@@ -1,0 +1,13 @@
+name: exit_plan_mode
+toolset: planning
+description: Present the finished plan to the user for approval and leave plan mode if approved.
+parameters:
+  type: object
+  properties:
+    plan: {type: string, minLength: 1, description: The plan in markdown.}
+  required: [plan]
+  additionalProperties: false
+default_action: allow
+interactive_only: true
+timeout_ms: 600000
+search_hint: finish plan request approval leave plan mode

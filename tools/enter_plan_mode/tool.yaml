@@ -1,0 +1,10 @@
+name: enter_plan_mode
+toolset: planning
+description: >-
+  Switch to plan mode: file edits are blocked (except under .auoreo/plans/) so you can
+  research and propose a plan before changing anything.
+parameters: {type: object, properties: {}, additionalProperties: false}
+default_action: allow
+interactive_only: true
+timeout_ms: 5000
+search_hint: plan mode read only research before editing

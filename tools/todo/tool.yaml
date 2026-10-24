@@ -1,0 +1,24 @@
+name: todo
+toolset: planning
+description: >-
+  Replace the session's todo list. Use it for multi-step work: keep exactly one item
+  in_progress, mark items completed as soon as they are done.
+parameters:
+  type: object
+  properties:
+    todos:
+      type: array
+      maxItems: 50
+      items:
+        type: object
+        properties:
+          content: {type: string, minLength: 1}
+          status: {type: string, enum: [pending, in_progress, completed]}
+        required: [content, status]
+        additionalProperties: false
+  required: [todos]
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+timeout_ms: 5000
+search_hint: todo checklist track tasks progress

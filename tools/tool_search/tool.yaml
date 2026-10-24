@@ -1,0 +1,18 @@
+name: tool_search
+toolset: core
+description: >-
+  Search for additional tools that are not loaded yet (e.g. MCP tools, API helpers).
+  Matching tools become callable from the next step.
+parameters:
+  type: object
+  properties:
+    query: {type: string, minLength: 1}
+    limit: {type: integer, minimum: 1, maximum: 20, default: 5}
+  required: [query]
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 5000
+search_hint: find more tools

@@ -1,0 +1,21 @@
+name: glob
+toolset: files
+description: >-
+  Find files by glob pattern (e.g. "**/*.py", "src/**/test_*.ts"), newest first.
+  Respects .gitignore. Use this instead of `bash find`.
+parameters:
+  type: object
+  properties:
+    pattern: {type: string, description: Glob pattern relative to path.}
+    path: {type: string, description: "Directory to search (default: working directory)."}
+    limit: {type: integer, minimum: 1, maximum: 2000, default: 200}
+  required: [pattern]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 30000
+search_hint: find files by name glob pattern

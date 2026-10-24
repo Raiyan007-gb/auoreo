@@ -34,11 +34,17 @@ def serve(
         raise typer.Exit(2) from exc
     bound = sock.getsockname()[1]
     url = f"http://{st.host}:{bound}"
-    print(f"server listening on {url}", flush=True)  # discovery contract (stdout, flushed)
-    if open_browser:
-        webbrowser.open(url)
+
+    class _Server(uvicorn.Server):
+        async def startup(self, sockets: list[socket.socket] | None = None) -> None:
+            await super().startup(sockets=sockets)
+            if self.started:  # announce only once the app (lifespan) is ready
+                print(f"server listening on {url}", flush=True)  # discovery contract
+                if open_browser:
+                    webbrowser.open(url)
+
     config = uvicorn.Config(create_app(st), log_level="info", lifespan="on")
-    server = uvicorn.Server(config)
+    server = _Server(config)
     try:
         server.run(sockets=[sock])
     except KeyboardInterrupt:

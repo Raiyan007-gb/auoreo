@@ -1,0 +1,16 @@
+name: plan-then-build
+description: The planner studies the code and writes a plan; the default agent implements it.
+steps:
+  - id: plan
+    agent: planner
+    input: "{{input}}"
+  - id: build
+    agent: default
+    input: |-
+      Implement this plan, then run the project's checks and report the result.
+
+      Original request:
+      {{input}}
+
+      Plan:
+      {{steps.plan.output}}

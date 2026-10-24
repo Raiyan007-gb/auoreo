@@ -1,0 +1,19 @@
+name: knowledge_search
+toolset: memory
+description: >-
+  Search long-term memory (saved facts and ingested documents) with hybrid keyword +
+  semantic retrieval. Results carry citations (fact:<id> or path:start-end).
+parameters:
+  type: object
+  properties:
+    query: {type: string, minLength: 1}
+    limit: {type: integer, minimum: 1, maximum: 30, default: 8}
+    max_tokens: {type: integer, minimum: 100, maximum: 2000, default: 800}
+  required: [query]
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 30000
+search_hint: search knowledge base facts documents rag

@@ -1,0 +1,16 @@
+start: "*** Begin Patch" NL op+ "*** End Patch" NL?
+op: add | delete | update
+add: "*** Add File: " PATH NL add_line*
+add_line: "+" LINE? NL
+delete: "*** Delete File: " PATH NL
+update: "*** Update File: " PATH NL move? hunk+
+move: "*** Move to: " PATH NL
+hunk: header? hunk_line+
+header: "@@" LINE? NL
+hunk_line: CONTEXT NL | REMOVE NL | ADDED NL
+CONTEXT: / [^\n]*/
+REMOVE: /-[^\n]*/
+ADDED: /\+[^\n]*/
+PATH: /[^\n]+/
+LINE: /[^\n]+/
+NL: /\r?\n/

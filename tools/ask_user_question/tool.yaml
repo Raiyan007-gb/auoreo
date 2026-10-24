@@ -1,0 +1,37 @@
+name: ask_user_question
+toolset: interaction
+description: >-
+  Ask the user 1–5 questions, each optionally with 2–4 options (an "Other" free-text
+  answer is always allowed). Use only when you cannot proceed with a sensible default.
+parameters:
+  type: object
+  properties:
+    questions:
+      type: array
+      minItems: 1
+      maxItems: 5
+      items:
+        type: object
+        properties:
+          question: {type: string, minLength: 1}
+          header: {type: string, maxLength: 20}
+          options:
+            type: array
+            minItems: 2
+            maxItems: 4
+            items:
+              type: object
+              properties:
+                label: {type: string, minLength: 1}
+                description: {type: string}
+              required: [label]
+              additionalProperties: false
+          multiSelect: {type: boolean, default: false}
+        required: [question]
+        additionalProperties: false
+  required: [questions]
+  additionalProperties: false
+default_action: allow
+interactive_only: true
+timeout_ms: 600000
+search_hint: ask user clarify question choice

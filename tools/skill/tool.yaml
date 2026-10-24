@@ -1,0 +1,15 @@
+name: skill
+toolset: skills
+description: >-
+  Load a skill's full instructions by name (see the skills list in the system prompt).
+  The instructions are added to the conversation; follow them for the current task.
+parameters:
+  type: object
+  properties:
+    name: {type: string, minLength: 1}
+  required: [name]
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+timeout_ms: 10000
+search_hint: load skill instructions

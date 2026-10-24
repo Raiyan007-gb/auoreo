@@ -1,0 +1,29 @@
+name: apply_patch
+toolset: files
+description: |-
+  Apply a multi-file patch. Format:
+  *** Begin Patch
+  *** Add File: path/new.py
+  +line of the new file
+  *** Update File: path/old.py
+  *** Move to: path/renamed.py      (optional)
+  @@ optional context header
+   unchanged context line
+  -removed line
+  +added line
+  *** Delete File: path/gone.py
+  *** End Patch
+  Each hunk's context and removed lines must match the file exactly and uniquely.
+  The patch is validated completely before any file is changed.
+parameters:
+  type: object
+  properties:
+    patch: {type: string}
+    dry_run: {type: boolean, default: false, description: Validate and show the plan only.}
+  required: [patch]
+  additionalProperties: false
+permission: edit
+default_action: ask
+is_destructive: true
+timeout_ms: 30000
+search_hint: patch diff multiple files add update delete move

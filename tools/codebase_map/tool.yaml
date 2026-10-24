@@ -1,0 +1,20 @@
+name: codebase_map
+toolset: files
+description: >-
+  Summarize the repository layout: file counts by type, top-level directories,
+  likely entrypoints and test locations, and top-level symbols per source file.
+  Use it once at the start of work in an unfamiliar codebase.
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: "Root directory (default: working directory)."}
+    max_files: {type: integer, minimum: 10, maximum: 2000, default: 300}
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 60000
+search_hint: repository overview structure symbols map

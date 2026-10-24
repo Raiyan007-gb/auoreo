@@ -164,6 +164,12 @@ class AgentRunner:
                 log.exception("memory recall failed")
         context = render_context(spec, self.s.cwd, engine.mode, memory_block)
 
+        async def question(qs: list[dict[str, Any]]) -> dict[str, Any]:
+            return await self.s.questions.ask(sid, qs)
+
+        async def emit(event_type: str, data: dict[str, Any]) -> None:
+            await self.s.emit(sid, event_type, {"run_id": run_id, **data})
+
         ctx = ToolContext(
             session_id=sid,
             cwd=self.s.cwd,
@@ -171,7 +177,9 @@ class AgentRunner:
             harness=self.s.harness,
             state=rt.state,
             interactive=rt.interactive,
-            services={"memory": self.s.memory, "services": self.s},
+            question=question,
+            emit=emit,
+            services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec},
         )
         result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_user_idx)
         if self.s.memory is not None and result.text:

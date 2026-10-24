@@ -16,6 +16,7 @@ from auoreo.core.db import Database, SessionRow, utcnow
 from auoreo.core.event_store import EventStore
 from auoreo.core.idempotency import Idempotency
 from auoreo.core.paths import bundled_root, ensure_home
+from auoreo.core.questions import QuestionBroker
 from auoreo.core.secrets import SecretStore
 from auoreo.core.settings import Settings
 from auoreo.gateway.resolve import make_gateway
@@ -42,12 +43,14 @@ class Services:
     secrets: SecretStore
     gateway: Gateway
     approvals: ApprovalBroker = field(init=False)
+    questions: QuestionBroker = field(init=False)
     coordinator: SessionRunCoordinator = field(init=False)
     memory: MemoryService | None = None
     mcp: McpBridge | None = None
 
     def __post_init__(self) -> None:
         self.approvals = ApprovalBroker(self.emit, self.settings.approval_timeout_s)
+        self.questions = QuestionBroker(self.emit, self.settings.approval_timeout_s)
 
     async def emit(self, aggregate_id: str, type_: str, data: dict[str, Any]) -> None:
         await self.events.append(aggregate_id, type_, data)

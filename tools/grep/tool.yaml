@@ -1,0 +1,25 @@
+name: grep
+toolset: files
+description: >-
+  Search file contents with a regular expression (ripgrep). Returns matching lines as
+  path:line:text, or only file paths with output_mode=files. Respects .gitignore.
+parameters:
+  type: object
+  properties:
+    pattern: {type: string, description: Regular expression (Rust regex syntax).}
+    path: {type: string, description: "File or directory (default: working directory)."}
+    glob: {type: string, description: 'Only search files matching this glob, e.g. "*.py".'}
+    case_insensitive: {type: boolean, default: false}
+    output_mode: {type: string, enum: [content, files, count], default: content}
+    context: {type: integer, minimum: 0, maximum: 20, default: 0}
+    limit: {type: integer, minimum: 1, maximum: 5000, default: 300}
+  required: [pattern]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 60000
+search_hint: search text regex in files ripgrep

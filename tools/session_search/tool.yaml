@@ -1,0 +1,17 @@
+name: session_search
+toolset: memory
+description: Search past conversation messages across sessions (or one session) by keywords.
+parameters:
+  type: object
+  properties:
+    query: {type: string, minLength: 1}
+    session_id: {type: string}
+    limit: {type: integer, minimum: 1, maximum: 50, default: 8}
+  required: [query]
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 15000
+search_hint: search previous conversations history

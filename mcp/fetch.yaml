@@ -1,0 +1,8 @@
+# Example MCP server (disabled). Enable with `enabled: true` once `uvx` can reach PyPI.
+name: fetch
+transport: stdio
+command: uvx
+args: [mcp-server-fetch]
+timeout_ms: 30000
+enabled: false
+exposure: deferred
