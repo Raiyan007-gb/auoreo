@@ -34,6 +34,7 @@ uv run pyinstaller --onefile \
 ```python
 import sys
 from pathlib import Path
+
 BASE_DIR = getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)
 web_dir = Path(BASE_DIR) / "web" / "app" / "dist"
 # PyInstaller ≥4.3 sets module __file__ to its in-bundle path, so __file__-relative lookups

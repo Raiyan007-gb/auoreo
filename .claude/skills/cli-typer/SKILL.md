@@ -13,13 +13,15 @@ Docs: https://typer.tiangolo.com · Context7: `/websites/typer_tiangolo`. Typer 
 
 ```python
 # src/agent_cli/main.py
-from typing import Annotated    # stdlib; Typer ≥0.21.2 no longer depends on typing-extensions
+from typing import Annotated  # stdlib; Typer ≥0.21.2 no longer depends on typing-extensions
 import typer
 
 app = typer.Typer(help="Agent Platform CLI")
 
+
 def main() -> None:
     app()
+
 
 if __name__ == "__main__":
     main()
@@ -34,9 +36,9 @@ def serve(
     port: Annotated[int, typer.Option(help="port to listen on", min=0, max=65535)] = 0,
 ) -> None:
     """Start the headless server (prints the URL line for SDKs/TUI/web to attach)."""
-    listener = agent_api.listen(hostname=hostname, port=port)   # reuse server core
+    listener = agent_api.listen(hostname=hostname, port=port)  # reuse server core
     print(f"agent-platform server listening on http://{listener.hostname}:{listener.port}", flush=True)
-    listener.serve_forever()   # Effect.never-style: block until signal
+    listener.serve_forever()  # Effect.never-style: block until signal
 ```
 
 - Arguments = `Annotated[str, typer.Argument()]`; Options = `typer.Option(help=..., min=..., max=...)`. Types carry the validation.
@@ -77,7 +79,10 @@ For config/session sub-groups, nest Typer instances:
 
 ```python
 config_app = typer.Typer(help="Get/set configuration")
-app.add_typer(config_app, name="config")   # pass name= explicitly (since 0.14 it's no longer inferred from the callback)
+app.add_typer(
+    config_app, name="config"
+)  # pass name= explicitly (since 0.14 it's no longer inferred from the callback)
+
 
 @config_app.command("get")
 def config_get(key: str) -> None: ...
@@ -88,7 +93,7 @@ def config_get(key: str) -> None: ...
 By default `agent` (no args) just shows help. To run logic instead (e.g. drop into the TUI), make the callback executable and check `ctx.invoked_subcommand` so it doesn't also fire before every subcommand:
 
 ```python
-@app.callback(invoke_without_command=True)   # or typer.Typer(invoke_without_command=True)
+@app.callback(invoke_without_command=True)  # or typer.Typer(invoke_without_command=True)
 def main_callback(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
         ...  # e.g. launch TUI, or auto-start `agent serve`

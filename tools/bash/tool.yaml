@@ -1,0 +1,22 @@
+name: bash
+toolset: shell
+description: >-
+  Run a shell command with bash in the session working directory and return combined
+  stdout/stderr and the exit code. Use for builds, tests, git, and file operations that
+  have no dedicated tool. Commands are checked against permission rules and floors.
+parameters:
+  type: object
+  properties:
+    command: {type: string, description: The bash command to run.}
+    timeout_s: {type: integer, minimum: 1, maximum: 600, default: 120,
+                description: Seconds before the command is killed.}
+  required: [command]
+  additionalProperties: false
+permission: bash
+pattern_arg: command
+default_action: ask
+is_destructive: true
+interrupt: cancel
+timeout_ms: 610000
+search_hint: run shell command terminal
+max_result_size_chars: 64000

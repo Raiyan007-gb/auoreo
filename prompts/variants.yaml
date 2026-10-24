@@ -1,0 +1,11 @@
+# Per-(provider, model_regex) request shaping (spec §10.6). First match wins.
+variants:
+  - provider: "*"
+    model_regex: "kimi"
+    omit_fields: [temperature]
+  - provider: "*"
+    model_regex: "(^|/)o[0-9]"
+    omit_fields: [temperature]
+  - provider: "*"
+    model_regex: ".*"
+    temperature: 0.4

@@ -18,6 +18,7 @@ Docs: https://docs.litellm.ai · Context7: `/websites/litellm_ai` (reference) an
 import litellm
 from typing import AsyncIterator
 
+
 async def stream_chat(model: str, messages: list[dict], **kwargs) -> AsyncIterator[str]:
     resp = await litellm.acompletion(
         model=model,
@@ -27,13 +28,13 @@ async def stream_chat(model: str, messages: list[dict], **kwargs) -> AsyncIterat
         max_tokens=kwargs.get("max_tokens"),
         # optional retry/failover:
         num_retries=kwargs.get("num_retries", 2),
-        fallbacks=kwargs.get("fallbacks"),        # e.g. ["openai/gpt-...", ...] tried in order
-        stream_options={"include_usage": True},   # final chunk carries usage (choices == [])
+        fallbacks=kwargs.get("fallbacks"),  # e.g. ["openai/gpt-...", ...] tried in order
+        stream_options={"include_usage": True},  # final chunk carries usage (choices == [])
         metadata={"session_id": kwargs.get("session_id")},
     )
     async for chunk in resp:
-        if not chunk.choices:                     # usage-only chunk at end of stream
-            record_usage(chunk.usage)             # prompt_tokens / completion_tokens
+        if not chunk.choices:  # usage-only chunk at end of stream
+            record_usage(chunk.usage)  # prompt_tokens / completion_tokens
             continue
         delta = chunk.choices[0].delta  # type: ignore[union-attr]
         if delta and delta.content is not None:

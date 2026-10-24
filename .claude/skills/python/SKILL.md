@@ -36,7 +36,8 @@ pytest + pytest-asyncio (`asyncio_mode = "auto"` in `pyproject.toml`):
 # tests/unit/test_gateway.py
 import pytest
 
-async def test_stream_chat_mock(mock_gateway):   # auto-marked async by pytest-asyncio
+
+async def test_stream_chat_mock(mock_gateway):  # auto-marked async by pytest-asyncio
     chunks = [c async for c in mock_gateway.stream_chat("openai/gpt-4o", [{"role": "user", "content": "hi"}])]
     assert "".join(chunks)
 ```

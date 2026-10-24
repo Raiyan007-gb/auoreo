@@ -12,8 +12,9 @@ Docs: https://docs.pydantic.dev · Context7: `/websites/pydantic_dev_validation`
 ```python
 from pydantic import BaseModel, ConfigDict, Field
 
+
 class Agent(BaseModel):
-    model_config = ConfigDict(extra="forbid")   # strict: reject unknown keys in API payloads
+    model_config = ConfigDict(extra="forbid")  # strict: reject unknown keys in API payloads
 
     id: str = Field(pattern=r"^agent_[a-z0-9]+$")
     name: str
@@ -35,19 +36,23 @@ class ToolStatePending(BaseModel):
     status: Literal["pending"]
     input: str
 
+
 class ToolStateRunning(BaseModel):
     status: Literal["running"]
     input: dict[str, Any]
     content: list[ToolContent]
+
 
 class ToolStateCompleted(BaseModel):
     status: Literal["completed"]
     result: Any | None = None
     output_paths: list[str] | None = None
 
+
 class ToolStateError(BaseModel):
     status: Literal["error"]
     error: ToolError
+
 
 ToolState = Annotated[
     ToolStatePending | ToolStateRunning | ToolStateCompleted | ToolStateError,
@@ -68,11 +73,12 @@ Use `pydantic-settings` for server config from env (secrets stay in env, plan.md
 ```python
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AGENT_PLATFORM_", env_file=".env", extra="ignore")
-    server_password: str | None = None        # ← AGENT_PLATFORM_SERVER_PASSWORD (auth-oauth skill)
+    server_password: str | None = None  # ← AGENT_PLATFORM_SERVER_PASSWORD (auth-oauth skill)
     database_url: str = "sqlite+aiosqlite:///./agent.db"
-    cors_origins: list[str] = []              # env value must be JSON: '["http://localhost:3000"]'
+    cors_origins: list[str] = []  # env value must be JSON: '["http://localhost:3000"]'
 ```
 
 - Complex fields (`list`, `dict`, sub-models) are JSON-decoded from env; a non-JSON value raises

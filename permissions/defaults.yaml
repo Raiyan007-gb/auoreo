@@ -1,0 +1,24 @@
+# Bundled permission rules (lowest precedence). Evaluation: last matching rule wins
+# across layers bundled → project → runtime → agent → session → approved.
+# Unmatched → the tool's `default_action`.
+rules:
+  - {permission: read, pattern: "*", action: allow}
+  - {permission: read, pattern: "*.env", action: deny}
+  - {permission: read, pattern: "*.env.*", action: deny}
+  - {permission: read, pattern: "*.env.example", action: allow}
+  - {permission: read, pattern: "*secrets.db", action: deny}
+  - {permission: edit, pattern: "*", action: ask}
+  - {permission: edit, pattern: "*.env", action: deny}
+  - {permission: edit, pattern: "*secrets.db", action: deny}
+  - {permission: bash, pattern: "*", action: ask}
+  - {permission: bash, pattern: "ls", action: allow}
+  - {permission: bash, pattern: "ls *", action: allow}
+  - {permission: bash, pattern: "pwd", action: allow}
+  - {permission: bash, pattern: "git status*", action: allow}
+  - {permission: bash, pattern: "git diff*", action: allow}
+  - {permission: bash, pattern: "git log*", action: allow}
+  - {permission: webfetch, pattern: "*", action: ask}
+# Extra shell deny-globs (unbypassable, checked before any mode, even yolo).
+floors:
+  - "*git push --force*"
+  - "*git push -f *"

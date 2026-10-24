@@ -1,0 +1,21 @@
+name: read
+toolset: files
+description: >-
+  Read a text file and return it with 1-based line numbers. Use offset/limit for large
+  files. A file must be read before it can be edited or overwritten.
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: File path, absolute or relative to the working directory.}
+    offset: {type: integer, minimum: 1, default: 1, description: First line to return (1-based).}
+    limit: {type: integer, minimum: 1, maximum: 5000, default: 2000, description: Max lines.}
+  required: [path]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 30000
+search_hint: read view open file contents

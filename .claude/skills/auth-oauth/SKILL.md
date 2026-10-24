@@ -44,17 +44,19 @@ from authlib.integrations.httpx_client import AsyncOAuth2Client
 client = AsyncOAuth2Client(
     client_id,
     redirect_uri="http://127.0.0.1:PORT/callback",
-    code_challenge_method="S256",        # Authlib derives the S256 challenge from code_verifier
+    code_challenge_method="S256",  # Authlib derives the S256 challenge from code_verifier
 )
 code_verifier = generate_token(48)
 url, state = client.create_authorization_url(authorize_url, code_verifier=code_verifier)  # sync, no await
 # persist (state, code_verifier) until the callback arrives
 
 # 2. callback (agent_api exposes the callback route) — fetch_token verifies `state` (CSRF)
-token = await client.fetch_token(token_endpoint, authorization_response=str(request.url), code_verifier=code_verifier)
+token = await client.fetch_token(
+    token_endpoint, authorization_response=str(request.url), code_verifier=code_verifier
+)
 
 # 3. store
-await credential_store.set(provider_id, {"type": "oauth", "token": token})   # keyring / env file
+await credential_store.set(provider_id, {"type": "oauth", "token": token})  # keyring / env file
 ```
 
 - Localhost callback: bind the callback server to `127.0.0.1` (like opencode's `oauth-callback`), pick a free port; the CLI opens the browser via `webbrowser.open`.

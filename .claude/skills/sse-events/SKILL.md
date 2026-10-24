@@ -29,16 +29,19 @@ import asyncio
 _subscribers: set[asyncio.Queue[EventPayload]] = set()
 _lock = asyncio.Lock()
 
+
 async def publish(payload: EventPayload) -> None:
     async with _lock:
         for q in list(_subscribers):
-            await q.put(payload)        # best-effort; bounded queue sizes
+            await q.put(payload)  # best-effort; bounded queue sizes
+
 
 async def subscribe() -> asyncio.Queue[EventPayload]:
-    q: asyncio.Queue[EventPayload] = asyncio.Queue(maxsize=100)   # bound to prevent memory growth
+    q: asyncio.Queue[EventPayload] = asyncio.Queue(maxsize=100)  # bound to prevent memory growth
     async with _lock:
         _subscribers.add(q)
     return q
+
 
 async def unsubscribe(q) -> None:
     async with _lock:
@@ -59,20 +62,22 @@ JSON-encode `data`.
 from collections.abc import AsyncIterable
 from typing import Annotated
 from fastapi import Header, Request
-from fastapi.sse import EventSourceResponse, ServerSentEvent   # native (FastAPI >= 0.135)
+from fastapi.sse import EventSourceResponse, ServerSentEvent  # native (FastAPI >= 0.135)
+
 
 @app.get("/api/event", response_class=EventSourceResponse)
 async def event_stream(
     request: Request,
-    last_event_id: Annotated[int | None, Header()] = None,     # browser resends last `id` on reconnect
+    last_event_id: Annotated[int | None, Header()] = None,  # browser resends last `id` on reconnect
 ) -> AsyncIterable[ServerSentEvent]:
     # must yield (not return a response) so FastAPI's native keep-alive ping is applied
     # 1) Replay missed durable events from seq after last_event_id (DB query, ordered by seq)
     # 2) Then live-tail the subscriber queue
-    q = await subscribe()                      # subscribe AFTER validating auth
+    q = await subscribe()  # subscribe AFTER validating auth
     try:
-        async for payload in replay_from(last_event_id):         # durable catch-up
-            if await request.is_disconnected(): break
+        async for payload in replay_from(last_event_id):  # durable catch-up
+            if await request.is_disconnected():
+                break
             yield ServerSentEvent(data=payload.data, event=payload.type, id=str(payload.seq), retry=3000)
         while True:
             if await request.is_disconnected():
@@ -80,7 +85,7 @@ async def event_stream(
             payload = await q.get()
             yield ServerSentEvent(data=payload.data, event=payload.type, id=str(payload.seq), retry=3000)
     finally:
-        await unsubscribe(q)                   # always clean up, incl. on cancel
+        await unsubscribe(q)  # always clean up, incl. on cancel
 ```
 
 ## Production checklist (verified via Exa + Context7, 2026)

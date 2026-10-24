@@ -13,17 +13,20 @@ Docs: https://docs.sqlalchemy.org/en/20 · Context7: `/websites/sqlalchemy_en_20
 from sqlalchemy import ForeignKey, Integer, JSON, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
+
 class Base(DeclarativeBase):
     pass
 
+
 class EventRow(Base):
     __tablename__ = "events"
-    id: Mapped[str] = mapped_column(primary_key=True)          # "evt_..." monotonic
+    id: Mapped[str] = mapped_column(primary_key=True)  # "evt_..." monotonic
     type: Mapped[str] = mapped_column(index=True)
-    seq: Mapped[int] = mapped_column()                          # per-aggregate sequence
+    seq: Mapped[int] = mapped_column()  # per-aggregate sequence
     aggregate_id: Mapped[str] = mapped_column(index=True)
-    data: Mapped[dict] = mapped_column(JSON)                    # event payload
-    created_at: Mapped[int] = mapped_column(Integer)            # epoch ms
+    data: Mapped[dict] = mapped_column(JSON)  # event payload
+    created_at: Mapped[int] = mapped_column(Integer)  # epoch ms
+
 
 class SessionRow(Base):
     __tablename__ = "sessions"
@@ -43,7 +46,11 @@ engine = create_engine("sqlite+pysqlite:///./agent.db", connect_args={"check_sam
 SessionLocal = sessionmaker(bind=engine, autoflush=False)
 
 with SessionLocal() as session:
-    row = session.execute(select(EventRow).filter_by(aggregate_id=sess_id).order_by(EventRow.seq)).scalars().all()
+    row = (
+        session.execute(select(EventRow).filter_by(aggregate_id=sess_id).order_by(EventRow.seq))
+        .scalars()
+        .all()
+    )
 ```
 
 - In async handlers use `async_sessionmaker` + `create_async_engine("sqlite+aiosqlite:///...")`; never block the event loop with sync DB calls inside FastAPI/SSE (plan.md Part C).
@@ -56,7 +63,7 @@ engine = create_async_engine("sqlite+aiosqlite:///./agent.db")
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 async with SessionLocal() as session:
-    async with session.begin():               # commits on exit, rolls back on error
+    async with session.begin():  # commits on exit, rolls back on error
         session.add(EventRow(...))
     rows = (await session.scalars(select(EventRow).filter_by(aggregate_id=sess_id))).all()
 # at shutdown (FastAPI lifespan): await engine.dispose()

@@ -1,0 +1,17 @@
+name: write
+toolset: files
+description: >-
+  Create or overwrite a text file with the given content. Parent folders are created.
+  An existing file must be read first so its current content is known.
+parameters:
+  type: object
+  properties:
+    path: {type: string}
+    content: {type: string}
+  required: [path, content]
+  additionalProperties: false
+permission: edit
+pattern_arg: path
+default_action: ask
+timeout_ms: 30000
+search_hint: create write save new file

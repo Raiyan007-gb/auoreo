@@ -1,0 +1,19 @@
+name: edit
+toolset: files
+description: >-
+  Replace an exact string in a file. old_string must match exactly once unless
+  replace_all is true. The file must have been read in this session first.
+parameters:
+  type: object
+  properties:
+    path: {type: string}
+    old_string: {type: string, minLength: 1}
+    new_string: {type: string}
+    replace_all: {type: boolean, default: false}
+  required: [path, old_string, new_string]
+  additionalProperties: false
+permission: edit
+pattern_arg: path
+default_action: ask
+timeout_ms: 30000
+search_hint: edit modify replace text in file

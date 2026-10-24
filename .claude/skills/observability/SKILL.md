@@ -28,7 +28,9 @@ from opentelemetry.sdk.resources import Resource
 resource = Resource.create(attributes={"service.name": "agent-platform"})
 trace.set_tracer_provider(TracerProvider(resource=resource))
 # endpoint kwarg is used verbatim (include /v1/traces); omit it to use OTEL_EXPORTER_OTLP_ENDPOINT (+ /v1/traces) or localhost:4318
-trace.get_tracer_provider().add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:4318/v1/traces")))
+trace.get_tracer_provider().add_span_processor(
+    BatchSpanProcessor(OTLPSpanExporter(endpoint="http://localhost:4318/v1/traces"))
+)
 
 tracer = trace.get_tracer(__name__)
 with tracer.start_as_current_span("agent.run", attributes={"session_id": sess_id, "model": model_ref}):
@@ -44,7 +46,10 @@ with tracer.start_as_current_span("agent.run", attributes={"session_id": sess_id
 
 ```python
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-FastAPIInstrumentor.instrument_app(app, excluded_urls="healthz,api/event")  # one span per request; skip health + long-lived SSE
+
+FastAPIInstrumentor.instrument_app(
+    app, excluded_urls="healthz,api/event"
+)  # one span per request; skip health + long-lived SSE
 
 # OTLP exporter running alongside; Grafana/Prometheus visualize via Tempo/Prometheus backends
 ```

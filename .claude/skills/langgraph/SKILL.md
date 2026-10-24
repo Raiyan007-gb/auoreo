@@ -17,16 +17,18 @@ A compiled graph = typed **state** + **nodes** (functions) + **edges/conditional
 from typing import Literal
 from langgraph.graph import StateGraph, START, END, MessagesState
 
+
 def should_continue(state: MessagesState) -> Literal[END, "tools"]:
     last = state["messages"][-1]
     return END if not getattr(last, "tool_calls", None) else "tools"
 
+
 builder = StateGraph(MessagesState)
-builder.add_node("agent", call_model)   # calls the LLM, returns {"messages": [AIMessage]}
+builder.add_node("agent", call_model)  # calls the LLM, returns {"messages": [AIMessage]}
 builder.add_node("tools", execute_tools)
 builder.add_edge(START, "agent")
 builder.add_conditional_edges("agent", should_continue)
-builder.add_edge("tools", "agent")      # loop back
+builder.add_edge("tools", "agent")  # loop back
 ```
 
 ## Checkpointing (required for interrupts/resume)
@@ -34,7 +36,7 @@ builder.add_edge("tools", "agent")      # loop back
 ```python
 # uv add langgraph-checkpoint-sqlite   (SQLite saver is a separate package)
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver  # durable, restart-safe (async)
-from langgraph.checkpoint.memory import InMemorySaver         # tests only
+from langgraph.checkpoint.memory import InMemorySaver  # tests only
 
 # from_conn_string takes a plain file path (or ":memory:"), NOT a "sqlite:///" URL
 async with AsyncSqliteSaver.from_conn_string("./agent.db") as checkpointer:
@@ -49,12 +51,12 @@ async with AsyncSqliteSaver.from_conn_string("./agent.db") as checkpointer:
 
 ```python
 # version="v3" = typed per-channel projections over one event flow (langgraph >= 1.2)
-stream = await graph.astream_events(          # sync: graph.stream_events(...)
+stream = await graph.astream_events(  # sync: graph.stream_events(...)
     {"messages": [{"role": "user", "content": prompt}]},
     config,
     version="v3",
 )
-async for message in stream.messages:         # one ChatModelStream per LLM call
+async for message in stream.messages:  # one ChatModelStream per LLM call
     async for token in message.text:
         print(token, end="", flush=True)
 ```
@@ -68,12 +70,14 @@ async for message in stream.messages:         # one ChatModelStream per LLM call
 ```python
 from langgraph.types import Command, interrupt
 
+
 def needs_approval(state):
     if dangerous_tool_requested(state):
         action = interrupt({"question": "Approve running <tool>?", "args": {...}})
         # Graph HALTS here until a consumer resumes with Command(resume=...)
         return {"approved": action.get("accept")}
     return {}
+
 
 # After a run pauses: stream.interrupted is True, stream.interrupts holds the payload(s).
 # Resume on the same thread_id:

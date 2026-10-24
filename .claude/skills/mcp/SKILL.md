@@ -22,10 +22,11 @@ aliased**: importing `mcp.server.fastmcp` raises `ModuleNotFoundError` (submodul
 `annotations`, `icons`, `meta`, `structured_output`):
 
 ```python
-from mcp.server import MCPServer      # v1 was: from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer  # v1 was: from mcp.server.fastmcp import FastMCP
 # (also: from mcp.server.mcpserver import MCPServer, Context)
 
-mcp = MCPServer("agent-platform")     # name/instructions/lifespan/auth only — no host/port here
+mcp = MCPServer("agent-platform")  # name/instructions/lifespan/auth only — no host/port here
+
 
 @mcp.tool(
     name="web_search",
@@ -33,6 +34,7 @@ mcp = MCPServer("agent-platform")     # name/instructions/lifespan/auth only —
 )
 def web_search(query: str, num_results: int = 8) -> str:
     return run_search(query, num_results)
+
 
 if __name__ == "__main__":
     mcp.run()  # default transport: stdio (blocks)
@@ -50,15 +52,16 @@ if __name__ == "__main__":
 from mcp import Client, StdioServerParameters
 
 server_params = StdioServerParameters(
-    command="python", args=["-m", "path.to.search_server"]  # env= ADDS to an allow-listed env
+    command="python",
+    args=["-m", "path.to.search_server"],  # env= ADDS to an allow-listed env
 )
 
 # Client(...) picks the transport: StdioServerParameters → subprocess,
 # "https://host/mcp" (str) → streamable HTTP, server object → in-memory.
-async with Client(server_params) as client:                 # handshake done on enter
-    tools_result = await client.list_tools()                # ListToolsResult; paginate with cursor=/next_cursor
-    for tool in tools_result.tools:                         # iterate .tools (not the bare result)
-        print(tool.name, tool.description, tool.input_schema)   # v2 fields are snake_case
+async with Client(server_params) as client:  # handshake done on enter
+    tools_result = await client.list_tools()  # ListToolsResult; paginate with cursor=/next_cursor
+    for tool in tools_result.tools:  # iterate .tools (not the bare result)
+        print(tool.name, tool.description, tool.input_schema)  # v2 fields are snake_case
     result = await client.call_tool("web_search", {"query": "postgres pgvector", "num_results": 5})
     # result.content / result.structured_content / result.is_error
 ```
@@ -72,17 +75,21 @@ async with Client(server_params) as client:                 # handshake done on 
 ```python
 import pytest
 from mcp import Client
-from server import mcp            # your MCPServer/FastMCP instance
+from server import mcp  # your MCPServer/FastMCP instance
+
 
 @pytest.mark.anyio
 async def test_call_tool(client: Client):
     result = await client.call_tool("add", {"a": 1, "b": 2})
-    assert result.structured_content == {"result": 3}   # typed return → structured_content
-    assert result.content[0].text == "3"                # model-facing TextContent
+    assert result.structured_content == {"result": 3}  # typed return → structured_content
+    assert result.content[0].text == "3"  # model-facing TextContent
+
 
 @pytest.fixture
 async def client():
-    async with Client(mcp, raise_exceptions=True) as c:   # raise_exceptions surfaces server errors (in-process only)
+    async with Client(
+        mcp, raise_exceptions=True
+    ) as c:  # raise_exceptions surfaces server errors (in-process only)
         yield c
 ```
 

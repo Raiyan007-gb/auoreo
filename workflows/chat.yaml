@@ -1,0 +1,6 @@
+name: chat
+description: Single agent, single turn — the default conversation workflow.
+steps:
+  - id: reply
+    agent: default
+    input: "{{input}}"

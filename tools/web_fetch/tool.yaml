@@ -1,0 +1,20 @@
+name: web_fetch
+toolset: web
+description: >-
+  Fetch a public http(s) URL and return its content (HTML converted to markdown).
+  Private, loopback and link-local addresses are blocked; redirects are re-validated.
+parameters:
+  type: object
+  properties:
+    url: {type: string, format: uri}
+    max_chars: {type: integer, minimum: 1000, maximum: 200000, default: 50000}
+  required: [url]
+  additionalProperties: false
+permission: webfetch
+pattern_arg: url
+default_action: ask
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 60000
+search_hint: fetch download web page url http

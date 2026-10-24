@@ -15,12 +15,19 @@ from fastapi import APIRouter, FastAPI
 app = FastAPI(title="agent-platform", version="0.1.0")
 
 health_router = APIRouter(prefix="/health", tags=["health"])
+
+
 @health_router.get("")
-async def health() -> dict: return {"status": "ok"}   # don't reuse the router's name for the handler
+async def health() -> dict:
+    return {"status": "ok"}  # don't reuse the router's name for the handler
+
 
 session_router = APIRouter(prefix="/session", tags=["session"])
-@session_router.post("/create")                        # decorate the router, not `app`
+
+
+@session_router.post("/create")  # decorate the router, not `app`
 async def create_session(payload: SessionCreate) -> Session: ...
+
 
 app.include_router(health_router)
 app.include_router(session_router)
@@ -44,10 +51,11 @@ from typing import Annotated
 from fastapi import Request, Header
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
+
 @app.get("/api/event", response_class=EventSourceResponse)
 async def event_stream(
     request: Request,
-    last_event_id: Annotated[int | None, Header()] = None,   # browser resends last `id` on reconnect
+    last_event_id: Annotated[int | None, Header()] = None,  # browser resends last `id` on reconnect
 ) -> AsyncIterable[ServerSentEvent]:
     # ⚠ MUST be a generator (yield), not `return EventSourceResponse(...)` — the native 15 s
     # keepalive lives in the route layer and is only injected when the handler yields the
@@ -59,12 +67,13 @@ async def event_stream(
     finally:
         await event_service.unsubscribe(subscriber)
 
+
 async def event_generator(request: Request, subscriber: asyncio.Queue):
     try:
         while True:
             if await request.is_disconnected():
                 break
-            event = await subscriber.get()          # per-client queue; one per connection
+            event = await subscriber.get()  # per-client queue; one per connection
             yield ServerSentEvent(data=event.data, event=event.type, id=str(event.seq), retry=3000)
     finally:
         cleanup()  # always release DB/Redis/queue in finally
@@ -100,8 +109,8 @@ async def ws_endpoint(websocket: WebSocket):
     await websocket.accept()
     try:
         while True:
-            data = await websocket.receive_text()   # client→server (approvals, edits, cancel)
-            await websocket.send_text(handle(data)) # server→client
+            data = await websocket.receive_text()  # client→server (approvals, edits, cancel)
+            await websocket.send_text(handle(data))  # server→client
     except WebSocketDisconnect:
         pass
 ```
@@ -110,6 +119,7 @@ async def ws_endpoint(websocket: WebSocket):
 
 ```python
 from fastapi.staticfiles import StaticFiles
+
 app.mount("/", StaticFiles(directory="web/app/dist", html=True), name="ui")
 # mount AFTER API routers so /api/* wins. html=True serves index.html for directories and
 # 404.html on misses — it does NOT do SPA fallback; for client-side routes, subclass StaticFiles

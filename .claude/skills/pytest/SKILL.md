@@ -43,16 +43,19 @@ async def test_gateway_streams(mock_gateway):
 # tests/conftest.py
 import pytest
 
+
 @pytest.fixture
 def tmp_db(tmp_path):
     from agent_core.database import create_engine_for
+
     engine = create_engine_for(f"sqlite+pysqlite:///{tmp_path}/test.db")
     yield engine
     engine.dispose()
 
+
 @pytest.fixture
-async def fake_llm():          # async fixture (auto mode)
-    return FakeLitellmGateway()   # inject via agent_gateway interface (no real keys)
+async def fake_llm():  # async fixture (auto mode)
+    return FakeLitellmGateway()  # inject via agent_gateway interface (no real keys)
 ```
 
 - For a broader-scoped async fixture (e.g. one app per module), use `@pytest_asyncio.fixture(scope="module", loop_scope="module")`. `loop_scope` must be at least as wide as `scope`, and tests that use it need `@pytest.mark.asyncio(loop_scope="module")`. Don't override the old `event_loop` fixture; pytest-asyncio removed it in favor of `loop_scope`.
