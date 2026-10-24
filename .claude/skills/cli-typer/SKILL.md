@@ -7,14 +7,14 @@ description: Build the agent_cli command surface with Typer — subcommands (ser
 
 `agent_cli` (package `agent-cli`, command `agent`) is built with **Typer** (Click-adjacent, type-hint-driven). It ships the easy install (`pipx install agent-cli` / `uv tool install`) and runs **the same server** as everything else via `serve` (plan.md Part C.1).
 
-Docs: https://typer.tiangolo.com · Context7: `/websites/typer_tiangolo` (77).
+Docs: https://typer.tiangolo.com · Context7: `/websites/typer_tiangolo`. Typer is still 0.x (0.23.0 shipped 2026-02); pin `typer>=0.21.2` or newer.
 
 ## App + subcommands
 
 ```python
 # src/agent_cli/main.py
+from typing import Annotated    # stdlib; Typer ≥0.21.2 no longer depends on typing-extensions
 import typer
-from typing_extensions import Annotated    # or typing.Annotated on 3.12
 
 app = typer.Typer(help="Agent Platform CLI")
 
@@ -77,7 +77,7 @@ For config/session sub-groups, nest Typer instances:
 
 ```python
 config_app = typer.Typer(help="Get/set configuration")
-app.add_typer(config_app, name="config")
+app.add_typer(config_app, name="config")   # pass name= explicitly (since 0.14 it's no longer inferred from the callback)
 
 @config_app.command("get")
 def config_get(key: str) -> None: ...
@@ -85,14 +85,18 @@ def config_get(key: str) -> None: ...
 
 ## invoke_without_command
 
-If you want `agent` (no args) to show help or drop into the TUI, use:
+By default `agent` (no args) just shows help. To run logic instead (e.g. drop into the TUI), make the callback executable and check `ctx.invoked_subcommand` so it doesn't also fire before every subcommand:
 
 ```python
-app = typer.Typer(invoke_without_command=True)
-@app.callback()
-def main_callback() -> None:
-    # e.g. print help, or auto-start `agent serve` if desired
+@app.callback(invoke_without_command=True)   # or typer.Typer(invoke_without_command=True)
+def main_callback(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        ...  # e.g. launch TUI, or auto-start `agent serve`
 ```
+
+For sub-groups that should print help when called bare, use `add_typer(..., no_args_is_help=True)`.
+
+`agent --version` (required by `native-binary` rules): an eager `bool` option on the callback whose `callback=` prints the version and `raise typer.Exit()`.
 
 ## Rules for this repo
 

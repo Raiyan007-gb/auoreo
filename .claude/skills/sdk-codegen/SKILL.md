@@ -11,27 +11,35 @@ description: Generate typed SDKs (TypeScript + Python) from the FastAPI/OpenAPI 
 
 ```
 agent_schema models → FastAPI routes → app.openapi()/openapi.json
-   ├─ openapi-typescript (TS)  → web/sdk/types.gen.ts + fetch client
-   └─ openapi-python-client    → agent_sdk/* (models + async client)
+   ├─ openapi-typescript (TS)  → web/sdk/types.gen.ts  + openapi-fetch client
+   └─ openapi-python-client    → agent_sdk/* (attrs models + httpx sync/async client)
 ```
 
-## TS: openapi-typescript (or openapi-ts /Hey API)
+## TS: openapi-typescript + openapi-fetch (or Hey API)
 
 ```bash
-npx openapi-typescript http://127.0.0.1:4096/openapi.json -o web/sdk/types.gen.ts
+npx openapi-typescript web/sdk/openapi.json -o web/sdk/types.gen.ts   # or the live http://127.0.0.1:4096/openapi.json
 ```
 
-- Produces exhaustive TS types (`components['schemas']`) + a typed `createClient<paths>()` fetcher with 0 runtime cost (Context7 `/websites/openapi-ts_dev`).
+- Produces exhaustive, **types-only** output (`paths`, `components['schemas']`) — zero runtime. Pair with the separate tiny `openapi-fetch` package for the typed client (Context7 `/websites/openapi-ts_dev`):
+  ```ts
+  import createClient from "openapi-fetch";
+  import type { paths } from "./types.gen";
+  const client = createClient<paths>({ baseUrl });
+  const { data, error } = await client.POST("/session/create", { body: { /* typed */ } });  // data on 2XX, error on 4XX/5XX
+  ```
+- Alternative: Hey API (`npx @hey-api/openapi-ts -i web/sdk/openapi.json -o web/sdk/gen`) emits `types.gen.ts` + `sdk.gen.ts` + `client.gen.ts` with a Fetch client by default (Context7 `/websites/heyapi_dev`). Pick one generator; don't mix.
 - Point it at the **live `/openapi.json`** (from a running `agent_api`, or a saved spec committed in `web/sdk/openapi.json`). Committing the spec makes builds hermetic + diffable.
 
 ## Python: openapi-python-client
 
 ```bash
 uvx openapi-python-client generate --path web/sdk/openapi.json --output-path src/agent_sdk --overwrite --meta none
-# --overwrite: fails without it if the dir exists · --meta none: generate straight into the dir (no poetry scaffold)
+# --overwrite: fails without it if the dir exists · --meta none: generate only the package (no pyproject/README scaffold)
+# (use --url http://127.0.0.1:4096/openapi.json instead of --path to read a live server)
 ```
 
-- Generates typed Python `client.py` + Pydantic response models + async methods. Prefer it over hand-rolling `requests`.
+- Generates `Client`/`AuthenticatedClient` (httpx), **attrs**-based models (`to_dict`/`from_dict` — not Pydantic), and per-endpoint modules under `api/<tag>/` exposing `sync`, `sync_detailed`, `asyncio`, `asyncio_detailed`. Prefer it over hand-rolling `requests`. Context7: `/openapi-generators/openapi-python-client`.
 - Mark `src/agent_sdk` generated: add a header + exclude from manual review (regenerate, don't hand-edit).
 
 ## Ergonomic layer (hand-written, thin)

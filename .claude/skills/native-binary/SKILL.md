@@ -9,11 +9,13 @@ The "native binary" channel ships a per-OS/arch standalone executable so end-use
 
 | Tool | Pros | Cons | Current |
 |---|---|---|---|
-| **PyInstaller** | Mature, onefile, cross-OS support, wide hook coverage | Larger output; startup extracts to temp dir; slower start in onefile mode | 6.22 (2026-08) |
-| **Nuitka** | Compiles to C, smaller + faster, `--mode=onefile`/`--project` | Longer compile; needs a C compiler | 4.x (4.1.3 current; Py 3.4–3.14) |
-| **Bun compile** (TS path) | `bun build --compile` single static binary for `web/*` tooling | Not for the Python engine | — |
+| **PyInstaller** | Mature, onefile, cross-OS support, wide hook coverage | Larger output; startup extracts to temp dir; slower start in onefile mode | 6.22.x (6.22.3, 2026-09; Py ≤3.15 since 6.21) |
+| **Nuitka** | Compiles to C, smaller + faster, `--mode=onefile`/`--project` (reads `pyproject.toml`) | Longer compile; needs a C compiler (Zig supported as fallback) | 4.2.x (4.2.2 current; Py 3.14 official, 3.15 experimental) |
+| **Bun compile** (TS path) | `bun build --compile [--target=bun-<os>-<arch>[-musl]]` single binary for `web/*` tooling; **can cross-compile** | Not for the Python engine | — |
 
 For this Python-first repo, **PyInstaller is the pragmatic default** for `agent` (the Python engine), with Nuitka as an optimization.
+
+Context7: `/websites/pyinstaller_en_stable` (+ `/pyinstaller/pyinstaller/v6.22.3` changelog) · `/websites/nuitka_net` · `/websites/bun_sh` · `/azure/login`.
 
 ## PyInstaller onefile (agent_cli)
 
@@ -27,15 +29,18 @@ uv run pyinstaller --onefile \
 ```
 
 - Use **onefolder (`--onedir`)** for faster startup + easier debugging during dev; ship `--onefile` for end-users (plan.md Part J decision matrix: "⭐ signed exe, no deps").
-- Collect data files (web UI `dist/`, templates, skills) with `--add-data "web/app/dist:web/app/dist"` — PyInstaller ≥ 6.0 accepts **POSIX `source:dest` syntax on Windows too** (now the recommended cross-platform form; the legacy `;` still works):
+- Collect data files (web UI `dist/`, templates, skills) with `--add-data "web/app/dist:web/app/dist"` — PyInstaller ≥ 6.0 accepts **POSIX `source:dest` syntax on Windows too** (now the recommended cross-platform form; the legacy `;` still works but is discouraged). Locate them at runtime relative to the bundle root:
 
 ```python
 import sys
+from pathlib import Path
 BASE_DIR = getattr(sys, "_MEIPASS", Path(__file__).resolve().parent)
 web_dir = Path(BASE_DIR) / "web" / "app" / "dist"
+# PyInstaller ≥4.3 sets module __file__ to its in-bundle path, so __file__-relative lookups
+# also work frozen (docs' preferred form) — place data with a matching --add-data dest.
 ```
 
-- **No cross-compile**: build each OS on its own runner (macOS→macOS, Windows→Windows, Linux→Linux). CI uses a per-OS matrix (see `github-actions` skill build-cli job).
+- **No cross-compile** (PyInstaller and Nuitka): build each OS on its own runner (macOS→macOS, Windows→Windows, Linux→Linux). CI uses a per-OS matrix (see `github-actions` skill build-cli job).
 
 ## Per-OS/arch matrix (mirror opencode publish.yml)
 
@@ -47,13 +52,14 @@ web_dir = Path(BASE_DIR) / "web" / "app" / "dist"
 
 - musl: build inside an Alpine/musl container so `agent` runs on Alpine; detect glibc vs musl like opencode's `bin/opencode` (check `/etc/alpine-release` or `ldd --version`).
 - Name artifacts `agent-<platform>-<arch>[-(baseline|musl)]`; upload each to GitHub Release + npm package (see `npm` skill launcher).
+- Note for Bun-compiled tooling: current Bun ships one x64 binary (SSE4.2 floor, AVX2/AVX-512 picked at runtime); `-baseline`/`-modern` target suffixes are accepted but resolve to the same binary, so a separate baseline build is redundant there.
 
 ## Windows code-signing (required for Windows users)
 
 Unsigned `.exe` → SmartScreen blocks + AV warnings (plan.md Part J decision matrix). Use **Azure Trusted Signing** in CI (same as opencode):
 
 ```yaml
-- uses: azure/login@v3
+- uses: azure/login@v3   # OIDC: job needs `permissions: id-token: write`
   with: { client-id: ..., tenant-id: ..., subscription-id: ... }
 - uses: azure/artifact-signing-action@v2   # v2 (2026-05) — rebranded from Trusted Signing; new inputs file-digest/timestamp-rfc3161
   with:
@@ -65,8 +71,7 @@ Unsigned `.exe` → SmartScreen blocks + AV warnings (plan.md Part J decision ma
       dist/agent-windows-x64-baseline/agent.exe
 # verify: Get-AuthenticodeSignature dist/.../agent.exe  (must be Valid)
 # ⚠ the action documents NO Windows ARM (arm64) signing support — verify before signing win-arm64
-```
-# repack .zip then `gh release upload` to the tag
+# then: repack .zip and `gh release upload` to the tag
 ```
 
 macOS binaries need Developer ID + notarization (`xcrun notarytool`, or electron-builder flow for the desktop app — see `electron` skill).
