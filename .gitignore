@@ -13,3 +13,4 @@ build/
 .artifacts/
 .auoreo/
 web/dist/
+.claude/worktrees/
