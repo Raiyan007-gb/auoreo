@@ -7,9 +7,11 @@ description: Python 3.12+ conventions for this repo — modern typing, async/awa
 
 This repo is a Python 3.12+ monorepo under `src/` with `agent_*` package names (plan.md Part D). Follow these conventions so the codebase stays uniform.
 
+Context7: `/astral-sh/ruff` (lint/format) + `/astral-sh/uv` (running tools) + `/pytest-dev/pytest-asyncio`.
+
 ## Modern Python idioms (Python 3.12+)
 
-- Use `X | None` (PEP 604), `list[X]`/`dict[str, X]` (PEP 585), `typing.Protocol`, `dataclass`/Pydantic models, and match statements. No `typing.Optional`, `typing.List`, or `from __future__ import annotations` where the interpreter already supports it.
+- Use `X | None` (PEP 604), `list[X]`/`dict[str, X]` (PEP 585), `typing.Protocol`, `dataclass`/Pydantic models, and match statements. Use PEP 695 syntax (3.12+) for generics and aliases: `class Store[T]: ...`, `def first[T](xs: list[T]) -> T`, and `type EventId = str` instead of `TypeVar`/`TypeAlias` boilerplate (ruff `UP040`/`UP046`/`UP047` flag the old forms). No `typing.Optional`, `typing.List`, or `from __future__ import annotations` where the interpreter already supports it.
 - Prefer `async def` + `await` for I/O (FastAPI handlers, SSE generators, gateway calls). The whole server is async — never block the event loop with sync DB/HTTP calls inside handlers.
 - Use `asyncio.Queue` for per-client event fan-out (plan.md Part G; see `fastapi` skill SSE section).
 - Return early, keep functions focused; use `Enum`/`Literal` for tag-like fields (event types, ToolState status).
@@ -17,13 +19,14 @@ This repo is a Python 3.12+ monorepo under `src/` with `agent_*` package names (
 ## Typing + linting (plan.md Part K)
 
 ```bash
-uvx ruff check src/          # lint (fast, replaces flake8+isort+pyupgrade)
+uvx ruff check src/          # lint (fast, replaces flake8+isort+pyupgrade once "I"/"UP" are in [tool.ruff.lint] select)
 uvx ruff format --check src/ # formatting
-uvx mypy src/                # strict-ish type checking
+uv run mypy src/             # strict-ish type checking (needs the project env → uv run, not uvx)
 ```
 
 - Every public API uses **type annotations**; mypy is a CI gate. `# type: ignore` needs a comment explaining why.
 - Prefer explicit return types on exported functions.
+- Ruff can run isolated via `uvx` and infers `target-version` from `requires-python`. mypy (and pytest) have to see the installed `src/` packages and their deps, so run them with `uv run` (uv docs: use `uv run`, not `uvx`, for tools that need the project installed).
 
 ## Async testing
 

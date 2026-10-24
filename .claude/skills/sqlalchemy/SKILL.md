@@ -1,11 +1,11 @@
 ---
 name: sqlalchemy
-description: SQLite (and later Postgres) persistence with SQLAlchemy 2.0 — declarative models, sessions, migrations with Alembic. Use when writing agent_core database/event/session stores in this repo.
+description: SQLite (and later Postgres) persistence with SQLAlchemy 2.0 — declarative models, sync/async sessions, migrations with Alembic. Use when writing agent_core database/event/session stores in this repo.
 ---
 
 # SQLAlchemy 2.0 — storage layer (agent_core)
 
-Docs: https://docs.sqlalchemy.org/en/20 · Context7: `/websites/sqlalchemy_en_20` (Core, 81) + `/websites/sqlalchemy_en_20_orm` (ORM, 86). This repo: SQLite first, Postgres+pgvector as an adapter (plan.md Part E).
+Docs: https://docs.sqlalchemy.org/en/20 · Context7: `/websites/sqlalchemy_en_20` (Core) + `/websites/sqlalchemy_en_20_orm` (ORM, incl. asyncio ext) + `/websites/alembic_sqlalchemy_en` (Alembic). This repo: SQLite first, Postgres+pgvector as an adapter (plan.md Part E).
 
 ## Declarative models (2.0 style — Mapped + mapped_column)
 
@@ -47,18 +47,35 @@ with SessionLocal() as session:
 ```
 
 - In async handlers use `async_sessionmaker` + `create_async_engine("sqlite+aiosqlite:///...")`; never block the event loop with sync DB calls inside FastAPI/SSE (plan.md Part C).
+
+```python
+from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
+
+# For async, declare the Base above as `class Base(AsyncAttrs, DeclarativeBase)` → `await obj.awaitable_attrs.rel`
+engine = create_async_engine("sqlite+aiosqlite:///./agent.db")
+SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+async with SessionLocal() as session:
+    async with session.begin():               # commits on exit, rolls back on error
+        session.add(EventRow(...))
+    rows = (await session.scalars(select(EventRow).filter_by(aggregate_id=sess_id))).all()
+# at shutdown (FastAPI lifespan): await engine.dispose()
+```
+
+- Async gotcha: lazy loading triggers implicit IO, which raises under `AsyncSession`. Set `expire_on_commit=False` so attributes stay readable after `commit()`, eager-load relationships with `selectinload(...)`, or use `awaitable_attrs`.
 - One short-lived `Session` per operation (per request / per event batch); commit explicitly. A single shared long-lived session across requests causes stale identity map bugs.
 
 ## Migrations (Alembic)
 
 ```bash
 uv add --dev alembic
-alembic init src/agent_core/alembic
-# configure env.py to import Base.metadata from agent_core
-alembic revision --autogenerate -m "add events table"
-alembic upgrade head
+uv run alembic init -t async src/agent_core/alembic   # async template (works with aiosqlite/asyncpg)
+# configure env.py: target_metadata = Base.metadata from agent_core; render_as_batch=True
+uv run alembic revision --autogenerate -m "add events table"
+uv run alembic upgrade head
 ```
 
+- Set `render_as_batch=True` in `context.configure(...)` in `env.py`. SQLite can't `ALTER` most column/constraint changes, so autogenerate has to emit `batch_alter_table` (copy-and-move) operations. Postgres is unaffected.
 - Migrations live in `agent_core/alembic/` (plan.md Part D). Every schema change = new revision; `upgrade head` runs in CI and at deploy.
 - Events table gets a `schema_version` guard so the app can detect "DB newer than code" and refuse to start (plan.md Part E).
 
