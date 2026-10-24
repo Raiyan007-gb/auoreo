@@ -49,16 +49,24 @@ async def unsubscribe(q) -> None:
 
 **FastAPI 0.135+ ships native SSE**: `from fastapi.sse import EventSourceResponse, ServerSentEvent`
 (auto `Cache-Control: no-cache`, `X-Accel-Buffering: no`, 15 s keep-alive ping). Use it as the
-default. On an older FastAPI, `sse-starlette` provides the identical API (same class/field names) —
-switch only the import.
+default. Docs: https://fastapi.tiangolo.com/tutorial/server-sent-events/ · Context7: `/websites/fastapi_tiangolo`.
+On FastAPI < 0.135, `sse-starlette` (Context7: `/sysid/sse-starlette`) has similarly named classes
+but is **not** an import-only swap: wrap the generator and `return EventSourceResponse(gen())`
+instead of `response_class=` + `yield`; its `ServerSentEvent` has no `raw_data` and doesn't
+JSON-encode `data`.
 
 ```python
-from fastapi.sse import EventSourceResponse, ServerSentEvent   # native (FastAPI >= 0.135)
-# from sse_starlette.sse import EventSourceResponse, ServerSentEvent  # fallback (older)
+from collections.abc import AsyncIterable
+from typing import Annotated
 from fastapi import Header, Request
+from fastapi.sse import EventSourceResponse, ServerSentEvent   # native (FastAPI >= 0.135)
 
 @app.get("/api/event", response_class=EventSourceResponse)
-async def event_stream(request: Request, last_event_id: int | None = Header(default=None)):
+async def event_stream(
+    request: Request,
+    last_event_id: Annotated[int | None, Header()] = None,     # browser resends last `id` on reconnect
+) -> AsyncIterable[ServerSentEvent]:
+    # must yield (not return a response) so FastAPI's native keep-alive ping is applied
     # 1) Replay missed durable events from seq after last_event_id (DB query, ordered by seq)
     # 2) Then live-tail the subscriber queue
     q = await subscribe()                      # subscribe AFTER validating auth
@@ -75,10 +83,11 @@ async def event_stream(request: Request, last_event_id: int | None = Header(defa
         await unsubscribe(q)                   # always clean up, incl. on cancel
 ```
 
-## Production checklist (verified via Exa, 2026)
+## Production checklist (verified via Exa + Context7, 2026)
 
-- Headers: `Cache-Control: no-cache` + `X-Accel-Buffering: no` (sse-starlette sets both automatically).
-- Keep-alive: send a `: ping` comment every 15–30 s (sse-starlette `ping` param) to outlast proxy idle timeouts (ALB/Nginx close idle connections at 55–60 s).
+- Headers: `Cache-Control: no-cache` + `X-Accel-Buffering: no` (`fastapi.sse` sets both automatically; sse-starlette sets `X-Accel-Buffering: no` + `Cache-Control: no-store`).
+- Keep-alive: a `: ping` comment every 15–30 s to outlast proxy idle timeouts (ALB/Nginx close idle connections at 55–60 s) — `fastapi.sse` does this every 15 s when idle; sse-starlette `ping=` (default 15 s). Manual: `ServerSentEvent(comment="ping")`.
+- `id` must be a single line with no `\0`; `retry` is in milliseconds.
 - Monotonic `seq` from a **DB sequence / Redis INCR** — never `time.time()` (must be strictly ordered across restarts, plan.md Part G).
 - Disconnect handling: check `request.is_disconnected()` before blocking `queue.get()`; re-raise `asyncio.CancelledError` after `finally` cleanup; don't swallow it.
 - Proxy: `proxy_buffering off`, `proxy_read_timeout 3600s`, gzip disabled on `text/event-stream`.

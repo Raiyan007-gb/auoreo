@@ -12,37 +12,46 @@ This repo's auth model (plan.md Part H #11, Part B "Auth"): (1) the **server** c
 Mirror opencode's `OPENCODE_SERVER_PASSWORD`: server reads `AGENT_PLATFORM_SERVER_PASSWORD`. If unset AND hostname ≠ loopback, **warn on startup** ("server is unsecured" — opencode's exact behavior in `serve.ts`).
 
 ```python
+import secrets
+from typing import Annotated
 from fastapi import Depends, HTTPException, Header
 
-def require_token(authorization: str | None = Header(default=None)) -> None:
+def require_token(authorization: Annotated[str | None, Header()] = None) -> None:
     if settings.server_password is None:
         return                                   # local single-user → allow
-    if authorization != f"Bearer {settings.server_password}":
-        raise HTTPException(status_code=401, detail="invalid or missing token")
+    expected = f"Bearer {settings.server_password}".encode()
+    if not secrets.compare_digest((authorization or "").encode(), expected):   # constant-time
+        raise HTTPException(status_code=401, detail="invalid or missing token",
+                            headers={"WWW-Authenticate": "Bearer"})
 
 @app.get("/health", dependencies=[Depends(require_token)]) ...
 ```
 
 - Attach via `dependencies=[...]` or a router-wide dependency on group routers (`agent_api/middleware/auth.py`).
 - mDNS/`--mdns` forces hostname `0.0.0.0` → password effectively required there.
+- Alternative: `fastapi.security.HTTPBearer(auto_error=False)` as the dependency (returns
+  `HTTPAuthorizationCredentials | None`) — same check, but the scheme shows up in OpenAPI/`/docs` and generated SDKs.
 
 ## 2. Provider login flow (`agent login`)
 
-Flow per provider: initiate OAuth → user authorizes in browser → redirect to local callback → exchange code → store token. Use `Authlib` for OAuth2/PKCE.
+Flow per provider: initiate OAuth → user authorizes in browser → redirect to local callback → exchange code → store token. Use `Authlib` for OAuth2/PKCE (Context7: `/authlib/authlib`).
 
 ```python
+from authlib.common.security import generate_token
 from authlib.integrations.httpx_client import AsyncOAuth2Client
 
 # 1. start
 client = AsyncOAuth2Client(
     client_id,
     redirect_uri="http://127.0.0.1:PORT/callback",
-    code_challenge_method="S256",        # Authlib passes PKCE automatically; set S256 at init
+    code_challenge_method="S256",        # Authlib derives the S256 challenge from code_verifier
 )
-url, state = await client.create_authorization_url(authorize_url, code_verifier=...)
+code_verifier = generate_token(48)
+url, state = client.create_authorization_url(authorize_url, code_verifier=code_verifier)  # sync, no await
+# persist (state, code_verifier) until the callback arrives
 
-# 2. callback (agent_api exposes the callback route)
-token = await client.fetch_token(token_endpoint, authorization_response=request.url, code_verifier=...)
+# 2. callback (agent_api exposes the callback route) — fetch_token verifies `state` (CSRF)
+token = await client.fetch_token(token_endpoint, authorization_response=str(request.url), code_verifier=code_verifier)
 
 # 3. store
 await credential_store.set(provider_id, {"type": "oauth", "token": token})   # keyring / env file
@@ -56,7 +65,9 @@ await credential_store.set(provider_id, {"type": "oauth", "token": token})   # k
 
 - Interface `agent_core/auth.CredentialStore` with backends: **env** (read-only, primary) → **keyring** (OS keychain) → **file** (`~/.agent-platform/auth.json` mode 0600, test/local only).
 - Never store plaintext secrets in the repo, or in `.env` accidentally committed. Keep `.env` git-ignored (plan.md Part K).
-- Token refresh: store `refresh_token` + `expires_at`; refresh before expiry in the gateway.
+- Token refresh: store `refresh_token` + `expires_at`; refresh before expiry in the gateway. With Authlib,
+  construct the client with `token=stored, token_endpoint=..., update_token=async_cb` — it auto-refreshes
+  (60 s before expiry by default, `leeway=`) on the next request and calls `update_token` to persist the new token.
 
 ## 4. MCP server auth (later, agent_mcp/oauth.py)
 

@@ -5,7 +5,7 @@ description: Define contract models and validation with Pydantic v2 — BaseMode
 
 # Pydantic v2 — schema source of truth (agent_schema)
 
-Docs: https://docs.pydantic.dev · Context7: `/pydantic/pydantic` (v2, benchmark 81). Pydantic v2 is the contract layer: `agent_schema` models → FastAPI request/response → OpenAPI → generated SDKs (plan.md Part B + K).
+Docs: https://docs.pydantic.dev · Context7: `/websites/pydantic_dev_validation` (v2 docs; repo: `/pydantic/pydantic`), settings: `/pydantic/pydantic-settings`. Pydantic v2 is the contract layer: `agent_schema` models → FastAPI request/response → OpenAPI → generated SDKs (plan.md Part B + K).
 
 ## Base models
 
@@ -55,7 +55,10 @@ ToolState = Annotated[
 ]
 ```
 
-- `model_validate({...})` dispatches to the right variant automatically; `model_dump(mode="json")` serializes for SSE/API.
+- As a field on a model, `Model.model_validate({...})` dispatches to the right variant automatically;
+  `model_dump(mode="json")` serializes for SSE/API.
+- `ToolState` itself is an `Annotated` alias, not a `BaseModel` — validate it standalone with
+  `TypeAdapter(ToolState).validate_python(...)` / `.dump_python(..., mode="json")` (build the adapter once, module-level).
 - This mirrors opencode's `Schema.Struct` tagged-union approach for `session-message` + `tool-state`.
 
 ## Settings / env
@@ -66,15 +69,20 @@ Use `pydantic-settings` for server config from env (secrets stay in env, plan.md
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    server_password: str | None = None
+    model_config = SettingsConfigDict(env_prefix="AGENT_PLATFORM_", env_file=".env", extra="ignore")
+    server_password: str | None = None        # ← AGENT_PLATFORM_SERVER_PASSWORD (auth-oauth skill)
     database_url: str = "sqlite+aiosqlite:///./agent.db"
-    cors_origins: list[str] = []
+    cors_origins: list[str] = []              # env value must be JSON: '["http://localhost:3000"]'
 ```
+
+- Complex fields (`list`, `dict`, sub-models) are JSON-decoded from env; a non-JSON value raises
+  `SettingsError`. For comma-separated input use `Annotated[list[str], NoDecode, BeforeValidator(split)]`
+  (`from pydantic_settings import NoDecode`).
 
 ## Correctness notes for this repo
 
 - **Discriminator fields must be `Literal`** on every variant or validation fails — keep the `status`/`type` tags exact (they're the wire contract for the event manifest).
 - FastAPI derives OpenAPI from these models; run the `sdk.yml` guard after any schema change (plan.md Part K).
-- Don't mutate shared models between requests; prefer `model_copy(update=...)` for derived states.
+- Don't mutate shared models between requests; prefer `model_copy(update=...)` for derived states
+  (note: `update` values are **not validated** — only pass trusted, already-typed data; nested models are shared unless `deep=True`).
 - v2 vs v1: no `Config` class — use `model_config = ConfigDict(...)`; no `.dict()`/`.parse_obj()` — use `model_dump()`/`model_validate()`.
