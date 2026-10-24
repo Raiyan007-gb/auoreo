@@ -25,19 +25,23 @@ async def stream_chat(model: str, messages: list[dict], **kwargs) -> AsyncIterat
         stream=True,
         temperature=kwargs.get("temperature", 0.4),
         max_tokens=kwargs.get("max_tokens"),
-        # optional budget/retry:
+        # optional retry/failover:
         num_retries=kwargs.get("num_retries", 2),
-        max_cost=kwargs.get("max_cost"),          # abort above a cost cap
+        fallbacks=kwargs.get("fallbacks"),        # e.g. ["openai/gpt-...", ...] tried in order
+        stream_options={"include_usage": True},   # final chunk carries usage (choices == [])
         metadata={"session_id": kwargs.get("session_id")},
     )
     async for chunk in resp:
+        if not chunk.choices:                     # usage-only chunk at end of stream
+            record_usage(chunk.usage)             # prompt_tokens / completion_tokens
+            continue
         delta = chunk.choices[0].delta  # type: ignore[union-attr]
         if delta and delta.content is not None:
             yield delta.content
 ```
 
 - **Provider credentials come from env vars** — never from code. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, `DEEPSEEK_API_KEY`, etc. LiteLLM reads them automatically. This repo keeps keys in env/keyring (plan.md Part K).
-- `litellm.token_counter(messages=..., model=...)` for input token counting; responses carry `usage.input_tokens/output_tokens` for cost accounting (plan.md `sessions.tokens`).
+- `litellm.token_counter(messages=..., model=...)` for input token counting; responses carry OpenAI-style `usage.prompt_tokens/completion_tokens/total_tokens` for accounting (plan.md `sessions.tokens`). `litellm.completion_cost(completion_response=resp)` returns USD cost from LiteLLM's price map.
 
 ## Proxy config (model_list)
 
@@ -58,7 +62,7 @@ Call through the proxy with the OpenAI SDK: `OpenAI(base_url="http://localhost:4
 
 ## Correctness notes for this repo
 
-- **Retries/fallbacks:** set `num_retries`; consider `model_fallbacks=["..."]` for provider downtimes. Surface retryable vs fatal through `agent_gateway` errors (don't leak LiteLLM exceptions to `agent_api` — map to typed errors).
-- **Budgets per session:** pass `max_cost` or enforce in `agent_gateway/registry.py` per-run caps using `usage`.
-- **Ollama/local:** LiteLLM supports `ollama/...`, `vllm/...` (OpenAI-compatible `host=...`), so the platform stays provider-neutral even offline.
+- **Retries/fallbacks:** set `num_retries` (LiteLLM's own retry loop — not the provider SDK's `max_retries`); use `fallbacks=["..."]` for provider downtimes (primary `model` is tried first, don't repeat it). For multi-deployment load balancing in-process, `litellm.Router(model_list=[...], num_retries=..., fallbacks=[{"a": ["b"]}])` + `await router.acompletion(...)`. Surface retryable vs fatal through `agent_gateway` errors (don't leak LiteLLM exceptions to `agent_api` — map to typed errors).
+- **Budgets per session:** the SDK `completion()` has no per-call cost-cap kwarg — enforce per-run caps in `agent_gateway/registry.py` from `usage` + `completion_cost()`. (Hard budgets via `max_budget`/virtual keys exist on the proxy side.)
+- **Ollama/local:** LiteLLM supports `ollama/...` and `hosted_vllm/<model>` (OpenAI-compatible server via `api_base=...`), so the platform stays provider-neutral even offline.
 - Wrap LiteLLM behind the `agent_gateway` interface so tests can inject a fake gateway (plan.md Part K testing pyramid); never import `litellm` outside `agent_gateway`.
