@@ -7,11 +7,18 @@ description: TypeScript 5.9/6.x conventions for the web/ tree — strict setting
 
 TypeScript is only used for the **clients** (web/tui, web/app, web/desktop, web/sdk) — plan.md Part D. All engine/server code stays Python (`src/`).
 
-> **TS 6.0 is stable** (2026-03-23; 5.9.3 was the last 5.x). TS 6.0 changes defaults: `strict`
-> now defaults `true`, `moduleResolution` defaults to `bundler`. The tsconfig below is still
-> valid (explicit flags are now partially redundant) — keep it explicit for clarity. `tsc --init`
-> under 6.0 additionally recommends `verbatimModuleSyntax`, `isolatedModules`,
-> `moduleDetection: "force"`, `noUncheckedSideEffectImports`, `exactOptionalPropertyTypes`.
+Context7: `/websites/typescriptlang` (TS 6.0 release notes) · `/microsoft/typescript/v6.0.2` · `/microsoft/typescript-go` (TS 7).
+
+> **TS 6.0 is stable** (2026-03-23; 5.9.3 was the last 5.x) and is the **last JS-based release** —
+> TS 7.0 is the Go native port (`@typescript/native-preview`, `npx tsgo`; the command is `tsc` from
+> 7.0 RC on). TS 6.0 default changes: `strict: true`, `module: esnext`, `target` floats to the
+> latest ES (currently `es2025`), `noUncheckedSideEffectImports: true`, **`types: []`** (no more
+> auto-including every `@types/*`), and **`rootDir` = the tsconfig's directory**. Deprecated in 6.0
+> and removed in 7.0: `baseUrl` (put the prefix in `paths`), `moduleResolution: node`/`node10`
+> (use `bundler` or `nodenext`), `classic`, `target: ES5`, `module: AMD/UMD/System`, `outFile`,
+> `downlevelIteration`, `esModuleInterop: false`. The tsconfig below is TS 6/7-safe — keep it
+> explicit for clarity. `tsc --init` (since 5.9) also recommends `verbatimModuleSyntax`,
+> `isolatedModules`, `moduleDetection: "force"`, `exactOptionalPropertyTypes`.
 
 ## Strict config (tsconfig.base.json)
 
@@ -32,6 +39,7 @@ TypeScript is only used for the **clients** (web/tui, web/app, web/desktop, web/
 ```
 
 - `noUncheckedIndexedAccess` forces handling of `arr[i]` returns `T | undefined` — matches the codebase standard (no silent `undefined` access).
+- Because `types` now defaults to `[]`, each package lists its globals explicitly: `web/tui` → `"types": ["node"]` (+ `npm i -D @types/node`), `web/app` → `"types": ["vite/client"]` (for `import.meta.env`). "Cannot find name 'process'" after upgrading means a missing `types` entry.
 - No `any` in committed code; if unavoidable, scope it with a comment.
 
 ## Layout
@@ -44,7 +52,7 @@ TypeScript is only used for the **clients** (web/tui, web/app, web/desktop, web/
 ```ts
 // web/app/src/lib/sse.ts — subscribe to a single /api/event stream, replay on reconnect
 export function subscribeEvents(baseUrl: URL, lastSeq: number, onEvent: (e: EventPayload) => void) {
-  const es = new EventSource(`${baseUrl}/api/event?last_seq=${lastSeq}`);
+  const es = new EventSource(new URL(`/api/event?last_seq=${lastSeq}`, baseUrl)); // avoids "//api" from a trailing-slash base
   es.addEventListener("message", (ev) => { try { onEvent(JSON.parse(ev.data)) } catch {} });
   return () => es.close();
 }
@@ -57,7 +65,7 @@ export function subscribeEvents(baseUrl: URL, lastSeq: number, onEvent: (e: Even
 
 - `npm`/`pnpm` workspaces at repo root for `web/*`; `tsc --noEmit` is the typecheck CI gate.
 - `vite build` produces `dist/` served by `agent_api` on the same port (plan.md Part C.1; see `fastapi` skill static section).
-- Env vars: prefix client-visible config with `VITE_` when using Vite define/env; keep secrets server-side only — never bundle API keys into the web bundle.
+- Env vars: only `VITE_`-prefixed vars are exposed to client code (`import.meta.env.VITE_*`; type them in `vite-env.d.ts` via `interface ImportMetaEnv`); keep secrets server-side only — never bundle API keys into the web bundle.
 
 ## Codegen (no drift)
 

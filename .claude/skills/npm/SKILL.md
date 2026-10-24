@@ -1,6 +1,6 @@
 ---
 name: npm
-description: Publish web/sdk and the binary launcher to npm — package.json bin, workspaces, provenance, dist-tags, and the bin/agent Node launcher that spawns the native binary. Use when building web/* release channel.
+description: Publish web/sdk and the binary launcher to npm — package.json bin, workspaces, OIDC trusted publishing + provenance, staged publishing, dist-tags, and the bin/agent Node launcher that spawns the native binary. Use when building web/* release channel.
 ---
 
 # npm — JS distribution channel (plan.md Part J)
@@ -13,13 +13,14 @@ npm is the channel that gives devs **one command** (`npm i -g agent-platform`) p
 {
   "name": "agent-platform",
   "version": "1.2.3",
-  "type": "module",      # ⚠ ESM package — see bin/agent.cjs note below
-  "bin": { "agent": "./bin/agent.cjs" },   # .cjs: launcher uses require(); ESM .js would break
+  "type": "module",
+  "bin": { "agent": "./bin/agent.cjs" },
   "files": ["bin", "dist"],
   "engines": { "node": ">=22.14" }
 }
 ```
 
+- ⚠ `"type": "module"` makes this an ESM package — hence `bin/agent.cjs` (see note below). (No comments in real `package.json` — it's strict JSON.)
 - `bin` maps the command name → an executable JS file with a shebang `#!/usr/bin/env node`; npm creates the global/linkable binary.
 - **`.cjs` matters:** with `"type": "module"`, a `.js` file is ESM and `require()` is undefined (`ERR_REQUIRE_ESM`). Name the launcher `bin/agent.cjs` (CommonJS) — or rewrite it with `import { spawn } from "node:child_process"` and keep `.js`. The launcher pattern below uses `require`, so use `.cjs`.
 - `files` whitelist keeps the tarball small (only what's needed).
@@ -34,8 +35,8 @@ npm is the channel that gives devs **one command** (`npm i -g agent-platform`) p
 This is how "npm command" and "exe" become the same artifact: the npm package is the delivery channel, the compiled binary is the payload.
 
 ```js
-// bin/agent.cjs (simplified) — .cjs because the package is "type": "module"
 #!/usr/bin/env node
+// bin/agent.cjs (simplified) — .cjs because the package is "type": "module"; shebang MUST be line 1
 const { spawn } = require("node:child_process");
 const os = require("node:os");
 const p = `${os.platform()}-${os.arch()}`;
@@ -49,13 +50,14 @@ child.on("exit", code => process.exit(code ?? 0));
 
 Repo `package.json` defines `web/*` workspaces; `web/sdk` is the publishable package. `npm ci --workspace web/sdk` installs only what's needed.
 
-## Publishing rules/verification (Context7 `/npm/cli`, `npm/cli` ★)
+## Publishing rules/verification (Context7 `/npm/cli`, `/websites/npmjs`)
 
-- **npm OIDC trusted publishing is GA** (npm CLI ≥ 11.5.1, Node ≥ 22.14, 2025-07) — no publish token needed. In CI: set `permissions: { id-token: write }`, `setup-node` with `registry-url`, then `npm publish --provenance --access public --tag <tag>`; the publish authenticates via OIDC. A separate **read-only** `NPM_READ_TOKEN` is only for installing private deps (never for publish). Requires `node >= 22.14` (hence `engines` above) — verify via `npm publish --dry-run` first (see `github-actions` skill for the workflow).
-- **Trusted-publisher config (2026-05-20 change):** npm now requires each trusted publisher to explicitly select at least one allowed action — `--allow-publish` and/or `--allow-stage-publish`. A new `npm trust` CLI exists (requires npm ≥ 11.15.0) for managing publishers. One trusted publisher per package; the workflow filename must match exactly (case-sensitive); **self-hosted runners are not supported** for npm OIDC — cloud runners only.
-- **Provenance caveat:** `--provenance` is unavailable when publishing from a **private** source repository (GitHub changelog 2025-07-31). If the repo is private, drop `--provenance` or make it conditional.
+- **npm OIDC trusted publishing is GA** (npm CLI ≥ 11.5.1, Node ≥ 22.14, 2025-07) — no publish token needed. In CI: set `permissions: { id-token: write, contents: read }`, `actions/setup-node@v6` with `registry-url: https://registry.npmjs.org` and `package-manager-cache: false` (no caching in release builds; npm's example uses `node-version: '24'`), then `npm publish --tag <tag>`; the publish authenticates via OIDC. A separate **read-only** `NPM_READ_TOKEN` (as `NODE_AUTH_TOKEN` on `npm ci`) is only for installing private deps (never for publish). Requires `node >= 22.14` (hence `engines` above) — verify via `npm publish --dry-run` first (see `github-actions` skill for the workflow).
+- **Provenance is automatic** with trusted publishing from GitHub Actions/GitLab when the repo is **public** and the package is public — `--provenance` is no longer needed (harmless to keep). From a **private** source repo no provenance is generated, even for public packages — drop or condition the flag.
+- **Trusted-publisher config:** each trusted publisher must select at least one allowed action — `--allow-publish` and/or `--allow-stage-publish`. Manage them with `npm trust <provider>` (requires npm ≥ 11.15.0, account 2FA, package must already exist; `npm trust <provider> --help` lists provider claims). Up to **10** trusted publishers per package; existing ones can't be edited — delete + recreate. The workflow filename must match exactly (case-sensitive); **self-hosted runners are not supported** — cloud runners only (GitHub-hosted, GitLab.com shared, CircleCI cloud; CircleCI gets no provenance).
+- **Staged publishing (optional, stronger):** `npm stage publish` uploads the version without making it public and without a 2FA prompt; a maintainer then runs `npm stage approve <stage-id>` (2FA) — also `stage list|view|reject|download`. npm recommends trust relationships allow only stage-publish and packages be set to "require 2FA and disallow tokens".
 - **Dist-tags:** `--tag alpha|beta|rc|latest` — a tag write touches ONLY that tag (`root['dist-tags'][tag] = version`); `latest` is untouched by `--tag alpha`. Resolve the tag from the version string (like opencode's resolver).
-- `publishConfig.access=public` for unscoped public packages; avoid `gettings tag` surprises by **not** setting a default tag in most cases (release workflow always passes `--tag` explicitly).
+- **Access:** unscoped packages (`agent-platform`, `agent-<platform>-<arch>`) are always public; `--access public` / `publishConfig.access` only matters for **scoped** packages (default restricted) and only on first publish. Avoid "default tag" surprises by **not** setting `publishConfig.tag` in most cases (release workflow always passes `--tag` explicitly).
 - No secrets in the tarball: `files` + `.npmignore`; never ship `*.local.json`, `.env`, keys.
 - Test with `npm publish --dry-run` locally before CI. `prepublishOnly` script runs the build on publish.
 

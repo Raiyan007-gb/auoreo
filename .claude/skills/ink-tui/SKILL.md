@@ -12,6 +12,7 @@ Docs: https://github.com/vadimdemedes/ink · Context7: `/vadimdemedes/ink` (Reac
 ## Entry + render
 
 ```tsx
+import { useState } from "react";
 import { render, Box, Text } from "ink";
 
 function App({ sessionId }: { sessionId: string }) {
@@ -29,27 +30,31 @@ render(<App sessionId="sess_..."/>);
 ```
 
 - Use `Box`/`Text` — Ink primitives (`Box` = flex container, `Text` = terminal text). `Text color={...}` for ANSI styling.
-- `render()` returns `{ unmount, waitUntilExit }` — keep a handle for programmatic exit.
+- `render()` returns an `Instance`: `{ rerender, unmount, waitUntilExit, waitUntilRenderFlush, cleanup, clear }` — keep a handle for programmatic exit. `waitUntilExit()` resolves with the value passed to `exit(value)` (rejects on `exit(error)`).
+- `render(<App/>, { alternateScreen: true })` renders in the alternate screen buffer (like vim/htop) and restores the shell on exit — interactive TTY only, ignored in CI/piped stdout.
 
 ## Keyboard + focus (multi-pane)
 
 ```tsx
-import { useInput, useFocus, useFocusManager } from "ink";
+import { useInput, usePaste, useFocus, useFocusManager } from "ink";
 
-function PromptFooter({ active }: { active: boolean }) {
-  const { isFocused, focus } = useFocus();
+function PromptFooter() {
+  const { isFocused } = useFocus({ id: "prompt", autoFocus: true });
+  const [buf, setBuf] = useState("");
   useInput((input, key) => {
-    if (!isFocused) return;
-    if (key.return) submit(input);      // Enter
+    if (key.return) { submit(buf); setBuf(""); }          // Enter
+    else if (key.backspace) setBuf((b) => b.slice(0, -1));
     else if (key.escape) cancel();
-    else if (key.tab) focusNextPane();  // move between message list / prompt / model picker
-  }, { isActive: active });
-  return <Text color={isFocused ? "cyan" : "white"}>{"> " + input}</Text>;
+    else if (!key.ctrl && !key.meta && !key.tab) setBuf((b) => b + input);
+  }, { isActive: isFocused });
+  usePaste((text) => setBuf((b) => b + text), { isActive: isFocused }); // bracketed paste, one string
+  return <Text color={isFocused ? "cyan" : "white"}>{"> " + buf}</Text>;
 }
 ```
 
-- `useFocusManager().focus(id)` to move focus programmatically (e.g. Tab cycles panes).
-- Hold "input buffer" state in the component (Ink input is event-based; there's no native <input>).
+- Ink's focus manager already handles **Tab / Shift+Tab** (`focusNext`/`focusPrevious`) and **Escape clears active focus** — don't re-implement Tab cycling; give panes `useFocus({ id })` (message list / prompt / model picker) and gate each `useInput` with `isActive: isFocused`.
+- `useFocusManager()` → `{ focus(id), focusNext, focusPrevious, enableFocus, disableFocus, activeId }` to move focus programmatically.
+- Hold "input buffer" state in the component (Ink input is event-based; there's no native <input>). `usePaste` delivers pasted text on a separate channel (never forwarded to `useInput` while active).
 
 ## App lifecycle / terminal control
 
@@ -58,8 +63,8 @@ import { useApp } from "ink";
 const { exit, waitUntilRenderFlush, suspendTerminal } = useApp();
 ```
 
-- `exit()` unmounts the app; `waitUntilRenderFlush()` for sequencing output with shell.
-- `suspendTerminal(async () => {})` to hand the terminal to a child process (e.g. `$EDITOR`, a pager) then restore — useful for `agent run`/reviews.
+- `exit()` unmounts the app (`exit(value)` resolves `waitUntilExit()` with `value`, `exit(err)` rejects it); `waitUntilRenderFlush()` for sequencing output with shell.
+- `await suspendTerminal(async () => {})` to hand the terminal to a child process (e.g. `$EDITOR`, a pager) then restore + full redraw — useful for `agent run`/reviews. Also callable without a callback (`const s = await suspendTerminal(); … await s.resume()`) or as `await using s = await suspendTerminal()`. Nested suspension throws; no-op handoff in non-TTY mode.
 
 ## Streaming the event feed
 
@@ -72,8 +77,8 @@ const { exit, waitUntilRenderFlush, suspendTerminal } = useApp();
 
 ## Gotchas
 
-- **Ink v7 requires Node.js ≥ 22 and React ≥ 19.2** (v7.0.0 breaking change) — and physical Backspace sets `key.backspace` (not `key.delete`), `key.meta` no longer set on plain Escape.
+- **Ink v7 requires Node.js ≥ 22**; current **7.1.x** declares peer `react`/`@types/react` **≥ 19.3.0** (v7.0.0 needed ≥ 19.2) — pin `react` accordingly in `web/tui`. Physical Backspace sets `key.backspace` (not `key.delete`), `key.meta` no longer set on plain Escape.
 - Ink is single-threaded; keep `useInput` handlers cheap and non-blocking.
-- Long-running: call `update()`/setState rather than mutating the rendered tree directly; the full `render()` is per-root.
+- Long-running: use setState (or `instance.rerender(<App …/>)` from outside React) rather than mutating the rendered tree directly; one `render()` per stdout — call `unmount()` before rendering again.
 - Terminal themes: expose color via props/theme copy so `Theme` reuse works (app + TUI share tokens).
 - Windows: Ink supports Windows terminals; test `web/tui` on Windows host (this repo's dev machine) and in WSL/CI (linux + darwin).
