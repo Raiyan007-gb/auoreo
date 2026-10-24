@@ -6,7 +6,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, event, func, select
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    event,
+    func,
+    select,
+)
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -16,7 +28,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: sessions.archived, usage, messages_archive (M3)
 
 
 def utcnow() -> datetime:
@@ -59,6 +71,7 @@ class SessionRow(Base):
     model: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="idle")
     parent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow)
 
@@ -82,6 +95,35 @@ class MessageRow(Base):
     message: Mapped[dict[str, Any]]
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     __table_args__ = (Index("ix_messages_session", "session_id", "idx", unique=True),)
+
+
+class MessageArchiveRow(Base):
+    """Messages replaced by compaction (soft-archive, still searchable). Schema v2."""
+
+    __tablename__ = "messages_archive"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("sessions.id", ondelete="CASCADE"))
+    compaction_id: Mapped[str] = mapped_column(String(64))
+    idx: Mapped[int] = mapped_column(Integer)
+    message: Mapped[dict[str, Any]]
+    archived_at: Mapped[datetime] = mapped_column(default=utcnow)
+    __table_args__ = (Index("ix_messages_archive_session", "session_id", "compaction_id"),)
+
+
+class UsageRow(Base):
+    """Per model call token/cost ledger (spec §20.2). Schema v2."""
+
+    __tablename__ = "usage"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(64), index=True)
+    run_id: Mapped[str] = mapped_column(String(64))
+    model: Mapped[str] = mapped_column(String(255))
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cached_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    estimated: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
 class AuditRow(Base):
@@ -152,7 +194,9 @@ __all__ = [
     "Database",
     "EventRow",
     "IdempotencyRow",
+    "MessageArchiveRow",
     "MessageRow",
     "SessionRow",
+    "UsageRow",
     "utcnow",
 ]
