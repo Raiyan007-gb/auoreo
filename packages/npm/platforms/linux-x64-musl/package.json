@@ -1,0 +1,16 @@
+{
+  "name": "@auoreo/cli-linux-x64-musl",
+  "version": "0.1.0",
+  "description": "auoreo native binary for Linux x64 (musl, e.g. Alpine); installed by the `auoreo` npm package",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raiyan007-gb/auoreo.git",
+    "directory": "packages/npm/platforms/linux-x64-musl"
+  },
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "libc": ["musl"],
+  "files": ["bin"],
+  "preferUnplugged": true,
+  "publishConfig": { "access": "public" }
+}

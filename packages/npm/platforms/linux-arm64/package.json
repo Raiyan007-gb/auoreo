@@ -1,0 +1,16 @@
+{
+  "name": "@auoreo/cli-linux-arm64",
+  "version": "0.1.0",
+  "description": "auoreo native binary for Linux arm64 (glibc); installed by the `auoreo` npm package",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raiyan007-gb/auoreo.git",
+    "directory": "packages/npm/platforms/linux-arm64"
+  },
+  "os": ["linux"],
+  "cpu": ["arm64"],
+  "libc": ["glibc"],
+  "files": ["bin"],
+  "preferUnplugged": true,
+  "publishConfig": { "access": "public" }
+}

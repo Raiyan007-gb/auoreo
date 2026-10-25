@@ -1,0 +1,77 @@
+# electron-builder 26.x config for the AUOREO desktop shell (see README.md "Release").
+# The renderer is the server-served web/dist (bundled inside the auoreo binary), so the app
+# itself only ships main/preload/lib plus the per-platform binary in extraResources.
+appId: dev.auoreo.desktop
+productName: AUOREO
+copyright: Copyright © AUOREO contributors
+directories:
+  output: release
+  buildResources: assets
+files:
+  - main.cjs
+  - preload.cjs
+  - lib.cjs
+  - package.json
+  - "!test/**"
+# The release job stages a PyInstaller artifact per target before packing, e.g.
+#   auoreo-macos-arm64      -> resources/bin/mac-arm64/auoreo
+#   auoreo-linux-x64        -> resources/bin/linux-x64/auoreo
+#   auoreo-windows-x64.exe  -> resources/bin/win-x64/auoreo.exe
+# and main.cjs finds it at <process.resourcesPath>/bin/auoreo[.exe].
+extraResources:
+  - from: resources/bin/${os}-${arch}
+    to: bin
+    filter:
+      - auoreo
+      - auoreo.exe
+
+# Update channels mirror `auoreo upgrade` (stable | beta | dev). The release job MUST set
+# AUOREO_CHANNEL; electron-builder then writes <channel>.yml / <channel>-mac.yml /
+# <channel>-linux.yml next to the artifacts and electron-updater reads the same name.
+generateUpdatesFilesForAllChannels: true
+publish:
+  - provider: github
+    owner: Raiyan007-gb
+    repo: auoreo
+    channel: ${env.AUOREO_CHANNEL}
+    releaseType: release
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip # required by electron-updater (Squirrel.Mac)
+      arch: [arm64]
+  category: public.app-category.developer-tools
+  icon: assets/icon.png
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  # Signing + notarization are env-driven (never committed):
+  #   CSC_LINK / CSC_KEY_PASSWORD           Developer ID Application .p12 (base64 or path)
+  #   APPLE_API_KEY / APPLE_API_KEY_ID / APPLE_API_ISSUER  (or APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID)
+  notarize: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: assets/icon.png
+  # Authenticode via env: WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD (pfx), or Azure Trusted Signing
+  # (azureSignOptions + AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET) set in CI.
+  signtoolOptions:
+    signingHashAlgorithms: [sha256]
+    publisherName: AUOREO
+
+nsis:
+  oneClick: true
+  perMachine: false
+
+linux:
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+  category: Development
+  icon: assets/icon.png
+  maintainer: AUOREO contributors

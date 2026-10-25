@@ -1,0 +1,32 @@
+{
+  "name": "auoreo",
+  "version": "0.1.0",
+  "description": "AUOREO filesystem-native agent harness: npm launcher for the native auoreo binary",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Raiyan007-gb/auoreo.git",
+    "directory": "packages/npm"
+  },
+  "type": "module",
+  "bin": {
+    "auoreo": "bin/auoreo.cjs"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "sync-version": "node scripts/sync-version.mjs",
+    "pack-platforms": "node scripts/pack-platforms.mjs"
+  },
+  "optionalDependencies": {
+    "@auoreo/cli-darwin-arm64": "0.1.0",
+    "@auoreo/cli-linux-arm64": "0.1.0",
+    "@auoreo/cli-linux-x64": "0.1.0",
+    "@auoreo/cli-linux-x64-musl": "0.1.0",
+    "@auoreo/cli-win32-x64": "0.1.0"
+  }
+}

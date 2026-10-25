@@ -1,0 +1,21 @@
+{
+  "name": "auoreo-desktop",
+  "productName": "AUOREO",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AUOREO desktop shell: runs the local auoreo server and shows the web UI",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.mjs\"",
+    "dist": "electron-builder --config electron-builder.yml --publish never",
+    "release": "electron-builder --config electron-builder.yml --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0"
+  }
+}
