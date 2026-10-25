@@ -16,12 +16,17 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `permissions/*.yaml` | Permission rules + unbypassable floors |
 | `mcp/<name>.yaml` | MCP servers (tools become `mcp__<server>__<tool>`) |
 | `backends/<kind>/<name>/backend.yaml` + `impl.py` | Device/library backends (capture, browser, stt, …) behind ABCs in `src/auoreo/backends/`; selected via `settings.backends` |
+| `hooks/<name>.yaml` | Lifecycle hooks (Pre/PostToolUse, Stop, Session*, *Compact): a command gets the event as JSON on stdin |
+| `jobs/<name>.yaml` | Scheduled jobs (cron / `every` / one-shot); APScheduler fires, AUOREO runs the session and delivers |
+| `webhooks/<route>.yaml` | `POST /hooks/<route>`: HMAC-verified ingress → agent session → delivery |
+| `plugins/<name>/plugin.yaml` + `pyproject.toml` | Out-of-process plugins (own venv, JSON-RPC over stdio): tools, delivery providers, connectors |
 | `commands/<name>.md` | Slash commands (`/compact`, `/model`, `/plan`, `/review`); `handler: prompt` renders the body |
 | `memory/*.md` | Templates copied into `~/.auoreo/memory/` |
 | `src/auoreo/harness/` | discovery → loader → registry → orchestrator |
 | `src/auoreo/runtime/` | inbox, agent loop, session coordinator, compaction, slash-command dispatch, titles |
 | `src/auoreo/gateway/` | LLM gateway (LiteLLM Router) + fake gateway |
-| `src/auoreo/core/` | settings, DB + Alembic migrations, events, bus, audit, redaction, permissions, approvals, questions, secrets, usage ledger, tunnels, WS connections |
+| `src/auoreo/core/` | settings, DB + Alembic migrations, events, bus, audit, redaction, permissions, approvals, questions, secrets, usage ledger, tunnels, WS connections, `extensions.py` (starter seam for optional subsystems) |
+| `src/auoreo/automation/`, `src/auoreo/teams/`, `src/auoreo/plugins/`, `src/auoreo/rtc/` | Optional subsystems attached through `core/extensions.py` (webhooks + scheduler + deliveries; delegation/mailbox/kanban; plugin host; WebRTC) |
 | `src/auoreo/tools/` | tool *engine* only (executor, context, net helpers) — no tool bodies |
 | `src/auoreo/memory/` | FTS5 + sqlite-vec hybrid memory |
 | `src/auoreo/api/`, `src/auoreo/cli/` | FastAPI app (one port; REST + SSE `/api/events` + WS `/ws`) and Typer CLI |
@@ -41,6 +46,8 @@ Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` �
   `web/sdk/types.gen.ts`. Run `uv run python scripts/check_openapi.py` then
   `cd web && npm run gen:types` after API changes; WS frames live in `schema/ws.py` and reuse
   the SSE `ServerEvent` envelope (never a second event model).
+- A new optional subsystem registers one `module:function` line in `core/extensions.STARTERS`;
+  it never edits `services.py`. Device/library integrations are `backends/` with a fake.
 - Schema changes need an Alembic revision in `src/auoreo/core/alembic/versions/` and a
   `SCHEMA_VERSION` bump; `Database.init()` upgrades file databases in place.
 - Secrets come only from env / keyring / `secrets.db`. Tools never read `.env` or

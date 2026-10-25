@@ -37,7 +37,7 @@ elicitation (→ M5g), compaction + sandbox deferred (→ M3a / M5i), Alembic de
 
 ---
 
-## M3 — Web UI, control plane, long sessions
+## M3 — Web UI, control plane, long sessions ✅ shipped (`9fa4138`)
 
 Goal: a usable product for one person — browser UI on the same port, bidirectional control
 over WebSocket, sessions that survive long conversations and can be forked/exported,
@@ -144,6 +144,8 @@ conversation triggers compaction and continues; `state.db` from M2 upgrades in p
 
 ## M4 — Perception and devices (voice, vision, browser, desktop, WebRTC)
 
+Status: M4a/M4b/M4e shipped (`fe94817`); voice (M4c) and desktop control (M4d) deferred after M5 by decision.
+
 New folder kind `backends/<kind>/<name>/` with ABCs in `src/auoreo/backends/{stt,tts,vad,wake,capture,browser,desktop}.py`;
 `settings.json: backends{stt: "faster_whisper", tts: "kittentts", …}` selects; `auoreo doctor`
 reports each backend's `check()` (binary/model/device present) and license posture
@@ -186,6 +188,8 @@ desktop pass fake-backend tests and `doctor` prints an honest readiness matrix.
 ---
 
 ## M5 — Automation and multi-agent
+
+Status: shared contracts shipped (`fa3d896`: hooks/jobs/webhooks/plugins kinds, schema v3, extension seam); wave 1 (M5a/b/c/d/e/g) in progress, wave 2 = M5f/M5h/M5i.
 
 - **M5a Webhook ingress (spec §5.1, §19.11).** Folder `webhooks/<route>.yaml`
   `{provider: github|generic, secret: "secret:webhook/<route>", events: [...], filters:
