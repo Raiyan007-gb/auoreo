@@ -13,7 +13,7 @@ def _verified(ctx: ToolContext) -> bool:
     if not getattr(settings, "plan_requires_verify", False):
         return True
     plan = list(ctx.state.plan)
-    return bool(plan) and getattr(ctx.state, "plan_verified", None) == plan_hash(plan)
+    return bool(plan) and ctx.state.plan_verified == plan_hash(plan)
 
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:

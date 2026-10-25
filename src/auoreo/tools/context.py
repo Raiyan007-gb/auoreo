@@ -5,6 +5,8 @@ A tool handler is `async def run(args: dict, ctx: ToolContext) -> str | ToolResu
 
 from __future__ import annotations
 
+import contextlib
+import json
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -57,6 +59,7 @@ class SessionState:
     todos: list[dict[str, Any]] = field(default_factory=list)
     plan: list[dict[str, Any]] = field(default_factory=list)
     plan_mode: bool = False
+    plan_verified: str | None = None  # plan hash `verify_plan` last passed
     loaded_tools: set[str] = field(default_factory=set)  # deferred tools surfaced by search
     pending_user_messages: list[str] = field(default_factory=list)
     sandbox_note_shown: bool = False  # `[sandbox: not enforced …]` told once per session
@@ -79,6 +82,56 @@ def loaded_from_history(history: list[dict[str, Any]]) -> set[str]:
             if line.startswith("- ") and ":" in line:
                 names.add(line[2:].split(":", 1)[0].strip())
     return names
+
+
+def restore_state(state: SessionState, history: list[dict[str, Any]]) -> None:
+    """Rebuild cross-process session state from a persisted transcript: tools loaded by
+    `tool_search`, the last `update_plan` steps, the last `verify_plan` verdict, plan mode."""
+    state.loaded_tools.update(loaded_from_history(history))
+    calls: dict[str, tuple[str, str]] = {}
+    for msg in history:
+        tool_calls = msg.get("tool_calls") if msg.get("role") == "assistant" else None
+        for tc in tool_calls or []:
+            fn = tc.get("function") or {}
+            calls[str(tc.get("id"))] = (str(fn.get("name", "")), str(fn.get("arguments") or "{}"))
+        if msg.get("role") != "tool" or not isinstance(msg.get("content"), str):
+            continue
+        name, raw = calls.get(str(msg.get("tool_call_id")), ("", "{}"))
+        _RESTORERS.get(name, _noop)(state, raw, msg["content"])
+
+
+def _noop(state: SessionState, raw: str, content: str) -> None:
+    return None
+
+
+def _restore_plan(state: SessionState, raw: str, content: str) -> None:
+    if content.startswith("plan updated:"):
+        with contextlib.suppress(ValueError, TypeError):
+            steps = json.loads(raw).get("steps")
+            if isinstance(steps, list):
+                state.plan = steps
+
+
+def _restore_verify(state: SessionState, raw: str, content: str) -> None:
+    last = content.rstrip().splitlines()[-1] if content.strip() else ""
+    passed = content.startswith("verify_plan: PASS") and last.startswith("plan hash: ")
+    state.plan_verified = last.removeprefix("plan hash: ").strip() if passed else None
+
+
+def _restore_mode(on: bool, prefix: str) -> Callable[[SessionState, str, str], None]:
+    def apply(state: SessionState, raw: str, content: str) -> None:
+        if content.startswith(prefix):
+            state.plan_mode = on
+
+    return apply
+
+
+_RESTORERS: dict[str, Callable[[SessionState, str, str], None]] = {
+    "update_plan": _restore_plan,
+    "verify_plan": _restore_verify,
+    "enter_plan_mode": _restore_mode(True, "Plan mode is on"),
+    "exit_plan_mode": _restore_mode(False, "Plan approved"),
+}
 
 
 AskFn = Callable[[str, str, str], Awaitable[bool]]

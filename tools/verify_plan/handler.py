@@ -82,7 +82,7 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
     if destructive:
         lines.append("needs approval when executed (destructive):")
         lines += [f"  - {d}" for d in destructive]
-    ctx.state.plan_verified = digest if passed and plan else None  # type: ignore[attr-defined]
+    ctx.state.plan_verified = digest if passed and plan else None
     verdict = "PASS" if passed else "FAIL — fix the plan with update_plan and call verify_plan again"
     text = "\n".join([f"verify_plan: {verdict}", *lines, f"plan hash: {digest}"])
     meta = {"passed": passed, "hash": digest, "destructive": len(destructive)}
