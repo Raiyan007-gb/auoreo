@@ -1,14 +1,43 @@
-# Per-(provider, model_regex) request shaping (spec §10.6). First match wins.
+# Per-(provider, model_regex) request shaping (spec §10.6). First match wins; the regex is
+# matched against the primary deployment id (`openrouter/anthropic/claude-opus-4.7`), so a
+# routing group is shaped by its first model.
+#
+# Fields: omit_fields, temperature, reasoning (on|off|auto), reasoning_vocab (AUOREO effort
+# low|medium|high|max → provider value; a missing level clamps to the nearest weaker one;
+# unset = built-in: max→high except Opus-class), thinking_display (hidden|summary|full),
+# block_binding (keep|strip prior thinking blocks), interleaved_field, rename_fields.
 variants:
+  # OpenRouter free SKUs rarely support reasoning params: fail safe.
+  - provider: openrouter
+    model_regex: ":free$"
+    reasoning: "off"
+    temperature: 0.4
+  # Kimi: fixed sampling; interleaved reasoning travels as `reasoning_content`.
   - provider: "*"
-    model_regex: "kimi"
+    model_regex: "kimi|moonshot"
     omit_fields: [temperature]
+    interleaved_field: reasoning_content
+  # OpenAI o-series / GPT-5: fixed temperature; reasoning_effort tops out at high.
   - provider: "*"
-    model_regex: "(^|/)o[0-9]"
+    model_regex: "(^|/)o[0-9]|gpt-5"
     omit_fields: [temperature]
+    reasoning_vocab: {low: low, medium: medium, high: high, max: high}
+  # Anthropic Opus-class (4.6+ / 5.x, Fable, Mythos): adaptive thinking, `max` effort native,
+  # sampling params removed.
   - provider: "*"
-    model_regex: "claude-[a-z]+-5|gpt-5"   # fixed-temperature reasoning models (temperature=1 only)
+    model_regex: "claude-(opus|fable|mythos)-(5|4[.-][6-9])"
     omit_fields: [temperature]
+    reasoning_vocab: {low: low, medium: medium, high: high, max: max}
+    thinking_display: summary
+  # Anthropic Sonnet/Haiku 4.6+ / 5.x: adaptive thinking; max clamps to high (built-in).
+  - provider: "*"
+    model_regex: "claude-(sonnet|haiku)-(5|4[.-]6)"
+    omit_fields: [temperature]
+    thinking_display: summary
+  # Gemini: reasoning_effort maps to thinking budgets; no `max` tier.
+  - provider: "*"
+    model_regex: "gemini"
+    reasoning_vocab: {low: low, medium: medium, high: high, max: high}
   - provider: "*"
     model_regex: ".*"
     temperature: 0.4

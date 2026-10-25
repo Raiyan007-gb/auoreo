@@ -20,6 +20,7 @@ from pydantic_settings import (
 )
 
 from auoreo.core.paths import home_dir
+from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
 from auoreo.core.settings_models import (
     LiveKitSettings,
     LiveKitSipSettings,
@@ -73,6 +74,8 @@ class Settings(BaseSettings):
     )
     aliases: dict[str, str] = Field(default_factory=dict)
     fallbacks: dict[str, list[str]] = Field(default_factory=lambda: {"default": ["small"]})
+    auxiliary: AuxSettings = Field(default_factory=AuxSettings)
+    gateway_tuning: GatewayTuning = Field(default_factory=GatewayTuning)
     memory: MemorySettings = Field(default_factory=MemorySettings)
     loop: LoopSettings = Field(default_factory=LoopSettings)
     extra_roots: list[Path] = Field(default_factory=list)

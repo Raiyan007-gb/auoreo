@@ -348,7 +348,25 @@ class Variant(_Strict):
     model_regex: str = ".*"
     omit_fields: list[str] = Field(default_factory=list)
     temperature: float | None = None
-    reasoning_vocab: list[str] | None = None
+    reasoning_vocab: dict[str, str] | None = None
+    """AUOREO effort (`low|medium|high|max`) → provider value. A level missing from the map
+    clamps to the nearest weaker one listed. Unset → built-in default (`max→high` off
+    Opus-class). A list form (`[low, high]`) is shorthand for an identity map."""
+    reasoning: Literal["on", "off", "auto"] = "auto"
+    """`off` omits every reasoning field; `on` always sends one (default `medium`);
+    `auto` sends the resolved effort only when one is set."""
+    thinking_display: Literal["hidden", "summary", "full"] | None = None
+    block_binding: Literal["keep", "strip"] = "keep"
+    """`strip` drops prior assistant `thinking_blocks`/`reasoning_content` before sending."""
+    interleaved_field: str | None = None
+    """Assistant-message field carrying interleaved reasoning (e.g. `reasoning_content`)."""
+    rename_fields: dict[str, str] = Field(default_factory=dict)
+    """Request field renames applied last (e.g. `max_tokens: max_completion_tokens`)."""
+
+    @field_validator("reasoning_vocab", mode="before")
+    @classmethod
+    def _vocab_list(cls, v: Any) -> Any:
+        return {str(x): str(x) for x in v} if isinstance(v, list) else v
 
 
 class VariantsFile(_Strict):

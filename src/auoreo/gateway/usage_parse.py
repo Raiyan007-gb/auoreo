@@ -1,0 +1,54 @@
+"""Provider usage → `Usage` (spec §10.8, §20.2). No `litellm` here.
+
+LiteLLM normalises usage to the OpenAI shape, but cache/reasoning detail lives in
+different places per provider:
+- cached prompt tokens: `prompt_tokens_details.cached_tokens` (OpenAI, and Anthropic after
+  LiteLLM's mapping) or the raw Anthropic `cache_read_input_tokens`;
+- reasoning tokens: `completion_tokens_details.reasoning_tokens`.
+Reasoning tokens are part of `completion_tokens`; a provider that reports them separately
+(completion < reasoning) has them added to the total.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from auoreo.gateway.types import Usage
+
+
+def _get(obj: Any, name: str) -> Any:
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return obj.get(name)
+    return getattr(obj, name, None)
+
+
+def _int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def parse_usage(raw: Any) -> Usage | None:
+    """A `Usage` from a LiteLLM/OpenAI usage object or dict; None when it carries no tokens."""
+    prompt = _int(_get(raw, "prompt_tokens"))
+    completion = _int(_get(raw, "completion_tokens"))
+    if not (prompt or completion):
+        return None
+    cached = _int(_get(_get(raw, "prompt_tokens_details"), "cached_tokens")) or _int(
+        _get(raw, "cache_read_input_tokens")
+    )
+    reasoning = _int(_get(_get(raw, "completion_tokens_details"), "reasoning_tokens"))
+    if completion < reasoning:
+        completion += reasoning
+    return Usage(
+        prompt,
+        completion,
+        cached_tokens=min(cached, prompt) if prompt else cached,
+        reasoning_tokens=reasoning,
+    )
+
+
+__all__ = ["parse_usage"]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from auoreo.gateway.resolve import resolve_model
+from auoreo.gateway.aux import resolve_aux_model
 from auoreo.gateway.types import LLMRequest, TextDelta
 
 if TYPE_CHECKING:
@@ -35,7 +35,7 @@ async def _ask_model(
     services: Services, session_model: str | None, user_text: str, assistant_text: str
 ) -> str:
     st = services.settings
-    model = "small" if "small" in st.models else resolve_model(st, session_override=session_model)
+    model = resolve_aux_model(st, "title", gateway=services.gateway, main=session_model)
     request = LLMRequest(
         model=model,
         messages=(

@@ -50,7 +50,8 @@ class UsageLedger:
             run_id=run_id,
             model=model,
             prompt_tokens=usage.prompt_tokens,
-            completion_tokens=usage.completion_tokens,
+            completion_tokens=usage.completion_tokens,  # includes reasoning tokens
+            cached_tokens=usage.cached_tokens,
             cost_usd=cost,
             estimated=estimated,
             latency_ms=latency_ms,
