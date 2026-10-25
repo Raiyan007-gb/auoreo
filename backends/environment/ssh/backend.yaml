@@ -1,0 +1,14 @@
+kind: environment
+name: ssh
+description: >-
+  A remote host over SSH (asyncssh; extra `ssh`), configured by settings.environment_ssh.
+  The private key comes only from the secret store (`key_secret: secret:<NAME>`), the host key
+  is checked against a required known_hosts file (a mismatch or timeout fails closed), and
+  commands run as `bash -lc` with a PTY on request; write_stdin feeds the channel, and
+  upload/download use SFTP. Remote: every exec is audited.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: EPL-2.0 (asyncssh)
+posture: ok

@@ -1,0 +1,24 @@
+name: use_environment
+toolset: shell
+description: >-
+  Switch where exec_command runs for the rest of this session: a named execution environment
+  from settings.environments (a container, an SSH host, a cloud sandbox), or "default" for the
+  configured default. Processes already running stay where they started. Empty name lists them.
+parameters:
+  type: object
+  properties:
+    name:
+      type: string
+      default: ""
+      description: Environment name from settings.environments, "default" to reset, or "" to list.
+  additionalProperties: false
+permission: environment
+pattern_arg: name
+default_action: ask
+is_destructive: false
+exposure: deferred
+interrupt: cancel
+timeout_ms: 30000
+search_hint: execution environment remote ssh docker container sandbox e2b modal daytona switch where commands run
+max_result_size_chars: 8000
+net: none

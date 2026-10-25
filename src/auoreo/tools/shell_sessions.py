@@ -219,6 +219,13 @@ class ShellRegistry(SessionScoped):
     def live(self, session_id: str) -> dict[str, ShellProcess]:
         return self._procs.get(session_id, {})
 
+    def find(self, proc_id: str) -> ShellProcess | None:
+        """The live process `proc_id` in any session (ids are unique per registry)."""
+        for procs in self._procs.values():
+            if proc_id in procs:
+                return procs[proc_id]
+        return None
+
     def get(self, session_id: str, proc_id: str) -> ShellProcess:
         p = self.live(session_id).get(proc_id)
         if p is None:
@@ -269,7 +276,7 @@ class ShellRegistry(SessionScoped):
             )  # fmt: skip
         _LIVE_PGIDS.add(proc.pid)
         pid_s = secrets.token_hex(3)
-        while pid_s in mine:
+        while self.find(pid_s) is not None:  # unique across sessions (environment backends)
             pid_s = secrets.token_hex(3)
         p = ShellProcess(pid_s, session_id, cmd, tty, proc.pid, granted, proc, master_fd=master)
         if master is not None:
@@ -371,13 +378,19 @@ UNSANDBOXED = (
 )
 
 
+def sandbox_refusal(sandbox: Any, tool: str) -> str | None:
+    """Why the unsandboxed shell must refuse under `sandbox` (None = the `none` backend)."""
+    name = str(getattr(sandbox, "name", "?"))
+    caps = sandbox.capabilities() if hasattr(sandbox, "capabilities") else {}
+    if name != "none" or any(caps.values()):
+        return UNSANDBOXED.format(tool=tool, name=name)
+    return None
+
+
 def refuse_if_sandboxed(ctx: ToolContext, tool: str) -> None:
     """Never silently bypass an enforcing sandbox: only the `none` backend is accepted."""
-    backend = ctx.backend("sandbox")
-    name = str(getattr(backend, "name", "?"))
-    caps = backend.capabilities() if hasattr(backend, "capabilities") else {}
-    if name != "none" or any(caps.values()):
-        raise ToolError(UNSANDBOXED.format(tool=tool, name=name))
+    if why := sandbox_refusal(ctx.backend("sandbox"), tool):
+        raise ToolError(why)
 
 
 def render(p: ShellProcess, text: str, dropped: int, max_tokens: int) -> ToolResult:

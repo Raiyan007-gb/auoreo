@@ -1,0 +1,13 @@
+kind: environment
+name: e2b
+description: >-
+  E2B cloud sandbox (Firecracker microVM) per AUOREO session, created lazily from
+  settings.environment_e2b_template and killed at session close. Key E2B_API_KEY from the
+  secret store. Commands and stdin go through the `e2b` SDK (imported lazily: `pip install
+  e2b`); check() calls the REST API (GET /sandboxes). Contract-tested only (no live account).
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API (SDK Apache-2.0)
+posture: ok
