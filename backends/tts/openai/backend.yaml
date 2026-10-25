@@ -1,0 +1,11 @@
+kind: tts
+name: openai
+description: >-
+  OpenAI /v1/audio/speech (gpt-4o-mini-tts, input <= 4096 chars, mp3 or opus).
+  Key OPENAI_API_KEY from the secret store.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API (client code MIT)
+posture: ok

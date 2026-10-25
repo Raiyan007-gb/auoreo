@@ -1,0 +1,11 @@
+kind: tts
+name: kittentts
+description: >-
+  Local KittenTTS nano-int8 (ONNX on CPU, 24 kHz, 8 voices). Needs the kittentts wheel;
+  model download is opt-in (settings.voice_download_models).
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok

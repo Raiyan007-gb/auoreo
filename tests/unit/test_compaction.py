@@ -214,11 +214,17 @@ async def test_pressure_trigger_compacts_and_context_follows_turn(
     services: Services, gateway: FakeGateway
 ) -> None:
     # Size the window from the real system prompt so the test does not depend on how many
-    # bundled tools (and tool descriptions) ship: ~4.6k tokens of headroom above it.
+    # bundled tools (and tool descriptions) ship. The auto threshold is a fraction of the
+    # window, so grow the window until a fixed ~2.6k tokens of history fit below it.
     from auoreo.harness.orchestrator import build_spec
+    from auoreo.runtime.compaction import thresholds
 
     system = build_spec(services.harness, "default", "default", "manual").system_prompt
-    gateway.context_window_tokens = gateway.count_tokens("default", system) + 4_600
+    base = gateway.count_tokens("default", system)
+    window = base + 4_600
+    while thresholds(window).auto - base < 2_600:
+        window += 50
+    gateway.context_window_tokens = window
     sess = await services.create_session()
     mark = await services.events.last_seq()
     await turns(services, sess.id, 20)

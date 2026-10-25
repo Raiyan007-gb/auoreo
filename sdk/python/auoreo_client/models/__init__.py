@@ -10,6 +10,7 @@ from .answer_api_questions_request_id_answer_post_response_answer_api_questions_
 from .answer_responses_item import AnswerResponsesItem
 from .archived_message import ArchivedMessage
 from .archived_message_tool_calls_type_0_item import ArchivedMessageToolCallsType0Item
+from .body_transcribe_api_voice_transcribe_post import BodyTranscribeApiVoiceTranscribePost
 from .cancel_api_sessions_session_id_cancel_post_response_cancel_api_sessions_session_id_cancel_post import (
     CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost,
 )
@@ -99,6 +100,12 @@ from .usage_summary import UsageSummary
 from .usage_totals import UsageTotals
 from .validation_error import ValidationError
 from .validation_error_context import ValidationErrorContext
+from .voice_backend_status import VoiceBackendStatus
+from .voice_segment import VoiceSegment
+from .voice_speak_request import VoiceSpeakRequest
+from .voice_speak_request_format_type_0 import VoiceSpeakRequestFormatType0
+from .voice_status import VoiceStatus
+from .voice_transcription import VoiceTranscription
 from .webhook_route_info import WebhookRouteInfo
 from .webhook_route_info_filters_item import WebhookRouteInfoFiltersItem
 from .webhook_route_info_provider import WebhookRouteInfoProvider
@@ -110,6 +117,7 @@ __all__ = (
     "AnswerResponsesItem",
     "ArchivedMessage",
     "ArchivedMessageToolCallsType0Item",
+    "BodyTranscribeApiVoiceTranscribePost",
     "CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost",
     "ChatAccepted",
     "ChatRequest",
@@ -195,6 +203,12 @@ __all__ = (
     "UsageTotals",
     "ValidationError",
     "ValidationErrorContext",
+    "VoiceBackendStatus",
+    "VoiceSegment",
+    "VoiceSpeakRequest",
+    "VoiceSpeakRequestFormatType0",
+    "VoiceStatus",
+    "VoiceTranscription",
     "WebhookRouteInfo",
     "WebhookRouteInfoFiltersItem",
     "WebhookRouteInfoProvider",

@@ -370,76 +370,6 @@ class PluginPaired(BaseModel):
     chat_id: str | None = None
 
 
-# --- M5h compat surfaces (OpenAI-compatible `/v1`) -------------------------------------
-
-
-class OpenAIChatRequest(BaseModel):
-    """`POST /v1/chat/completions` body. Unknown OpenAI fields (`n`, `top_p`, …) are
-    accepted and ignored; tools are the client's — nothing is executed server-side."""
-
-    model_config = ConfigDict(extra="allow")
-    model: str = Field(min_length=1)
-    messages: list[dict[str, Any]] = Field(min_length=1)
-    tools: list[dict[str, Any]] | None = None
-    tool_choice: str | dict[str, Any] | None = None
-    temperature: float | None = None
-    max_tokens: int | None = Field(default=None, ge=1)
-    max_completion_tokens: int | None = Field(default=None, ge=1)
-    stream: bool = False
-    stream_options: dict[str, Any] | None = None
-    user: str | None = None
-
-
-class OpenAIModel(BaseModel):
-    id: str
-    object: Literal["model"] = "model"
-    created: int = 0
-    owned_by: str = "auoreo"
-
-
-class OpenAIModelList(BaseModel):
-    object: Literal["list"] = "list"
-    data: list[OpenAIModel]
-
-
-class OpenAIToolCallFunction(BaseModel):
-    name: str
-    arguments: str
-
-
-class OpenAIToolCall(BaseModel):
-    id: str
-    type: Literal["function"] = "function"
-    function: OpenAIToolCallFunction
-
-
-class OpenAIMessage(BaseModel):
-    role: Literal["assistant"] = "assistant"
-    content: str | None
-    tool_calls: list[OpenAIToolCall] | None = None
-
-
-class OpenAIChoice(BaseModel):
-    index: int = 0
-    message: OpenAIMessage
-    finish_reason: str
-
-
-class OpenAIUsage(BaseModel):
-    prompt_tokens: int
-    completion_tokens: int
-    total_tokens: int
-
-
-class OpenAIChatCompletion(BaseModel):
-    id: str
-    object: Literal["chat.completion"] = "chat.completion"
-    created: int
-    model: str
-    choices: list[OpenAIChoice]
-    usage: OpenAIUsage
-
-
 # --- M5f memory lifecycle + curator
 class CuratorMerge(BaseModel):
     fact_id: int
@@ -487,3 +417,44 @@ class FactActionResult(BaseModel):
     id: int
     ok: bool
     trust: float | None = None
+
+
+# --- M4c voice
+class VoiceSegment(BaseModel):
+    start: float
+    end: float
+    text: str
+
+
+class VoiceTranscription(BaseModel):
+    text: str
+    segments: list[VoiceSegment]
+    language: str | None = None
+    duration_s: float = Field(description="Duration of the normalized audio")
+    backend: str = Field(description="Selected stt backend")
+    run_id: str | None = Field(default=None, description="Followup run when `session_id` was given")
+
+
+class VoiceSpeakRequest(_In):
+    text: str = Field(min_length=1, max_length=5000)
+    voice: str | None = Field(default=None, max_length=200)
+    speed: float = Field(default=1.0, ge=0.25, le=4.0)
+    format: Literal["wav", "mp3", "opus"] | None = Field(
+        default=None, description="Transcode the backend output (ffmpeg); default = backend native"
+    )
+    session_id: str | None = None
+
+
+class VoiceBackendStatus(BaseModel):
+    kind: str
+    name: str | None = None
+    ok: bool
+    detail: str = ""
+    remedy: str = ""
+    license: str = ""
+    posture: str = "ok"
+
+
+class VoiceStatus(BaseModel):
+    enabled: bool
+    backends: list[VoiceBackendStatus]

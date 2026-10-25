@@ -39,6 +39,7 @@ from auoreo.api.routers import openai_compat as openai_compat_router
 from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import rtc as rtc_router
 from auoreo.api.routers import teams as teams_router
+from auoreo.api.routers import voice as voice_router
 from auoreo.api.routers import webhooks as webhooks_router
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings, get_settings
@@ -68,6 +69,7 @@ ROUTERS = (
     plugins_router,  # M5e
     openai_compat_router,  # M5h
     acp_router,  # M5h
+    voice_router,  # M4c
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

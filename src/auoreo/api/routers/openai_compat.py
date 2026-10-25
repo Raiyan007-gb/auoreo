@@ -27,7 +27,7 @@ from auoreo.core.services import Services
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Finish, LLMRequest, StreamItem, TextDelta, ToolCall, Usage
 from auoreo.harness.orchestrator import pick_variant
-from auoreo.schema.chat import (
+from auoreo.schema.compat import (
     OpenAIChatCompletion,
     OpenAIChatRequest,
     OpenAIChoice,

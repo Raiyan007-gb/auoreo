@@ -1,0 +1,11 @@
+kind: wake
+name: openwakeword
+description: >-
+  openWakeWord (code Apache-2.0, pretrained/custom weights often CC-BY-NC). Manifest + readiness
+  stub only: needs an explicit non-commercial opt-in and a custom "hey oreo" model; not implemented.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0 code / CC-BY-NC-SA-4.0 weights
+posture: nc-opt-in

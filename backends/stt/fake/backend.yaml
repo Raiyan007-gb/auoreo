@@ -1,0 +1,11 @@
+kind: stt
+name: fake
+description: >-
+  Test backend - returns the WAV's ICMT comment as the transcript (or "fake transcript (N.N s)").
+  Select it with settings.backends.stt = "fake".
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

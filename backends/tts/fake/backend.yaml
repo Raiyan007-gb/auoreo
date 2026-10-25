@@ -1,0 +1,11 @@
+kind: tts
+name: fake
+description: >-
+  Test backend - a 440 Hz tone WAV lasting len(text)/15 seconds, with the text in its ICMT
+  comment (so stt/fake round-trips it). Select it with settings.backends.tts = "fake".
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

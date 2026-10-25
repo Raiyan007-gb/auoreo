@@ -1,0 +1,12 @@
+kind: desktop
+name: cua_driver
+description: >-
+  Desktop control through the cua-driver MCP server (`cua-driver mcp` over stdio; >= 0.20,
+  telemetry off, scrubbed env). Background delivery by default. Needs a display and the
+  driver's accessibility/screen-recording permissions.
+impl: impl.py:Backend
+default: true
+requires_binaries: [cua-driver]
+requires_env: []
+license: MIT
+posture: ok

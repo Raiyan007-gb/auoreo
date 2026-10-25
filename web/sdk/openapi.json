@@ -86,6 +86,43 @@
         "title": "ArchivedMessage",
         "type": "object"
       },
+      "Body_transcribe_api_voice_transcribe_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Audio (wav, webm, ogg, mp3, m4a, \u2026)",
+            "title": "File",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_transcribe_api_voice_transcribe_post",
+        "type": "object"
+      },
       "ChatAccepted": {
         "properties": {
           "deduped": {
@@ -2545,6 +2582,218 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VoiceBackendStatus": {
+        "properties": {
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "license": {
+            "default": "",
+            "title": "License",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "posture": {
+            "default": "ok",
+            "title": "Posture",
+            "type": "string"
+          },
+          "remedy": {
+            "default": "",
+            "title": "Remedy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ok"
+        ],
+        "title": "VoiceBackendStatus",
+        "type": "object"
+      },
+      "VoiceSegment": {
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "number"
+          },
+          "start": {
+            "title": "Start",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "text"
+        ],
+        "title": "VoiceSegment",
+        "type": "object"
+      },
+      "VoiceSpeakRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "anyOf": [
+              {
+                "enum": [
+                  "wav",
+                  "mp3",
+                  "opus"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Transcode the backend output (ffmpeg); default = backend native",
+            "title": "Format"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "speed": {
+            "default": 1.0,
+            "maximum": 4.0,
+            "minimum": 0.25,
+            "title": "Speed",
+            "type": "number"
+          },
+          "text": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Voice"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "VoiceSpeakRequest",
+        "type": "object"
+      },
+      "VoiceStatus": {
+        "properties": {
+          "backends": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceBackendStatus"
+            },
+            "title": "Backends",
+            "type": "array"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "backends"
+        ],
+        "title": "VoiceStatus",
+        "type": "object"
+      },
+      "VoiceTranscription": {
+        "properties": {
+          "backend": {
+            "description": "Selected stt backend",
+            "title": "Backend",
+            "type": "string"
+          },
+          "duration_s": {
+            "description": "Duration of the normalized audio",
+            "title": "Duration S",
+            "type": "number"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Followup run when `session_id` was given",
+            "title": "Run Id"
+          },
+          "segments": {
+            "items": {
+              "$ref": "#/components/schemas/VoiceSegment"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "segments",
+          "duration_s",
+          "backend"
+        ],
+        "title": "VoiceTranscription",
         "type": "object"
       },
       "WebhookRouteInfo": {
@@ -7921,6 +8170,297 @@
         "summary": "Summary",
         "tags": [
           "usage"
+        ]
+      }
+    },
+    "/api/voice/speak": {
+      "post": {
+        "description": "Text (\u2264 5000 chars) \u2192 audio in the backend's format, or `format` via ffmpeg.",
+        "operationId": "speak_api_voice_speak_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceSpeakRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "audio/mpeg": {},
+              "audio/ogg": {},
+              "audio/wav": {}
+            },
+            "description": "Audio bytes"
+          },
+          "422": {
+            "description": "Nothing to speak or synthesis failed"
+          },
+          "503": {
+            "description": "Voice disabled or the TTS backend is not ready"
+          }
+        },
+        "summary": "Speak",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/voice/status": {
+      "get": {
+        "description": "Selected stt/tts/vad/wake/desktop backends and their readiness (`check()`).",
+        "operationId": "voice_status_api_voice_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Voice Status",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/voice/transcribe": {
+      "post": {
+        "description": "Normalize \u2192 VAD gate \u2192 STT. With `session_id` the text is also submitted as a followup.",
+        "operationId": "transcribe_api_voice_transcribe_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "language",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Language"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_transcribe_api_voice_transcribe_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceTranscription"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "413": {
+            "description": "Upload over 25 MB"
+          },
+          "422": {
+            "description": "No speech detected, or undecodable audio"
+          },
+          "503": {
+            "description": "Voice disabled or the STT backend is not ready"
+          }
+        },
+        "summary": "Transcribe",
+        "tags": [
+          "voice"
         ]
       }
     },

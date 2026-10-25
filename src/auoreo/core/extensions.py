@@ -25,6 +25,7 @@ STARTERS: list[str] = [
     "auoreo.teams:start",  # key = last dotted part → services.ext["teams"]
     "auoreo.plugins:start",  # → services.ext["plugins"]
     "auoreo.memory.curator:start",  # → services.ext["curator"] (deterministic, no LLM)
+    "auoreo.voice:start",  # M4c → services.ext["voice"]
 ]
 
 

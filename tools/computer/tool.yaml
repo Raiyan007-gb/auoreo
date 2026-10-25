@@ -1,0 +1,33 @@
+name: computer
+toolset: computer
+description: >-
+  Control the desktop: observe (screenshot, list_windows), act (click, double_click,
+  right_click, type, key, scroll, drag, focus_app, wait) and verify. `target` is an element
+  ref or "x,y" in relative 0-1000 coordinates of the primary display (500,500 = centre).
+  Mutating actions return a fresh screenshot plus a verify verdict (did the screen change?).
+  delivery_mode "background" (default) never steals focus; "foreground" needs a separate
+  approval - use it only after a background attempt did not land. Lock/logout/shutdown key
+  combos and dangerous typed shell commands are refused.
+parameters:
+  type: object
+  properties:
+    op:
+      type: string
+      enum: [click, double_click, right_click, type, key, scroll, drag, screenshot, wait, focus_app, list_windows]
+    target: {type: string, description: "Element ref from the last state read, or \"x,y\" (0-1000); app name for focus_app."}
+    to: {type: string, description: "drag destination \"x,y\" (0-1000)."}
+    text: {type: string, maxLength: 10000, description: "Text for op=type."}
+    key: {type: string, description: "Key or combo for op=key, e.g. \"enter\", \"cmd+s\", \"ctrl+shift+t\"."}
+    direction: {type: string, enum: [up, down, left, right], description: "op=scroll direction (default down)."}
+    amount: {type: integer, minimum: 1, maximum: 50, description: "Scroll steps, or seconds for op=wait (max 10)."}
+    delivery_mode: {type: string, enum: [background, foreground], default: background}
+  required: [op]
+  additionalProperties: false
+permission: computer
+pattern_arg: op
+default_action: ask
+is_read_only: false
+is_destructive: true
+is_concurrency_safe: false
+timeout_ms: 120000
+search_hint: computer desktop control click type keyboard mouse screen app window gui automate

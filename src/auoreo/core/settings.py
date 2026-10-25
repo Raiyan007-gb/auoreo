@@ -200,6 +200,29 @@ class Settings(BaseSettings):
     db_query_dsns: dict[str, str] = Field(default_factory=dict)
     """Allow-listed DSNs for `db_query`: name → `secret:<name>` or a SQLAlchemy URL
     (e.g. `sqlite:///path/app.db`). Only names listed here can be queried."""
+    # --- M4c
+    voice_enabled: bool = True
+    """Start the voice service (`/api/voice/*`, `transcribe`/`speak` tools, RTC transcription)."""
+    voice_download_models: bool = False
+    """Let local voice backends (faster-whisper, KittenTTS) download model weights on first use."""
+    voice_language: str | None = None
+    """Default STT language (ISO-639-1); None = auto-detect."""
+    voice_tts_voice: str | None = None
+    """Default TTS voice (backend-specific name or id)."""
+    voice_speaking_rms: float = 0.02
+    """Normalised RMS (0..1) above which the fake VAD counts a 30 ms frame as speech."""
+    voice_stt_model: str | None = None
+    """Model override for the selected STT backend (e.g. `small`, `whisper-1`)."""
+    voice_endpoint_silence_ms: int = Field(default=700, ge=100, le=5000)
+    """Silence after speech that ends a live (WebRTC) utterance."""
+    voice_wake_phrase: str = "hey oreo"
+    voice_kws_model_dir: Path | None = None
+    """sherpa-onnx keyword-spotting model folder (tokens.txt, encoder/decoder/joiner .onnx)."""
+    # --- M4d
+    cua_driver_command: str = "cua-driver"
+    """Executable of the cua-driver MCP server (`<command> mcp` over stdio)."""
+    cua_telemetry: bool = False
+    """Leave cua-driver telemetry on (default forces `CUA_DRIVER_RS_TELEMETRY_ENABLED=0`)."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

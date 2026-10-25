@@ -1,0 +1,11 @@
+kind: tts
+name: piper
+description: >-
+  Piper VITS TTS (GPL-3.0, espeak-ng). Manifest + readiness stub only - it may only ever run
+  as an isolated subprocess (never imported); the adapter is not implemented yet.
+impl: impl.py:Backend
+default: false
+requires_binaries: [piper]
+requires_env: []
+license: GPL-3.0
+posture: gpl-isolated

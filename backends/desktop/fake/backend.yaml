@@ -1,0 +1,11 @@
+kind: desktop
+name: fake
+description: >-
+  Test backend - in-memory windows, Pillow-drawn screenshots, recorded actions and scriptable
+  verify verdicts; no display needed. Select it with settings.backends.desktop = "fake".
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

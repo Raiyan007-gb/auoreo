@@ -1,0 +1,12 @@
+kind: wake
+name: sherpa_onnx
+description: >-
+  sherpa-onnx open-vocabulary keyword spotting (zipformer KWS model folder in
+  settings.voice_kws_model_dir with tokens.txt, encoder/decoder/joiner .onnx, keywords.txt).
+  Needs `pip install sherpa-onnx`.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok
