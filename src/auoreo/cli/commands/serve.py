@@ -10,6 +10,7 @@ from typing import Annotated
 import typer
 
 from auoreo.cli.common import err_console, settings
+from auoreo.core import logjson
 from auoreo.core.settings import Settings
 
 
@@ -73,7 +74,7 @@ def serve(
             await super().shutdown(sockets=sockets)
 
     app = create_app(st)
-    config = uvicorn.Config(app, log_level="info", lifespan="on")
+    config = uvicorn.Config(app, log_level="info", lifespan="on", **logjson.uvicorn_kwargs(st))
     server = _Server(config)
     try:
         server.run(sockets=[sock])
@@ -112,7 +113,12 @@ def _run_workers(st: Settings, sock: socket.socket, bound: int, url: str, open_b
         }
     )
     config = uvicorn.Config(
-        "auoreo.api.app:create_app", factory=True, workers=st.workers, log_level="info", lifespan="on"
+        "auoreo.api.app:create_app",
+        factory=True,
+        workers=st.workers,
+        log_level="info",
+        lifespan="on",
+        **logjson.uvicorn_kwargs(st),
     )
     print(f"server listening on {url} ({st.workers} workers; sticky sessions required)", flush=True)
     if open_browser:
@@ -164,7 +170,7 @@ def _serve_uds(st: Settings, path: Path, *, tcp: bool) -> None:
             await super().shutdown(sockets=sockets)
 
     app = uds_mod.TrustUnixSocket(inner, st.server_password)
-    server = _Server(uvicorn.Config(app, log_level="info", lifespan="on"))
+    server = _Server(uvicorn.Config(app, log_level="info", lifespan="on", **logjson.uvicorn_kwargs(st)))
     try:
         server.run(sockets=sockets)
     except KeyboardInterrupt:

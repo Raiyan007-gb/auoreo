@@ -18,3 +18,5 @@ web/node_modules/
 web/app/.vite/
 web/test-results/
 web/playwright-report/
+.coverage
+.coverage.*

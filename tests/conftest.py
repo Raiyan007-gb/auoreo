@@ -8,6 +8,7 @@ import pytest
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings
 from auoreo.gateway.fake import FakeGateway
+from tests.cassettes import vcr_cassette_dir, vcr_config  # noqa: F401  (G5c: VCR cassettes)
 
 REPO = Path(__file__).resolve().parents[1]
 

@@ -22,14 +22,15 @@ opt-in Sentry SDK (`sentry_setup`, extra `sentry`) is imported only here, always
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterator
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager, nullcontext, suppress
 from dataclasses import dataclass, field
 from typing import Any
 
-from auoreo.core import tracefile
+from auoreo.core import metrics_text, tracefile
 
 log = logging.getLogger(__name__)
 
@@ -151,12 +152,10 @@ def _instrument_httpx() -> None:
 def reset() -> None:
     """Flush and drop the providers (tests, mode changes). Safe when off."""
     if _state.instrumented_httpx:
-        try:
+        with suppress(Exception):
             from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 
             HTTPXClientInstrumentor().uninstrument()
-        except Exception:
-            pass
     for provider in (_state.tracer_provider, _state.meter_provider):
         if provider is not None:
             try:
@@ -188,6 +187,16 @@ def _ensure() -> bool:
 
 def enabled() -> bool:
     return _ensure()
+
+
+def current_ids() -> dict[str, str]:
+    """G5c log linkage: `{trace_id, span_id}` of the current span; {} when off or none."""
+    if _state.tracer is None:
+        return {}
+    from opentelemetry import trace
+
+    ctx = trace.get_current_span().get_span_context()
+    return {"trace_id": f"{ctx.trace_id:032x}", "span_id": f"{ctx.span_id:016x}"} if ctx.is_valid else {}
 
 
 def memory_exporter() -> Any:
@@ -227,8 +236,6 @@ def status(settings: Any) -> tuple[str, str]:
 
 
 def _otel_status(settings: Any) -> tuple[str, str]:
-    import importlib.util
-
     mode = str(getattr(settings, "otel_mode", "off") or "off")
     if mode == "off":
         return "ok", "off (set AUOREO_OTEL_MODE=local|otlp to trace)"
@@ -366,13 +373,12 @@ def count(name: str, value: float = 1, **labels: Any) -> None:
     """Add to an allowlisted counter/gauge; unknown metrics and label keys are dropped."""
     if name == "compaction_runs_total":
         _instant("compaction", "interaction")
-    if not _ensure():
+    if (spec := METRICS.get(name)) is None:
         return
-    inst = _state.instruments.get(name)
-    if inst is None:
+    attrs = {k: str(v)[:_LABEL_MAX] for k, v in labels.items() if k in spec[1] and v is not None}
+    metrics_text.add(name, value, attrs)  # G5c: `/metrics` fallback, works with OTel off
+    if not _ensure() or (inst := _state.instruments.get(name)) is None:
         return
-    allowed = METRICS[name][1]
-    attrs = {k: str(v)[:_LABEL_MAX] for k, v in labels.items() if k in allowed and v is not None}
     try:
         inst.add(value, attrs)
     except Exception:  # telemetry must never break the caller
@@ -381,8 +387,6 @@ def count(name: str, value: float = 1, **labels: Any) -> None:
 
 def record_usage(model: str, prompt_tokens: int, completion_tokens: int, cost_usd: float | None) -> None:
     """Usage-ledger hook: `tokens_total{model,type}` + `cost_usd_total{model}`."""
-    if not _ensure():
-        return
     count("tokens_total", prompt_tokens, model=model, type="prompt")
     count("tokens_total", completion_tokens, model=model, type="completion")
     if cost_usd:
@@ -453,8 +457,6 @@ def sentry_setup(settings: Any) -> bool:
 
 
 def _sentry_integrations() -> list[Any]:
-    import importlib.util
-
     if importlib.util.find_spec("fastapi") is None:
         return []
     try:
@@ -491,8 +493,6 @@ def _before_breadcrumb(crumb: dict[str, Any], hint: dict[str, Any]) -> dict[str,
 
 
 def _sentry_status(settings: Any) -> tuple[str, str] | None:
-    import importlib.util
-
     if not getattr(settings, "sentry_dsn", None):
         return None
     if (share := settings.sentry_share) != "off" and importlib.util.find_spec("sentry_sdk") is None:
