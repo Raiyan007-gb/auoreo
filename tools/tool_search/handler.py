@@ -4,7 +4,7 @@ import math
 import re
 from collections import Counter
 
-from auoreo.tools.context import ToolContext
+from auoreo.tools.context import TOOLS_LOADED_PREFIX, ToolContext
 
 
 def _tokens(text: str) -> list[str]:
@@ -42,6 +42,8 @@ async def run(args: dict, ctx: ToolContext) -> str:
         return f"no tools match {args['query']!r}"
     by_name = {t.name: t for t in pool}
     ctx.state.loaded_tools.update(best)
-    return "loaded (callable from the next step):\n" + "\n".join(
-        f"- {n}: {by_name[n].manifest.description.strip()[:200]}" for n in best
+    return (
+        TOOLS_LOADED_PREFIX
+        + "\n"
+        + "\n".join(f"- {n}: {by_name[n].manifest.description.strip()[:200]}" for n in best)
     )

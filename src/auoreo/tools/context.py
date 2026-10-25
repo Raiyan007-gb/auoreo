@@ -62,6 +62,24 @@ class SessionState:
     sandbox_note_shown: bool = False  # `[sandbox: not enforced …]` told once per session
 
 
+TOOLS_LOADED_PREFIX = "loaded (callable from the next step):"
+"""First line of a `tool_search` result; the `- name:` lines after it are the loaded tools."""
+
+
+def loaded_from_history(history: list[dict[str, Any]]) -> set[str]:
+    """Deferred tools surfaced by earlier `tool_search` calls in a persisted transcript, so a
+    session reopened in another process (`auoreo run --session`, a restart) keeps them."""
+    names: set[str] = set()
+    for msg in history:
+        content = msg.get("content") if msg.get("role") == "tool" else None
+        if not isinstance(content, str) or not content.startswith(TOOLS_LOADED_PREFIX):
+            continue
+        for line in content.splitlines()[1:]:
+            if line.startswith("- ") and ":" in line:
+                names.add(line[2:].split(":", 1)[0].strip())
+    return names
+
+
 AskFn = Callable[[str, str, str], Awaitable[bool]]
 """ask(permission, pattern, detail) -> granted."""
 EmitFn = Callable[[str, dict[str, Any]], Awaitable[None]]

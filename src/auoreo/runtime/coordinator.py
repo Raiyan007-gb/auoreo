@@ -21,6 +21,7 @@ from auoreo.runtime.hooks import hooks_of
 from auoreo.runtime.inbox import InputKind, RunOptions, TurnRequest
 from auoreo.runtime.runner import AgentRunner, SessionRuntime, TurnResult
 from auoreo.runtime.titles import generate_title
+from auoreo.tools.context import loaded_from_history
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -51,6 +52,7 @@ class SessionRunCoordinator:
             row.model,
             history=await self.runner.load_history(session_id),
         )
+        rt.state.loaded_tools.update(loaded_from_history(rt.history))
         self._runtimes[session_id] = rt
         return rt
 
