@@ -39,9 +39,11 @@ app.command("logs")(logs.logs)
 app.add_typer(tunnel.app, name="tunnel", help="Expose the server via cloudflared / tailscale.")
 
 
-# M5a automation: scheduler, webhooks, deliveries outbox
 from auoreo.cli.commands import cron, deliveries, webhook  # noqa: E402
 
 app.add_typer(cron.app, name="cron", help="Scheduled jobs: list, run now, pause, resume, runs.")
 app.add_typer(webhook.app, name="webhook", help="Inbound webhook routes: list, send a signed test payload.")
 app.add_typer(deliveries.app, name="deliveries", help="Automation outbox: list, replay --dry-run.")
+from auoreo.cli.commands import plugin  # noqa: E402
+
+app.add_typer(plugin.app, name="plugin", help="List, add, remove, reload and pair plugins.")

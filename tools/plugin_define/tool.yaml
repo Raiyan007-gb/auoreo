@@ -1,0 +1,20 @@
+name: plugin_define
+toolset: creator
+description: >-
+  Creator mode: define a session-scoped tool from Python source. `code` must define
+  `async def run(args, ctx)` returning a string (or {"content", "is_error"}); it runs later in
+  an isolated subprocess. The definition is inert until plugin_run (which needs approval).
+  Standard library only; never install packages or write repository files.
+parameters:
+  type: object
+  properties:
+    name: {type: string, pattern: "^[a-z][a-z0-9_]{0,31}$"}
+    description: {type: string, minLength: 1, maxLength: 1024}
+    parameters: {type: object, description: "JSON Schema (type: object) for the tool arguments"}
+    code: {type: string, minLength: 1, maxLength: 100000}
+  required: [name, description, code]
+  additionalProperties: false
+default_action: allow
+exposure: deferred
+timeout_ms: 10000
+search_hint: creator mode define dynamic tool python code

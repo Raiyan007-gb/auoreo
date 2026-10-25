@@ -1,0 +1,22 @@
+name: discord
+version: 0.1.0
+description: >-
+  Discord delivery provider (outbound only in this wave; no connector): incoming webhook
+  (`secrets:discord/webhook_url`) or bot token + channel id (`secrets:discord/bot_token`).
+provides: [delivery]
+consumes: ["secrets:discord/webhook_url", "secrets:discord/bot_token"]
+permissions: [messaging]
+config_schema:
+  type: object
+  properties:
+    default_channel_id:
+      type: string
+      pattern: "^[0-9]+$"
+      description: Channel used by the bot variant when the target is `bot` or empty.
+    username:
+      type: string
+      maxLength: 80
+      description: Display name override for webhook messages.
+  additionalProperties: false
+entry: plugin.py:Plugin
+enabled: false

@@ -1,0 +1,16 @@
+name: plugin_run
+toolset: creator
+description: >-
+  Creator mode: start a tool defined with plugin_define in its sandbox and register it as
+  `creator__<session>__<name>` (callable from the next step). Always asks the user to
+  approve the code first.
+parameters:
+  type: object
+  properties:
+    name: {type: string, pattern: "^[a-z][a-z0-9_]{0,31}$"}
+  required: [name]
+  additionalProperties: false
+default_action: allow
+exposure: deferred
+timeout_ms: 600000
+search_hint: creator mode run start activate dynamic tool

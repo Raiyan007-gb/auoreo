@@ -1,0 +1,23 @@
+name: telegram
+version: 0.1.0
+description: Telegram bot connector (long polling, pairing codes, allowlist) and delivery provider.
+provides: [connector, delivery]
+consumes: [sessions, "secrets:telegram/bot_token"]
+permissions: [messaging]
+config_schema:
+  type: object
+  properties:
+    allowlist:
+      type: array
+      items: {type: string}
+      description: Chat ids allowed to talk to the agent (added by `auoreo plugin pair telegram <code>`).
+    agent:
+      type: string
+      description: Agent for Telegram sessions (default agent when unset).
+    poll_timeout_s:
+      type: integer
+      minimum: 1
+      maximum: 50
+  additionalProperties: false
+entry: plugin.py:Plugin
+enabled: false

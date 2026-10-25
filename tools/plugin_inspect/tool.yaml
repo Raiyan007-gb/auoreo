@@ -1,0 +1,16 @@
+name: plugin_inspect
+toolset: creator
+description: >-
+  Creator mode: list the tools this session has defined with plugin_define (name, status,
+  package hash). Pass `query` to filter by name or description.
+parameters:
+  type: object
+  properties:
+    query: {type: string}
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 5000
+search_hint: creator mode plugin dynamic tools list inspect

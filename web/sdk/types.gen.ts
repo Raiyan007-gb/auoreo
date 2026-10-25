@@ -365,6 +365,114 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plugins */
+        get: operations["list_plugins_api_plugins_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{name}/pair": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pair
+         * @description Allowlist the chat that was shown this pairing code (connector plugins, e.g. telegram).
+         */
+        post: operations["pair_api_plugins__name__pair_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{name}/reload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reload Plugin
+         * @description Re-read definitions from disk, then restart this plugin (reinstalls on a hash change).
+         */
+        post: operations["reload_plugin_api_plugins__name__reload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{name}/skills": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plugin Skills */
+        get: operations["plugin_skills_api_plugins__name__skills_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{name}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Plugin */
+        post: operations["start_plugin_api_plugins__name__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/plugins/{name}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop Plugin */
+        post: operations["stop_plugin_api_plugins__name__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/questions/pending": {
         parameters: {
             query?: never;
@@ -1196,6 +1304,63 @@ export interface components {
              * @enum {string}
              */
             reply: "once" | "always" | "reject";
+        };
+        /** PluginInfo */
+        PluginInfo: {
+            /** Connectors */
+            connectors?: string[];
+            /** Deliveries */
+            deliveries?: string[];
+            /** Description */
+            description: string;
+            /** Error */
+            error?: string | null;
+            /** Name */
+            name: string;
+            /** Provides */
+            provides: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "stopped" | "crashed" | "disabled" | "invalid_config";
+            /**
+             * Tools
+             * @description Registered dynamic tools (`plugin__<name>__<tool>`)
+             */
+            tools: string[];
+            /**
+             * Verify
+             * @description lock.json hash vs the plugin folder
+             * @enum {string}
+             */
+            verify: "ok" | "mismatch" | "missing";
+            /** Version */
+            version: string;
+        };
+        /** PluginPair */
+        PluginPair: {
+            /**
+             * Code
+             * @description 6-digit pairing code shown to the remote chat
+             */
+            code: string;
+        };
+        /** PluginPaired */
+        PluginPaired: {
+            /** Chat Id */
+            chat_id?: string | null;
+            /** Paired */
+            paired: boolean;
+        };
+        /** PluginSkillInfo */
+        PluginSkillInfo: {
+            /** Body */
+            body: string;
+            /** Description */
+            description: string;
+            /** Name */
+            name: string;
         };
         /** ReloadResult */
         ReloadResult: {
@@ -2305,6 +2470,230 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plugins_api_plugins_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pair_api_plugins__name__pair_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PluginPair"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginPaired"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reload_plugin_api_plugins__name__reload_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    plugin_skills_api_plugins__name__skills_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginSkillInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_plugin_api_plugins__name__start_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stop_plugin_api_plugins__name__stop_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginInfo"];
                 };
             };
             /** @description Validation Error */

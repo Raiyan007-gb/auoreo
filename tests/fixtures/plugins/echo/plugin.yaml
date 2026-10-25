@@ -1,0 +1,14 @@
+name: echo
+version: 0.1.0
+description: Test plugin — echo tool, file delivery, canned connector.
+provides: [tools, delivery, connector, skills]
+consumes: [sessions, "secrets:echo/token"]
+permissions: []
+config_schema:
+  type: object
+  properties:
+    log_path: {type: string}
+    inbound: {type: boolean}
+    greeting: {type: string, maxLength: 20}
+  additionalProperties: false
+entry: plugin.py:Plugin

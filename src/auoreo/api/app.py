@@ -33,6 +33,7 @@ from auoreo.api.routers import cron as cron_router
 from auoreo.api.routers import deliveries as deliveries_router
 from auoreo.api.routers import hooks as hooks_router
 from auoreo.api.routers import kanban as kanban_router
+from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import rtc as rtc_router
 from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import webhooks as webhooks_router
@@ -61,6 +62,7 @@ ROUTERS = (
     deliveries_router,
     teams_router,
     kanban_router,
+    plugins_router,  # M5e
 )
 
 

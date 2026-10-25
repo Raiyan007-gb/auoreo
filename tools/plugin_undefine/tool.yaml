@@ -1,0 +1,13 @@
+name: plugin_undefine
+toolset: creator
+description: Creator mode — stop (if running) and delete a creator tool definition.
+parameters:
+  type: object
+  properties:
+    name: {type: string}
+  required: [name]
+  additionalProperties: false
+default_action: allow
+exposure: deferred
+timeout_ms: 15000
+search_hint: creator mode delete remove dynamic tool
