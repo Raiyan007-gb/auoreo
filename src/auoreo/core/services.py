@@ -138,6 +138,17 @@ class Services:
                 log.exception("backend %s failed to close", kind)
         self._backends.clear()
 
+    async def close_backend_session(self, session_id: str) -> None:
+        """Best effort: release per-session resources (e.g. a browser page) on cached backends."""
+        for kind, inst in list(self._backends.items()):
+            close_session = getattr(inst, "close_session", None)
+            if close_session is None:
+                continue
+            try:
+                await close_session(session_id)
+            except Exception:  # deleting a session must not fail on a backend
+                log.exception("backend %s failed to close session %s", kind, session_id)
+
     async def close(self) -> None:
         await self.connections.close_all(1001)  # before the DB goes away
         await self.close_backends()

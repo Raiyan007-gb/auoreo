@@ -1,0 +1,11 @@
+kind: browser
+name: playwright
+description: >-
+  Headless Chromium via playwright-python; one isolated BrowserContext per session.
+  Browsers come from PLAYWRIGHT_BROWSERS_PATH or settings.browser_executable_path.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok

@@ -1,0 +1,13 @@
+name: browser_screenshot
+toolset: browser
+description: "PNG screenshot of the open page (saved under the session folder)."
+parameters:
+  type: object
+  properties:
+    full_page: {type: boolean, default: false}
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+is_concurrency_safe: false
+timeout_ms: 30000
+search_hint: browser screenshot image png capture page

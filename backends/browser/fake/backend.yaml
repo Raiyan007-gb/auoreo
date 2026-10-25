@@ -1,0 +1,6 @@
+kind: browser
+name: fake
+description: In-memory fake browser with canned pages and deterministic snapshots (tests, demos).
+impl: impl.py:Backend
+license: MIT
+posture: ok

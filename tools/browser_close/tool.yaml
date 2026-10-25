@@ -1,0 +1,12 @@
+name: browser_close
+toolset: browser
+description: "Close this session's browser page and its storage."
+parameters:
+  type: object
+  properties: {}
+  additionalProperties: false
+default_action: allow
+is_read_only: false
+is_concurrency_safe: false
+timeout_ms: 30000
+search_hint: browser close quit

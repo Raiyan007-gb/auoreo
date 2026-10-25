@@ -1,0 +1,13 @@
+name: browser_snapshot
+toolset: browser
+description: "Re-read the open page: snapshot with fresh element refs."
+parameters:
+  type: object
+  properties:
+    max_chars: {type: integer, minimum: 1000, maximum: 100000, default: 20000}
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+is_concurrency_safe: false
+timeout_ms: 30000
+search_hint: browser page snapshot accessibility refs

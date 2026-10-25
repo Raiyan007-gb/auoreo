@@ -1,0 +1,18 @@
+name: browser_navigate
+toolset: browser
+description: "Open an http(s) URL in a headless browser; returns a page snapshot with element refs (e1, e2, ...)."
+parameters:
+  type: object
+  properties:
+    url: {type: string, format: uri}
+    wait: {type: string, enum: [load, domcontentloaded, networkidle], default: load}
+    max_chars: {type: integer, minimum: 1000, maximum: 100000, default: 20000}
+  required: [url]
+  additionalProperties: false
+permission: webfetch
+pattern_arg: url
+default_action: ask
+is_read_only: false
+is_concurrency_safe: false
+timeout_ms: 60000
+search_hint: browser open web page navigate url playwright
