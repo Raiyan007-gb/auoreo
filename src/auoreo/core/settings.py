@@ -112,6 +112,41 @@ class NamedEnvironment(BaseModel):
     description: str = ""
 
 
+# --- W2-D: LiveKit SFU transport (P2, opt-in; backends/rtc_transport/livekit)
+class LiveKitSipSettings(BaseModel):
+    """`settings.livekit.sip`: SIP trunks are created on demand by the livekit backend helpers;
+    these are the defaults. No REGISTER, no video; media is always SRTP `REQUIRE`."""
+
+    model_config = ConfigDict(extra="forbid")
+    inbound_numbers: list[str] = Field(default_factory=list)
+    allowed_addresses: list[str] = Field(default_factory=list)
+    """Carrier source IPs/CIDRs; `inbound_numbers=[]` needs these or digest auth."""
+    auth_username: str | None = None
+    auth_password_secret: str | None = None
+    """Secret-store name of the inbound digest password (never the value)."""
+    krisp_enabled: bool = True
+    room_prefix: str = Field(default="auoreo-call-", pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    outbound_address: str | None = None
+    """Carrier SIP host for the outbound trunk (TLS transport)."""
+
+
+class LiveKitSettings(BaseModel):
+    """`settings.livekit`. Self-hosted by default; a `*.livekit.cloud` URL is refused unless
+    `cloud_consent` is true (media then leaves your network)."""
+
+    model_config = ConfigDict(extra="forbid")
+    url: str | None = None
+    """`wss://` / `https://` of the LiveKit server (clients connect to the same URL)."""
+    api_key_secret: str = "LIVEKIT_API_KEY"
+    api_secret_secret: str = "LIVEKIT_API_SECRET"
+    cloud_consent: bool = False
+    token_ttl_s: int = Field(default=3600, ge=60, le=86_400)
+    sip: LiveKitSipSettings = Field(default_factory=LiveKitSipSettings)
+
+
+# --- end W2-D
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUOREO_", extra="ignore", env_ignore_empty=True)
 
@@ -382,6 +417,9 @@ class Settings(BaseSettings):
     """Peer instances for mailbox `bridge:<name>/<member>` addressing (HMAC-signed)."""
     instance_name: str = Field(default="auoreo", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
     """How this instance names itself to bridge peers (overridable per peer: `as_name`)."""
+    # --- W2-D
+    livekit: LiveKitSettings = Field(default_factory=LiveKitSettings)
+    """LiveKit SFU transport (`backends.rtc_transport = "livekit"`, extra `livekit`); P2 opt-in."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

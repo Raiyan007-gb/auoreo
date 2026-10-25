@@ -3149,6 +3149,147 @@
         "title": "RtcClosed",
         "type": "object"
       },
+      "RtcJoinInfo": {
+        "properties": {
+          "extra": {
+            "additionalProperties": true,
+            "title": "Extra",
+            "type": "object"
+          },
+          "join_id": {
+            "description": "Pass to `DELETE /api/rtc/join/{join_id}` to leave",
+            "title": "Join Id",
+            "type": "string"
+          },
+          "room": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Room"
+          },
+          "sdp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SDP answer (P2P transports)",
+            "title": "Sdp"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Room-scoped access token (LiveKit)",
+            "title": "Token"
+          },
+          "transport": {
+            "description": "Backend name, e.g. `aiortc` or `livekit`",
+            "title": "Transport",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SFU URL to connect to (LiveKit)",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "transport",
+          "join_id"
+        ],
+        "title": "RtcJoinInfo",
+        "type": "object"
+      },
+      "RtcJoinRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "identity": {
+            "default": "user",
+            "description": "Participant identity (LiveKit token subject)",
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.@:-]+$",
+            "title": "Identity",
+            "type": "string"
+          },
+          "sdp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SDP offer; required by the aiortc transport",
+            "title": "Sdp"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Session the media belongs to",
+            "title": "Session Id"
+          }
+        },
+        "title": "RtcJoinRequest",
+        "type": "object"
+      },
+      "RtcLeft": {
+        "properties": {
+          "join_id": {
+            "title": "Join Id",
+            "type": "string"
+          },
+          "transport": {
+            "title": "Transport",
+            "type": "string"
+          }
+        },
+        "required": [
+          "transport",
+          "join_id"
+        ],
+        "title": "RtcLeft",
+        "type": "object"
+      },
       "RtcOffer": {
         "additionalProperties": false,
         "description": "Client SDP offer. The client must create the `auoreo-events` data channel first.",
@@ -9203,6 +9344,201 @@
           }
         },
         "summary": "List Peers",
+        "tags": [
+          "rtc"
+        ]
+      }
+    },
+    "/api/rtc/join": {
+      "post": {
+        "description": "Join the media session for `session_id` through the selected `rtc_transport` backend.\nThe token in the answer is never logged or audited.",
+        "operationId": "join_api_rtc_join_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RtcJoinRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RtcJoinInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "LiveKit Cloud URL without `settings.livekit.cloud_consent`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Too many peers (`rtc_max_peers`)"
+          },
+          "501": {
+            "description": "Transport not installed or not configured"
+          },
+          "502": {
+            "description": "The SFU's server API failed"
+          }
+        },
+        "summary": "Join",
+        "tags": [
+          "rtc"
+        ]
+      }
+    },
+    "/api/rtc/join/{join_id}": {
+      "delete": {
+        "description": "Idempotent leave through the selected transport.",
+        "operationId": "leave_api_rtc_join__join_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "join_id",
+            "required": true,
+            "schema": {
+              "title": "Join Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RtcLeft"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Leave",
         "tags": [
           "rtc"
         ]

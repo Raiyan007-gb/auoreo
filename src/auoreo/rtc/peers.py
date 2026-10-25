@@ -234,3 +234,14 @@ class RtcManager:
                 "speaking": rms > self.svc.settings.rtc_speaking_rms,
             },
         )
+
+
+def manager_for(svc: Services) -> RtcManager:
+    """The process-wide `RtcManager` (`svc.rtc`), created lazily; shared by `/api/rtc/*` and
+    the `rtc_transport/aiortc` backend."""
+    if svc.rtc is None:
+        svc.rtc = RtcManager(svc)
+        if (voice := svc.ext.get("voice")) is not None:  # M4c: live transcription hook
+            voice.attach(svc.rtc)
+    mgr: RtcManager = svc.rtc
+    return mgr

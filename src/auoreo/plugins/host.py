@@ -34,6 +34,7 @@ from auoreo.plugins.bridge import (
     unregister_delivery,
 )
 from auoreo.plugins.connectors import InboundRouter, PairingStore, file_config
+from auoreo.plugins.grants import secret_granted
 from auoreo.plugins.protocol import RpcError, RpcPeer
 from auoreo.tools.context import ToolResult
 
@@ -385,7 +386,7 @@ class PluginHost:
     async def _on_request(self, st: PluginState, method: str, params: dict[str, Any]) -> Any:
         if method == "secret.get":
             name = str(params.get("name", ""))
-            allowed = f"secrets:{name}" in st.manifest.consumes
+            allowed = secret_granted(name, st.manifest.consumes)
             await self.s.audit.record(
                 actor=f"plugin:{st.name}",
                 action="plugin.secret",

@@ -1,0 +1,12 @@
+kind: rtc_transport
+name: aiortc
+description: >-
+  In-process WebRTC (P2P) via aiortc: join answers the client's SDP offer through the existing
+  RtcManager (same peers as POST /api/rtc/offer), leave closes the peer. Media leaves the host
+  directly or through the TURN servers in settings.rtc_ice_servers. Needs the `rtc` extra.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: BSD-3-Clause
+posture: ok

@@ -1,0 +1,44 @@
+name: mqtt
+version: 0.1.0
+description: >-
+  MQTT connector (paho-mqtt v2): messages on allowlisted topic filters become connector messages
+  routed to a session; tools mqtt_publish (publish_allow filters, approval by default) and
+  mqtt_subscriptions. Payloads are redacted from logs.
+provides: [connector, tools]
+consumes: [sessions, "secrets:MQTT_PASSWORD"]
+permissions: [plugin__mqtt__mqtt_publish, plugin__mqtt__mqtt_subscriptions]
+config_schema:
+  type: object
+  properties:
+    host: {type: string, minLength: 1, description: Broker host name or IP.}
+    port: {type: integer, minimum: 1, maximum: 65535, default: 1883}
+    tls: {type: boolean, default: false, description: TLS with the system CA bundle (use port 8883).}
+    username: {type: string}
+    password_secret:
+      type: string
+      enum: [MQTT_PASSWORD]
+      default: MQTT_PASSWORD
+      description: Secret-store name of the password (must be declared in consumes).
+    client_id:
+      type: string
+      pattern: "^[A-Za-z0-9_.-]{1,64}$"
+      description: Stable client id; required by clean_session=false (default auoreo-<host>).
+    subscribe:
+      type: array
+      items: {type: string, minLength: 1}
+      description: Topic filters (MQTT + / # wildcards) to subscribe to; inbound on anything else is dropped.
+    publish_allow:
+      type: array
+      items: {type: string, minLength: 1}
+      description: Topic filters mqtt_publish may write to (empty = no publishing).
+    qos: {type: integer, enum: [0, 1, 2], default: 1}
+    agent: {type: string, description: Agent for MQTT sessions (default agent when unset).}
+    session_key:
+      type: string
+      enum: [filter, topic]
+      default: filter
+      description: One session per subscription filter (default) or per concrete topic.
+  required: [host]
+  additionalProperties: false
+entry: plugin.py:Plugin
+enabled: false

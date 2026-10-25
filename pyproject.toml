@@ -68,6 +68,9 @@ sqlcipher = [  # W1-E: whole-file encryption of state.db (db_encryption = "sqlci
 redis = [  # W1-E: multi-worker event fan-out (serve --workers N with redis_url)
     "redis>=6,<9",
 ]
+livekit = [  # W2-D: backends/rtc_transport/livekit (SFU rooms, SIP, egress; P2 opt-in)
+    "livekit-api>=1.2,<2",
+]
 code = [
     "tree-sitter>=0.26.0",
     "tree-sitter-go>=0.25.0",
@@ -94,6 +97,7 @@ dev = [
     "asgi-lifespan>=2.1.0",
     "fakeredis>=2.30,<3",
     "mypy>=2.4.0",
+    "paho-mqtt>=2.1,<3",  # W2-D: plugins/mqtt is imported in process by its unit tests
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "pytest-httpx>=0.36.2",

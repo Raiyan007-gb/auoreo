@@ -1,0 +1,6 @@
+[project]
+name = "auoreo-plugin-mqtt"
+version = "0.1.0"
+description = "AUOREO MQTT connector + publish tools"
+requires-python = ">=3.12"
+dependencies = ["paho-mqtt>=2.1,<3"]
