@@ -8,6 +8,7 @@ from fastapi import APIRouter, Header, Query, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.core import observability as obs
 from auoreo.core.event_store import REPLAY_LIMIT
 from auoreo.schema.chat import LatestSeq
 
@@ -36,6 +37,7 @@ async def events(
         cursor = int(last_event_id)
     channels = frozenset(f"session:{s}" for s in session_id) if session_id else None
     sub = svc.bus.subscribe(channels)  # subscribe first so nothing falls in the gap
+    obs.count("active_sse_connections", 1)  # --- W0-D
     try:
         yield ServerSentEvent(comment="connected", retry=3000)
         while True:
@@ -57,4 +59,5 @@ async def events(
             cursor = ev.seq
             yield ServerSentEvent(data=ev.model_dump(mode="json"), event=ev.type, id=ev.id)
     finally:
+        obs.count("active_sse_connections", -1)
         svc.bus.unsubscribe(sub)

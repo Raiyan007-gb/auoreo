@@ -1,0 +1,12 @@
+kind: rerank
+name: cohere
+description: >-
+  Cohere POST /v2/rerank (default rerank-v3.5; set rerank_model to another Cohere rerank
+  model, e.g. a v4 one). Key COHERE_API_KEY from the secret store; per-query budget
+  rerank_timeout_s.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API (client code MIT)
+posture: ok

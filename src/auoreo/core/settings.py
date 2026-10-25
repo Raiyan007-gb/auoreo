@@ -250,6 +250,22 @@ class Settings(BaseSettings):
     """Executable of the cua-driver MCP server (`<command> mcp` over stdio)."""
     cua_telemetry: bool = False
     """Leave cua-driver telemetry on (default forces `CUA_DRIVER_RS_TELEMETRY_ENABLED=0`)."""
+    # --- W0-D
+    rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    """Model for the selected rerank backend: a Hugging Face cross-encoder id for
+    `cross_encoder` (alternative `Qwen/Qwen3-Reranker-0.6B`), a provider model for `cohere`
+    (`rerank-v3.5` when this is left at the cross-encoder default)."""
+    rerank_download_models: bool = False
+    """Let the local cross-encoder download weights on first use (else it must be cached)."""
+    rerank_timeout_s: float = Field(default=2.0, gt=0, le=60)
+    """Per-query rerank budget; on timeout the RRF order is kept (fail-open)."""
+    rerank_top_n: int = Field(default=8, ge=1, le=30)
+    """Hits kept after reranking the top-30 window (spec §24.3: top-8)."""
+    otel_mode: Literal["off", "local", "otlp"] = "off"
+    """`AUOREO_OTEL_MODE`: off · local (console, or in-memory with AUOREO_OTEL_TEST=1) · otlp
+    (OTLP/HTTP to OTEL_EXPORTER_OTLP_ENDPOINT). Needs the `otel` extra."""
+    otel_capture_content: bool = False
+    """Attach prompt/tool bodies to spans. Off by default (spec §20.1)."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

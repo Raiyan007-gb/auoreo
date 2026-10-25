@@ -1,8 +1,8 @@
 """Async memory facade: hybrid retrieval (RRF k=60), injection block, writes.
 
 Retrieval pipeline (spec §11.6): trivial → skip; FTS ×3 + KNN ×3 per kind → reciprocal
-rank fusion → × trust (facts below `min_trust` dropped) → top-30 → (rerank: fail-open
-no-op for now) → top-N with citations.
+rank fusion → × trust (facts below `min_trust` dropped) → top-30 → rerank (selected
+`backends/rerank/` backend, fail-open; see memory/rerank.py) → top-N with citations.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ from auoreo.memory import ledger
 from auoreo.memory.chunking import chunk_text
 from auoreo.memory.contradiction import MIN_SHARED, contradicts, top_terms
 from auoreo.memory.files import read_capped
+from auoreo.memory.rerank import RerankStats
+from auoreo.memory.rerank import apply as rerank_hits
 from auoreo.memory.store import MemoryStore, Row, fts_query
 
 if TYPE_CHECKING:
@@ -62,6 +64,17 @@ class MemoryService:
         self.store = store
         self.cfg = services.settings.memory
         self._lock = asyncio.Lock()
+        self.reranker: Any = None
+        """Override for the rerank backend (eval/tests); None → `services.backend("rerank")`."""
+        self.rerank_stats = RerankStats()
+
+    def _reranker(self) -> Any:
+        if self.reranker is not None:
+            return self.reranker
+        try:
+            return self.s.backend("rerank")
+        except Exception:  # no rerank backend discovered / failed to load: RRF order
+            return None
 
     @classmethod
     async def open(cls, services: Services) -> MemoryService:
@@ -243,7 +256,16 @@ class MemoryService:
             )
             hits.append(Hit(row.kind, row.id, row.text, score * trust, row.source, cite))
         hits.sort(key=lambda h: h.score, reverse=True)
-        top = hits[:30][:limit]  # top-30 window → rerank (no-op, fail-open) → top-N
+        settings = self.s.settings
+        top = await rerank_hits(  # top-30 window → rerank (fail-open) → top-N
+            self._reranker(),
+            query,
+            hits,
+            limit,
+            top_n=settings.rerank_top_n,
+            timeout_s=settings.rerank_timeout_s,
+            stats=self.rerank_stats,
+        )
         used = [h.id for h in top if h.kind == "fact"]
         if used:
             try:  # usage feeds the curator; best effort
@@ -285,4 +307,10 @@ class MemoryService:
 
     async def stats(self) -> dict[str, object]:
         counts = await self._run(self.store.counts)
-        return {**counts, "vector": self.store.vec_enabled, "dims": self.cfg.dims}
+        self.rerank_stats.backend = getattr(self._reranker(), "name", None) or "none"
+        return {
+            **counts,
+            "vector": self.store.vec_enabled,
+            "dims": self.cfg.dims,
+            **self.rerank_stats.as_dict(),
+        }

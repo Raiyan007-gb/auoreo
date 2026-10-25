@@ -30,6 +30,8 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "GEMINI_API_KEY",
         "GOOGLE_API_KEY",
         "GROQ_API_KEY",
+        "COHERE_API_KEY",
+        "AUOREO_OTEL_MODE",
         "AUOREO_PERMISSION_MODE",
         "AUOREO_SMALL_MODEL",
         "AUOREO_EMBED_MODEL",

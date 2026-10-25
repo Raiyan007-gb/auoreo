@@ -27,6 +27,20 @@ def test_litellm_is_imported_only_by_the_gateway_module() -> None:
     assert set(offenders) == {Path("gateway/gateway.py")}
 
 
+def test_opentelemetry_is_imported_only_by_observability() -> None:
+    offenders = set()
+    for path in _py_files():
+        for node in ast.walk(ast.parse(path.read_text())):
+            names = []
+            if isinstance(node, ast.Import):
+                names = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            if any(n == "opentelemetry" or n.startswith("opentelemetry.") for n in names):
+                offenders.add(path.relative_to(SRC))
+    assert offenders == {Path("core/observability.py")}
+
+
 def test_no_god_files() -> None:
     limits = {"api/app.py": 300}
     for path in _py_files():

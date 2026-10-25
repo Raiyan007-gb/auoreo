@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import select
 
+from auoreo.core import observability as obs
 from auoreo.core.db import MessageArchiveRow, MessageRow
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import LLMRequest, TextDelta, Usage
@@ -265,6 +266,7 @@ class CompactionService:
         retain = self.s.settings.loop.compaction_retain_ratio if retain_ratio is None else retain_ratio
         cid = f"cmp_{uuid.uuid4().hex[:12]}"
         await self.s.emit(session_id, "compaction.started", {"trigger": trigger, "compaction_id": cid})
+        obs.count("compaction_runs_total")  # --- W0-D
         await self._hook("PreCompact", rt, {"trigger": trigger, "compaction_id": cid})
         try:
             res = await self._compact(rt, cid, trigger, retain, model, stop_below)
