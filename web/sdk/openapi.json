@@ -19,6 +19,73 @@
         "title": "Answer",
         "type": "object"
       },
+      "ArchivedMessage": {
+        "properties": {
+          "archived_at": {
+            "format": "date-time",
+            "title": "Archived At",
+            "type": "string"
+          },
+          "compaction_id": {
+            "title": "Compaction Id",
+            "type": "string"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "idx": {
+            "title": "Idx",
+            "type": "integer"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "tool_call_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Call Id"
+          },
+          "tool_calls": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool Calls"
+          }
+        },
+        "required": [
+          "compaction_id",
+          "idx",
+          "role",
+          "content",
+          "archived_at"
+        ],
+        "title": "ArchivedMessage",
+        "type": "object"
+      },
       "ChatAccepted": {
         "properties": {
           "deduped": {
@@ -129,6 +196,64 @@
           "message"
         ],
         "title": "ChatRequest",
+        "type": "object"
+      },
+      "CompactRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "retain_ratio": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retain Ratio"
+          }
+        },
+        "title": "CompactRequest",
+        "type": "object"
+      },
+      "CompactionOut": {
+        "properties": {
+          "archived": {
+            "title": "Archived",
+            "type": "integer"
+          },
+          "compaction_id": {
+            "title": "Compaction Id",
+            "type": "string"
+          },
+          "post_tokens": {
+            "title": "Post Tokens",
+            "type": "integer"
+          },
+          "pre_tokens": {
+            "title": "Pre Tokens",
+            "type": "integer"
+          },
+          "pruned": {
+            "title": "Pruned",
+            "type": "integer"
+          },
+          "summary_chars": {
+            "title": "Summary Chars",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "compaction_id",
+          "pre_tokens",
+          "post_tokens",
+          "archived",
+          "pruned",
+          "summary_chars"
+        ],
+        "title": "CompactionOut",
         "type": "object"
       },
       "FactIn": {
@@ -608,6 +733,138 @@
           "updated_at"
         ],
         "title": "SessionInfo",
+        "type": "object"
+      },
+      "UsageRecord": {
+        "properties": {
+          "cached_tokens": {
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
+          "completion_tokens": {
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Usd"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "estimated": {
+            "title": "Estimated",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "prompt_tokens": {
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "run_id",
+          "model",
+          "prompt_tokens",
+          "completion_tokens",
+          "cached_tokens",
+          "cost_usd",
+          "estimated",
+          "created_at"
+        ],
+        "title": "UsageRecord",
+        "type": "object"
+      },
+      "UsageSummary": {
+        "properties": {
+          "by_model": {
+            "items": {
+              "$ref": "#/components/schemas/UsageTotals"
+            },
+            "title": "By Model",
+            "type": "array"
+          },
+          "by_session": {
+            "items": {
+              "$ref": "#/components/schemas/UsageTotals"
+            },
+            "title": "By Session",
+            "type": "array"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "total": {
+            "$ref": "#/components/schemas/UsageTotals"
+          }
+        },
+        "required": [
+          "days",
+          "total",
+          "by_model",
+          "by_session"
+        ],
+        "title": "UsageSummary",
+        "type": "object"
+      },
+      "UsageTotals": {
+        "properties": {
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "completion_tokens": {
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "prompt_tokens": {
+            "title": "Prompt Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "calls",
+          "prompt_tokens",
+          "completion_tokens",
+          "cost_usd"
+        ],
+        "title": "UsageTotals",
         "type": "object"
       },
       "ValidationError": {
@@ -2097,6 +2354,111 @@
         ]
       }
     },
+    "/api/sessions/{session_id}/archive": {
+      "get": {
+        "description": "Archived messages, newest compaction first; original order within a compaction.",
+        "operationId": "archive_api_sessions__session_id__archive_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ArchivedMessage"
+                  },
+                  "title": "Response Archive Api Sessions  Session Id  Archive Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Archive",
+        "tags": [
+          "compaction"
+        ]
+      }
+    },
     "/api/sessions/{session_id}/cancel": {
       "post": {
         "description": "Advisory and idempotent: cancelling an idle or unknown session is not an error.",
@@ -2192,6 +2554,113 @@
         ]
       }
     },
+    "/api/sessions/{session_id}/compact": {
+      "post": {
+        "operationId": "compact_api_sessions__session_id__compact_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CompactRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompactionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compact",
+        "tags": [
+          "compaction"
+        ]
+      }
+    },
     "/api/sessions/{session_id}/messages": {
       "get": {
         "operationId": "get_messages_api_sessions__session_id__messages_get",
@@ -2283,6 +2752,208 @@
         "summary": "Get Messages",
         "tags": [
           "sessions"
+        ]
+      }
+    },
+    "/api/usage": {
+      "get": {
+        "operationId": "list_usage_api_usage_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/UsageRecord"
+                  },
+                  "title": "Response List Usage Api Usage Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Usage",
+        "tags": [
+          "usage"
+        ]
+      }
+    },
+    "/api/usage/summary": {
+      "get": {
+        "operationId": "summary_api_usage_summary_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Summary",
+        "tags": [
+          "usage"
         ]
       }
     }

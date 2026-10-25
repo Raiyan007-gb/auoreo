@@ -139,6 +139,20 @@ wheels = [
 ]
 
 [[package]]
+name = "alembic"
+version = "1.20.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mako" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/93/1c/00909e0fbebad2121d916fdcab044cae988146680e9ee4387ba25fef8747/alembic-1.20.1.tar.gz", hash = "sha256:83490def1f723413db5096591f7609ac52544805be93849170088ed04f5a2e0b", size = 2103576, upload-time = "2026-10-22T03:24:35.93Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/11/3c/8740f5b4e1bd57333e4f84265b9b6363da4f7cf70f5622dd1e2fde7a0bd5/alembic-1.20.1-py3-none-any.whl", hash = "sha256:9970712cfb81ea26c8658d378aaa5b8f6ff9146e5bb111d70497c164016cf598", size = 270355, upload-time = "2026-10-22T03:24:37.667Z" },
+]
+
+[[package]]
 name = "annotated-doc"
 version = "0.0.5"
 source = { registry = "https://pypi.org/simple" }
@@ -259,6 +273,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
+    { name = "alembic" },
     { name = "cryptography" },
     { name = "fastapi" },
     { name = "httpx" },
@@ -293,6 +308,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.22.1,<0.23" },
+    { name = "alembic", specifier = ">=1.19,<2" },
     { name = "cryptography", specifier = ">=50.0.2,<51" },
     { name = "fastapi", specifier = ">=0.162.0,<0.163" },
     { name = "httpx", specifier = ">=0.28.1,<0.29" },
@@ -1371,6 +1387,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/b6/46/1ad7bdba8597ac62c04dbc9a124c99e3828ca4f2d39bbdc5faf6958ea604/litellm-1.106.3-cp310-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:1ee5b8e443ac170da36fbad1da7e810d1bf6d496522e84b8e7aa8bffe544f064", size = 35714466, upload-time = "2026-10-24T09:15:10.045Z" },
     { url = "https://files.pythonhosted.org/packages/29/d6/8d225ac12eddf49954d4d091e2b6cda1f9bc01fe064fbcb852a4800cfe3b/litellm-1.106.3-cp310-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:7f19865e23a2c944c7503d67c31ad6ac7f04d7b8335014eebafcd01bf1f8852e", size = 36690214, upload-time = "2026-10-24T09:15:14.443Z" },
     { url = "https://files.pythonhosted.org/packages/1d/37/6fe9f5ba0bc524d208e289b9dce82a3b78768dddc63baa0859de86bbc22a/litellm-1.106.3-cp310-abi3-win_amd64.whl", hash = "sha256:9a05ee983e2a9a8414cf2dabf6a6668ce91071194e8524f77308f41b75870621", size = 37383432, upload-time = "2026-10-24T09:15:19.163Z" },
+]
+
+[[package]]
+name = "mako"
+version = "1.4.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markupsafe" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5a/09/e07c4b5579a79f4b16f8d4f29f6c54514ac787c4ad506b8c4f28a0e6b0bf/mako-1.4.3.tar.gz", hash = "sha256:cd6537fe88d5fec315c55c2f8529bc4ce7a9a352ad7db3eeaa6a66e2dd4ec37a", size = 412799, upload-time = "2026-09-22T20:54:31.509Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6d/a0/053d6af3e8f871e0073b4a36732d9e65be77a72e5434c31b94f6af78a6bb/mako-1.4.3-py3-none-any.whl", hash = "sha256:723296007c870bfd6b3f0c3230dba7198096e5269297ebf5e4eff9e7ffa39d4f", size = 80164, upload-time = "2026-09-22T20:54:33.128Z" },
 ]
 
 [[package]]

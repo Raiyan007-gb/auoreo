@@ -206,5 +206,54 @@ class LiteLLMGateway:
         except Exception:
             return max(1, len(text) // 4)
 
+    def _deployments(self, model: str) -> list[str]:
+        """A routing group expands to its deployments; a raw id is its own deployment."""
+        model = self.settings.aliases.get(model, model)
+        group = self.settings.models.get(model)
+        return list(group.models) if group and group.models else [model]
+
+    def context_window(self, model: str) -> int:
+        group = self.settings.models.get(self.settings.aliases.get(model, model))
+        if group is not None and group.max_input_tokens:
+            return group.max_input_tokens
+        deployments = self._deployments(model)
+        if any("[1m]" in m for m in [model, *deployments]):
+            return ONE_MILLION
+        for dep in deployments:
+            for candidate in _lookup_names(dep):
+                try:
+                    info = litellm.get_model_info(candidate)
+                except Exception:
+                    continue
+                window = info.get("max_input_tokens") or info.get("max_tokens")
+                if window:
+                    return int(window)
+        return DEFAULT_CONTEXT_WINDOW
+
+    def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
+        for dep in self._deployments(model)[:1]:
+            for candidate in _lookup_names(dep):
+                try:
+                    p, c = litellm.cost_per_token(
+                        model=candidate, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
+                    )
+                except Exception:
+                    continue
+                if p or c:
+                    return float(p + c)
+        return None
+
+
+DEFAULT_CONTEXT_WINDOW = 128_000
+ONE_MILLION = 1_000_000
+
+
+def _lookup_names(model: str) -> list[str]:
+    """`openrouter/anthropic/x` may be unmapped while `anthropic/x` is priced."""
+    names = [model]
+    if model.startswith("openrouter/") and model.count("/") >= 2:
+        names.append(model.split("/", 1)[1])
+    return names
+
 
 __all__ = ["LiteLLMGateway", "build_model_list", "map_error"]

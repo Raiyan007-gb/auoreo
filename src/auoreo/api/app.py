@@ -12,13 +12,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from auoreo import __version__
-from auoreo.api.routers import chat, events, harness, health, memory, permissions, questions, sessions
+from auoreo.api.routers import (
+    chat,
+    compaction,
+    events,
+    harness,
+    health,
+    memory,
+    permissions,
+    questions,
+    sessions,
+    usage,
+)
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings, get_settings
 from auoreo.gateway.types import Gateway
 
 log = logging.getLogger(__name__)
-ROUTERS = (health, sessions, chat, events, harness, permissions, questions, memory)
+ROUTERS = (health, sessions, chat, events, harness, permissions, questions, memory, compaction, usage)
 
 
 def create_app(

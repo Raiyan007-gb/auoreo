@@ -56,6 +56,14 @@ class Gateway(Protocol):
 
     def count_tokens(self, model: str, text: str) -> int: ...
 
+    def context_window(self, model: str) -> int:
+        """Max input tokens for a model id or routing group (spec §11.9 S0)."""
+        ...
+
+    def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
+        """Estimated USD cost of one call, or None when the model has no known pricing."""
+        ...
+
 
 def tool_schema(name: str, description: str, parameters: dict[str, Any]) -> dict[str, Any]:
     """OpenAI-style function tool definition (what LiteLLM expects)."""
