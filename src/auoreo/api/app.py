@@ -29,7 +29,11 @@ from auoreo.api.routers import (
     usage,
 )
 from auoreo.api.routers import commands as commands_router
+from auoreo.api.routers import cron as cron_router
+from auoreo.api.routers import deliveries as deliveries_router
+from auoreo.api.routers import hooks as hooks_router
 from auoreo.api.routers import rtc as rtc_router
+from auoreo.api.routers import webhooks as webhooks_router
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings, get_settings
 from auoreo.gateway.types import Gateway
@@ -49,6 +53,10 @@ ROUTERS = (
     commands_router,
     ws,
     rtc_router,
+    hooks_router,
+    cron_router,
+    webhooks_router,
+    deliveries_router,
 )
 
 

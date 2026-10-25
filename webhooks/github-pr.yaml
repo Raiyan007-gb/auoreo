@@ -1,0 +1,22 @@
+name: github-pr
+description: Review newly opened pull requests and log (or comment) the result.
+provider: github
+secret: "secret:webhook/github-pr"   # auoreo secrets set webhook/github-pr
+events: [pull_request]
+filters:
+  - {field: action, equals: opened}
+  - {field: pull_request.draft, equals: "false"}
+agent: default
+prompt: |
+  A pull request was {{event.action}} in {{event.repository.full_name}}:
+  "{{event.pull_request.title}}" by {{event.pull_request.user.login}}
+  {{event.pull_request.html_url}}
+
+  Description:
+  {{event.pull_request.body}}
+
+  Write a short first-pass review: what the change does and what to check.
+deliver: [log]                      # add "github_comment" to post on the PR (secret github/token)
+enabled: false
+rate_limit_per_minute: 30
+max_body_bytes: 1048576

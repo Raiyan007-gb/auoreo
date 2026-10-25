@@ -41,6 +41,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cron": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Jobs */
+        get: operations["list_jobs_api_cron_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cron/{name}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Job */
+        post: operations["pause_job_api_cron__name__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cron/{name}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Job */
+        post: operations["resume_job_api_cron__name__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cron/{name}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Job
+         * @description Fire now (outside the schedule); the run continues in the background.
+         */
+        post: operations["run_job_api_cron__name__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cron/{name}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Job Runs */
+        get: operations["job_runs_api_cron__name__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Deliveries */
+        get: operations["list_deliveries_api_deliveries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/deliveries/{delivery_id}/replay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Replay Delivery
+         * @description `dry_run=true` (default) only shows the stored prompt; otherwise a new pending row
+         *     with the same payload is queued (the original is untouched).
+         */
+        post: operations["replay_delivery_api_deliveries__delivery_id__replay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -520,6 +646,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Webhooks */
+        get: operations["list_webhooks_api_webhooks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hooks/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hooks Health */
+        get: operations["hooks_health_hooks_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/hooks/{route}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive Hook */
+        post: operations["receive_hook_hooks__route__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -623,6 +800,125 @@ export interface components {
             /** Summary Chars */
             summary_chars: number;
         };
+        /** CronJobInfo */
+        CronJobInfo: {
+            /** Agent */
+            agent: string;
+            /** Deliver */
+            deliver: string[];
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Error
+             * @description Schedule parse error, if any
+             */
+            error?: string | null;
+            last_run: components["schemas"]["CronRunInfo"] | null;
+            /** Name */
+            name: string;
+            /** Next Run At */
+            next_run_at: string | null;
+            /** Paused */
+            paused: boolean;
+            /** Schedule */
+            schedule: string;
+            /** Tz */
+            tz: string | null;
+        };
+        /** CronPaused */
+        CronPaused: {
+            /** Job */
+            job: string;
+            /** Paused */
+            paused: boolean;
+        };
+        /** CronRunAccepted */
+        CronRunAccepted: {
+            /** Job */
+            job: string;
+            /** Run Id */
+            run_id: number;
+            /** Status */
+            status: string;
+        };
+        /** CronRunInfo */
+        CronRunInfo: {
+            /** Catch Up */
+            catch_up: boolean;
+            /** Error */
+            error: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: number;
+            /** Job */
+            job: string;
+            /**
+             * Scheduled For
+             * Format: date-time
+             */
+            scheduled_for: string;
+            /** Session Id */
+            session_id: string | null;
+            /** Started At */
+            started_at: string | null;
+            /**
+             * Status
+             * @description pending | running | ok | failed | skipped
+             */
+            status: string;
+        };
+        /** DeliveryInfo */
+        DeliveryInfo: {
+            /** Attempts */
+            attempts: number;
+            /** Claimed At */
+            claimed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error */
+            error: string | null;
+            /** External Id */
+            external_id: string;
+            /** Id */
+            id: number;
+            /** Kind */
+            kind: string;
+            /** Result */
+            result: {
+                [key: string]: unknown;
+            };
+            /** Session Id */
+            session_id: string | null;
+            /** Source */
+            source: string;
+            /**
+             * Status
+             * @description pending | delivering | delivered | failed | unknown
+             */
+            status: string;
+            /** Target */
+            target: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** DeliveryReplay */
+        DeliveryReplay: {
+            /** @description The new pending row (not on dry run) */
+            delivery?: components["schemas"]["DeliveryInfo"] | null;
+            /** Dry Run */
+            dry_run: boolean;
+            /** Prompt */
+            prompt: string;
+        };
         /** FactIn */
         FactIn: {
             /**
@@ -675,6 +971,25 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /** HookAck */
+        HookAck: {
+            /** Delivery Id */
+            delivery_id?: number | null;
+            /** Event */
+            event?: string | null;
+            /** Route */
+            route?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "accepted" | "ignored" | "duplicate";
+        };
+        /** HooksHealth */
+        HooksHealth: {
+            /** Routes */
+            routes: string[];
         };
         /** LatestSeq */
         LatestSeq: {
@@ -957,6 +1272,43 @@ export interface components {
             /** Error Type */
             type: string;
         };
+        /** WebhookRouteInfo */
+        WebhookRouteInfo: {
+            /** Agent */
+            agent: string;
+            /** Deliver */
+            deliver: string[];
+            /** Description */
+            description: string;
+            /** Enabled */
+            enabled: boolean;
+            /** Events */
+            events: string[];
+            /** Filters */
+            filters: {
+                [key: string]: unknown;
+            }[];
+            /** Max Body Bytes */
+            max_body_bytes: number;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            /**
+             * Provider
+             * @enum {string}
+             */
+            provider: "github" | "generic";
+            /** Rate Limit Per Minute */
+            rate_limit_per_minute: number;
+            /**
+             * Secret Configured
+             * @description Whether the referenced secret resolves (value never shown)
+             */
+            secret_configured: boolean;
+            /** Workflow */
+            workflow: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -1037,6 +1389,266 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CommandInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_jobs_api_cron_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CronJobInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_job_api_cron__name__pause_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CronPaused"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_job_api_cron__name__resume_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CronPaused"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_job_api_cron__name__run_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CronRunAccepted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    job_runs_api_cron__name__runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CronRunInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_deliveries_api_deliveries_get: {
+        parameters: {
+            query?: {
+                status?: string | null;
+                kind?: string | null;
+                limit?: number;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    replay_delivery_api_deliveries__delivery_id__replay_post: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                delivery_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeliveryReplay"];
                 };
             };
             /** @description Validation Error */
@@ -2144,6 +2756,143 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_webhooks_api_webhooks_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookRouteInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    hooks_health_hooks_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HooksHealth"];
+                };
+            };
+        };
+    };
+    receive_hook_hooks__route__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ignored by event/filter, or a duplicate delivery id */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookAck"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookAck"];
+                };
+            };
+            /** @description Missing or bad signature */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or disabled route */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Body over max_body_bytes */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not JSON */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Route rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Route secret not configured (fail closed) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

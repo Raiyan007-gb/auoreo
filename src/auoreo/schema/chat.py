@@ -194,3 +194,90 @@ class RtcPeerInfo(BaseModel):
 
 class RtcClosed(BaseModel):
     closed: bool
+
+
+# --- M5a automation: scheduler, webhooks, deliveries
+class CronRunInfo(BaseModel):
+    id: int
+    job: str
+    scheduled_for: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    status: str = Field(description="pending | running | ok | failed | skipped")
+    session_id: str | None
+    catch_up: bool
+    error: str | None
+
+
+class CronJobInfo(BaseModel):
+    name: str
+    description: str
+    schedule: str
+    tz: str | None
+    agent: str
+    deliver: list[str]
+    enabled: bool
+    paused: bool
+    error: str | None = Field(default=None, description="Schedule parse error, if any")
+    next_run_at: datetime | None
+    last_run: CronRunInfo | None
+
+
+class CronRunAccepted(BaseModel):
+    job: str
+    run_id: int
+    status: str
+
+
+class CronPaused(BaseModel):
+    job: str
+    paused: bool
+
+
+class WebhookRouteInfo(BaseModel):
+    name: str
+    path: str
+    description: str
+    provider: Literal["github", "generic"]
+    events: list[str]
+    filters: list[dict[str, Any]]
+    agent: str
+    workflow: str | None
+    deliver: list[str]
+    enabled: bool
+    rate_limit_per_minute: int
+    max_body_bytes: int
+    secret_configured: bool = Field(description="Whether the referenced secret resolves (value never shown)")
+
+
+class HookAck(BaseModel):
+    status: Literal["accepted", "ignored", "duplicate"]
+    route: str | None = None
+    event: str | None = None
+    delivery_id: int | None = None
+
+
+class HooksHealth(BaseModel):
+    routes: list[str]
+
+
+class DeliveryInfo(BaseModel):
+    id: int
+    kind: str
+    source: str
+    external_id: str
+    status: str = Field(description="pending | delivering | delivered | failed | unknown")
+    session_id: str | None
+    target: str
+    attempts: int
+    error: str | None
+    result: dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+    claimed_at: datetime | None
+
+
+class DeliveryReplay(BaseModel):
+    dry_run: bool
+    prompt: str
+    delivery: DeliveryInfo | None = Field(default=None, description="The new pending row (not on dry run)")

@@ -150,6 +150,17 @@ class Settings(BaseSettings):
     teams_child_timeout_s: int = Field(default=900, ge=10)
     plugins_enabled: bool = True
 
+    # --- M5a
+    automation_workers: int = Field(default=1, ge=1, le=16)
+    """Concurrent delivery workers (each runs one agent + delivery at a time)."""
+    automation_start_delay_s: float = Field(default=2.0, ge=0)
+    """Grace before the outbox worker and scheduler catch-up start, so short CLI commands
+    that build Services never claim rows or fire jobs."""
+    automation_poll_s: float = Field(default=2.0, gt=0)
+    """Outbox poll interval (rows enqueued by another process, e.g. `auoreo webhook test`)."""
+    automation_run_timeout_s: int = Field(default=900, ge=10)
+    """Agent timeout for webhook deliveries (jobs use their own `timeout_s`)."""
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""

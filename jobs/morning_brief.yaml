@@ -1,0 +1,11 @@
+name: morning_brief
+description: Summarize what needs attention every weekday morning.
+schedule: "0 9 * * 1-5"        # crontab semantics: 1-5 = Monday..Friday
+tz: Europe/Berlin
+agent: default
+prompt: |
+  It is {{now}} ({{job}}). Summarize what needs attention today in five bullet points.
+deliver: [log]
+enabled: false
+catch_up: true
+timeout_s: 900

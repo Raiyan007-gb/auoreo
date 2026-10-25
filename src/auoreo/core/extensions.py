@@ -18,8 +18,9 @@ log = logging.getLogger(__name__)
 
 STARTERS: list[str] = [
     # "auoreo.runtime.hooks:start",
-    # "auoreo.automation.scheduler:start",
-    # "auoreo.automation.webhooks:start",
+    "auoreo.automation.deliveries:start",
+    "auoreo.automation.scheduler:start",
+    "auoreo.automation.webhooks:start",
     # "auoreo.teams.service:start",
     # "auoreo.plugins.host:start",
 ]
