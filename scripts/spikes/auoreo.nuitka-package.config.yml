@@ -1,0 +1,11 @@
+# yamllint disable rule:line-length
+# Nuitka user package configuration for scripts/build_binary_nuitka.py (F7 spike).
+# Nuitka 2.8.10 and 4.3.1 both crash (AssertionError in the optimizer) on litellm 1.106's
+# `case A(...) | {...} if role:` - an or-pattern whose alternatives bind the same capture,
+# with a guard. Split it into two equivalent cases before compilation.
+---
+- module-name: 'litellm.litellm_core_utils.streaming_chunk_builder_utils'
+  anti-bloat:
+    - description: 'work around Nuitka crash on or-pattern + capture + guard'
+      replacements_plain:
+        'case StreamingChoices(delta=Delta(role=str() as role)) | {"delta": {"role": str() as role}} if role:': "case StreamingChoices(delta=Delta(role=str() as role)) if role:\n                return role\n            case {\"delta\": {\"role\": str() as role}} if role:"

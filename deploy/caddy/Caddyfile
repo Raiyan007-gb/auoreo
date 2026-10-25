@@ -1,0 +1,46 @@
+# AUOREO behind Caddy: HTTP/3 (QUIC) + HTTP/2 + HTTP/1.1 at the edge, plain HTTP/1.1 to
+# uvicorn on :4096 (F7 spike, docs/spikes/http3.md). Caddy obtains and renews the TLS
+# certificate itself; open TCP 443 *and UDP 443* (QUIC) in the firewall.
+#
+#   AUOREO_DOMAIN=auoreo.example.com caddy run --config deploy/caddy/Caddyfile
+#
+# AUOREO keeps binding loopback (`auoreo serve --host 127.0.0.1 --port 4096`); set
+# AUOREO_SERVER_PASSWORD - Caddy is not an auth layer here.
+
+{
+	# Overridable for a local test without root: AUOREO_DOMAIN=localhost:18443
+	# CADDY_HTTP_PORT=18080 CADDY_HTTPS_PORT=18443 AUOREO_UPSTREAM=127.0.0.1:14096
+	http_port {$CADDY_HTTP_PORT:80}
+	https_port {$CADDY_HTTPS_PORT:443}
+	servers {
+		# h3 is advertised to browsers with `Alt-Svc`; they start on h2/h1 and upgrade.
+		protocols h1 h2 h3
+	}
+}
+
+{$AUOREO_DOMAIN:localhost} {
+	# Compress normal responses only: never the SSE stream (compression buffers events).
+	@compressible {
+		not path /api/events /ws /mcp* /acp*
+	}
+	encode @compressible zstd gzip
+
+	reverse_proxy {$AUOREO_UPSTREAM:127.0.0.1:4096} {
+		# SSE (`/api/events`, ACP/MCP streams): `text/event-stream` responses are flushed
+		# immediately by Caddy anyway; -1 also covers chunked JSON streams without a type.
+		flush_interval -1
+
+		# WebSockets (`/ws`) are proxied as HTTP/1.1 Upgrade tunnels automatically. Keep them
+		# open for 5 min across `caddy reload` instead of a reconnect storm.
+		stream_close_delay 5m
+
+		# The SPA and the server see the real client (loopback-only CORS stays correct
+		# because the browser Origin is the public domain, listed in settings.cors_origins).
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Real-IP {remote_host}
+	}
+
+	# Static assets are cache-busted by Vite hashes.
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+}

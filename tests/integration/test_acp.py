@@ -49,6 +49,7 @@ async def test_initialize(client: httpx.AsyncClient) -> None:
     assert res["agentCapabilities"] == {
         "loadSession": True,
         "promptCapabilities": {"image": False, "audio": False, "embeddedContext": True},
+        "sessionCapabilities": {"list": {}, "resume": {}, "close": {}},
     }
 
 

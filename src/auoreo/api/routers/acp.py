@@ -1,7 +1,8 @@
 """`POST /acp` — Agent Client Protocol over JSON-RPC 2.0 (spec §5.4, §2.11, L1039).
 
 Single requests or batches (≤ `MAX_BATCH`). Methods: `initialize`, `authenticate`,
-`session/new`, `session/load`, `session/prompt`, `session/cancel`, `session/set_mode`.
+`session/new`, `session/load`, `session/prompt`, `session/cancel`, `session/set_mode`, and
+(F7, advertised under `sessionCapabilities`) `session/list`, `session/resume`, `session/close`.
 Wire names are camelCase, paths absolute, lines 1-based. `session/prompt` runs one
 non-interactive turn (tools that need approval are denied) and answers with its
 `stopReason` once the turn ends; the final text is echoed in `_meta.auoreo.text`.
@@ -14,9 +15,9 @@ for the request, then the stream closes. AUOREO has no thinking events, so no
 `agent_thought_chunk` is sent. Without that Accept header nothing changes; the durable
 `GET /api/events?session_id=…` stream carries the same events either way.
 
-`session/set_mode` takes `modeId` = `manual` | `acceptEdits` | `plan` (the permission mode
-for that session's following turns; `session/new` lists them under `modes`).
-`session/cancel` is advisory and idempotent: unknown or idle sessions are never an error.
+`session/set_mode` takes `modeId` = `manual` | `acceptEdits` | `plan` (the session's permission
+mode for later turns; listed by `session/new` under `modes`). `session/cancel` is advisory
+and idempotent: unknown or idle sessions are never an error (`session/close` is strict).
 `session/new` writes the protocol-version/capability handshake (the client's last
 `initialize` and any `ACP-Protocol-Version` header) to the audit log as `acp.handshake`.
 
@@ -54,13 +55,8 @@ router = APIRouter(tags=["compat"], dependencies=AUTH)
 
 PROTOCOL_VERSION = 1
 MAX_BATCH = 32
-PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR = (
-    -32700,
-    -32600,
-    -32601,
-    -32602,
-    -32603,
-)
+PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND = -32700, -32600, -32601
+INVALID_PARAMS, INTERNAL_ERROR = -32602, -32603
 STOP_REASONS = {
     "completed": "end_turn",
     "max_steps": "max_turn_requests",
@@ -82,6 +78,7 @@ MODES = {
     "plan": "Read-only planning: edits are blocked outside the plans directory",
 }
 KEEPALIVE_S = 15.0
+LIST_PAGE = 50
 _HEADERS: contextvars.ContextVar[dict[str, str]] = contextvars.ContextVar("acp_headers", default={})  # noqa: B039
 _STATE: dict[str, Any] = {"initialize": None, "audited_ext": set()}
 _STATS: Counter[str] = Counter()
@@ -181,6 +178,7 @@ async def initialize(svc: Services, params: Params) -> Any:
         "agentCapabilities": {
             "loadSession": True,
             "promptCapabilities": {"image": False, "audio": False, "embeddedContext": True},
+            "sessionCapabilities": {"list": {}, "resume": {}, "close": {}},
         },
         "authMethods": [],
         "agentInfo": {"name": "auoreo", "version": __version__},
@@ -268,6 +266,31 @@ async def session_cancel(svc: Services, params: Params) -> Any:
     return None
 
 
+async def session_list(svc: Services, params: Params) -> Any:
+    """Newest first, `LIST_PAGE` per page; the cursor is an opaque offset. Every session
+    shares the server's cwd, so a different `cwd` filter matches nothing."""
+    cwd, cursor = params.get("cwd"), params.get("cursor") or "0"
+    if cwd is not None and PurePath(str(cwd)) != svc.cwd:
+        return {"sessions": []}
+    if not isinstance(cursor, str) or not cursor.isdigit():
+        raise RpcError(INVALID_PARAMS, "invalid cursor")
+    start = int(cursor)
+    rows = await svc.list_sessions(start + LIST_PAGE + 1)
+    items = []
+    for r in rows[start : start + LIST_PAGE]:
+        item = {"sessionId": r.id, "cwd": str(svc.cwd), "updatedAt": r.updated_at.isoformat()}
+        items.append(item | {"title": r.title} if r.title else item)
+    out: dict[str, Any] = {"sessions": items}
+    if len(rows) > start + LIST_PAGE:
+        out["nextCursor"] = str(start + LIST_PAGE)
+    return out
+
+
+async def session_close(svc: Services, params: Params) -> Any:
+    await svc.coordinator.cancel(await _session(svc, params))  # unknown session → -32602
+    return {}
+
+
 @dataclass
 class AcpModeEngine(PermissionEngine):
     """Keeps an ACP-chosen permission mode across turns: the runtime refreshes the session
@@ -311,6 +334,9 @@ METHODS: dict[str, Handler] = {
     "session/prompt": session_prompt,
     "session/cancel": session_cancel,
     "session/set_mode": session_set_mode,
+    "session/list": session_list,
+    "session/resume": session_load,  # no history replay either way, so resume == load here
+    "session/close": session_close,
 }
 
 
@@ -430,15 +456,8 @@ def _tool_started(d: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _tool_completed(d: dict[str, Any]) -> list[dict[str, Any]]:
     text = {"type": "content", "content": {"type": "text", "text": str(d.get("content", ""))}}
-    status = "failed" if d.get("is_error") else "completed"
-    return [
-        {
-            "sessionUpdate": "tool_call_update",
-            "toolCallId": d.get("call_id"),
-            "status": status,
-            "content": [text],
-        }
-    ]
+    update = {"sessionUpdate": "tool_call_update", "toolCallId": d.get("call_id"), "content": [text]}
+    return [update | {"status": "failed" if d.get("is_error") else "completed"}]
 
 
 def _plan(d: dict[str, Any]) -> list[dict[str, Any]]:

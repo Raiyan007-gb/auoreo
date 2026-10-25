@@ -286,6 +286,21 @@ multi-env/exec-server), LiveKit SFU/SIP telephony, E2B/Modal/Daytona environment
 GraphRAG/HyDE/late-chunking memory options, SQLCipher audit-at-rest, PWA/Electron shells,
 PyInstaller `--onefile` matrix + npm launcher + GHCR image + signed auto-update channels.
 
+**M6 spikes (F7, decision records in `docs/spikes/`):**
+- Image generation: `plugins/imagegen` (openai `gpt-image-1` · fal FLUX · fake), off by default,
+  approval-gated, cost in every result; local SD not bundled. Host gap: no plugin → usage/audit call.
+- RL-vision: no perception policy shipped. Offline, retuning the static default gains +0.26 reward
+  and a contextual bandit adds only +0.04, with a reward (F1) the tool cannot observe online.
+- HTTP/3: stay on uvicorn (HTTP/1.1). Hypercorn h3 works, incl. SSE + WS; ship `deploy/caddy/Caddyfile`
+  (h1/h2/h3 edge, SSE verified over h3 end to end; Caddy refuses WS over h3, browsers use h1/h2).
+- Nuitka: PyInstaller stays (150 s build, 203.9 MB). The Nuitka onefile hit litellm optimizer crashes
+  (worked around), then needed 7,175 modules compiled to C and was stopped at the 25 min time box.
+  `scripts/build_binary_nuitka.py` is kept as experimental.
+- Tauri: Electron stays. The Tauri scaffold builds (4.6 MB vs Electron's 274 MB runtime), but the ~200 MB
+  server dominates, signing is unchanged, and window auth is missing.
+- ACP: v1 `session/list` · `session/resume` · `session/close` + `sessionCapabilities`; the client
+  methods (permission/fs/terminal) need a bidirectional transport.
+
 ---
 
 ## Verification matrix (this container vs. your machine)
