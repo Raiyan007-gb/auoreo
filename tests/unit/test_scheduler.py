@@ -145,11 +145,19 @@ async def test_interval_job_fires_and_delivers(services: Services, home: Path) -
     sched.trigger_overrides["tick"] = IntervalTrigger(seconds=1)
     await sched.resync()
 
-    async def done() -> bool:
-        return any(r.status == "ok" for r in await runs_of(services, "tick"))
+    async def done() -> bool:  # the run finishes before its delivery; wait for both
+        ok = [r for r in await runs_of(services, "tick") if r.status == "ok"]
+        if not ok:
+            return False
+        async with services.db.session() as s:
+            ext = [f"run-{r.id}" for r in ok]
+            rows = (await s.execute(select(DeliveryRow).where(DeliveryRow.external_id.in_(ext)))).scalars()
+            delivered.extend(int(d.external_id[4:]) for d in rows if d.status == "delivered")
+            return bool(delivered)
 
+    delivered: list[int] = []
     await wait_for(done)
-    run = next(r for r in await runs_of(services, "tick") if r.status == "ok")
+    run = next(r for r in await runs_of(services, "tick") if r.id == delivered[0])
     assert run.session_id and run.finished_at and not run.catch_up
     async with services.db.session() as s:
         d = (
