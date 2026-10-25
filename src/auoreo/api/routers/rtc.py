@@ -8,13 +8,21 @@ from __future__ import annotations
 
 from typing import Any, NoReturn
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Response, status
 
 from auoreo.api.deps import AUTH, ServicesDep
 from auoreo.core.services import Services
 from auoreo.rtc.peers import RtcLimitError, RtcManager, RtcUnavailable, SdpTooLarge, manager_for
+from auoreo.rtc.turn import ice_servers
 from auoreo.schema.chat import RtcAnswer, RtcClosed, RtcPeerInfo
-from auoreo.schema.rtc_transport import RtcJoinInfo, RtcJoinRequest, RtcLeft, RtcOffer
+from auoreo.schema.rtc_transport import (
+    RtcIceConfig,
+    RtcIceServer,
+    RtcJoinInfo,
+    RtcJoinRequest,
+    RtcLeft,
+    RtcOffer,
+)
 
 router = APIRouter(prefix="/api/rtc", tags=["rtc"], dependencies=AUTH)
 
@@ -57,6 +65,20 @@ async def offer(body: RtcOffer, svc: ServicesDep) -> RtcAnswer:
         code = next(c for t, c in _ERRORS.items() if isinstance(exc, t))
         raise HTTPException(code, str(exc)) from None
     return RtcAnswer(rtc_id=rtc_id, sdp=sdp)
+
+
+@router.get("/ice", response_model=RtcIceConfig)
+async def ice(svc: ServicesDep, response: Response) -> RtcIceConfig:
+    """ICE servers for a browser `RTCPeerConnection` (F5): `rtc_ice_servers` plus, when
+    `turn_secret_ref` + `turn_urls` are set, TURN REST credentials valid `turn_ttl_s` seconds.
+    The shared secret is never returned; fetch this right before each offer."""
+    response.headers["Cache-Control"] = "no-store"  # credentials: never cache
+    servers, expires = ice_servers(svc.settings, svc.secrets)
+    return RtcIceConfig(
+        iceServers=[RtcIceServer(**s) for s in servers],
+        expires_at=expires,
+        ttl_s=int(svc.settings.turn_ttl_s) if expires else None,
+    )
 
 
 @router.delete("/{rtc_id}", response_model=RtcClosed)

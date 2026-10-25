@@ -37,14 +37,16 @@ server (coturn) reachable on UDP 3478 and TCP/TLS 443, or a LiveKit server with 
 - `rtc:stun` — a RFC 5389 Binding request to the first `stun:` server over UDP with a 2 s
   timeout, reporting your public mapped address. With `AUOREO_OFFLINE=1` it is skipped and
   says so; no answer means offline or UDP blocked.
-- `rtc:turn` — whether any TURN server is configured (warns: CGNAT peers will fail without one).
+- `rtc:turn` — static TURN URLs and/or ephemeral TURN REST credentials (`turn_secret_ref` +
+  `turn_urls`, F5); warns when neither is set or the referenced secret is missing.
 - `rtc:transport` — the selected transport's `check()` (aiortc installed; LiveKit URL, keys,
   consent, SDK and reachability).
 
 ## LiveKit (P2, opt-in)
 
 Nothing in P0–M5 depends on LiveKit; the SDK is the optional extra `auoreo[livekit]`
-(`livekit-api`) and is imported lazily.
+(`livekit-api`, plus the realtime SDK `livekit` for DTMF and spoken announcements, F5) and is
+imported lazily.
 
 ```json
 {
@@ -54,7 +56,9 @@ Nothing in P0–M5 depends on LiveKit; the SDK is the optional extra `auoreo[liv
     "api_key_secret": "LIVEKIT_API_KEY",
     "api_secret_secret": "LIVEKIT_API_SECRET",
     "cloud_consent": false,
-    "sip": {"allowed_addresses": ["203.0.113.0/24"], "krisp_enabled": true}
+    "region": null,
+    "sip": {"allowed_addresses": ["203.0.113.0/24"], "krisp_enabled": false,
+            "outbound_trunk_id": "ST_xxx", "ivr": {"0": "transfer:+15550100", "9": "hangup"}}
   }
 }
 ```
@@ -79,9 +83,76 @@ Nothing in P0–M5 depends on LiveKit; the SDK is the optional extra `auoreo[liv
   (username + password from the secret store) is set.
 - Media encryption is always `SIP_MEDIA_ENCRYPT_REQUIRE` (SRTP); the outbound trunk uses TLS
   transport. No REGISTER (the carrier points the number at the trunk), no video.
-- `krisp_enabled` (noise cancellation) defaults on. DTMF reaches room participants as SIP DTMF
-  data packets (nothing in AUOREO consumes them yet); cold transfer is SIP REFER (`transfer(room, identity, "tel:+1…")`). Warm transfer (consult first,
-  then bridge) is not implemented here.
+- `krisp_enabled` (Krisp noise cancellation, on inbound trunks and outbound dials) defaults
+  **off** since F5: on a self-hosted server it needs a Krisp-enabled build. `livekit.region`
+  pins outbound SIP calls (`CreateSIPParticipant.destination.region`) and is echoed in the
+  join answer's `extra.region`; for Cloud region pinning also use a regional URL.
+
+### DTMF and IVR (F5)
+
+The agent joins a call room through the realtime SDK (`livekit.rtc`) as identity `auoreo-agent`
+with a token of kind `agent` (so `subscribable()` and other agents skip it) and listens for
+`sip_dtmf_received`: livekit-sip relays RFC 2833/4733 telephone-events as `SipDTMF`. Each digit
+emits `rtc.dtmf{room, participant, digit, action}`. `livekit.sip.ivr` maps digits to actions:
+
+| Action | Effect |
+|---|---|
+| `transfer:<+E164 \| tel: \| sip:>` | cold transfer of the pressing participant (dial tone on) |
+| `say:<text>` | TTS through the voice service, published as a one-off audio track |
+| `hangup` | `RemoveParticipant` for the caller (audited `rtc.hangup`) |
+| `followup:<text>` | `[caller X pressed D] <text>` queued as a follow-up turn of the room's session |
+
+A failing action emits `rtc.ivr_failed` instead of crashing the listener. Outbound tones:
+`send_dtmf(room, "123#")` publishes `publish_dtmf(code, digit)` per tone (codes per RFC 4733:
+`*`=10, `#`=11, `A`–`D`=12–15; `w` = 0.5 s pause); the audit row has the tone count, never the
+digits (they are often PINs). Without the realtime SDK, `send_dtmf`/`connect_agent` raise
+"realtime SDK is not installed" (HTTP 501 through the API) and nothing listens for DTMF.
+
+### Transfers (F5): `call_transfer` tool
+
+`call_transfer` (deferred; permission `telephony`, default `ask`, destructive) refuses unless
+`settings.backends.rtc_transport` is `livekit`. `caller` is the SIP participant identity;
+`room` defaults to the room joined for the current session.
+
+- **cold** — SIP REFER (`TransferSIPParticipant`) with `play_dialtone` (default true in the tool,
+  false in the raw helper = room audio). The carrier trunk must allow transfers.
+- **warm** — dial the target with `CreateSIPParticipant` (outbound trunk
+  `livekit.sip.outbound_trunk_id`, `wait_until_answered`, 30 s ringing timeout, SRTP REQUIRE,
+  Krisp/region from settings), speak `announce` to them, bridge, then the agent leaves.
+  *Cloud / Private Cloud:* the consult happens in a separate room `<room>-consult-<id>` and the
+  target is moved into the caller's room with `MoveParticipant` (only Cloud implements it).
+  *Self-hosted:* the target is dialled straight into the caller's room (`bridge: in_room`), so
+  the caller hears the announcement too. Without TTS/realtime SDK the announcement is skipped
+  (`announced: false`), not failed.
+
+Both emit `rtc.transfer{room, kind: warm|cold, caller, target, …}` and are audited
+`rtc.transfer`; `target` is masked to its last four digits in events and audit rows.
+
+### Self-hosting (F5): `deploy/livekit/`
+
+`deploy/livekit/compose.livekit.yaml` runs livekit-server, livekit-sip, livekit-egress and Redis
+with host networking (see [`deploy/README.md`](../deploy/README.md)). Requirements from spec
+§26.8: a domain with a real CA certificate for the API, a **separate** TURN domain for the
+embedded TURN/TLS on 5349 (443 without a load balancer), tcp 7881, udp 50000–60000, SIP 5060
+(udp+tcp; 5061 TLS) and RTP udp 10000–20000; egress wants ≥ 4 CPU / 4 GB per worker and
+`SYS_ADMIN`. Keys come only from `${LIVEKIT_API_KEY}` / `${LIVEKIT_API_SECRET}`.
+
+## Ephemeral TURN for the aiortc path (F5)
+
+LiveKit brings its own TURN. For the P2P aiortc transport, run the opt-in coturn in
+`deploy/coturn/` (`use-auth-secret`, relays never to RFC 1918 / loopback / link-local / CGNAT
+ranges, `no-multicast-peers`, `no-tcp-relay`) and configure:
+
+```json
+{"turn_secret_ref": "secret:TURN_SECRET", "turn_urls": ["turns:turn.example.com:5349"], "turn_ttl_s": 3600}
+```
+
+`GET /api/rtc/ice` then answers `{iceServers, expires_at, ttl_s}`: the static `rtc_ice_servers`
+plus one entry with TURN REST credentials (`username = "<expiry>:auoreo"`, `credential =
+base64(HMAC-SHA1(secret, username))`), `Cache-Control: no-store`. The secret is never returned;
+the server-side aiortc peer uses the same derived credentials. Clients should fetch it right
+before each offer (the bundled SPA does not open WebRTC peers itself yet, so there was no SPA
+config spot to change).
 
 ## Smart home: connector plugins (P2)
 
@@ -143,8 +214,18 @@ this environment.
   (`tests/mqtt_broker.py`), not Mosquitto/EMQX; TLS and broker auth failures were not exercised.
 - miIO: tested with a fake `miio` module only; python-miio itself was not installed or run.
 - LiveKit: token minting and the protobuf request shapes are real (`livekit-api`); the server
-  API calls (room, SIP, egress) ran against a fake client. No call was placed, no egress file
-  was written, and Cloud was never contacted.
+  API calls (room, SIP, egress, MoveParticipant, CreateSIPParticipant) ran against a fake
+  client. No call was placed, no egress file was written, and Cloud was never contacted.
+- DTMF / IVR / announcements: a fake `livekit.rtc.Room` emitted `sip_dtmf_received`; the real
+  realtime SDK (`livekit` 1.1) is installed but never connected to a server, and the PCM
+  publishing path (`AudioSource`/`LocalAudioTrack`) was not run against a room.
+- Warm transfer: request sequence only; whether a carrier accepts the outbound leg, and
+  `MoveParticipant` on Cloud, are untested.
+- `deploy/`: YAML structure and `docker compose config` only; no container was started (no
+  Docker daemon), the config keys were checked against LiveKit's documented samples, and the
+  livekit-sip env-var key fallback (`LIVEKIT_API_KEY`) follows upstream's config, not a run.
+- coturn / ephemeral TURN: the credential algorithm is checked against an `openssl` HMAC vector;
+  no coturn server validated a credential.
 - aiortc join: real loopback offer/answer through the API; no NAT traversal.
 - Teleop input: aiortc loopback against the `fake` desktop backend; no real display was driven.
 - STUN: the doctor probe was tested against a local UDP responder; public STUN only in live runs.

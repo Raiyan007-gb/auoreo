@@ -1,7 +1,8 @@
 """Run one tool call through the full pipeline (spec §9.4–9.6).
 
 parse → validate (JSON Schema) → PreToolUse hooks (deny / modify → re-validate) →
-interactive gate → permission (floors, rules, mode, smart-mode guardian, human approval)
+interactive gate → tool `pre_check` floor →
+permission (floors, rules, mode, smart-mode guardian, human approval)
 → scrubbed env → handler with timeout (per-path lock for writers)
 → redact → prune/spill → audit → PostToolUse hooks.
 """
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import inspect
 import json
 import logging
 import uuid
@@ -139,6 +141,19 @@ class ToolExecutor:
         mode, wider, why = self._sandbox_args(tool, args)
         if why is not None:
             return self._err(call, why)
+
+        # Tool-specific floor before any prompt (F5): `pre_check(args) -> str | None` in the
+        # handler module. A refusal is final: no rule, mode or approval can override it.
+        if (why := _pre_check(tool, args)) is not None:
+            await self.s.audit.record(
+                actor="agent",
+                action="tool.denied",
+                session_id=ctx.session_id,
+                decision="deny",
+                reason="pre_check",
+                detail={"tool": tool.name, "call_id": call.id, "why": why[:300]},
+            )
+            return self._err(call, f"refused: {why}. Do not retry unchanged.")
 
         # Stage 2: permission.
         permission = tool.manifest.permission_name
@@ -388,6 +403,20 @@ class ToolExecutor:
     @staticmethod
     def _err(call: ToolCall, message: str) -> ToolOutcome:
         return ToolOutcome(call, ToolResult(message, is_error=True))
+
+
+def _pre_check(tool: ToolDef, args: dict[str, Any]) -> str | None:
+    """The handler module's optional `pre_check(args) -> str | None` (folder tools only): a
+    non-None reason refuses the call before permission evaluation, so a floor-blocked call
+    never raises an approval prompt. Import failures are left to the execute stage."""
+    if tool.path is None:
+        return None
+    try:
+        module = inspect.getmodule(tool.handler())
+    except LoadError:
+        return None
+    check = getattr(module, "pre_check", None)
+    return check(args) if callable(check) else None
 
 
 def _agent(ctx: ToolContext) -> str:

@@ -54,6 +54,30 @@ def stun_binding(host: str, port: int, timeout: float = STUN_TIMEOUT_S) -> str:
     raise ValueError("no XOR-MAPPED-ADDRESS in the response")
 
 
+def turn_check(st: Settings, static_turn: list[str]) -> Check:
+    """F5: static TURN URLs and/or ephemeral TURN REST credentials (`turn_secret_ref`)."""
+    from auoreo.core.diagnostics import Check
+    from auoreo.rtc.turn import turn_secret
+
+    urls = list(st.turn_urls)
+    if st.turn_secret_ref and urls and turn_secret(st) is None:
+        ref = st.turn_secret_ref
+        return Check("rtc:turn", "warn", f"{ref} is not set", f"auoreo secrets set {ref[7:]}")
+    if st.turn_secret_ref and urls:
+        detail = f"ephemeral TURN REST credentials (ttl {st.turn_ttl_s} s) for {len(urls)} URL(s)"
+        return Check("rtc:turn", "ok", detail + (f" + {len(static_turn)} static" if static_turn else ""))
+    if st.turn_secret_ref or urls:
+        return Check("rtc:turn", "warn", "turn_secret_ref and turn_urls must both be set", "set both")
+    if static_turn:
+        return Check("rtc:turn", "ok", f"{len(static_turn)} TURN server(s) (static credentials)")
+    return Check(
+        "rtc:turn",
+        "warn",
+        "no TURN server",
+        "peers behind CGNAT/symmetric NAT need TURN (deploy/coturn + turn_secret_ref) or livekit",
+    )
+
+
 async def rtc_checks(st: Settings) -> list[Check]:
     from auoreo.core.diagnostics import Check  # late: diagnostics imports this module
 
@@ -87,14 +111,7 @@ async def rtc_checks(st: Settings) -> list[Check]:
                     "check UDP egress; on CGNAT/symmetric NAT add a TURN server (turns: on 443)",
                 )
             )
-    out.append(
-        Check(
-            "rtc:turn",
-            "ok" if turn else "warn",
-            f"{len(turn)} TURN server(s)" if turn else "no TURN server",
-            "" if turn else "peers behind CGNAT/symmetric NAT need TURN or the livekit transport",
-        )
-    )
+    out.append(turn_check(st, turn))
     try:
         h = Harness(default_roots(st.home, Path.cwd(), bundled_root(), st.extra_roots))
         bdef = h.select_backend("rtc_transport", st.backends.get("rtc_transport"))

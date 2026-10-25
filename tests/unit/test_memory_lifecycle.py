@@ -175,3 +175,31 @@ async def test_pin_round_trip(services: Services) -> None:
     assert await mem.pin(fid, False)
     assert (await mem.get_fact(fid) or {})["pinned"] == 0
     assert not await mem.pin(424242)
+
+
+async def test_close_waits_for_inflight_store_call_and_later_calls_fail_cleanly(services) -> None:  # type: ignore[no-untyped-def]
+    import asyncio
+    import threading
+    import time
+
+    import pytest
+
+    mem = services.memory
+    if mem is None:
+        pytest.skip("memory disabled")
+    started, order = threading.Event(), []
+
+    def slow() -> str:
+        started.set()
+        time.sleep(0.3)
+        order.append("call-done")
+        return "ok"
+
+    task = asyncio.create_task(mem._run(slow))
+    await asyncio.to_thread(started.wait, 2)
+    task.cancel()  # the worker thread keeps running, as with a cancelled turn
+    await asyncio.to_thread(mem.close)
+    order.append("closed")
+    assert order == ["call-done", "closed"]
+    with pytest.raises(RuntimeError, match="closed"):
+        await mem._run(lambda: "late")

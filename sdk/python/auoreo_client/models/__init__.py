@@ -137,6 +137,8 @@ from .reply_api_permissions_request_id_reply_post_response_reply_api_permissions
 )
 from .rtc_answer import RtcAnswer
 from .rtc_closed import RtcClosed
+from .rtc_ice_config import RtcIceConfig
+from .rtc_ice_server import RtcIceServer
 from .rtc_join_info import RtcJoinInfo
 from .rtc_join_info_extra import RtcJoinInfoExtra
 from .rtc_join_request import RtcJoinRequest
@@ -306,6 +308,8 @@ __all__ = (
     "ReplyApiPermissionsRequestIdReplyPostResponseReplyApiPermissionsRequestIdReplyPost",
     "RtcAnswer",
     "RtcClosed",
+    "RtcIceConfig",
+    "RtcIceServer",
     "RtcJoinInfo",
     "RtcJoinInfoExtra",
     "RtcJoinRequest",

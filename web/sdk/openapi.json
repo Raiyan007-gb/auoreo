@@ -3656,6 +3656,87 @@
         "title": "RtcClosed",
         "type": "object"
       },
+      "RtcIceConfig": {
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Unix time the TURN credentials stop working (None = no TURN REST)",
+            "title": "Expires At"
+          },
+          "iceServers": {
+            "description": "Pass as `RTCConfiguration.iceServers`",
+            "items": {
+              "$ref": "#/components/schemas/RtcIceServer"
+            },
+            "title": "Iceservers",
+            "type": "array"
+          },
+          "ttl_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ttl S"
+          }
+        },
+        "required": [
+          "iceServers"
+        ],
+        "title": "RtcIceConfig",
+        "type": "object"
+      },
+      "RtcIceServer": {
+        "description": "One `RTCIceServer` entry, ready for `new RTCPeerConnection({iceServers})`.",
+        "properties": {
+          "credential": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "base64(HMAC-SHA1(secret, username)); expires with the username",
+            "title": "Credential"
+          },
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Urls",
+            "type": "array"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "TURN REST username `<expiry>:<user>`",
+            "title": "Username"
+          }
+        },
+        "required": [
+          "urls"
+        ],
+        "title": "RtcIceServer",
+        "type": "object"
+      },
       "RtcJoinInfo": {
         "properties": {
           "extra": {
@@ -9883,6 +9964,88 @@
           }
         },
         "summary": "List Peers",
+        "tags": [
+          "rtc"
+        ]
+      }
+    },
+    "/api/rtc/ice": {
+      "get": {
+        "description": "ICE servers for a browser `RTCPeerConnection` (F5): `rtc_ice_servers` plus, when\n`turn_secret_ref` + `turn_urls` are set, TURN REST credentials valid `turn_ttl_s` seconds.\nThe shared secret is never returned; fetch this right before each offer.",
+        "operationId": "ice_api_rtc_ice_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RtcIceConfig"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ice",
         "tags": [
           "rtc"
         ]

@@ -1,6 +1,7 @@
 """The unified desktop act tool (M4d) over `ctx.backend("desktop")`.
 
-Floors (unbypassable, before any backend call): key combos that lock the screen, log out,
+Floors (unbypassable, checked by the executor's `pre_check` seam BEFORE the permission prompt,
+and again in `run` as defence in depth): key combos that lock the screen, log out,
 shut down or kill the session, and `type` of text that pipes a download into a shell or wipes
 the filesystem. `delivery_mode=foreground` needs its own approval (`computer_foreground`,
 pattern = op), separate from the tool's `computer` permission. Every action is audited.
@@ -102,6 +103,17 @@ def floors(op: str, args: dict) -> None:
         raise ToolError('op=drag needs `to` as "x,y"')
     if op == "focus_app" and not args.get("target"):
         raise ToolError("op=focus_app needs the app name as `target`")
+
+
+def pre_check(args: dict) -> str | None:
+    """Executor seam (F5): the floor verdict before permission evaluation, so a blocked combo or
+    typed command is refused without ever asking for approval. Shape errors are left to `run`."""
+    op = args.get("op")
+    if op == "key" and args.get("key"):
+        return key_floor(str(args["key"]), args.get("target"))
+    if op == "type" and args.get("text") is not None:
+        return text_floor(str(args["text"]))
+    return None
 
 
 async def _audit(ctx: ToolContext, args: dict, outcome: str, detail: dict) -> None:

@@ -1,0 +1,37 @@
+# livekit-server config for a self-hosted AUOREO telephony/SFU node (spec §26.8, F5).
+# Keys are NOT in this file: compose passes LIVEKIT_KEYS="<key>: <secret>" from the
+# environment (${LIVEKIT_API_KEY} / ${LIVEKIT_API_SECRET}), which livekit-server reads natively.
+#
+# Firewall (all on the public interface; run with host networking, see compose.livekit.yaml):
+#   tcp 7880        API + WebSocket signalling (put TLS in front: wss://lk.example.com)
+#   tcp 7881        ICE/TCP fallback
+#   udp 50000-60000 ICE/UDP media (two ports per participant)
+#   udp 3478        embedded TURN/UDP (also STUN)
+#   tcp 5349        embedded TURN/TLS on its own domain (cert must match turn.domain)
+port: 7880
+log_level: info
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 60000
+  # true on cloud VMs where the public IP is not on an interface (STUN discovers it)
+  use_external_ip: true
+redis:
+  # required for livekit-sip and livekit-egress (they coordinate through it)
+  address: 127.0.0.1:6379
+room:
+  empty_timeout: 300
+  max_participants: 16
+turn:
+  # LiveKit's embedded TURN (the aiortc P2P path uses deploy/coturn instead)
+  enabled: true
+  domain: turn.example.com        # a SEPARATE domain from the API host; cert must match
+  tls_port: 5349                  # set 443 if no L4 load balancer sits in front
+  udp_port: 3478
+  cert_file: /etc/livekit/certs/turn.crt
+  key_file: /etc/livekit/certs/turn.key
+  external_tls: false
+# webhook / prometheus are optional:
+# prometheus_port: 6789

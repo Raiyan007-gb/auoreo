@@ -47,6 +47,7 @@ from auoreo.rtc.echo import EchoGuard
 from auoreo.rtc.events import CHANNEL_LABEL, EventChannel
 from auoreo.rtc.outbound import SpeechQueue, outbound_track
 from auoreo.rtc.teleop import INPUT_LABEL, TeleopChannel
+from auoreo.rtc.turn import ice_servers
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -162,7 +163,12 @@ class RtcManager:
             raise RtcLimitError(f"at most {self.svc.settings.rtc_max_peers} WebRTC peers")
         from aiortc import RTCConfiguration, RTCIceServer, RTCPeerConnection, RTCSessionDescription
 
-        ice = [RTCIceServer(urls=u) for u in self.svc.settings.rtc_ice_servers]
+        # F5: static rtc_ice_servers + ephemeral TURN REST credentials (settings.turn_secret_ref)
+        servers, _ = ice_servers(self.svc.settings, getattr(self.svc, "secrets", None))
+        ice = [
+            RTCIceServer(urls=s["urls"], username=s.get("username"), credential=s.get("credential"))
+            for s in servers
+        ]
         pc = RTCPeerConnection(configuration=RTCConfiguration(iceServers=ice))
         rtc_id = f"rtc_{uuid.uuid4().hex[:12]}"
         peer = Peer(rtc_id=rtc_id, session_id=session_id, pc=pc, input_allowed=input_, manager=self)

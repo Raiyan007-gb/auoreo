@@ -27,6 +27,13 @@ Handlers import types from `auoreo.tools.context` (`ToolContext`, `ToolResult`,
 `ToolError`). Raise `ToolError("message")` for a model-visible error. A tool in an
 overlay root that shadows a bundled tool must set `override: true`.
 
+**Floors before the prompt (`pre_check`).** A handler module may also define a sync
+`def pre_check(args: dict) -> str | None`. The executor calls it after schema validation and
+`PreToolUse` hooks but *before* permission evaluation; a non-`None` string refuses the call
+(audited `tool.denied`, reason `pre_check`) without any rule, mode or approval prompt being
+consulted. Use it for argument-level floors a permission pattern cannot express (e.g.
+`computer` key combos); keep the same check in the handler as defence in depth.
+
 ## Toolsets
 
 `toolset:` groups tools (`files`, `shell`, `planning`, `github`, `coding`, …) for listing and

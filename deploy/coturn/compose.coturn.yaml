@@ -1,0 +1,20 @@
+# Opt-in coturn for the aiortc P2P path (F5). Not needed with the livekit transport.
+#
+#   export TURN_SECRET=$(openssl rand -hex 32)
+#   docker compose -f deploy/coturn/compose.coturn.yaml up -d
+#
+# Host networking so the relay range (udp 49160-49200) and 3478/5349 are reachable without
+# thousands of published ports; certs for turn.<domain> go in deploy/coturn/certs/ (not committed).
+name: auoreo-coturn
+services:
+  coturn:
+    image: coturn/coturn:4.6
+    network_mode: host
+    command:
+      - "-c"
+      - "/etc/coturn/turnserver.conf"
+      - "--static-auth-secret=${TURN_SECRET:?set TURN_SECRET}"
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - ./certs:/etc/coturn/certs:ro
+    restart: unless-stopped

@@ -12,7 +12,9 @@ contextual ("late") chunk embedding at ingest (memory/contextual.py).
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
+import threading
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -87,6 +89,8 @@ class MemoryService:
         self.store = store
         self.cfg = services.settings.memory
         self._lock = asyncio.Lock()
+        self._guard = threading.Lock()  # held by the worker thread during each store call
+        self._closed = False
         self.reranker: Any = None
         """Override for the rerank backend (eval/tests); None → `services.backend("rerank")`."""
         self.rerank_stats = RerankStats()
@@ -107,12 +111,26 @@ class MemoryService:
         return cls(services, store)
 
     def close(self) -> None:
-        self.store.close()
+        """Wait for an in-flight store call (a cancelled task's worker thread keeps running)
+        before closing the sqlite connection; closing under it can crash the process."""
+        acquired = self._guard.acquire(timeout=10)
+        try:
+            self._closed = True
+            self.store.close()
+        finally:
+            if acquired:
+                self._guard.release()
 
     async def _run[**P, T](self, fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs) -> T:
         """Run a blocking store call in a worker thread under the single-writer lock."""
         async with self._lock:
-            return await asyncio.to_thread(fn, *args, **kwargs)
+            return await asyncio.to_thread(self._guarded, functools.partial(fn, *args, **kwargs))
+
+    def _guarded[T](self, call: Callable[[], T]) -> T:
+        with self._guard:
+            if self._closed:
+                raise RuntimeError("memory store is closed")
+            return call()
 
     async def _embed(self, texts: list[str]) -> list[list[float]] | None:
         if not self.store.vec_enabled:
