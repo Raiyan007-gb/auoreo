@@ -18,6 +18,9 @@ is_read_only: true
 is_concurrency_safe: true      # may run in parallel with other safe calls
 exposure: direct               # direct | deferred (found via tool_search) | hidden
 timeout_ms: 30000
+net: none                      # none | proxy | direct — egress class, recorded in the audit row
+sandbox_mode: workspace-write  # read-only | workspace-write | danger-full-access (bash runs
+                               # through the selected `sandbox` backend with this mode)
 ```
 
 Handlers import types from `auoreo.tools.context` (`ToolContext`, `ToolResult`,

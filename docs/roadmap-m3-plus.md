@@ -144,7 +144,7 @@ conversation triggers compaction and continues; `state.db` from M2 upgrades in p
 
 ## M4 — Perception and devices (voice, vision, browser, desktop, WebRTC)
 
-Status: M4a/M4b/M4e shipped (`fe94817`); voice (M4c) and desktop control (M4d) deferred after M5 by decision.
+Status: M4a/M4b/M4e shipped (`fe94817`); M4c voice + M4d desktop control shipped as fake-backed contracts (`2a22800`) — real STT/TTS/VAD/wake libraries and cua-driver need a hardware checkpoint; the media sidecar and outbound TTS track are open.
 
 New folder kind `backends/<kind>/<name>/` with ABCs in `src/auoreo/backends/{stt,tts,vad,wake,capture,browser,desktop}.py`;
 `settings.json: backends{stt: "faster_whisper", tts: "kittentts", …}` selects; `auoreo doctor`
@@ -189,7 +189,7 @@ desktop pass fake-backend tests and `doctor` prints an honest readiness matrix.
 
 ## M5 — Automation and multi-agent
 
-Status: shared contracts shipped (`fa3d896`: hooks/jobs/webhooks/plugins kinds, schema v3, extension seam); wave 1 (M5a/b/c/d/e/g) in progress, wave 2 = M5f/M5h/M5i.
+Status: shared contracts (`fa3d896`), wave 1 M5a/b/c/d/e/g (`ab09e93`) and wave 2 shipped: M5h compat surfaces (`9069974`), M5f curator/skills-writer/locale (`0fab1dd`), M5i sandbox + ops (`7bec82f`). Open: docker/bwrap runs on a real host, `net: proxy` enforcement (no egress proxy yet), ACP `session/update` streaming.
 
 - **M5a Webhook ingress (spec §5.1, §19.11).** Folder `webhooks/<route>.yaml`
   `{provider: github|generic, secret: "secret:webhook/<route>", events: [...], filters:

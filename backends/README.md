@@ -25,3 +25,8 @@ Tool handlers get the selected instance with `ctx.backend("capture")`. Selection
 `settings.backends[kind]` → the manifest marked `default: true` → the only candidate.
 Every kind ships a `fake` backend used by tests and by `AUOREO_GATEWAY=fake` demos;
 `auoreo doctor` runs `check()` on the selected backend of every kind.
+
+Kinds today: `capture`, `browser`, `sandbox` (none · docker · bwrap; `sandbox_policy:
+warn|fail` decides what happens when the selected one is unavailable), `stt`, `tts`,
+`vad`, `wake`, `desktop`. Real voice/desktop libraries are imported lazily; their
+`check()` reports what is missing, and the `fake` sibling keeps tests and demos keyless.

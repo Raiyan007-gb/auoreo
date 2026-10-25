@@ -26,12 +26,13 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `src/auoreo/runtime/` | inbox, agent loop, session coordinator, compaction, slash-command dispatch, titles |
 | `src/auoreo/gateway/` | LLM gateway (LiteLLM Router) + fake gateway |
 | `src/auoreo/core/` | settings, DB + Alembic migrations, events, bus, audit, redaction, permissions, approvals, questions, secrets, usage ledger, tunnels, WS connections, `extensions.py` (starter seam for optional subsystems) |
-| `src/auoreo/automation/`, `src/auoreo/teams/`, `src/auoreo/plugins/`, `src/auoreo/rtc/` | Optional subsystems attached through `core/extensions.py` (webhooks + scheduler + deliveries; delegation/mailbox/kanban; plugin host; WebRTC) |
+| `src/auoreo/automation/`, `src/auoreo/teams/`, `src/auoreo/plugins/`, `src/auoreo/rtc/`, `src/auoreo/voice/` | Optional subsystems attached through `core/extensions.py` (webhooks + scheduler + deliveries; delegation/mailbox/kanban; plugin host; WebRTC; voice service + RTC bridge). The sandbox probe and memory curator are starters too |
 | `src/auoreo/tools/` | tool *engine* only (executor, context, net helpers) — no tool bodies |
 | `src/auoreo/memory/` | FTS5 + sqlite-vec hybrid memory |
 | `src/auoreo/api/`, `src/auoreo/cli/` | FastAPI app (one port; REST + SSE `/api/events` + WS `/ws`) and Typer CLI |
 | `web/` | React SPA (`web/app`), typed SDK (`web/sdk`, generated from `openapi.json`), Playwright e2e; `web/dist` is served at `/` |
-| `docs/roadmap-m3-plus.md` | Plan for M3 → M6 |
+| `sdk/python/` | Generated Python client (`scripts/gen_sdk.sh`, re-run after API changes) + hand-written SSE extras |
+| `docs/` | `roadmap-m3-plus.md` (M3 → M6 plan), `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md` |
 
 Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` → repo root
 (bundled) → `extra_roots` from `settings.json`.
@@ -44,7 +45,7 @@ Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` �
 - `litellm` is imported only in `src/auoreo/gateway/gateway.py` (test-enforced).
 - Pydantic models in `src/auoreo/schema/` are the wire contract → `web/sdk/openapi.json` →
   `web/sdk/types.gen.ts`. Run `uv run python scripts/check_openapi.py` then
-  `cd web && npm run gen:types` after API changes; WS frames live in `schema/ws.py` and reuse
+  `cd web && npm run gen:types` and `bash scripts/gen_sdk.sh` after API changes; WS frames live in `schema/ws.py` and reuse
   the SSE `ServerEvent` envelope (never a second event model).
 - A new optional subsystem registers one `module:function` line in `core/extensions.STARTERS`;
   it never edits `services.py`. Device/library integrations are `backends/` with a fake.
