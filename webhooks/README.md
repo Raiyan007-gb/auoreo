@@ -5,7 +5,7 @@
 ```yaml
 name: github-pr               # route name
 description: React to pull request events.
-provider: github              # github (X-Hub-Signature-256 HMAC) | generic (X-Signature HMAC)
+provider: github              # github (X-Hub-Signature-256 HMAC) | generic (X-Signature-256 HMAC, optional X-Timestamp ±300s)
 secret: "secret:webhook/github-pr"   # reference into the secret store, never a value
 events: [pull_request]        # provider event names; empty = all
 filters:
