@@ -31,6 +31,53 @@ class Pending:
     pattern: str
     detail: str
     future: asyncio.Future[ApprovalOutcome] = field(repr=False)
+    patterns: list[str] = field(default_factory=list)
+    """Checked scope: what this approval covers (§19.2)."""
+    always: list[str] = field(default_factory=list)
+    """Persist scope for an `always` reply; must be a subset of `patterns`."""
+    cwd: str | None = None
+    risk: str = "medium"
+
+
+class ScopeError(ValueError):
+    """`always[]` is not a subset of `patterns[]` (the ask fails closed)."""
+
+
+def validate_scope(
+    pattern: str, patterns: list[str] | None, always: list[str] | None
+) -> tuple[list[str], list[str]]:
+    """Defaults `patterns=[pattern]`, `always=patterns`; enforces `always ⊆ patterns`."""
+    checked = list(patterns) if patterns else [pattern]
+    persist = list(always) if always is not None else list(checked)
+    extra = [a for a in persist if a not in checked]
+    if extra:
+        raise ScopeError(f"always[] must be a subset of patterns[]; not in patterns: {extra}")
+    return checked, persist
+
+
+def group_key(p: Pending) -> tuple[str, str, str, str]:
+    """Approval grouping key (spec §25.10): `(permission, cwd_root, risk_tier, tool)`."""
+    return (p.permission, p.cwd or "", p.risk, p.tool)
+
+
+def grouped(pending: list[Pending]) -> list[dict[str, Any]]:
+    """Collapsible approval cards: count + first/last pattern + member request ids."""
+    groups: dict[tuple[str, str, str, str], list[Pending]] = {}
+    for p in pending:
+        groups.setdefault(group_key(p), []).append(p)
+    return [
+        {
+            "permission": key[0],
+            "cwd_root": key[1] or None,
+            "risk_tier": key[2],
+            "tool": key[3],
+            "count": len(items),
+            "first_pattern": items[0].pattern,
+            "last_pattern": items[-1].pattern,
+            "request_ids": [i.request_id for i in items],
+        }
+        for key, items in groups.items()
+    ]
 
 
 Emit = Callable[[str, str, dict[str, Any]], Awaitable[None]]
@@ -46,8 +93,22 @@ class ApprovalBroker:
         return [p for p in self._pending.values() if session_id in (None, p.session_id)]
 
     async def request(
-        self, session_id: str, tool: str, permission: str, pattern: str, detail: str
+        self,
+        session_id: str,
+        tool: str,
+        permission: str,
+        pattern: str,
+        detail: str,
+        *,
+        patterns: list[str] | None = None,
+        always: list[str] | None = None,
+        cwd: str | None = None,
+        risk: str = "medium",
     ) -> ApprovalOutcome:
+        try:
+            checked, persist = validate_scope(pattern, patterns, always)
+        except ScopeError as exc:  # fails closed: never shown to the human
+            return ApprovalOutcome(False, None, message=str(exc))
         p = Pending(
             uuid.uuid4().hex,
             session_id,
@@ -56,6 +117,10 @@ class ApprovalBroker:
             pattern,
             detail,
             asyncio.get_running_loop().create_future(),
+            checked,
+            persist,
+            cwd,
+            risk,
         )
         self._pending[p.request_id] = p
         await self._emit(
@@ -130,7 +195,8 @@ async def reply_with_grants(
         engine = engine_for(granted.session_id)
         if engine is None:
             return []
-        engine.grant_always(granted.permission, granted.pattern)
+        for pattern in granted.always or [granted.pattern]:
+            engine.grant_always(granted.permission, pattern)
         return [
             p.request_id
             for p in broker.pending(granted.session_id)
@@ -152,3 +218,50 @@ def pending_dict(p: Pending) -> dict[str, Any]:
         "pattern": p.pattern,
         "detail": p.detail,
     }
+
+
+# ------------------------------------------------------------------ unattended (§19.9)
+UNATTENDED_KINDS: tuple[str, ...] = ("single_query", "cron", "platform")
+
+
+async def unattended_kind(services: Any, session_id: str, hint: object = None) -> str:
+    """Classify a non-interactive session: `cron` (job/webhook delivery session),
+    `platform` (messaging-connector session), else `single_query` (`auoreo run`, MCP, ACP).
+    `hint` (e.g. `ctx.services["unattended"]`) wins when it names a kind."""
+    if isinstance(hint, str) and hint in UNATTENDED_KINDS:
+        return hint
+    try:
+        from sqlalchemy import select
+
+        from auoreo.core.db import DeliveryRow
+
+        async with services.db.session() as s:
+            q = select(DeliveryRow.id).where(
+                DeliveryRow.session_id == session_id, DeliveryRow.kind.in_(("job", "webhook"))
+            )
+            if (await s.execute(q.limit(1))).first() is not None:
+                return "cron"
+    except Exception:  # no deliveries table (minimal test services) → not a cron session
+        pass
+    import json
+
+    home = getattr(getattr(services, "settings", None), "home", None)
+    for path in sorted(home.glob("plugins/*/sessions.json")) if home is not None else []:
+        try:
+            mapping = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(mapping, dict) and session_id in mapping.values():
+            return "platform"
+    return "single_query"
+
+
+def unattended_action(settings: Any, kind: str) -> str:
+    """`approve` | `deny` from `settings.approvals.unattended.<kind>` (default deny)."""
+    policy = getattr(getattr(settings, "approvals", None), "unattended", None)
+    action = getattr(policy, kind, "deny")
+    return action if action in ("approve", "deny") else "deny"
+
+
+def unattended_hint(kind: str) -> str:
+    return f"`auoreo config set approvals.unattended.{kind} approve`"

@@ -8,7 +8,10 @@ Process confinement for tools that run model-supplied commands (`bash` today). A
 |---|---|---|---|
 | `none` | yes | nothing (`enforced=False`; the model is told once per session) | — |
 | `docker` | no | fs + net (cap_drop ALL, no-new-privileges, uid 1000, pids/mem limits, `network_mode=none` for `net: none`) | `uv sync --extra sandbox-docker` + a daemon |
-| `bwrap` | no | fs + net (ro `/usr`, private `/proc` `/dev` PID ns, `--unshare-net` for `net: none`) | `bwrap` on PATH; Landlock not layered yet |
+| `bwrap` | no | fs + net (ro `/usr`, private `/proc` `/dev` PID ns, `--unshare-net` for `net: none`) | `bwrap` on PATH; Landlock layered inside when the kernel has it (ABI in `check()`) |
+| `seatbelt` | no | fs + net (`/usr/bin/sandbox-exec -p <SBPL>`: deny default, ro system, rw cwd + tmp, loopback-only for `net: proxy`) | macOS |
+
+`none` + `security.sandbox_landlock: true` runs commands under the Landlock helper (fs only).
 
 Select with `settings.backends.sandbox`. At startup the selected backend is probed;
 on failure `sandbox_policy: warn` (default) audits `sandbox.fallback` and uses `none`,

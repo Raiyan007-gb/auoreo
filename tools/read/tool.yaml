@@ -20,3 +20,4 @@ is_search_or_read: true
 timeout_ms: 30000
 search_hint: read view open file contents
 sandbox_mode: read-only
+redaction: sentinel

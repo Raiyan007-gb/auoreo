@@ -1,11 +1,21 @@
-"""Secret redaction (on by default, snapshot at import). Spec §19.10."""
+"""Secret redaction (on by default, snapshot at import). Spec §19.10.
+
+Two output modes:
+- `mask` (display): `head6…tail4` for long values, `***` for short ones.
+- `sentinel` (file reads): `«redacted:<label>…»` — non-reusable and carries no entropy, so a
+  model that writes the redacted text back cannot corrupt a real secret (see
+  `auoreo.tools.writeguard`).
+"""
 
 from __future__ import annotations
 
 import logging
 import os
 import re
-from typing import Any
+from collections.abc import Callable, Iterable
+from typing import Any, Literal
+
+RedactMode = Literal["mask", "sentinel", "off"]
 
 # Prefixes: each starts with >=2 literal chars so the substring pre-screen is exact.
 PREFIXES: tuple[str, ...] = (
@@ -23,6 +33,8 @@ PREFIXES: tuple[str, ...] = (
     "xoxb-",
     "xoxp-",
     "xoxa-",
+    "xoxs-",
+    "xoxr-",
     "xapp-",
     "AIza",
     "pplx-",
@@ -34,50 +46,209 @@ PREFIXES: tuple[str, ...] = (
     "SG.",
     "xai-",
     "fw-",
+    "fpk_",
     "dsk-",
-    "eyJ",
+    "gAAAA",  # Fernet tokens
+    "eyJ",  # JWT
 )
+# Short generic prefixes that also start ordinary hyphenated words: the token must hold a digit.
+WEAK_PREFIXES: tuple[str, ...] = ("llm-", "r1-", "oai-")
+ALL_PREFIXES: tuple[str, ...] = PREFIXES + WEAK_PREFIXES
+
 _TOKEN = r"[A-Za-z0-9_\-.=]{10,}"
 _PREFIX_RE = re.compile(r"(?<![A-Za-z0-9])(" + "|".join(re.escape(p) for p in PREFIXES) + r")" + _TOKEN)
-_ASSIGN_RE = re.compile(
-    r"(?i)\b([A-Z0-9_]*(?:API_KEY|SECRET|TOKEN|PASSWORD|PASSWD)[A-Z0-9_]*)\s*[=:]\s*"
-    r"(['\"]?)([^\s'\"]{6,})\2"
+_WEAK_RE = re.compile(
+    r"(?<![A-Za-z0-9])(" + "|".join(re.escape(p) for p in WEAK_PREFIXES) + r")"
+    r"(?=[A-Za-z_\-]*\d)[A-Za-z0-9_\-]{10,}"
 )
-_AUTH_RE = re.compile(r"(?i)\b(authorization|x-api-key)(\s*[:=]\s*)(bearer\s+)?([^\s,;]{8,})")
+_SECRET_WORDS = r"(?:API_KEY|SECRET|TOKEN|PASSWORD|PASSWD)"
+_FRESH = r"(?![^\s'\"]*[…«*])"  # skip values an earlier pass already redacted
+_ASSIGN_RE = re.compile(
+    r"(?i)\b([A-Z0-9_]*" + _SECRET_WORDS + r"[A-Z0-9_]*)\s*[=:]\s*(['\"]?)" + _FRESH + r"([^\s'\"]{6,})\2"
+)
+# Upper-case env names ending in `_KEY` (`FAL_KEY=...`); case-sensitive so `sort_key=` is left alone.
+_ENV_KEY_RE = re.compile(r"\b([A-Z][A-Z0-9_]*_KEY)\s*=\s*(['\"]?)" + _FRESH + r"([^\s'\"]{6,})\2")
+_KEYWORDS = r"(?:api[_-]?key|apikey|secret|token|password|passwd|credentials?|private[_-]?key|access[_-]?key)"
+_JSON_RE = re.compile(r'(?i)("[^"\n]*' + _KEYWORDS + r'[^"\n]*"\s*:\s*")' + _FRESH + r'([^"\n]{6,})(")')
+_YAML_RE = re.compile(
+    r"(?im)^(\s*-?\s*[A-Za-z0-9_.-]*"
+    + _KEYWORDS
+    + r"[A-Za-z0-9_.-]*\s*:[ \t]+)(['\"]?)"
+    + _FRESH
+    + r"([^\s'\"#]{6,})\2"
+)
+_AUTH_RE = re.compile(r"(?i)\b(authorization|x-api-key)(\s*[:=]\s*)(bearer\s+)?" + _FRESH + r"([^\s,;]{8,})")
+_TELEGRAM_RE = re.compile(r"(?<![A-Za-z0-9])(\d{8,10}):([A-Za-z0-9_-]{35})(?![A-Za-z0-9_-])")
 _PEM_RE = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----", re.S)
 _DSN_RE = re.compile(r"\b([a-z][a-z0-9+.-]*://)([^/\s:@]+):([^/\s@]+)@")
+_PHONE_RE = re.compile(r"(?<![\w+])\+?\d{1,3}[ .-]?\(?\d{2,4}\)?[ .-]\d{3,4}[ .-]\d{3,4}(?![\w])")
 
 ENABLED: bool = os.environ.get("AUOREO_REDACT_SECRETS", "1").lower() not in {"0", "false", "no"}
+PHONES: bool = os.environ.get("AUOREO_REDACT_PHONES", "").lower() in {"1", "true", "yes"}
+SENTINEL_OPEN = "«redacted:"
+
+
+def configure(*, phones: bool | None = None) -> None:
+    """Startup snapshot of opt-in passes (called once from `configure_logging`)."""
+    global PHONES
+    if phones is not None:
+        PHONES = phones
 
 
 def mask(value: str) -> str:
     return "***" if len(value) < 18 else f"{value[:6]}…{value[-4:]}"
 
 
-def redact(text: str) -> str:
-    if not ENABLED or not text:
+def sentinel(label: str) -> str:
+    return f"{SENTINEL_OPEN}{label}…»"
+
+
+def _label_for(token: str) -> str:
+    for p in ALL_PREFIXES:
+        if token.startswith(p):
+            return p
+    return "secret"
+
+
+def _hide(value: str, mode: RedactMode, label: str | None = None) -> str:
+    if mode == "sentinel":
+        return sentinel(label or _label_for(value))
+    return mask(value)
+
+
+# ---------------------------------------------------------------- extra patterns
+_EXTRA: dict[str, tuple[re.Pattern[str], ...]] = {}
+_NESTED_QUANT = re.compile(r"\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)[+*{]")
+
+
+def _validate(rx: str) -> re.Pattern[str]:
+    compiled = re.compile(rx)
+    if compiled.match(""):
+        raise ValueError(f"redaction pattern {rx!r} matches the empty string")
+    if _NESTED_QUANT.search(rx):
+        raise ValueError(f"redaction pattern {rx!r} has a nested quantifier (ReDoS risk)")
+    depth, branch_start, i = 0, 0, 0
+    while i < len(rx):  # a top-level alternative must not be empty or start with a wildcard
+        ch = rx[i]
+        if ch == "\\":
+            i += 2
+            continue
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        elif ch == "|" and depth == 0:
+            if i == branch_start or rx[branch_start] in ".*+?":
+                raise ValueError(f"redaction pattern {rx!r} has an empty/wildcard top-level branch")
+            branch_start = i + 1
+        i += 1
+    if branch_start >= len(rx) or rx[branch_start] in ".*+?":
+        raise ValueError(f"redaction pattern {rx!r} has an empty/wildcard top-level branch")
+    return compiled
+
+
+def register_redaction_patterns(name: str, regexes: Iterable[str]) -> None:
+    """Additive-only registration for plugins/backends; matches are always redacted.
+
+    Raises `ValueError` for a reused name or a pattern that fails the ReDoS/top-alt checks."""
+    if name in _EXTRA:
+        raise ValueError(f"redaction patterns '{name}' are already registered (additive only)")
+    _EXTRA[name] = tuple(_validate(rx) for rx in regexes)
+
+
+def registered_patterns() -> dict[str, int]:
+    return {k: len(v) for k, v in _EXTRA.items()}
+
+
+# ---------------------------------------------------------------------- redact
+def _assign(mode: RedactMode) -> Callable[[re.Match[str]], str]:
+    def sub(m: re.Match[str]) -> str:
+        return f"{m.group(1)}={m.group(2)}{_hide(m.group(3), mode, m.group(1))}{m.group(2)}"
+
+    return sub
+
+
+def redact(text: str, mode: RedactMode = "mask") -> str:
+    if not ENABLED or not text or mode == "off":
         return text
-    if any(p in text for p in PREFIXES):
-        text = _PREFIX_RE.sub(lambda m: mask(m.group(0)), text)
+    if any(p in text for p in ALL_PREFIXES):
+        text = _PREFIX_RE.sub(lambda m: _hide(m.group(0), mode), text)
+        text = _WEAK_RE.sub(lambda m: _hide(m.group(0), mode), text)
     text = _PEM_RE.sub("«redacted:private-key»", text)
-    text = _ASSIGN_RE.sub(lambda m: f"{m.group(1)}={m.group(2)}{mask(m.group(3))}{m.group(2)}", text)
-    text = _AUTH_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{m.group(3) or ''}{mask(m.group(4))}", text)
-    return _DSN_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}:***@", text)
+    text = _TELEGRAM_RE.sub(lambda m: f"{m.group(1)}:{_hide(m.group(2), mode, 'telegram')}", text)
+    text = _JSON_RE.sub(lambda m: f"{m.group(1)}{_hide(m.group(2), mode)}{m.group(3)}", text)
+    text = _YAML_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}{_hide(m.group(3), mode)}{m.group(2)}", text)
+    text = _ASSIGN_RE.sub(_assign(mode), text)
+    text = _ENV_KEY_RE.sub(_assign(mode), text)
+    text = _AUTH_RE.sub(
+        lambda m: f"{m.group(1)}{m.group(2)}{m.group(3) or ''}{_hide(m.group(4), mode, m.group(1))}", text
+    )
+    dsn_pw = "***" if mode == "mask" else sentinel("password")
+    text = _DSN_RE.sub(lambda m: f"{m.group(1)}{m.group(2)}:{dsn_pw}@", text)
+    for patterns in _EXTRA.values():
+        for rx in patterns:
+            text = rx.sub(lambda m: _hide(m.group(0), mode, "custom"), text)
+    if PHONES:
+        text = _PHONE_RE.sub("***" if mode == "mask" else sentinel("phone"), text)
+    return text
 
 
-def redact_obj(obj: Any) -> Any:
+def redact_terminal_output(text: str, enabled: bool = True) -> str:
+    """bash/exec output: redacted (display mask) unless `security.redact_terminal_output` is off."""
+    return redact(text) if enabled else text
+
+
+def redact_tool_output(text: str, *, mode: RedactMode, permission: str, settings: Any) -> str:
+    """The executor's result pass: shell tools (permission `bash`: bash/exec/pwsh) follow
+    `security.redact_terminal_output`; every other tool uses its manifest `redaction` mode."""
+    if not getattr(settings, "redact_secrets", True):
+        return text
+    if permission == "bash":
+        security = getattr(settings, "security", None)
+        return redact_terminal_output(text, bool(getattr(security, "redact_terminal_output", True)))
+    return redact(text, mode)
+
+
+# A display mask (`head6…tail4` / `***`) right after a secret-ish key, or one that starts with a
+# known provider prefix: what a model would copy back from a redacted view.
+_MASK_MARKER = re.compile(
+    r"(?:(?<![A-Za-z0-9])(?:" + "|".join(re.escape(p) for p in ALL_PREFIXES) + r")"
+    r"[A-Za-z0-9_\-.=]*…[A-Za-z0-9_\-.=]{4}(?![A-Za-z0-9]))"
+    r"|(?i:"
+    + _KEYWORDS
+    + r"[A-Za-z0-9_\-]*['\"]?\s*[=:]\s*['\"]?(?:[A-Za-z0-9_\-.=]{6}…[A-Za-z0-9_\-.=]{4}|\*\*\*))"
+)
+
+
+def contains_redaction_marker(text: str) -> str | None:
+    """The first sentinel or display-mask marker in `text`, else None."""
+    if (i := text.find(SENTINEL_OPEN)) >= 0:
+        end = text.find("»", i)
+        return text[i : end + 1 if end >= 0 else i + 40]
+    m = _MASK_MARKER.search(text)
+    return m.group(0) if m else None
+
+
+def redact_obj(obj: Any, mode: RedactMode = "mask") -> Any:
     if isinstance(obj, str):
-        return redact(obj)
+        return redact(obj, mode)
     if isinstance(obj, dict):
-        return {k: redact_obj(v) for k, v in obj.items()}
+        return {k: redact_obj(v, mode) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [redact_obj(v) for v in obj]
+        return [redact_obj(v, mode) for v in obj]
     return obj
 
 
 class RedactingFormatter(logging.Formatter):
+    """Redacts the fully formatted line; wraps another formatter when given one."""
+
+    def __init__(self, *args: Any, inner: logging.Formatter | None = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.inner = inner
+
     def format(self, record: logging.LogRecord) -> str:
-        return redact(super().format(record))
+        text = self.inner.format(record) if self.inner is not None else super().format(record)
+        return redact(text)
 
 
 HOLD_BACK = 128

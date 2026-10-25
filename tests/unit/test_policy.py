@@ -160,7 +160,7 @@ def test_bundled_default_policy() -> None:
 def test_engine_policy_after_floors_before_rules() -> None:
     deny_rules = [Rule(permission="*", pattern="*", action="deny")]
     allow = pol("allow", returns('"allow"'))
-    assert engine_with(allow, rules=deny_rules).evaluate("bash", "ls").reason == "policy:allow"
+    assert engine_with(allow, rules=deny_rules).evaluate("bash", "ls").detail == "policy:allow"
     # a policy allow never beats a floor
     d = engine_with(allow).evaluate("bash", "rm -rf /")
     assert d.action == "deny" and d.reason.startswith("floor")
@@ -169,7 +169,7 @@ def test_engine_policy_after_floors_before_rules() -> None:
     # ... nor the bare-sudo ask, nor the sudo -n explicit rule
     assert engine_with(allow).evaluate("bash", "sudo apt update").action == "ask"
     no_explicit = engine_with(allow).evaluate("bash", "sudo -n systemctl restart x")
-    assert no_explicit.action == "deny" and "sudo -n" in no_explicit.reason
+    assert no_explicit.action == "deny" and "sudo -n" in no_explicit.detail
     # None falls through to the rules
     assert engine_with(pol("n", returns("None"))).evaluate("bash", "ls").reason == "rule"
 
@@ -177,7 +177,7 @@ def test_engine_policy_after_floors_before_rules() -> None:
 def test_engine_deny_ask_review_and_modes(monkeypatch: pytest.MonkeyPatch) -> None:
     assert engine_with(pol("d", returns('"deny"'))).evaluate("bash", "ls").action == "deny"
     review = engine_with(pol("r", returns('"review"'))).evaluate("bash", "ls")
-    assert (review.action, review.reason) == ("ask", "policy_review:r")
+    assert (review.action, review.reason, review.detail) == ("ask", "policy", "policy_review:r")
     monkeypatch.setattr("auoreo.core.permissions.YOLO_FROZEN", True)
     yolo = PermissionEngine([], mode="yolo", policies=PolicyEngine([pol("a", returns('"ask"'))]))
     assert yolo.evaluate("bash", "ls").action == "ask"  # yolo never upgrades a policy ask
@@ -200,7 +200,7 @@ def test_ceiling_engine_honours_policies() -> None:
     child = CeilingEngine(
         "manual", list(ALLOW_ALL), [], "manual", policies=PolicyEngine([pol("d", returns('"deny"'))])
     )
-    assert child.evaluate("bash", "ls").reason == "policy:d"
+    assert child.evaluate("bash", "ls").detail == "policy:d"
 
 
 # ------------------------------------------------------------------ wiring
@@ -219,13 +219,13 @@ async def test_runner_and_child_engines_get_policies(services: Services, workdir
     runner = services.coordinator.runner
     eng = runner._engine(rt, spec)
     assert eng.policies is not None and eng.context["session_id"] == sess.id
-    assert eng.evaluate("bash", "ls -la").reason == "policy:no_ls"
+    assert eng.evaluate("bash", "ls -la").detail == "policy:no_ls"
     # a child CeilingEngine (teams spawn sets it with no rules) gets policies on the runner refresh
     child = await services.create_session()
     crt = await services.coordinator.runtime(child.id)
     crt.engine = CeilingEngine("manual", [], [], "manual")
     ceng = runner._engine(crt, spec)
-    assert isinstance(ceng, CeilingEngine) and ceng.evaluate("bash", "ls -la").reason == "policy:no_ls"
+    assert isinstance(ceng, CeilingEngine) and ceng.evaluate("bash", "ls -la").detail == "policy:no_ls"
 
 
 async def test_mcp_server_engine_honours_policies(services: Services, workdir: Path) -> None:
@@ -234,7 +234,7 @@ async def test_mcp_server_engine_honours_policies(services: Services, workdir: P
     endpoint = McpEndpoint()
     endpoint.svc = services
     _, _, _, engine = endpoint._prepare()
-    assert engine.evaluate("bash", "ls -la").reason == "policy:no_ls"
+    assert engine.evaluate("bash", "ls -la").detail == "policy:no_ls"
 
 
 async def review_run(

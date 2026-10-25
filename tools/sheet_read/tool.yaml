@@ -21,3 +21,4 @@ exposure: deferred
 timeout_ms: 60000
 search_hint: excel xlsx csv tsv spreadsheet sheet table rows
 sandbox_mode: read-only
+redaction: sentinel

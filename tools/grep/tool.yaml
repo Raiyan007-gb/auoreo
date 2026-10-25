@@ -24,3 +24,4 @@ is_search_or_read: true
 timeout_ms: 60000
 search_hint: search text regex in files ripgrep
 sandbox_mode: read-only
+redaction: sentinel

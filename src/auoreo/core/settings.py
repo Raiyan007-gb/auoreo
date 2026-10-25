@@ -31,6 +31,7 @@ from auoreo.core.settings_models import (
     SshEnvironment,
     VoiceHostBackends,
 )
+from auoreo.core.settings_security import ApprovalSettings, SecuritySettings
 from auoreo.policy.config import BanditSettings
 from auoreo.remote.config import BridgePeer, RemoteEnvironment  # --- W2-B
 
@@ -63,6 +64,8 @@ class Settings(BaseSettings):
     approval_timeout_s: float = 300.0
     strict_overlays: bool = False
     redact_secrets: bool = True
+    security: SecuritySettings = Field(default_factory=SecuritySettings)  # §19 (settings_security.py)
+    approvals: ApprovalSettings = Field(default_factory=ApprovalSettings)  # §19.9 unattended policy
     keyring: Literal["require", "allow-file", "forbid-file"] = "allow-file"
 
     # settings.json-only structured config

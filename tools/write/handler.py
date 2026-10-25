@@ -1,4 +1,5 @@
 from auoreo.tools.context import ToolContext, ToolError
+from auoreo.tools.writeguard import check_write
 
 
 async def run(args: dict, ctx: ToolContext) -> str:
@@ -8,6 +9,10 @@ async def run(args: dict, ctx: ToolContext) -> str:
             raise ToolError(f"{path} is a directory")
         if str(path) not in ctx.state.read_files:
             raise ToolError(f"{path} exists; read it before overwriting")
+    check_write(
+        args["content"],
+        original=path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None,
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.auoreo-tmp")
     tmp.write_text(args["content"], encoding="utf-8")

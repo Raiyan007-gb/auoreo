@@ -37,7 +37,9 @@ async def services(home: Path, workdir: Path, gateway: FakeGateway) -> AsyncIter
 def prompts(services: Services, monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
     asked: list[tuple[str, str]] = []
 
-    async def request(session_id: str, tool: str, permission: str, pattern: str, detail: str) -> Any:
+    async def request(
+        session_id: str, tool: str, permission: str, pattern: str, detail: str, **_: Any
+    ) -> Any:
         asked.append((tool, pattern))
         return ApprovalOutcome(granted=True, reply="once")
 

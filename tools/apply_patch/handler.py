@@ -9,6 +9,7 @@ from lark import Lark, Token, Tree
 from lark.exceptions import LarkError
 
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
+from auoreo.tools.writeguard import check_write
 
 _PARSER = Lark((Path(__file__).parent / "grammar.lark").read_text(), parser="lalr")
 _SECRET = re.compile(r"(^|/)(\.env(\.[^/]*)?|secrets\.db)$")
@@ -112,6 +113,12 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
             else:
                 writes[path] = new_text
                 summary.append(f"M {op.path}")
+    for path, content in writes.items():  # write-back guard (spec §19.10)
+        if content is not None:
+            check_write(
+                content,
+                original=path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None,
+            )
     if args.get("dry_run"):
         return ToolResult("dry run OK:\n" + "\n".join(summary))
     for path, content in writes.items():

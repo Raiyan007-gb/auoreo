@@ -17,7 +17,7 @@ default_action: allow
 is_read_only: true
 is_concurrency_safe: true
 is_search_or_read: true
-requires_env: []
+requires_env: [EXA_API_KEY]  # scoped secret read (spec §25.11)
 timeout_ms: 30000
 search_hint: web search internet query find pages
 net: direct

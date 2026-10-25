@@ -24,8 +24,8 @@ import jsonschema
 from auoreo.backends.sandbox import escalation_request
 from auoreo.core import observability as obs
 from auoreo.core.guardian import guardian_verdict
-from auoreo.core.redaction import redact
-from auoreo.core.secrets import child_env
+from auoreo.core.redaction import redact, redact_tool_output
+from auoreo.core.secrets import child_env, secret_scope
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import LoadError, ToolDef
 from auoreo.runtime.hooks import RESULT_PREVIEW_CHARS, hooks_of
@@ -37,6 +37,7 @@ from auoreo.tools.context import (
     ToolError,
     ToolResult,
 )
+from auoreo.tools.gates import external_dir_gate, risk_tier, secret_names, unattended_gate
 
 if TYPE_CHECKING:
     from auoreo.core.permissions import PermissionEngine
@@ -155,7 +156,9 @@ class ToolExecutor:
             )
             return self._err(call, f"refused: {why}. Do not retry unchanged.")
 
-        # Stage 2: permission.
+        # Stage 2: permission (a file path outside cwd first passes `external_directory`).
+        if (refused := await external_dir_gate(self, call, tool, args, ctx, engine)) is not None:
+            return refused
         permission = tool.manifest.permission_name
         pattern = self._pattern(tool, args, ctx)
         decision = engine.evaluate(
@@ -206,12 +209,15 @@ class ToolExecutor:
             session_token = CURRENT_SESSION.set(ctx.session_id)
             exec_token = CURRENT_EXEC.set(policy)
             try:
-                coro = obs.traced(handler(args, ctx), "tool.call", tool=tool.name, decision=decision.action)
-                if lock is not None:
-                    async with lock:
+                with secret_scope(tool.name, secret_names(tool, self.s.settings, self.s.harness)):
+                    coro = obs.traced(
+                        handler(args, ctx), "tool.call", tool=tool.name, decision=decision.action
+                    )
+                    if lock is not None:
+                        async with lock:
+                            raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
+                    else:
                         raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
-                else:
-                    raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
             finally:
                 CURRENT_EXEC.reset(exec_token)
                 CURRENT_SESSION.reset(session_token)
@@ -228,7 +234,12 @@ class ToolExecutor:
             log.exception("tool %s crashed", tool.name)
             result = ToolResult(f"tool crashed: {type(exc).__name__}: {exc}", is_error=True)
 
-        text = redact(result.content) if self.s.settings.redact_secrets else result.content
+        text = redact_tool_output(
+            result.content,
+            mode=tool.manifest.redaction,
+            permission=tool.manifest.permission_name,
+            settings=self.s.settings,
+        )
         limit = min(tool.manifest.max_result_size_chars, self.s.settings.loop.tool_result_inline_chars)
         spill = self.s.settings.home / "sessions" / ctx.session_id / "tool-results"
         text, prune_meta = prune(text, limit, spill, call.id)
@@ -312,13 +323,16 @@ class ToolExecutor:
             if hook.granted:
                 return None, "hook:PermissionRequest"
         if not ctx.interactive:
-            return self._err(
-                call,
-                f"'{tool.name}' needs approval for `{pattern[:200]}` but this "
-                "run is non-interactive; allow it with a permission rule",
-            ), reason
+            refused = await unattended_gate(self, call, tool, ctx, permission, pattern, audit, reason)
+            return refused, (reason if refused is not None else f"{reason}+unattended")
         outcome = await self.s.approvals.request(
-            ctx.session_id, tool.name, permission, pattern, _detail(tool, args)
+            ctx.session_id,
+            tool.name,
+            permission,
+            pattern,
+            _detail(tool, args),
+            cwd=str(ctx.cwd),
+            risk=risk_tier(tool),
         )
         await self.s.audit.record(
             actor="human",
@@ -368,7 +382,9 @@ class ToolExecutor:
         )
         if decision.action == "deny":
             return self._err(call, f"sandbox escalation denied ({decision.detail})"), None
-        if decision.action == "ask" or decision.reason == "mode: yolo":  # yolo never grants a wider mode
+        if decision.action == "ask" or (
+            decision.reason == "mode" and decision.note == "yolo"
+        ):  # yolo never grants a wider mode
             refused, _ = await self._ask(
                 call,
                 tool,

@@ -7,9 +7,13 @@ if no usable keyring exists and `AUOREO_KEYRING=allow-file`, the key falls back 
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
+from collections.abc import Callable, Iterable, Iterator
+from contextvars import ContextVar
+from dataclasses import dataclass
 from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -22,6 +26,34 @@ ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "TERM", "USER", "SHELL"
 
 class SecretStoreError(RuntimeError):
     pass
+
+
+class UnscopedSecretError(SecretStoreError):
+    """A tool asked for a secret outside its declared `requires_env` scope (spec §25.11)."""
+
+
+@dataclass(frozen=True)
+class SecretScope:
+    """The secret names the running tool may read, and who it is (for the audit row)."""
+
+    by: str
+    names: frozenset[str]
+
+
+SECRET_SCOPE: ContextVar[SecretScope | None] = ContextVar("auoreo_secret_scope", default=None)
+AuditHook = Callable[[str, str, bool], None]
+"""`(name, by, allowed)` — called for every scoped/attributed read; never sees the value."""
+
+
+@contextlib.contextmanager
+def secret_scope(by: str, names: Iterable[str]) -> Iterator[SecretScope]:
+    """Install a per-call scope (the executor wraps each tool call in one)."""
+    scope = SecretScope(by, frozenset(names))
+    token = SECRET_SCOPE.set(scope)
+    try:
+        yield scope
+    finally:
+        SECRET_SCOPE.reset(token)
 
 
 def _keyring_get(name: str) -> str | None:
@@ -53,6 +85,8 @@ class SecretStore:
         self.path = home / "secrets.db"
         self.key_file = home / ".secrets.key"
         self.policy = keyring_policy
+        self.audit_hook: AuditHook | None = None
+        """Set by the `secret_audit` extension starter (no DB import here)."""
 
     # ---------------------------------------------------------------- key mgmt
     def _key(self, create: bool) -> bytes | None:
@@ -112,8 +146,32 @@ class SecretStore:
     def names(self) -> list[str]:
         return sorted(self._load())
 
-    def get(self, name: str) -> str | None:
-        """env → keyring → secrets.db. Never raises for a missing value."""
+    def get(self, name: str, *, by: str | None = None) -> str | None:
+        """env → keyring → secrets.db. Never raises for a missing value.
+
+        Inside a tool call (`SECRET_SCOPE` set) a name outside the tool's scope raises
+        `UnscopedSecretError`. Scoped reads and reads attributed with `by=` (plugins,
+        backends) are audited by NAME only through `audit_hook`."""
+        scope = SECRET_SCOPE.get()
+        if scope is not None or by is not None:
+            who = by or (scope.by if scope else "unknown")
+            allowed = scope is None or name in scope.names
+            self._audit(name, who, allowed)
+            if not allowed:
+                raise UnscopedSecretError(
+                    f"'{who}' may not read secret '{name}' (not in its requires_env scope)"
+                )
+        return self._resolve(name)
+
+    def _audit(self, name: str, by: str, allowed: bool) -> None:
+        if self.audit_hook is None:
+            return
+        try:
+            self.audit_hook(name, by, allowed)
+        except Exception:  # auditing must never break the read path
+            log.exception("secret audit hook failed")
+
+    def _resolve(self, name: str) -> str | None:
         if (v := os.environ.get(name)) is not None:
             return v
         if (v := _keyring_get(name)) is not None:
@@ -129,7 +187,41 @@ def child_env(requires: list[str], secrets: SecretStore | None) -> dict[str, str
     """Scrubbed environment for subprocesses: allowlist + the tool's declared needs."""
     env = {k: os.environ[k] for k in ENV_ALLOWLIST if k in os.environ}
     for name in requires:
-        value = secrets.get(name) if secrets else os.environ.get(name)
+        value = secrets._resolve(name) if secrets else os.environ.get(name)
         if value is not None:
             env[name] = value
     return env
+
+
+async def start(services: object) -> None:
+    """Extension starter: audit every scoped secret read as `secret.read{name, by}`."""
+    import asyncio
+
+    store = getattr(services, "secrets", None)
+    audit = getattr(services, "audit", None)
+    if store is None or audit is None:
+        return None
+    pending: set[asyncio.Task[object]] = set()
+
+    def hook(name: str, by: str, allowed: bool) -> None:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        from auoreo.tools.context import CURRENT_SESSION
+
+        task = loop.create_task(
+            audit.record(
+                session_id=CURRENT_SESSION.get(),
+                actor="tool" if not by.startswith(("plugin:", "backend:")) else by.split(":", 1)[0],
+                action="secret.read",
+                decision="allow" if allowed else "deny",
+                reason="scope" if allowed else "unscoped",
+                detail={"name": name, "by": by},
+            )
+        )
+        pending.add(task)
+        task.add_done_callback(pending.discard)
+
+    store.audit_hook = hook
+    return None
