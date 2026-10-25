@@ -44,7 +44,45 @@ def _v1(db: sqlite3.Connection) -> None:
     db.execute("CREATE INDEX IF NOT EXISTS facts_active ON facts(tenant_id, archived_at, valid_to)")
 
 
-STEPS: tuple[Callable[[sqlite3.Connection], None], ...] = (_v1,)
+# v2 — GraphRAG-lite + chunk provenance (spec §25.8). `chunks.doc_id` already exists in the
+# v0 schema; it is only added when missing (hand-made or very old databases).
+_V2_CHUNK_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("chunk_strategy", "TEXT DEFAULT 'early'"),
+    ("span_start", "INTEGER"),
+    ("span_end", "INTEGER"),
+    ("doc_id", "TEXT"),
+)
+_NOW = "((julianday('now') - 2440587.5) * 86400.0)"
+
+
+def _v2(db: sqlite3.Connection) -> None:
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS fact_entities (fact_id INTEGER NOT NULL, entity TEXT NOT NULL, "
+        "PRIMARY KEY(fact_id, entity))"
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS fact_entities_entity ON fact_entities(entity)")
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS communities (id INTEGER PRIMARY KEY, "
+        "tenant_id TEXT NOT NULL DEFAULT 'local', level INTEGER NOT NULL, entities TEXT NOT NULL, "
+        "fact_ids TEXT NOT NULL, summary TEXT NOT NULL, mtime REAL NOT NULL)"
+    )
+    have = _columns(db, "chunks")
+    for name, decl in _V2_CHUNK_COLUMNS:
+        if name not in have:
+            db.execute(f"ALTER TABLE chunks ADD COLUMN {name} {decl}")
+    # Entity rows follow the fact lifecycle: dropped on purge, archive or expiry.
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS facts_entities_ad AFTER DELETE ON facts BEGIN "
+        "DELETE FROM fact_entities WHERE fact_id = old.id; END"
+    )
+    db.execute(
+        "CREATE TRIGGER IF NOT EXISTS facts_entities_au AFTER UPDATE OF archived_at, valid_to ON facts "
+        f"WHEN new.archived_at IS NOT NULL OR (new.valid_to IS NOT NULL AND new.valid_to <= {_NOW} + 1.0) "
+        "BEGIN DELETE FROM fact_entities WHERE fact_id = new.id; END"
+    )
+
+
+STEPS: tuple[Callable[[sqlite3.Connection], None], ...] = (_v1, _v2)
 VERSION = len(STEPS)
 
 

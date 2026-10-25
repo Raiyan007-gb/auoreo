@@ -142,3 +142,48 @@ def show(fact_id: int) -> None:
     row = with_services(go)
     _need(row is not None, fact_id, "deleted")
     dump_json(row)
+
+
+graph_app = typer.Typer(no_args_is_help=True, help="GraphRAG-lite communities (deterministic, no LLM).")
+app.add_typer(graph_app, name="graph")
+
+
+@graph_app.command("build")
+def graph_build() -> None:
+    """Rebuild entity communities from the active facts (works even when graph_enabled is off)."""
+
+    async def go(svc: Services) -> dict[str, object]:
+        assert svc.memory is not None
+        built = await svc.memory.build_graph()
+        levels = sorted({c.level for c in built})
+        return {
+            "communities": len(built),
+            "levels": {str(lvl): sum(1 for c in built if c.level == lvl) for lvl in levels},
+            "facts": len({f for c in built for f in c.fact_ids}),
+            "graph_enabled": svc.settings.memory.graph_enabled,
+        }
+
+    dump_json(with_services(go))
+
+
+@graph_app.command("show")
+def graph_show(
+    level: Annotated[int | None, typer.Option(help="Only this level (1 or 2).")] = None,
+    full: Annotated[bool, typer.Option("--full", help="Print whole summaries and entity lists.")] = False,
+) -> None:
+    """List stored communities with their entities and extractive summaries."""
+
+    async def go(svc: Services) -> list[dict[str, object]]:
+        assert svc.memory is not None
+        return [
+            {
+                "id": c.id,
+                "level": c.level,
+                "entities": c.entities if full else c.entities[:10],
+                "facts": len(c.fact_ids),
+                "summary": c.summary if full else c.summary[:300],
+            }
+            for c in await svc.memory.communities(level)
+        ]
+
+    dump_json(with_services(go))

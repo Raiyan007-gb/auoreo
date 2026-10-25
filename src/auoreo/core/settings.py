@@ -55,6 +55,20 @@ class MemorySettings(BaseModel):
     curator_min_idle_hours: float = Field(default=2, ge=0)
     curator_stale_after_days: float = Field(default=30, gt=0)
     curator_archive_after_days: float = Field(default=90, gt=0)
+    # --- W1-D (spec §25.8): opt-in retrieval options, all off by default
+    graph_enabled: bool = False
+    """GraphRAG-lite: entity fan-out in search + community summaries for global queries."""
+    graph_levels: int = Field(default=2, ge=1, le=2)
+    graph_min_weight: int = Field(default=2, ge=1)
+    graph_fanout_limit: int = Field(default=12, ge=1)
+    graph_fanout_weight: float = Field(default=0.8, gt=0)
+    graph_summary_tokens: int = Field(default=600, gt=0)
+    recall_hyde: bool = False
+    """HyDE: on zero FTS hits, embed query + a hypothetical answer for the vector arm only."""
+    hyde_max_tokens: int = Field(default=128, gt=0)
+    chunk_strategy: Literal["early", "late"] = "early"
+    """`late` = contextual chunk embedding (a late-chunking approximation; memory/contextual.py)."""
+    late_max_chars: int = Field(default=12_000, gt=0)
 
 
 class LoopSettings(BaseModel):

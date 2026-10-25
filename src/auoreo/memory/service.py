@@ -3,6 +3,10 @@
 Retrieval pipeline (spec §11.6): trivial → skip; FTS ×3 + KNN ×3 per kind → reciprocal
 rank fusion → × trust (facts below `min_trust` dropped) → top-30 → rerank (selected
 `backends/rerank/` backend, fail-open; see memory/rerank.py) → top-N with citations.
+
+Opt-in options (spec §25.8, all off by default): HyDE for the vector arm on zero FTS hits
+(memory/hyde.py), GraphRAG-lite entity fan-out + community summaries (memory/graph.py) and
+contextual ("late") chunk embedding at ingest (memory/contextual.py).
 """
 
 from __future__ import annotations
@@ -14,8 +18,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from auoreo.memory import ledger
-from auoreo.memory.chunking import chunk_text
+from auoreo.memory import graph, hyde, ledger
+from auoreo.memory.chunking import Chunk, chunk_text
+from auoreo.memory.contextual import batches, contextual_inputs
 from auoreo.memory.contradiction import MIN_SHARED, contradicts, top_terms
 from auoreo.memory.files import read_capped
 from auoreo.memory.rerank import RerankStats
@@ -37,17 +42,35 @@ class Hit:
     score: float
     source: str | None
     citation: str
+    span_start: int | None = None
+    span_end: int | None = None
+    chunk_strategy: str | None = None
+
+
+@dataclass
+class RecallStats:
+    """Counters for the opt-in recall options (exposed through `MemoryService.stats`)."""
+
+    graph_hit: int = 0
+    hyde_used: int = 0
+    hyde_failed: int = 0
+
+    def as_dict(self) -> dict[str, object]:
+        return {"graph_hit": self.graph_hit, "hyde_used": self.hyde_used, "hyde_failed": self.hyde_failed}
 
 
 def is_trivial(query: str) -> bool:
     return fts_query(query) is None or len(query.strip()) < 4
 
 
-def rrf(rankings: list[list[tuple[str, int]]], k: int) -> dict[tuple[str, int], float]:
+def rrf(
+    rankings: list[list[tuple[str, int]]], k: int, weights: list[float] | None = None
+) -> dict[tuple[str, int], float]:
     scores: dict[tuple[str, int], float] = {}
-    for ranking in rankings:
+    for n, ranking in enumerate(rankings):
+        w = weights[n] if weights else 1.0
         for rank, key in enumerate(ranking, start=1):
-            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
+            scores[key] = scores.get(key, 0.0) + w / (k + rank)
     return scores
 
 
@@ -67,6 +90,7 @@ class MemoryService:
         self.reranker: Any = None
         """Override for the rerank backend (eval/tests); None → `services.backend("rerank")`."""
         self.rerank_stats = RerankStats()
+        self.recall_stats = RecallStats()
 
     def _reranker(self) -> Any:
         if self.reranker is not None:
@@ -112,6 +136,7 @@ class MemoryService:
             self.cfg.embed_model,
             source,
         )
+        await self._index(fid, content)
         if created:
             try:
                 await self.flag_contradictions(fid, content)
@@ -145,7 +170,39 @@ class MemoryService:
         """Supersede `fact_id` with `content`; returns the new row's id (None if not active)."""
         content = scrub(content).strip()[:2000]
         emb = await self._embed([content])
-        return await self._run(self.store.replace_fact, fact_id, content, emb[0] if emb else None)
+        new_id = await self._run(self.store.replace_fact, fact_id, content, emb[0] if emb else None)
+        if new_id is not None:
+            await self._index(new_id, content)
+        return new_id
+
+    async def _index(self, fact_id: int, content: str) -> None:
+        """Entity rows for GraphRAG-lite (deterministic; advisory, never fails a write)."""
+        try:
+            await self._run(graph.index_fact, self.store, fact_id, content)
+        except Exception:
+            log.exception("entity indexing failed for fact %s", fact_id)
+
+    async def build_graph(self) -> list[graph.Community]:
+        """Rebuild GraphRAG-lite communities (curator loop / `auoreo memory graph build`)."""
+        model = self.s.settings.model or "default"
+        return await self._run(
+            graph.build,
+            self.store,
+            self.cfg.graph_levels,
+            self.cfg.graph_min_weight,
+            self.cfg.graph_summary_tokens,
+            lambda t: self.s.gateway.count_tokens(model, t),
+        )
+
+    async def communities(self, level: int | None = None) -> list[graph.Community]:
+        return await self._run(graph.load, self.store, level)
+
+    async def refresh_graph(self) -> bool:
+        """Rebuild when enabled and stale; returns whether a rebuild ran."""
+        if not self.cfg.graph_enabled or not await self._run(graph.is_stale, self.store):
+            return False
+        await self.build_graph()
+        return True
 
     async def forget(self, fact_id: int, actor: str = "user", reason: str = "forgotten on request") -> bool:
         """Archive (never delete) a fact; ledger + audit."""
@@ -192,7 +249,7 @@ class MemoryService:
             self.cfg.chunk_overlap,
             lambda t: self.s.gateway.count_tokens(model, t),
         )
-        embs = await self._embed([c.text for c in chunks]) if chunks else None
+        embs = await self._embed_chunks(text, chunks) if chunks else None
         added = 0
         for i, c in enumerate(chunks):
             emb = embs[i] if embs else None
@@ -206,9 +263,24 @@ class MemoryService:
                 c.tokens,
                 emb,
                 self.cfg.embed_model,
+                strategy=self.cfg.chunk_strategy,
+                span=(c.span_start, c.span_end),
             ):
                 added += 1
         return added
+
+    async def _embed_chunks(self, text: str, chunks: list[Chunk]) -> list[list[float]] | None:
+        """`early`: embed each chunk alone. `late`: contextual chunk vectors (one batched call
+        per document; see memory/contextual.py for why this approximates late chunking)."""
+        if self.cfg.chunk_strategy != "late":
+            return await self._embed([c.text for c in chunks])
+        out: list[list[float]] = []
+        for batch in batches(contextual_inputs(text, chunks, self.cfg.late_max_chars)):
+            embs = await self._embed(batch)
+            if embs is None or len(embs) != len(batch):
+                return None
+            out.extend(embs)
+        return out
 
     async def record_message(self, session_id: str, role: str, text: str) -> None:
         if text.strip():
@@ -221,19 +293,32 @@ class MemoryService:
         limit: int = 8,
         kinds: tuple[str, ...] = ("fact", "chunk"),
         include_archived: bool = False,
+        *,
+        allow_aux: bool = True,
     ) -> list[Hit]:
+        """`allow_aux=False` (unattended / subagent callers) never spends a HyDE aux call."""
         if is_trivial(query):
             return []
         wide = max(limit * 3, 10)
-        emb = await self._embed([query])
+        fts = {k: await self._run(self.store.fts, k, query, wide, include_archived) for k in kinds}
+        n_fts = sum(len(v) for v in fts.values())
+        emb = await self._embed([await self._vector_text(query, n_fts, allow_aux)])
         rankings: list[list[tuple[str, int]]] = []
         for kind in kinds:
-            fts = await self._run(self.store.fts, kind, query, wide, include_archived)
-            rankings.append([(kind, i) for i in fts])
+            rankings.append([(kind, i) for i in fts[kind]])
             if emb:
                 knn = await self._run(self.store.knn, kind, emb[0], wide, include_archived)
                 rankings.append([(kind, i) for i in knn])
-        fused = rrf(rankings, self.cfg.rrf_k)
+        weights = [1.0] * len(rankings)
+        use_graph = self.cfg.graph_enabled and "fact" in kinds
+        graph_used = False
+        if use_graph and not include_archived:
+            fan = await self._run(graph.fanout, self.store, query, self.cfg.graph_fanout_limit)
+            if fan:
+                rankings.append([("fact", i) for i in fan])
+                weights.append(self.cfg.graph_fanout_weight)
+                graph_used = True
+        fused = rrf(rankings, self.cfg.rrf_k, weights)
         by_kind: dict[str, list[int]] = {}
         for kind, rid in fused:
             by_kind.setdefault(kind, []).append(rid)
@@ -254,7 +339,7 @@ class MemoryService:
                 if row.kind == "fact"
                 else f"{row.source}:{row.extra.get('start')}-{row.extra.get('end')}"
             )
-            hits.append(Hit(row.kind, row.id, row.text, score * trust, row.source, cite))
+            hits.append(Hit(row.kind, row.id, row.text, score * trust, row.source, cite, *_span(row)))
         hits.sort(key=lambda h: h.score, reverse=True)
         settings = self.s.settings
         top = await rerank_hits(  # top-30 window → rerank (fail-open) → top-N
@@ -272,13 +357,33 @@ class MemoryService:
                 await self._run(self.store.bump_use, used)
             except Exception:
                 log.exception("could not record fact usage")
+        if use_graph and graph.is_global(query):
+            picked = await self._run(graph.pick, self.store, query, 2)
+            top += [Hit("community", c.id, c.summary, 0.0, None, f"community:{c.id}") for c in picked]
+            graph_used = graph_used or bool(picked)
+        if graph_used:
+            self.recall_stats.graph_hit += 1
         return top
+
+    async def _vector_text(self, query: str, fts_hits: int, allow_aux: bool) -> str:
+        """The text the KNN arm embeds: the query, or query + HyDE document (§25.8)."""
+        if not (self.cfg.recall_hyde and allow_aux and self.store.vec_enabled):
+            return query
+        if not hyde.triggered(query, fts_hits):
+            return query
+        doc = await hyde.generate(self.s, query, self.cfg.hyde_max_tokens)
+        if doc is None:
+            self.recall_stats.hyde_failed += 1
+            return query
+        self.recall_stats.hyde_used += 1
+        log.info("hyde_used query_chars=%d doc_chars=%d", len(query), len(doc))
+        return f"{query}\n{doc}"
 
     async def search_sessions(self, query: str, limit: int = 8, session_id: str | None = None) -> list[Hit]:
         rows = await self._run(self.store.search_transcript, query, limit, session_id)
         return [Hit("transcript", r.id, r.text, 0.0, r.source, f"session:{r.source}") for r in rows]
 
-    async def context_block(self, query: str) -> str:
+    async def context_block(self, query: str, *, allow_aux: bool = True) -> str:
         """Memory text for the per-turn context snapshot (files + recalled items)."""
         home = self.s.settings.home
         parts: list[str] = []
@@ -288,7 +393,7 @@ class MemoryService:
             parts.append(mem)
         if user:
             parts.append(user)
-        hits = await self.search(query, limit=8)
+        hits = await self.search(query, limit=8, allow_aux=allow_aux)
         if hits:
             budget = self.cfg.auto_inject_tokens * 4
             lines, used = [], 0
@@ -298,9 +403,12 @@ class MemoryService:
                     break
                 lines.append(line)
                 used += len(line)
-            n_f = sum(1 for h in hits[: len(lines)] if h.kind == "fact")
+            shown = hits[: len(lines)]
+            n_f = sum(1 for h in shown if h.kind == "fact")
+            n_g = sum(1 for h in shown if h.kind == "community")
+            themes = f" + {n_g} themes" if n_g else ""
             parts.append(
-                f"🧠 memory — recalled {n_f} facts + {len(lines) - n_f} chunks\n"
+                f"🧠 memory — recalled {n_f} facts + {len(lines) - n_f - n_g} chunks{themes}\n"
                 f"<{_MEMORY_TAG}>\n" + "\n".join(lines) + f"\n</{_MEMORY_TAG}>"
             )
         return "\n\n".join(parts)
@@ -313,4 +421,17 @@ class MemoryService:
             "vector": self.store.vec_enabled,
             "dims": self.cfg.dims,
             **self.rerank_stats.as_dict(),
+            **self.recall_stats.as_dict(),
         }
+
+
+def _span(row: Row) -> tuple[int | None, int | None, str | None]:
+    """Chunk provenance for `Hit` (None for facts)."""
+    if row.kind != "chunk":
+        return None, None, None
+    lo, hi = row.extra.get("span_start"), row.extra.get("span_end")
+    return (
+        lo if isinstance(lo, int) else None,
+        hi if isinstance(hi, int) else None,
+        str(row.extra.get("strategy") or "early"),
+    )

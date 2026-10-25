@@ -272,11 +272,15 @@ class MemoryStore:
         tokens: int,
         embedding: list[float] | None,
         embed_model: str | None,
+        *,
+        strategy: str = "early",
+        span: tuple[int, int] | None = None,
     ) -> bool:
+        lo, hi = span if span and span[0] >= 0 else (None, None)
         cur = self.db.execute(
             "INSERT INTO chunks(tenant_id, doc_id, source, start_line, end_line, text, tokens, sha, "
-            "embed_model, created_at) VALUES (?,?,?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(tenant_id, sha) DO NOTHING RETURNING id",
+            "embed_model, created_at, chunk_strategy, span_start, span_end) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(tenant_id, sha) DO NOTHING RETURNING id",
             (
                 self.tenant,
                 doc_id,
@@ -288,6 +292,9 @@ class MemoryStore:
                 sha(text),
                 embed_model if embedding else None,
                 time.time(),
+                strategy,
+                lo,
+                hi,
             ),
         )
         row = cur.fetchone()
@@ -391,12 +398,21 @@ class MemoryStore:
             ).fetchall()
             return {int(r[0]): Row("fact", int(r[0]), r[1], r[2], float(r[3]), {}) for r in rows}
         rows = self.db.execute(
-            "SELECT id, text, source, start_line, end_line FROM chunks "
-            f"WHERE tenant_id=? AND id IN ({marks})",
+            "SELECT id, text, source, start_line, end_line, chunk_strategy, span_start, span_end "
+            f"FROM chunks WHERE tenant_id=? AND id IN ({marks})",
             (self.tenant, *ids),
         ).fetchall()
         return {
-            int(r[0]): Row("chunk", int(r[0]), r[1], r[2], -1.0, {"start": r[3], "end": r[4]}) for r in rows
+            int(r[0]): Row(
+                "chunk",
+                int(r[0]),
+                r[1],
+                r[2],
+                -1.0,
+                {"start": r[3], "end": r[4], "strategy": r[5] or "early"}
+                | {"span_start": r[6], "span_end": r[7]},
+            )
+            for r in rows
         }
 
     def search_transcript(self, query: str, limit: int, session_id: str | None) -> list[Row]:
