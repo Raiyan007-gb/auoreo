@@ -5,8 +5,10 @@
 (cwd = session cwd, scrubbed env + `AUOREO_SESSION_ID`/`AUOREO_HOOK_EVENT`, JSON payload on
 stdin) and folds the stdout replies into one `HookOutcome`:
 
-- tool events (`PreToolUse`/`PostToolUse`/`PermissionRequest`): allow | deny{message} |
-  modify{input} (modifications chain; the first deny wins);
+- tool events (`PreToolUse`/`PostToolUse`): allow | deny{message} | modify{input}
+  (modifications chain; the first deny wins);
+- `PermissionRequest` (fired on the `ask` path before a human is asked): an explicit
+  allow grants this one call, deny{message} refuses it, no reply / `{}` defers to the human;
 - `UserPromptSubmit`: modify{text} | deny{message};
 - `Stop`: {block, reason} (the first block wins);
 - everything else is informational.
@@ -55,6 +57,8 @@ class HookOutcome:
     text: str | None = None
     """Replacement prompt text (`modify` on `UserPromptSubmit`)."""
     ran: list[str] = field(default_factory=list)
+    granted: bool = False
+    """`PermissionRequest`: a hook explicitly answered `allow` (and none denied)."""
 
     @property
     def denied(self) -> bool:
@@ -89,6 +93,19 @@ def _fold_tool(out: HookOutcome, reply: dict[str, Any], name: str) -> bool:
     return False
 
 
+def _fold_permission(out: HookOutcome, reply: dict[str, Any], name: str) -> bool:
+    decision = reply.get("decision")
+    if decision == "deny":
+        out.granted = False
+        out.decision, out.message = "deny", str(reply.get("message") or f"denied by hook '{name}'")
+        return True
+    if decision == "allow":
+        out.granted = True
+    elif decision is not None:
+        raise HookError(f"unknown decision {decision!r} (PermissionRequest takes allow | deny)")
+    return False
+
+
 def _fold_prompt(out: HookOutcome, reply: dict[str, Any], name: str) -> bool:
     decision = reply.get("decision", "allow")
     if decision == "deny":
@@ -118,7 +135,7 @@ def _fold_info(out: HookOutcome, reply: dict[str, Any], name: str) -> bool:
 _FOLD = {
     "PreToolUse": _fold_tool,
     "PostToolUse": _fold_tool,
-    "PermissionRequest": _fold_tool,
+    "PermissionRequest": _fold_permission,
     "UserPromptSubmit": _fold_prompt,
     "Stop": _fold_stop,
 }

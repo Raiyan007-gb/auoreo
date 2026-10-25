@@ -20,6 +20,13 @@ Replies: tool events `{"decision": "allow"|"deny"|"modify", "message"?: str, "in
 `{"block": true, "reason": "..."}` append the reason and let the agent continue. Hooks never
 run on API-error messages.
 
+`PermissionRequest` fires on the `ask` path (after the guardian, before the human is
+asked, also in non-interactive runs) with `{agent, tool, arguments, permission, pattern,
+reason}`. Reply `{"decision": "allow"}` to grant this one call (never an `always` grant),
+`{"decision": "deny", "message": "..."}` to refuse it (the message reaches the model), or
+nothing / `{}` to leave it to the human. A failing hook follows `on_error` (`block` refuses
+the call; `warn` falls through to the human). Floors and policy `deny` never reach it.
+
 Details: `matcher` accepts `a|b` alternatives; a `command` argument starting with `./` or
 `../` resolves against the root the hook file lives in (bundled, project or runtime) when
 that file exists there, else against the session cwd. The subprocess gets

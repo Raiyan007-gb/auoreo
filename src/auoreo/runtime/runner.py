@@ -24,6 +24,7 @@ from sqlalchemy import func, select
 from auoreo.core import observability as obs
 from auoreo.core.db import MessageRow
 from auoreo.core.permissions import PermissionEngine
+from auoreo.core.policy import policy_engine
 from auoreo.core.redaction import StreamRedactor
 from auoreo.core.usage import UsageLedger
 from auoreo.gateway.errors import GatewayError
@@ -128,6 +129,8 @@ class AgentRunner:
             rt.engine.floors = floors(self.s.harness)
             rt.engine.mode = "plan" if rt.state.plan_mode else mode
             rt.engine.__post_init__()
+        rt.engine.policies = policy_engine(self.s.harness)  # child CeilingEngines get it here too
+        rt.engine.context = {"agent": spec.name, "session_id": rt.session_id, "cwd": str(self.s.cwd)}
         if rt.state.plan_mode:
             rt.engine.mode = "plan"
         return rt.engine

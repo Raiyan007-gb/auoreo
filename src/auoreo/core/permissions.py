@@ -11,11 +11,15 @@ import fnmatch
 import os
 import re
 import shlex
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from auoreo.harness.manifests import Rule
+
+if TYPE_CHECKING:
+    from auoreo.core.policy import PolicyEngine
 
 Action = Literal["allow", "ask", "deny"]
 Mode = Literal["manual", "smart", "yolo", "plan", "acceptEdits"]
@@ -139,6 +143,8 @@ class PermissionEngine:
     plans_dir: str | None = None
     session_rules: list[Rule] = field(default_factory=list)
     approved: list[Rule] = field(default_factory=list)  # in-memory `always` grants
+    policies: PolicyEngine | None = None  # Starlark exec policies (after floors, before rules)
+    context: dict[str, Any] = field(default_factory=dict)  # agent, session_id, cwd, tool → `req`
 
     def __post_init__(self) -> None:
         if self.mode == "yolo" and not YOLO_FROZEN:
@@ -159,11 +165,44 @@ class PermissionEngine:
                 return "bare sudo needs a human at a terminal; this run is non-interactive"
         return None
 
+    def policy(
+        self, permission: str, pattern: str, *, interactive: bool, context: Mapping[str, Any] | None
+    ) -> Decision | None:
+        """The exec-policy answer (`policy:<name>` / `policy_review:<name>`), or None."""
+        if self.policies is None:
+            return None
+        ctx = {**self.context, **(context or {})}
+        req = {
+            "tool": ctx.get("tool") or permission,
+            "permission": permission,
+            "pattern": pattern,
+            "mode": self.mode,
+            "interactive": interactive,
+            "agent": ctx.get("agent"),
+            "session_id": ctx.get("session_id"),
+            "cwd": str(ctx["cwd"]) if ctx.get("cwd") is not None else None,
+        }
+        res = self.policies.decide(req)
+        if res.action is None:
+            return None
+        if res.action == "review":
+            return Decision("ask", f"policy_review:{res.policy}")
+        return Decision(res.action, res.reason)
+
     def evaluate(
-        self, permission: str, pattern: str, default: Action = "ask", *, interactive: bool = True
+        self,
+        permission: str,
+        pattern: str,
+        default: Action = "ask",
+        *,
+        interactive: bool = True,
+        context: Mapping[str, Any] | None = None,
     ) -> Decision:
         if (why := self.floor(permission, pattern, interactive=interactive)) is not None:
             return Decision("deny", f"floor: {why}")
+        by_policy = self.policy(permission, pattern, interactive=interactive, context=context)
+        if by_policy is not None and by_policy.action == "deny":
+            return by_policy
         sudo = sudo_kind(pattern) if permission == "bash" else None
         compound = permission == "bash" and is_compound(pattern)
         found: Rule | None = None
@@ -174,11 +213,14 @@ class PermissionEngine:
                 continue  # compound commands never match a narrow allow rule
             found = rule
         decision = Decision(found.action, "rule", found) if found else Decision(default, "default")
+        if by_policy is not None:
+            decision = by_policy  # a policy answer replaces the rules (but not the sudo floors)
         if sudo == "noninteractive":
             # `sudo -n` runs only on an explicit allow rule naming the sudo command (silent deny on miss).
             explicit = found is not None and found.action == "allow" and _names_sudo(found.pattern)
             return decision if explicit else Decision("deny", "floor: sudo -n needs an explicit allow rule")
-        decision = self._apply_mode(decision, permission, pattern)
+        if by_policy is None or self.mode == "plan":  # yolo/acceptEdits never upgrade a policy ask
+            decision = self._apply_mode(decision, permission, pattern)
         if sudo == "bare" and decision.action == "allow":
             return Decision("ask", "floor: bare sudo always asks", decision.rule)
         return decision
