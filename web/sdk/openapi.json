@@ -4533,7 +4533,7 @@
   "paths": {
     "/acp": {
       "post": {
-        "description": "JSON-RPC 2.0 entry point for ACP clients (editors).",
+        "description": "JSON-RPC 2.0 entry point for ACP clients (editors). `Accept: text/event-stream` on a\nsingle `session/prompt` streams `session/update` notifications before the response.",
         "operationId": "acp_acp_post",
         "parameters": [
           {
@@ -4600,9 +4600,10 @@
             "content": {
               "application/json": {
                 "schema": {}
-              }
+              },
+              "text/event-stream": {}
             },
-            "description": "JSON-RPC response or batch"
+            "description": "JSON-RPC response or batch; SSE of session/update + the response when streaming"
           },
           "204": {
             "description": "Only notifications"

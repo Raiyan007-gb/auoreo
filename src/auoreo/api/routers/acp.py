@@ -1,32 +1,53 @@
-"""`POST /acp` — Agent Client Protocol over JSON-RPC 2.0 (spec §5.4, §2.11).
+"""`POST /acp` — Agent Client Protocol over JSON-RPC 2.0 (spec §5.4, §2.11, L1039).
 
 Single requests or batches (≤ `MAX_BATCH`). Methods: `initialize`, `authenticate`,
-`session/new`, `session/load`, `session/prompt`, `session/cancel`. Wire names are camelCase,
-paths absolute, lines 1-based. `session/prompt` runs one non-interactive turn (tools that
-need approval are denied) and answers with its `stopReason` once the turn ends; the live
-`session/update`-equivalent stream is the durable event stream (`GET /api/events?session_id=…`),
-and the final text is echoed in `_meta.auoreo.text`. `session/cancel` is advisory and
-idempotent: unknown or idle sessions are never an error.
+`session/new`, `session/load`, `session/prompt`, `session/cancel`, `session/set_mode`.
+Wire names are camelCase, paths absolute, lines 1-based. `session/prompt` runs one
+non-interactive turn (tools that need approval are denied) and answers with its
+`stopReason` once the turn ends; the final text is echoed in `_meta.auoreo.text`.
+
+**Streaming** (F3): a single `session/prompt` request sent with `Accept: text/event-stream`
+answers as SSE: `session/update` notifications (`agent_message_chunk` from `message.delta`,
+`tool_call` + `tool_call_update` pending → in_progress → completed|failed from `tool.*`,
+`plan` from `plan.updated` / `todo.updated`) as `data:` lines, then the JSON-RPC response
+for the request, then the stream closes. AUOREO has no thinking events, so no
+`agent_thought_chunk` is sent. Without that Accept header nothing changes; the durable
+`GET /api/events?session_id=…` stream carries the same events either way.
+
+`session/set_mode` takes `modeId` = `manual` | `acceptEdits` | `plan` (the permission mode
+for that session's following turns; `session/new` lists them under `modes`).
+`session/cancel` is advisory and idempotent: unknown or idle sessions are never an error.
+`session/new` writes the protocol-version/capability handshake (the client's last
+`initialize` and any `ACP-Protocol-Version` header) to the audit log as `acp.handshake`.
 
 Notifications (no `id`) get no response; a batch of only notifications answers 204.
+Unknown `_`-prefixed extension methods are ignored when sent as notifications (requests get
+-32601), counted in `stats()` and audited once per name; `initialize` advertises in
+`_meta.auoreo` that no extension methods are implemented.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import logging
-from collections.abc import Awaitable, Callable
+from collections import Counter
+from collections.abc import AsyncIterator, Awaitable, Callable
+from dataclasses import dataclass, fields
 from pathlib import Path, PurePath
 from typing import Any
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.responses import Response
 
 from auoreo import __version__
 from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.core.permissions import PermissionEngine
 from auoreo.core.services import Services
+from auoreo.harness.orchestrator import floors
+from auoreo.schema.events import ServerEvent
 
 log = logging.getLogger(__name__)
 router = APIRouter(tags=["compat"], dependencies=AUTH)
@@ -55,6 +76,21 @@ _BODY_SCHEMA = {
 
 Params = dict[str, Any]
 Handler = Callable[[Services, Params], Awaitable[Any]]
+MODES = {
+    "manual": "Ask before edits and commands (non-interactive here: such calls are denied)",
+    "acceptEdits": "Allow file edits without asking; other approvals are still denied",
+    "plan": "Read-only planning: edits are blocked outside the plans directory",
+}
+KEEPALIVE_S = 15.0
+_HEADERS: contextvars.ContextVar[dict[str, str]] = contextvars.ContextVar("acp_headers", default={})  # noqa: B039
+_STATE: dict[str, Any] = {"initialize": None, "audited_ext": set()}
+_STATS: Counter[str] = Counter()
+_EXT: Counter[str] = Counter()
+
+
+def stats() -> dict[str, Any]:
+    """Process-local counters: requests, streams, ignored `_` extension methods by name."""
+    return {**_STATS, "ext_ignored": sum(_EXT.values()), "ext_methods": dict(_EXT)}
 
 
 class RpcError(Exception):
@@ -74,16 +110,25 @@ def _error(rid: Any, code: int, message: str, data: Any = None) -> dict[str, Any
     "/acp",
     openapi_extra=_BODY_SCHEMA,
     responses={
-        200: {"description": "JSON-RPC response or batch"},
+        200: {
+            "description": "JSON-RPC response or batch; SSE of session/update + the response when streaming",
+            "content": {"text/event-stream": {}},
+        },
         204: {"description": "Only notifications"},
     },
 )
 async def acp(request: Request, svc: ServicesDep) -> Response:
-    """JSON-RPC 2.0 entry point for ACP clients (editors)."""
+    """JSON-RPC 2.0 entry point for ACP clients (editors). `Accept: text/event-stream` on a
+    single `session/prompt` streams `session/update` notifications before the response."""
     try:
         payload = json.loads(await request.body())
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JSONResponse(_error(None, PARSE_ERROR, "Parse error"))
+    _HEADERS.set({k: v for k, v in request.headers.items() if k.startswith("acp-")})
+    if _wants_stream(request, payload):
+        _STATS["streams"] += 1
+        sse = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        return StreamingResponse(stream_prompt(svc, payload), media_type="text/event-stream", headers=sse)
     if isinstance(payload, list):
         if not payload:
             return JSONResponse(_error(None, INVALID_REQUEST, "empty batch"))
@@ -105,7 +150,10 @@ async def dispatch(svc: Services, msg: Any) -> dict[str, Any] | None:
     rid, method = msg.get("id"), msg["method"]
     params = msg.get("params") or {}
     handler = METHODS.get(method)
+    _STATS["requests" if is_request else "notifications"] += 1
     if handler is None:
+        if method.startswith("_"):
+            await _ext_ignored(svc, method)
         if not is_request:
             return None  # unknown notifications (incl. `_`-extensions) are ignored
         return _error(rid, METHOD_NOT_FOUND, f"Method not found: {method}")
@@ -123,6 +171,11 @@ async def dispatch(svc: Services, msg: Any) -> dict[str, Any] | None:
 
 # ------------------------------------------------------------------- methods
 async def initialize(svc: Services, params: Params) -> Any:
+    _STATE["initialize"] = {
+        "protocolVersion": params.get("protocolVersion"),
+        "clientCapabilities": params.get("clientCapabilities") or {},
+        "clientInfo": params.get("clientInfo") or {},
+    }
     return {
         "protocolVersion": PROTOCOL_VERSION,
         "agentCapabilities": {
@@ -131,6 +184,7 @@ async def initialize(svc: Services, params: Params) -> Any:
         },
         "authMethods": [],
         "agentInfo": {"name": "auoreo", "version": __version__},
+        "_meta": {"auoreo": {"extMethods": [], "unknownExtMethods": "ignored", "streaming": True}},
     }
 
 
@@ -155,10 +209,35 @@ async def session_new(svc: Services, params: Params) -> Any:
         session_id=row.id,
         detail={"protocolVersion": PROTOCOL_VERSION, "warnings": len(warnings)},
     )
-    out: dict[str, Any] = {"sessionId": row.id}
+    await _audit_handshake(svc, row.id)
+    current = svc.settings.permission_mode if svc.settings.permission_mode in MODES else "manual"
+    out: dict[str, Any] = {
+        "sessionId": row.id,
+        "modes": {
+            "currentModeId": current,
+            "availableModes": [{"id": k, "name": k, "description": v} for k, v in MODES.items()],
+        },
+    }
     if warnings:
         out["_meta"] = {"auoreo": {"warnings": warnings}}
     return out
+
+
+async def _audit_handshake(svc: Services, sid: str) -> None:
+    init = _STATE["initialize"] or {}
+    await svc.audit.record(
+        actor="acp",
+        action="acp.handshake",
+        session_id=sid,
+        detail={
+            "agentProtocolVersion": PROTOCOL_VERSION,
+            "clientProtocolVersion": init.get("protocolVersion"),
+            "headerVersion": _HEADERS.get().get("acp-protocol-version"),
+            "clientCapabilities": sorted(init.get("clientCapabilities", {})),
+            "clientInfo": {k: str(v)[:100] for k, v in init.get("clientInfo", {}).items()},
+            "initialized": bool(init),
+        },
+    )
 
 
 async def session_load(svc: Services, params: Params) -> Any:
@@ -189,6 +268,41 @@ async def session_cancel(svc: Services, params: Params) -> Any:
     return None
 
 
+@dataclass
+class AcpModeEngine(PermissionEngine):
+    """Keeps an ACP-chosen permission mode across turns: the runtime refreshes the session
+    engine's mode at each turn start and then re-runs `__post_init__`, which re-applies it."""
+
+    acp_mode: str | None = None
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.acp_mode is not None:
+            self.mode = self.acp_mode  # type: ignore[assignment]
+
+
+async def session_set_mode(svc: Services, params: Params) -> Any:
+    sid = await _session(svc, params)
+    mode = params.get("modeId")
+    if not isinstance(mode, str) or mode not in MODES:
+        raise RpcError(INVALID_PARAMS, f"unknown modeId {mode!r}", {"available": list(MODES)})
+    rt = await svc.coordinator.runtime(sid)
+    rt.state.plan_mode = mode == "plan"
+    if isinstance(rt.engine, AcpModeEngine):
+        rt.engine.acp_mode = mode
+        rt.engine.__post_init__()
+    elif rt.engine is not None:
+        base = {f.name: getattr(rt.engine, f.name) for f in fields(PermissionEngine)}
+        rt.engine = AcpModeEngine(**base, acp_mode=mode)
+    else:
+        plans = str(svc.cwd / ".auoreo" / "plans")
+        rt.engine = AcpModeEngine([], floors(svc.harness), "manual", plans, acp_mode=mode)
+    await svc.audit.record(
+        actor="acp", action="acp.session.set_mode", session_id=sid, detail={"modeId": mode}
+    )
+    return {}
+
+
 METHODS: dict[str, Handler] = {
     "initialize": initialize,
     "authenticate": authenticate,
@@ -196,7 +310,16 @@ METHODS: dict[str, Handler] = {
     "session/load": session_load,
     "session/prompt": session_prompt,
     "session/cancel": session_cancel,
+    "session/set_mode": session_set_mode,
 }
+
+
+async def _ext_ignored(svc: Services, method: str) -> None:
+    _EXT[method[:64]] += 1
+    seen: set[str] = _STATE["audited_ext"]
+    if method not in seen and len(seen) < 64:
+        seen.add(method)
+        await svc.audit.record(actor="acp", action="acp.ext.ignored", detail={"method": method[:64]})
 
 
 async def _session(svc: Services, params: Params) -> str:
@@ -229,3 +352,124 @@ def prompt_text(prompt: Any) -> str:
     if not text.strip():
         raise RpcError(INVALID_PARAMS, "prompt is empty")
     return text
+
+
+# ----------------------------------------------------------------- streaming
+def _wants_stream(request: Request, payload: Any) -> bool:
+    return (
+        "text/event-stream" in request.headers.get("accept", "")
+        and isinstance(payload, dict)
+        and payload.get("method") == "session/prompt"
+        and "id" in payload
+    )
+
+
+def _sse(obj: Any) -> str:
+    return "data: " + json.dumps(obj, separators=(",", ":"), default=str) + "\n\n"
+
+
+async def stream_prompt(svc: Services, msg: dict[str, Any]) -> AsyncIterator[str]:
+    """SSE body: `session/update` notifications for the turn, then the JSON-RPC response."""
+    params = msg.get("params")
+    sid = params.get("sessionId") if isinstance(params, dict) else None
+    sub = svc.bus.subscribe(frozenset({f"session:{sid}"})) if isinstance(sid, str) else None
+    task = asyncio.create_task(dispatch(svc, msg))  # subscribed first: nothing falls in the gap
+    try:
+        while sub is not None:
+            getter = asyncio.ensure_future(sub.queue.get())
+            done, _ = await asyncio.wait({getter, task}, timeout=KEEPALIVE_S, return_when="FIRST_COMPLETED")
+            if getter in done:
+                for note in session_updates(str(sid), getter.result()):
+                    yield _sse(note)
+                continue
+            getter.cancel()
+            if not done:
+                yield ": keepalive\n\n"
+                continue
+            while not sub.queue.empty():  # the turn is over: flush what it emitted
+                for note in session_updates(str(sid), sub.queue.get_nowait()):
+                    yield _sse(note)
+            break
+        yield _sse(await task)
+    finally:
+        if sub is not None:
+            svc.bus.unsubscribe(sub)
+
+
+TOOL_KINDS = {
+    "read": "read",
+    "edit": "edit",
+    "write": "edit",
+    "multi_edit": "edit",
+    "apply_patch": "edit",
+    "bash": "execute",
+    "grep": "search",
+    "glob": "search",
+    "web_fetch": "fetch",
+    "web_search": "fetch",
+}
+
+
+def _raw_input(arguments: Any) -> Any:
+    try:
+        return json.loads(arguments) if isinstance(arguments, str) else arguments
+    except json.JSONDecodeError:
+        return {"truncated": arguments}
+
+
+def _message_chunk(d: dict[str, Any]) -> list[dict[str, Any]]:
+    return [{"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": d.get("text", "")}}]
+
+
+def _tool_started(d: dict[str, Any]) -> list[dict[str, Any]]:
+    tool, cid = str(d.get("tool", "")), d.get("call_id")
+    call = {"sessionUpdate": "tool_call", "toolCallId": cid, "title": tool, "status": "pending"}
+    call |= {"kind": TOOL_KINDS.get(tool, "other"), "rawInput": _raw_input(d.get("arguments"))}
+    return [call, {"sessionUpdate": "tool_call_update", "toolCallId": cid, "status": "in_progress"}]
+
+
+def _tool_completed(d: dict[str, Any]) -> list[dict[str, Any]]:
+    text = {"type": "content", "content": {"type": "text", "text": str(d.get("content", ""))}}
+    status = "failed" if d.get("is_error") else "completed"
+    return [
+        {
+            "sessionUpdate": "tool_call_update",
+            "toolCallId": d.get("call_id"),
+            "status": status,
+            "content": [text],
+        }
+    ]
+
+
+def _plan(d: dict[str, Any]) -> list[dict[str, Any]]:
+    items = d.get("steps") or d.get("todos") or []
+    entries = [
+        {
+            "content": str(i.get("step") or i.get("content") or ""),
+            "priority": str(i.get("priority") or "medium"),
+            "status": str(i.get("status") or "pending"),
+        }
+        for i in items
+        if isinstance(i, dict)
+    ]
+    return [{"sessionUpdate": "plan", "entries": entries}]
+
+
+UPDATES: dict[str, Callable[[dict[str, Any]], list[dict[str, Any]]]] = {
+    "message.delta": _message_chunk,
+    "tool.started": _tool_started,
+    "tool.completed": _tool_completed,
+    "plan.updated": _plan,
+    "todo.updated": _plan,
+}
+
+
+def session_updates(sid: str, event: ServerEvent) -> list[dict[str, Any]]:
+    """One AUOREO event → zero or more ACP `session/update` notifications."""
+    fn = UPDATES.get(event.type)
+    if fn is None:
+        return []
+    return [
+        {"jsonrpc": "2.0", "method": "session/update", "params": {"sessionId": sid, "update": u}}
+        for u in fn(event.data)
+    ]

@@ -6,7 +6,7 @@ AUOREO serves three protocols besides its own `/api` + `/ws`, all on the same po
 | Surface | Path | What it is |
 |---|---|---|
 | OpenAI-compatible | `GET /v1/models`, `POST /v1/chat/completions` | Thin translate → gateway (no agent loop) |
-| MCP server | `POST/GET/DELETE /mcp` | The agent's tools for external MCP clients (streamable HTTP) |
+| MCP server | `POST/GET/DELETE /mcp` | The agent's tools, read-only resources and slash-command prompts for external MCP clients (streamable HTTP) |
 | ACP | `POST /acp` | Agent Client Protocol (JSON-RPC 2.0) for editors |
 
 Plus the generated **Python SDK** in `sdk/python/` (see its README).
@@ -102,6 +102,44 @@ asyncio.run(main())
 
 Without a password, `Client("http://127.0.0.1:4096/mcp")` is enough.
 
+### Resources and prompts (F3)
+
+Read-only resources (`api/mcp_resources.py`). Every read is redacted (`core.redaction`),
+capped at **256 KiB** (longer content is cut at a code-point boundary and ends with a
+`> [truncated by AUOREO: …]` notice) and audited as `mcp.resource.read` (`detail.uri`,
+bytes, truncated; `decision=deny` for unknown URIs, which fail with `-32602`).
+
+| URI | Content | MIME |
+|---|---|---|
+| `auoreo://memory/<FILE>.md` | `MEMORY.md`, `USER.md`, `PREFS.md`, `PROJECT.md` under `<home>/memory/` | `text/markdown` |
+| `auoreo://skills/<name>` | the skill's `SKILL.md` | `text/markdown` |
+| `auoreo://harness/<kind>` | `harness.describe()[kind]` (tools, agents, skills, workflows, mcp, prompts …) | `application/json` |
+| `auoreo://sessions/<id>` | the markdown transcript (`GET /api/sessions/{id}/export?format=md`) | `text/markdown` |
+
+`resources/list` shows the existing memory files, every skill and harness kind and the 50
+newest sessions; `resources/templates/list` gives the four parameterised forms. A token
+sees every session today, so every session id is readable.
+
+**Prompts**: each `commands/<name>.md` with `handler: prompt` is an MCP prompt with one
+optional `args` argument; `prompts/get` renders the body with the runtime's strict
+`{{args}}` / `{{input}}` renderer and returns it as one user message. Engine-handled
+commands (`/compact`, `/model`, `/plan`) are not exposed.
+
+**Change notifications**: on 2026-07-28 sessions, `subscriptions/listen` (the SDK's
+`ListenHandler`) delivers `ResourceUpdated` for memory files and `resources`/`prompts`
+list-changed after a harness reload; handshake-era sessions can `resources/subscribe` to a
+memory URI and get `notifications/resources/updated`. Both are driven by a 30 s
+mtime/generation poll that runs only while at least one subscriber exists. Capabilities
+advertise `resources` (with `subscribe`) and `prompts`; `listChanged` is advertised on
+2026-07-28 sessions (where it is delivered over `subscriptions/listen`).
+
+```python
+async with Client("http://127.0.0.1:4096/mcp") as c:
+    print([str(r.uri) for r in (await c.list_resources()).resources])
+    print((await c.read_resource("auoreo://memory/MEMORY.md")).contents[0].text)
+    print((await c.get_prompt("review", {"args": "src/app.py"})).messages[0].content.text)
+```
+
 ## ACP `/acp`
 
 JSON-RPC 2.0 over `POST /acp`, single messages or batches of up to 32 (processed
@@ -111,9 +149,10 @@ concurrently, answered in order). camelCase wire names, absolute paths, 1-based 
 |---|---|
 | `initialize` | `{protocolVersion: 1, agentCapabilities: {loadSession: true, promptCapabilities: {image: false, audio: false, embeddedContext: true}}, authMethods: [], agentInfo}` |
 | `authenticate` | `{}` (HTTP auth already applies) |
-| `session/new {cwd?, mcpServers?}` | `{sessionId}`; `mcpServers` are ignored and a differing `cwd` noted, both in `_meta.auoreo.warnings` |
+| `session/new {cwd?, mcpServers?}` | `{sessionId, modes: {currentModeId, availableModes}}`; `mcpServers` are ignored and a differing `cwd` noted, both in `_meta.auoreo.warnings`; the handshake is audited as `acp.handshake` |
 | `session/load {sessionId}` | `{}` if the session exists, else `-32602` |
-| `session/prompt {sessionId, prompt}` | runs one non-interactive turn; `{stopReason}` when it ends |
+| `session/prompt {sessionId, prompt}` | runs one non-interactive turn; `{stopReason}` when it ends (streams `session/update` first with `Accept: text/event-stream`) |
+| `session/set_mode {sessionId, modeId}` | `{}`; `modeId` = `manual` \| `acceptEdits` \| `plan`, the session's permission mode for later turns (audited `acp.session.set_mode`) |
 | `session/cancel {sessionId}` | notification; advisory and idempotent, never an error |
 
 - `prompt` blocks: `text`, `resource` with `resource.text` (embedded context, wrapped in
@@ -122,9 +161,21 @@ concurrently, answered in order). camelCase wire names, absolute paths, 1-based 
 - `stopReason`: `end_turn` (completed), `max_turn_requests` (step limit), `refusal`
   (blocked, e.g. by a hook or the budget), `cancelled` (`session/cancel`). A failed turn is
   a `-32603` error with the run id. The final text is in `_meta.auoreo.text`.
-- **Progress**: `session/update` notifications are not pushed over this endpoint; the same
-  information (deltas, tool calls, permission requests) is on the durable event stream,
-  `GET /api/events?session_id=<sessionId>` (SSE) or `/ws`.
+- **Streaming** (F3): send a single `session/prompt` request with
+  `Accept: text/event-stream` and the response is SSE: `data:` lines carrying
+  `session/update` notifications — `agent_message_chunk` (text deltas), `tool_call`
+  (`status: pending`, `kind`, `rawInput`) then `tool_call_update` (`in_progress`, then
+  `completed` or `failed` with the redacted result text), `plan` (from `update_plan` /
+  `todo`) — and finally the JSON-RPC response for the request, after which the stream
+  closes. A `: keepalive` comment is sent every 15 s of silence. There are no thinking events,
+  so no `agent_thought_chunk`. Without the header the response is plain JSON as before; the
+  same events are always on `GET /api/events?session_id=<sessionId>` (SSE) or `/ws`.
+- **Handshake**: `initialize` stores the client's `protocolVersion`, `clientCapabilities`
+  and `clientInfo`; `session/new` audits them with the agent version and an
+  `ACP-Protocol-Version` header (if sent) as `acp.handshake`.
+- **Extensions**: unknown `_`-prefixed methods are ignored as notifications and `-32601`
+  as requests; both are counted (`routers.acp.stats()["ext_methods"]`) and audited once per
+  name (`acp.ext.ignored`). `initialize` advertises `_meta.auoreo.extMethods: []`.
 - Errors: invalid JSON `-32700`, malformed message/empty or oversized batch `-32600`,
   unknown method `-32601`, bad params `-32602`. Notifications get no response; a request
   made only of notifications answers `204`.
@@ -137,13 +188,38 @@ SID=$(curl -s localhost:4096/acp "${H[@]}" \
 curl -s localhost:4096/acp "${H[@]}" -d '{"jsonrpc":"2.0","id":3,"method":"session/prompt",
   "params":{"sessionId":"'"$SID"'","prompt":[{"type":"text","text":"hello"}]}}'
 # {"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn","_meta":{"auoreo":{…}}}}
+curl -N localhost:4096/acp "${H[@]}" -H 'Accept: text/event-stream' -d '{"jsonrpc":"2.0","id":4,
+  "method":"session/prompt","params":{"sessionId":"'"$SID"'","prompt":[{"type":"text","text":"hi"}]}}'
+# data: {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"…","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"echo: hi"}}}}
+# data: {"jsonrpc":"2.0","id":4,"result":{"stopReason":"end_turn",…}}
 ```
 
 ## Not supported (yet)
 
 - OpenAI: `/v1/completions`, `/v1/embeddings`, `/v1/responses`, `n > 1`, logprobs,
   `response_format` enforcement (passed nowhere), forced `tool_choice`.
-- MCP server: resources, prompts, sampling or elicitation towards the client; tools of
-  agents other than `settings.agent`; deferred tools.
-- ACP: pushed `session/update` notifications on `/acp`, session modes, client-side
-  file-system / terminal methods (`fs/*`, `terminal/*`), per-session MCP servers.
+- MCP server: writable resources, resources other than the four schemes above,
+  `listChanged` on handshake-era sessions, sampling or elicitation towards the client; tools
+  of agents other than `settings.agent`; deferred tools.
+- ACP: `session/update` for requests sent without `Accept: text/event-stream` (use
+  `/api/events`), streaming inside batches, `agent_thought_chunk`, permission requests to the
+  client (`session/request_permission`), client-side file-system / terminal methods
+  (`fs/*`, `terminal/*`), per-session MCP servers.
+
+## Tracing and error reporting (F3)
+
+- **Perfetto trace file**: `AUOREO_TRACE_FILE=/tmp/auoreo.trace.json` writes Chrome/Perfetto
+  Trace-Event JSON (array form, one event per line, strict JSON once the process exits; a
+  crashed file still opens in ui.perfetto.dev). Tracks `interaction` / `llm` / `tool`; `X`
+  events for `agent.run` (model, agent, status), `llm.call` (model, purpose, token counts)
+  and `tool.call` (tool, decision); instants for approvals and compactions. Never prompt
+  text, tool arguments or results. Works with `AUOREO_OTEL_MODE=off`.
+  `auoreo trace summarize <file> [--json]` prints count / total / p50 / p95 per span.
+- **Sentry** (opt-in, `uv sync --extra sentry`): `AUOREO_SENTRY_DSN=<dsn>` and
+  `sentry_share` = `errors_only` (default: exceptions only, no breadcrumbs, no traces) |
+  `full` (also breadcrumbs without HTTP data, and performance traces only when
+  `AUOREO_OTEL_MODE` is on) | `off` (nothing is sent). `send_default_pii=False`, no local
+  variables, no request bodies/headers/cookies, no auto-enabled (AI/HTTP/DB) integrations;
+  every event passes `core.redaction` in `before_send`. `sentry_sdk` is imported only by
+  `core/observability.py`; `auoreo doctor`'s `otel` row reports the Sentry and trace-file
+  state.

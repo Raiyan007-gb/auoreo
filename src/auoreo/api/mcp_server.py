@@ -13,6 +13,11 @@ agent's rules and the unbypassable floors, so permissions, hooks, redaction, pru
 the audit log apply exactly as for the agent. Calls are **non-interactive**: anything
 whose permission resolves to `ask` is denied (add an allow rule to permit it).
 
+Resources (`auoreo://memory|skills|harness|sessions/…`) and prompts (slash commands with
+`handler: prompt`) live in `api/mcp_resources.py`; capabilities advertise `resources`
+(with `subscribe`) and `prompts`, plus `listChanged` on 2026-07-28 sessions that open a
+`subscriptions/listen` stream.
+
 Auth runs in front of the SDK: the Bearer token (or `auoreo_token` cookie) when a server
 password is set, and a browser `Origin` must be loopback or in `cors_origins` (403).
 """
@@ -36,6 +41,7 @@ from starlette.types import Message, Receive, Scope, Send
 
 from auoreo import __version__
 from auoreo.api.deps import COOKIE, token_matches
+from auoreo.api.mcp_resources import McpCatalog, session_id_of
 from auoreo.api.ws import origin_allowed
 from auoreo.core.permissions import PermissionEngine
 from auoreo.core.policy import policy_engine
@@ -62,12 +68,26 @@ class McpEndpoint:
     because a mounted sub-app's own lifespan never runs)."""
 
     def __init__(self) -> None:
+        self.catalog = McpCatalog(lambda: self.svc)
+        cat = self.catalog
         self.server: Server[Any] = Server(
             "auoreo",
             version=__version__,
-            instructions="AUOREO harness tools. Calls run non-interactively under AUOREO permissions.",
+            instructions=(
+                "AUOREO harness tools, read-only resources (auoreo://memory, skills, harness, "
+                "sessions) and slash-command prompts. Tool calls run non-interactively under "
+                "AUOREO permissions."
+            ),
             on_list_tools=self._list_tools,
             on_call_tool=self._call_tool,
+            on_list_resources=cat.list_resources,
+            on_list_resource_templates=cat.list_templates,
+            on_read_resource=cat.read_resource,
+            on_subscribe_resource=cat.subscribe,
+            on_unsubscribe_resource=cat.unsubscribe,
+            on_subscriptions_listen=cat.listen,
+            on_list_prompts=cat.list_prompts,
+            on_get_prompt=cat.get_prompt,
         )
         self.manager = StreamableHTTPSessionManager(app=self.server)
         self.svc: Services | None = None
@@ -76,9 +96,12 @@ class McpEndpoint:
     @asynccontextmanager
     async def lifespan(self, svc: Services) -> AsyncIterator[None]:
         self.svc = svc
-        async with self.manager.run():
-            yield
-        self.svc = None
+        try:
+            async with self.manager.run():
+                yield
+        finally:
+            await self.catalog.close()
+            self.svc = None
 
     # ------------------------------------------------------------------ ASGI
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -141,7 +164,7 @@ class McpEndpoint:
         self, ctx: ServerRequestContext[Any], params: mt.CallToolRequestParams
     ) -> mt.CallToolResult:
         svc, spec, tools, engine = self._prepare()
-        sid = f"mcp-{_session_id(ctx)}"
+        sid = f"mcp-{_session_id(ctx)}"  # a fresh id per call when the transport has none
         tctx = ToolContext(
             session_id=sid,
             cwd=svc.cwd,
@@ -169,10 +192,8 @@ class McpEndpoint:
 
 
 def _session_id(ctx: ServerRequestContext[Any]) -> str:
-    request = ctx.request
-    headers = getattr(request, "headers", None)
-    sid = headers.get("mcp-session-id") if headers is not None else None
-    return str(sid) if sid else uuid.uuid4().hex
+    sid = session_id_of(ctx)
+    return uuid.uuid4().hex if sid == "anon" else sid
 
 
 def _echo_version(send: Send, version: str | None) -> Callable[[Message], Awaitable[None]]:

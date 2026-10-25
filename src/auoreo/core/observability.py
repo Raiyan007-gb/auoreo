@@ -15,6 +15,9 @@ can be re-run (tests) and other libraries' globals are untouched. Prompt and too
 are never attached unless `otel_capture_content` is true. Metric names and labels are a
 closed allowlist with bounded labels (model, type, status): never session ids or text.
 If the packages are missing, `setup()` warns once and behaves as `off`.
+
+F3: the same hooks feed the Perfetto writer (`core/tracefile.py`, works with OTel off); the
+opt-in Sentry SDK (`sentry_setup`, extra `sentry`) is imported only here, always redacted.
 """
 
 from __future__ import annotations
@@ -22,9 +25,11 @@ from __future__ import annotations
 import logging
 import os
 from collections.abc import AsyncIterable, AsyncIterator, Awaitable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from typing import Any
+
+from auoreo.core import tracefile
 
 log = logging.getLogger(__name__)
 
@@ -66,6 +71,7 @@ _state = _State()
 def setup(settings: Any) -> str:
     """Configure once from `settings.otel_mode`; returns the effective mode."""
     mode = str(getattr(settings, "otel_mode", "off") or "off")
+    _side_setup(settings)
     if _state.configured and _state.mode == mode:
         return _state.mode
     if _state.configured:
@@ -105,10 +111,7 @@ def _configure(mode: str) -> None:
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
     from opentelemetry.sdk.trace.sampling import ParentBasedTraceIdRatio
 
-    try:
-        ratio = float(os.environ.get("OTEL_TRACES_SAMPLER_ARG", "1.0"))
-    except ValueError:
-        ratio = 1.0
+    ratio = _ratio()
     resource = Resource.create({"service.name": SERVICE_NAME})
     tp = TracerProvider(resource=resource, sampler=ParentBasedTraceIdRatio(ratio))
     reader: Any
@@ -198,6 +201,7 @@ def metric_reader() -> Any:
 
 def instrument_app(app: Any, settings: Any) -> None:
     """FastAPI server spans (called once from create_app). No-op when off/unavailable."""
+    tracefile.close_on_shutdown(app)  # uvicorn re-raises SIGTERM after shutdown: atexit never runs
     if setup(settings) == "off":
         return
     try:
@@ -213,7 +217,16 @@ def instrument_app(app: Any, settings: Any) -> None:
 
 
 def status(settings: Any) -> tuple[str, str]:
-    """Doctor row: (`ok` | `warn`, detail)."""
+    """Doctor row: (`ok` | `warn`, detail); Sentry and the trace file are appended when set."""
+    level, detail = _otel_status(settings)
+    trace = getattr(settings, "trace_file", None)
+    for row in (_sentry_status(settings), ("ok", f"trace → {trace}") if trace else None):
+        if row:
+            level, detail = ("warn" if "warn" in (level, row[0]) else "ok"), f"{detail}; {row[1]}"
+    return level, detail
+
+
+def _otel_status(settings: Any) -> tuple[str, str]:
     import importlib.util
 
     mode = str(getattr(settings, "otel_mode", "off") or "off")
@@ -235,13 +248,18 @@ def status(settings: Any) -> tuple[str, str]:
 class Span:
     """Thin handle over an OTel span; every method is safe on the no-op instance."""
 
-    __slots__ = ("_span",)
+    __slots__ = ("_attrs", "_span")
 
-    def __init__(self, span: Any = None) -> None:
+    def __init__(self, span: Any = None, attrs: dict[str, Any] | None = None) -> None:
         self._span = span
+        self._attrs = attrs  # trace-file args (filtered by `tracefile.ARGS` on write)
 
     def set(self, key: str, value: Any) -> None:
-        if self._span is not None and value is not None:
+        if value is None:
+            return
+        if self._attrs is not None:
+            self._attrs[key] = value
+        if self._span is not None:
             self._span.set_attribute(key, value if isinstance(value, (bool, int, float)) else str(value))
 
     def content(self, key: str, text: str) -> None:
@@ -250,6 +268,8 @@ class Span:
             self.set(key, text[:_CONTENT_MAX])
 
     def error(self, exc: BaseException) -> None:
+        if self._attrs is not None:
+            self._attrs["error"] = type(exc).__name__
         if self._span is not None:
             from opentelemetry.trace import Status, StatusCode
 
@@ -263,11 +283,14 @@ _NOOP = Span()
 @contextmanager
 def span(name: str, **attrs: Any) -> Iterator[Span]:
     """Current-context span (children nest under it); a no-op when tracing is off."""
-    if not _ensure():
+    otel, writer = _ensure(), tracefile.active()
+    if not otel and writer is None:
         yield _NOOP
         return
-    with _state.tracer.start_as_current_span(name, record_exception=False) as raw:
-        handle = Span(raw)
+    start = writer.now_us() if writer is not None else 0.0
+    cm = _state.tracer.start_as_current_span(name, record_exception=False) if otel else nullcontext()
+    with cm as raw:
+        handle = Span(raw, {} if writer is not None else None)
         for k, v in attrs.items():
             handle.set(k, v)
         try:
@@ -275,37 +298,40 @@ def span(name: str, **attrs: Any) -> Iterator[Span]:
         except BaseException as exc:
             handle.error(exc)
             raise
+        finally:
+            if writer is not None:
+                writer.complete(name, start, handle._attrs)
 
 
 async def traced[T](awaitable: Awaitable[T], name: str, **attrs: Any) -> T:
     """Await `awaitable` inside a span (used around tool dispatch)."""
+    if attrs.get("decision") == "ask":  # it reached execution, so a human approved it
+        _instant("approval", "tool", tool=attrs.get("tool"), decision="approved")
     with span(name, **attrs):
         return await awaitable
 
 
 async def traced_stream(stream: AsyncIterable[Any], *, model: str, purpose: str) -> AsyncIterator[Any]:
     """Wrap a gateway stream in an `llm.call` span; token counts come from `Usage` items.
-
-    The span is made current only while the next item is awaited, never across a `yield`,
-    so the caller's context is untouched between items.
-    """
-    if not _ensure():
+    The span is current only while the next item is awaited (see `_next_in`)."""
+    otel, writer = _ensure(), tracefile.active()
+    if not otel and writer is None:
         async for item in stream:
             yield item
         return
-    from opentelemetry import trace
-
-    raw = _state.tracer.start_span("llm.call", attributes={"model": model, "purpose": purpose})
-    handle, it = Span(raw), aiter(stream)
+    start = writer.now_us() if writer is not None else 0.0
+    base = {"model": model, "purpose": purpose}
+    raw = _state.tracer.start_span("llm.call", attributes=base) if otel else None
+    attrs = dict(base) if writer is not None else None
+    handle, it = Span(raw, attrs), aiter(stream)
     prompt = completion = 0
     text: list[str] = []
     try:
         while True:
-            with trace.use_span(raw, end_on_exit=False, record_exception=False):
-                try:
-                    item = await anext(it)
-                except StopAsyncIteration:
-                    break
+            try:
+                item = await _next_in(raw, it)
+            except StopAsyncIteration:
+                break
             prompt += int(getattr(item, "prompt_tokens", 0) or 0)
             completion += int(getattr(item, "completion_tokens", 0) or 0)
             if _state.capture_content and isinstance(getattr(item, "text", None), str):
@@ -319,12 +345,27 @@ async def traced_stream(stream: AsyncIterable[Any], *, model: str, purpose: str)
         handle.set("tokens.completion", completion)
         if text:
             handle.content("llm.completion", "".join(text))
-        raw.end()
+        if raw is not None:
+            raw.end()
+        if writer is not None:
+            writer.complete("llm.call", start, attrs)
+
+
+async def _next_in(raw: Any, it: AsyncIterator[Any]) -> Any:
+    """`anext(it)` with the OTel span current only for the await (never across a yield)."""
+    if raw is None:
+        return await anext(it)
+    from opentelemetry import trace
+
+    with trace.use_span(raw, end_on_exit=False, record_exception=False):
+        return await anext(it)
 
 
 # ---------------------------------------------------------------- metrics
 def count(name: str, value: float = 1, **labels: Any) -> None:
     """Add to an allowlisted counter/gauge; unknown metrics and label keys are dropped."""
+    if name == "compaction_runs_total":
+        _instant("compaction", "interaction")
     if not _ensure():
         return
     inst = _state.instruments.get(name)
@@ -346,3 +387,114 @@ def record_usage(model: str, prompt_tokens: int, completion_tokens: int, cost_us
     count("tokens_total", completion_tokens, model=model, type="completion")
     if cost_usd:
         count("cost_usd_total", cost_usd, model=model)
+
+
+# ---------------------------------------------------------- F3: trace file
+def _instant(name: str, track: str, **attrs: Any) -> None:
+    _ensure()  # lazy setup also opens AUOREO_TRACE_FILE
+    tracefile.instant(name, track, attrs)
+
+
+def _side_setup(settings: Any) -> None:
+    """Trace file + Sentry follow the settings on every `setup()` (both are idempotent)."""
+    tracefile.configure_from(settings)
+    sentry_setup(settings)
+
+
+# -------------------------------------------------------------- F3: Sentry
+SENTRY_INSTALL = "uv sync --extra sentry"
+_sentry: dict[str, Any] = {"key": None, "share": "off", "active": False}
+
+
+def _ratio() -> float:
+    try:
+        return float(os.environ.get("OTEL_TRACES_SAMPLER_ARG", "1.0"))
+    except ValueError:
+        return 1.0
+
+
+def sentry_setup(settings: Any) -> bool:
+    """Opt-in Sentry (`sentry_dsn`): lazy `sentry_sdk` import, no PII or locals, redacting
+    `before_send`; `traces_sample_rate` is 0 unless `sentry_share=full` and OTel is on;
+    breadcrumbs only in `full`. Idempotent per settings; returns whether it is active."""
+    dsn = getattr(settings, "sentry_dsn", None)
+    share = str(getattr(settings, "sentry_share", "errors_only") or "errors_only")
+    otel_mode = str(getattr(settings, "otel_mode", "off") or "off")
+    if _sentry["key"] == (dsn, share, otel_mode):
+        return bool(_sentry["active"])
+    _sentry.update(key=(dsn, share, otel_mode), share=share, active=False)
+    if not dsn or share == "off":
+        return False
+    try:
+        import sentry_sdk
+    except ImportError:
+        log.warning("AUOREO_SENTRY_DSN is set but sentry-sdk is missing; run `%s`", SENTRY_INSTALL)
+        return False
+    from auoreo import __version__
+
+    full = share == "full"
+    rate = _ratio() if full and otel_mode != "off" else 0.0
+    sentry_sdk.init(
+        dsn=dsn,
+        release=f"auoreo@{__version__}",
+        send_default_pii=False,
+        include_local_variables=False,
+        auto_enabling_integrations=False,  # no AI/HTTP/DB auto-integrations: they can see prompts
+        max_request_body_size="never",
+        max_breadcrumbs=50 if full else 0,
+        traces_sample_rate=rate,
+        before_send=_before_send,
+        before_send_transaction=_before_send,
+        before_breadcrumb=_before_breadcrumb,
+        integrations=_sentry_integrations(),
+    )
+    _sentry["active"] = True
+    return True
+
+
+def _sentry_integrations() -> list[Any]:
+    import importlib.util
+
+    if importlib.util.find_spec("fastapi") is None:
+        return []
+    try:
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+
+        return [StarletteIntegration(), FastApiIntegration()]
+    except Exception as exc:  # DidNotEnable / version skew: run without them
+        log.info("sentry FastAPI integration unavailable: %s", exc)
+        return []
+
+
+def _before_send(event: Any, hint: Any) -> Any:
+    """Drop everything when `off`; otherwise strip bodies/PII/locals and redact secrets."""
+    if _sentry["share"] == "off":
+        return None
+    from auoreo.core.redaction import redact_obj
+
+    event = {k: v for k, v in event.items() if k not in {"user", "extra"}}
+    if _sentry["share"] != "full":
+        event.pop("breadcrumbs", None)
+    if isinstance(req := event.get("request"), dict):  # method + URL only: no body/headers/cookies
+        event["request"] = {k: req[k] for k in ("method", "url") if k in req}
+    for exc in (event.get("exception") or {}).get("values") or []:
+        for frame in (exc.get("stacktrace") or {}).get("frames") or []:
+            frame.pop("vars", None)
+    return redact_obj(event)
+
+
+def _before_breadcrumb(crumb: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any] | None:
+    from auoreo.core.redaction import redact_obj  # breadcrumbs only in `full`, never HTTP data
+
+    return redact_obj({k: v for k, v in crumb.items() if k != "data"}) if _sentry["share"] == "full" else None
+
+
+def _sentry_status(settings: Any) -> tuple[str, str] | None:
+    import importlib.util
+
+    if not getattr(settings, "sentry_dsn", None):
+        return None
+    if (share := settings.sentry_share) != "off" and importlib.util.find_spec("sentry_sdk") is None:
+        return "warn", f"sentry: DSN set but sentry-sdk is missing; run `{SENTRY_INSTALL}`"
+    return "ok", f"sentry: {share} (redacted, no PII)"

@@ -58,6 +58,9 @@ otel = [  # W0-D: tracing + allowlisted metrics (src/auoreo/core/observability.p
     "opentelemetry-instrumentation-fastapi>=0.66b0",
     "opentelemetry-instrumentation-httpx>=0.66b0",
 ]
+sentry = [  # F3: opt-in error reporting (AUOREO_SENTRY_DSN; src/auoreo/core/observability.py)
+    "sentry-sdk>=2.30,<3",
+]
 rerank-local = [  # W0-D: backends/rerank/cross_encoder (CPU torch on Linux/Windows)
     "sentence-transformers>=5,<6",
     "torch>=2.4",  # direct so [tool.uv.sources] can pin the CPU wheel index

@@ -149,7 +149,7 @@ async def test_batch_and_notifications(client: httpx.AsyncClient, gateway: FakeG
 async def test_protocol_errors(client: httpx.AsyncClient) -> None:
     r = await client.post("/acp", content=b"{not json", headers={"Content-Type": "application/json"})
     assert r.status_code == 200 and r.json()["error"]["code"] == -32700 and r.json()["id"] is None
-    body = await call(client, "session/set_mode", {})
+    body = await call(client, "session/set_model", {})
     assert body["error"]["code"] == -32601
     r = await client.post("/acp", json={"id": 5, "method": "initialize"})  # missing jsonrpc
     assert r.json()["error"]["code"] == -32600 and r.json()["id"] == 5
