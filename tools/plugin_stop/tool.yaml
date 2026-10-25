@@ -1,0 +1,13 @@
+name: plugin_stop
+toolset: creator
+description: Creator mode — stop a running creator tool and unregister it (the definition is kept).
+parameters:
+  type: object
+  properties:
+    name: {type: string}
+  required: [name]
+  additionalProperties: false
+default_action: allow
+exposure: deferred
+timeout_ms: 15000
+search_hint: creator mode stop dynamic tool

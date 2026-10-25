@@ -37,3 +37,8 @@ from auoreo.cli.commands import logs, tunnel, web  # noqa: E402
 app.command("web")(web.web)
 app.command("logs")(logs.logs)
 app.add_typer(tunnel.app, name="tunnel", help="Expose the server via cloudflared / tailscale.")
+
+# M5e plugins
+from auoreo.cli.commands import plugin  # noqa: E402
+
+app.add_typer(plugin.app, name="plugin", help="List, add, remove, reload and pair plugins.")

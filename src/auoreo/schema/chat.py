@@ -194,3 +194,35 @@ class RtcPeerInfo(BaseModel):
 
 class RtcClosed(BaseModel):
     closed: bool
+
+
+# --- M5e plugins
+PluginStatus = Literal["running", "stopped", "crashed", "disabled", "invalid_config"]
+
+
+class PluginInfo(BaseModel):
+    name: str
+    version: str
+    description: str
+    status: PluginStatus
+    provides: list[str]
+    tools: list[str] = Field(description="Registered dynamic tools (`plugin__<name>__<tool>`)")
+    deliveries: list[str] = Field(default_factory=list)
+    connectors: list[str] = Field(default_factory=list)
+    error: str | None = None
+    verify: Literal["ok", "mismatch", "missing"] = Field(description="lock.json hash vs the plugin folder")
+
+
+class PluginSkillInfo(BaseModel):
+    name: str
+    description: str
+    body: str
+
+
+class PluginPair(_In):
+    code: str = Field(pattern=r"^\d{6}$", description="6-digit pairing code shown to the remote chat")
+
+
+class PluginPaired(BaseModel):
+    paired: bool
+    chat_id: str | None = None

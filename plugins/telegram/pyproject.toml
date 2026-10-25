@@ -1,0 +1,6 @@
+[project]
+name = "auoreo-plugin-telegram"
+version = "0.1.0"
+description = "AUOREO Telegram connector + delivery provider"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.28.1,<0.29"]

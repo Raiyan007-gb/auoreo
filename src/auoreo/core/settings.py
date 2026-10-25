@@ -150,6 +150,20 @@ class Settings(BaseSettings):
     teams_child_timeout_s: int = Field(default=900, ge=10)
     plugins_enabled: bool = True
 
+    # --- M5e
+    plugins: dict[str, dict[str, Any]] = Field(default_factory=dict)
+    """Per-plugin config (`plugins.<name>`), validated against the plugin's `config_schema`."""
+    plugins_python: str = "3.12"
+    """Interpreter request for plugin venvs (`uv venv --python <this>`)."""
+    plugins_seed: bool = False
+    """Pass `--seed` to `uv venv` (pip inside the plugin venv; needs the package index)."""
+    plugins_poll_s: float = Field(default=30.0, gt=0)
+    """Fallback poll of the harness snapshot for plugin hot reload."""
+    plugins_tool_timeout_s: float = Field(default=60.0, gt=0)
+    """Default plugin tool-call / delivery timeout (a tool entry's `timeout_ms` wins)."""
+    plugins_backoff_scale: float = Field(default=1.0, ge=0)
+    """Multiplier on the 1 s → 30 s crash-restart backoff (tests use 0)."""
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""

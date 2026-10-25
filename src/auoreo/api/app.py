@@ -29,6 +29,7 @@ from auoreo.api.routers import (
     usage,
 )
 from auoreo.api.routers import commands as commands_router
+from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import rtc as rtc_router
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings, get_settings
@@ -49,6 +50,7 @@ ROUTERS = (
     commands_router,
     ws,
     rtc_router,
+    plugins_router,  # M5e
 )
 
 
