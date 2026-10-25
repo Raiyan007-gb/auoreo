@@ -20,6 +20,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `jobs/<name>.yaml` | Scheduled jobs (cron / `every` / one-shot); APScheduler fires, AUOREO runs the session and delivers |
 | `webhooks/<route>.yaml` | `POST /hooks/<route>`: HMAC-verified ingress → agent session → delivery |
 | `plugins/<name>/plugin.yaml` + `pyproject.toml` | Out-of-process plugins (own venv, JSON-RPC over stdio): tools, delivery providers, connectors |
+| `policies/<name>.star` | Starlark exec policies: `# key: value` header + `decide(req)`; run after floors, before rules |
 | `commands/<name>.md` | Slash commands (`/compact`, `/model`, `/plan`, `/review`); `handler: prompt` renders the body |
 | `memory/*.md` | Templates copied into `~/.auoreo/memory/` |
 | `src/auoreo/harness/` | discovery → loader → registry → orchestrator |

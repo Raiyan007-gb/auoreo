@@ -253,7 +253,18 @@ Bot API, hooks blocking a tool call, plugin installed from a local path and hot-
 
 ---
 
-## M6 — P2 backlog (plan only; each item gated on an M5 spike)
+## M6 — P2 backlog (in progress)
+
+Status: **wave 0** closed the M3–M5 gaps (`a8b5193`): Skills / Plugins & MCP / Jobs / Teams /
+Audit / Doctor / Goals / Welcome pages, `/api/doctor` + `/api/audit[/verify]` + memory facts/files,
+goals + consent-first suggestions (schema v4), rerank backends (none · fake · cross_encoder ·
+cohere; fail-open) + `scripts/eval_memory.py`, opt-in OpenTelemetry, `lsp` (9 read-only ops),
+tree-sitter `symbols`, persistent shell (`exec_command`/`write_stdin`), deferred tools kept
+across reopened sessions. **Wave 1** (exec policy + guardian, blackboard/swarm/analyst, bandit,
+HyDE/graph/late chunking, DB encryption + multi-worker) is in progress on schema v5; wave 2
+(environments, remote plane, perception, IoT/LiveKit) has its backend ABCs merged; wave 3 is
+packaging.
+
 
 Object/face detection (RF-DETR + MediaPipe, Apache only; faces default-off), MQTT/miio
 connectors (`paho-mqtt` v2), bandit-based model/effort policy (off by default, kill switch),
