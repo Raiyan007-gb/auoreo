@@ -38,6 +38,7 @@ from auoreo import __version__
 from auoreo.api.deps import COOKIE, token_matches
 from auoreo.api.ws import origin_allowed
 from auoreo.core.permissions import PermissionEngine
+from auoreo.core.policy import policy_engine
 from auoreo.gateway.resolve import resolve_model
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import ToolDef
@@ -111,7 +112,14 @@ class McpEndpoint:
         spec = build_spec(svc.harness, agent.name, model, mode)
         tools = {t.name: t for t in spec.tools if not t.manifest.interactive_only}
         plans = str(svc.cwd / ".auoreo" / "plans")
-        engine = PermissionEngine(list(spec.rules), floors(svc.harness), mode, plans)
+        engine = PermissionEngine(
+            list(spec.rules),
+            floors(svc.harness),
+            mode,
+            plans,
+            policies=policy_engine(svc.harness),
+            context={"agent": spec.name, "cwd": str(svc.cwd)},
+        )
         return svc, spec, tools, engine
 
     async def _list_tools(

@@ -338,6 +338,26 @@ async def run_checks(settings: Settings, *, services: Services | None = None) ->
         *observability_checks(settings),
         *await extra_checks(settings),
     ]
+    # --- W1-A: exec policies (loaded count + compile errors; a broken policy denies everything)
+    try:
+        from auoreo.core.policy import policy_engine
+
+        ph = (
+            services.harness
+            if services is not None
+            else Harness(default_roots(settings.home, Path.cwd(), bundled_root(), settings.extra_roots))
+        )
+        pe = policy_engine(ph)
+        live = [p.name for p in pe.policies if p.broken is None]
+        detail = f"{len(live)} loaded ({', '.join(live) or 'none'}); {len(pe.errors)} compile error(s)"
+        if pe.errors:
+            detail += f": {pe.errors[0]}"
+        fix = "fix the policy (it denies every request until then)" if pe.errors else ""
+        at = next((i + 1 for i, c in enumerate(out) if c.check == "harness"), len(out))
+        out.insert(at, Check("policies", "error" if pe.errors else "ok", detail, fix))
+    except HarnessError:
+        pass  # already reported by the harness row
+    # --- end W1-A
     return out
 
 

@@ -144,7 +144,11 @@ class ToolExecutor:
         permission = tool.manifest.permission_name
         pattern = self._pattern(tool, args, ctx)
         decision = engine.evaluate(
-            permission, pattern, tool.manifest.default_action, interactive=ctx.interactive
+            permission,
+            pattern,
+            tool.manifest.default_action,
+            interactive=ctx.interactive,
+            context=_policy_context(tool, ctx),
         )
         audit = {
             "tool": tool.name,
@@ -251,9 +255,11 @@ class ToolExecutor:
         *,
         sticky: bool = True,
     ) -> tuple[ToolOutcome | None, str]:
-        """The `ask` path: smart-mode guardian first, then the human. Returns
-        `(error outcome or None to proceed, audit reason)`."""
-        if engine.mode == "smart":
+        """The `ask` path: guardian (smart mode, or a policy `review`), then
+        `PermissionRequest` hooks, then the human. Returns `(error outcome or None to
+        proceed, audit reason)`."""
+        review = reason.startswith("policy_review:")
+        if engine.mode == "smart" or review:
             spec = ctx.services.get("spec")
             verdict = await guardian_verdict(
                 self.s,
@@ -264,11 +270,32 @@ class ToolExecutor:
                 session_id=ctx.session_id,
                 model=getattr(spec, "model", None),
             )
+            who = f"{reason}+guardian" if review else "guardian"
             if verdict == "APPROVE":
-                return None, "guardian"
+                return None, who
             if verdict == "DENY":
-                msg = f"denied by the smart-mode guardian for `{pattern[:200]}`. Do not retry unchanged."
-                return self._err(call, msg), "guardian"
+                kind = "policy-review" if review else "smart-mode"
+                msg = f"denied by the {kind} guardian for `{pattern[:200]}`. Do not retry unchanged."
+                return self._err(call, msg), who
+        hooks = hooks_of(self.s)
+        if hooks is not None:
+            hook = await hooks.run(
+                "PermissionRequest",
+                session_id=ctx.session_id,
+                payload={
+                    "agent": _agent(ctx),
+                    "tool": tool.name,
+                    "arguments": args,
+                    "permission": permission,
+                    "pattern": pattern,
+                    "reason": reason,
+                },
+                match_key=tool.name,
+            )
+            if hook.denied:
+                return self._err(call, f"blocked by a PermissionRequest hook: {hook.message}"), "hook"
+            if hook.granted:
+                return None, "hook:PermissionRequest"
         if not ctx.interactive:
             return self._err(
                 call,
@@ -317,7 +344,13 @@ class ToolExecutor:
         permission `sandbox_escalate` (never `always`), audited with a single-use grant id."""
         justification = str(args.get("justification", ""))
         pattern = f"{to_mode}:{justification[:60]}"
-        decision = engine.evaluate("sandbox_escalate", pattern, "ask", interactive=ctx.interactive)
+        decision = engine.evaluate(
+            "sandbox_escalate",
+            pattern,
+            "ask",
+            interactive=ctx.interactive,
+            context=_policy_context(tool, ctx),
+        )
         if decision.action == "deny":
             return self._err(call, f"sandbox escalation denied ({decision.detail})"), None
         if decision.action == "ask" or decision.reason == "mode: yolo":  # yolo never grants a wider mode
@@ -360,6 +393,14 @@ class ToolExecutor:
 def _agent(ctx: ToolContext) -> str:
     spec = ctx.services.get("spec")
     return str(getattr(spec, "name", "") or "")
+
+
+def _policy_context(tool: ToolDef, ctx: ToolContext) -> dict[str, Any]:
+    """The per-call fields of the exec-policy `req` (spec §2.10)."""
+    out: dict[str, Any] = {"tool": tool.name, "session_id": ctx.session_id, "cwd": str(ctx.cwd)}
+    if agent := _agent(ctx):
+        out["agent"] = agent
+    return out
 
 
 def _detail(tool: ToolDef, args: dict[str, Any]) -> str:

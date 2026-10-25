@@ -7,6 +7,8 @@ The reply must be exactly `APPROVE`, `DENY` or `ESCALATE`; anything else, a time
 gateway error escalates to the human. Verdicts are cached by `sha256(permission+pattern)`
 (APPROVE 10 min, DENY 60 s). After 3 consecutive DENYs in a session the guardian is no
 longer consulted for that session (`permission.guardian_breaker`); everything escalates.
+The executor also consults it for an exec-policy `review` in any mode (`core/policy.py`).
+Each call's tokens/cost are recorded in the usage ledger with `run_id="guardian"`.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
 from auoreo.gateway.errors import GatewayError
-from auoreo.gateway.types import LLMRequest, TextDelta
+from auoreo.gateway.types import LLMRequest, TextDelta, Usage
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -88,7 +90,23 @@ async def _ask(services: Services, request: LLMRequest) -> str:
     async for item in services.gateway.stream(request):
         if isinstance(item, TextDelta):
             parts.append(item.text)
+        elif isinstance(item, Usage):
+            await _record_spend(services, request, item)
     return "".join(parts)
+
+
+async def _record_spend(services: Services, request: LLMRequest, usage: Usage) -> None:
+    """Guardian spend goes to the usage ledger as `run_id="guardian"` (spec §19.3
+    `guardian_spend`), against the session it reviewed. Never fails the verdict."""
+    runner = getattr(getattr(services, "coordinator", None), "runner", None)
+    ledger = getattr(runner, "usage", None)
+    if ledger is None:
+        return
+    session_id = str(request.metadata.get("session_id") or "guardian")
+    try:
+        await ledger.record(session_id, "guardian", request.model, usage)
+    except Exception:
+        log.warning("could not record guardian spend", exc_info=True)
 
 
 async def guardian_verdict(

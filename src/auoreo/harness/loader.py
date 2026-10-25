@@ -458,8 +458,9 @@ def load_policy(c: Candidate) -> Loaded:
         if sep and key.strip() in {"description", "priority", "enabled"}:
             header[key.strip()] = value.strip()
     manifest = _validate(PolicyManifest, header, c.path, text)
-    if not re.search(r"^def decide\(", text, re.MULTILINE):
-        raise LoadError(c.path, "policy must define `def decide(req):`")
+    from auoreo.core.policy import check_policy  # Starlark compile + `decide(req)` check
+
+    check_policy(c.path, c.name, text)
     return Loaded(manifest, c.root.source, c.path)
 
 
