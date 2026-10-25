@@ -259,6 +259,23 @@ class Settings(BaseSettings):
     """Local-time window like `22:00-07:00` during which suggestion delivery is deferred."""
     suggestions_max_pending: int = Field(default=5, ge=1, le=100)
     """At most this many pending suggestions; proposing more expires the oldest."""
+    # --- W0-D
+    rerank_model: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
+    """Model for the selected rerank backend: a Hugging Face cross-encoder id for
+    `cross_encoder` (default MiniLM-L6: ~200 ms for 30 pairs on CPU; `BAAI/bge-reranker-v2-m3`
+    is multilingual but ~2 s on CPU, so raise `rerank_timeout_s` or use a GPU), a provider model for `cohere`
+    (`rerank-v3.5` when this is left at the cross-encoder default)."""
+    rerank_download_models: bool = False
+    """Let the local cross-encoder download weights on first use (else it must be cached)."""
+    rerank_timeout_s: float = Field(default=2.0, gt=0, le=60)
+    """Per-query rerank budget; on timeout the RRF order is kept (fail-open)."""
+    rerank_top_n: int = Field(default=8, ge=1, le=30)
+    """Hits kept after reranking the top-30 window (spec §24.3: top-8)."""
+    otel_mode: Literal["off", "local", "otlp"] = "off"
+    """`AUOREO_OTEL_MODE`: off · local (console, or in-memory with AUOREO_OTEL_TEST=1) · otlp
+    (OTLP/HTTP to OTEL_EXPORTER_OTLP_ENDPOINT). Needs the `otel` extra."""
+    otel_capture_content: bool = False
+    """Attach prompt/tool bodies to spans. Off by default (spec §20.1)."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

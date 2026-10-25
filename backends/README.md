@@ -28,5 +28,5 @@ Every kind ships a `fake` backend used by tests and by `AUOREO_GATEWAY=fake` dem
 
 Kinds today: `capture`, `browser`, `sandbox` (none · docker · bwrap; `sandbox_policy:
 warn|fail` decides what happens when the selected one is unavailable), `stt`, `tts`,
-`vad`, `wake`, `desktop`. Real voice/desktop libraries are imported lazily; their
+`vad`, `wake`, `desktop`, `rerank` (none · fake · cross_encoder · cohere; fail-open). Real voice/desktop libraries are imported lazily; their
 `check()` reports what is missing, and the `fake` sibling keeps tests and demos keyless.

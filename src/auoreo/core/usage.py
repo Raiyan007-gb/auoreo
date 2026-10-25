@@ -12,6 +12,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from auoreo.core import observability as obs
 from auoreo.core.db import Database, SessionRow, UsageRow, utcnow
 from auoreo.gateway.types import Usage
 
@@ -43,6 +44,7 @@ class UsageLedger:
         async with self.db.session() as s:
             s.add(row)
             await s.commit()
+        obs.record_usage(model, usage.prompt_tokens, usage.completion_tokens, cost)  # --- W0-D
         return row
 
     async def by_session(

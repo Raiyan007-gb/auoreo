@@ -1,0 +1,11 @@
+kind: rerank
+name: fake
+description: >-
+  Deterministic token-overlap reranker (no model, no network) for tests, the memory eval
+  script and AUOREO_GATEWAY=fake demos.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

@@ -9,6 +9,7 @@ from typing import Any
 
 from sqlalchemy import select
 
+from auoreo.core import observability as obs
 from auoreo.core.db import AuditRow, Database, utcnow
 from auoreo.core.redaction import redact_obj
 
@@ -72,6 +73,7 @@ class AuditLog:
             )
             s.add(row)
             await s.commit()
+        obs.count("audit_writes_total")  # --- W0-D
 
     async def verify(self) -> int | None:
         """Recompute the chain. Returns the first broken seq, or None if intact."""

@@ -48,6 +48,24 @@ rtc = [
 sandbox-docker = [
     "docker>=7,<8",
 ]
+otel = [  # W0-D: tracing + allowlisted metrics (src/auoreo/core/observability.py)
+    "opentelemetry-sdk>=1.45,<2",
+    "opentelemetry-exporter-otlp-proto-http>=1.45,<2",
+    "opentelemetry-instrumentation-fastapi>=0.66b0",
+    "opentelemetry-instrumentation-httpx>=0.66b0",
+]
+rerank-local = [  # W0-D: backends/rerank/cross_encoder (CPU torch on Linux/Windows)
+    "sentence-transformers>=5,<6",
+    "torch>=2.4",  # direct so [tool.uv.sources] can pin the CPU wheel index
+]
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform != 'darwin'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [build-system]
 requires = ["uv_build>=0.11.32,<0.12.0"]

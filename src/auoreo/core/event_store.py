@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
+from auoreo.core import observability as obs
 from auoreo.core.bus import EventBus
 from auoreo.core.db import Database, EventRow, utcnow
 from auoreo.core.redaction import redact_obj
@@ -53,6 +54,7 @@ class EventStore:
             await s.commit()
             event = _to_event(row)
         self.bus.publish(event)
+        obs.count("events_published_total")  # --- W0-D
         return event
 
     async def replay(

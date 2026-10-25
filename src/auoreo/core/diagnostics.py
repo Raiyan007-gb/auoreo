@@ -301,6 +301,13 @@ def yolo_checks() -> list[Check]:
     ]
 
 
+def observability_checks(st: Settings) -> list[Check]:
+    from auoreo.core import observability
+
+    level, detail = observability.status(st)
+    return [Check("otel", "ok" if level == "ok" else "warn", detail)]
+
+
 async def extra_checks(st: Settings) -> list[Check]:
     out: list[Check] = []
     for fn in list(EXTRA_CHECKS):
@@ -328,6 +335,7 @@ async def run_checks(settings: Settings, *, services: Services | None = None) ->
         *auth_checks(settings),
         *await audit_checks(settings, services),
         *yolo_checks(),
+        *observability_checks(settings),
         *await extra_checks(settings),
     ]
     return out

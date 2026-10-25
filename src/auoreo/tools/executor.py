@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import jsonschema
 
 from auoreo.backends.sandbox import escalation_request
+from auoreo.core import observability as obs
 from auoreo.core.guardian import guardian_verdict
 from auoreo.core.redaction import redact
 from auoreo.core.secrets import child_env
@@ -186,7 +187,7 @@ class ToolExecutor:
             session_token = CURRENT_SESSION.set(ctx.session_id)
             exec_token = CURRENT_EXEC.set(policy)
             try:
-                coro = handler(args, ctx)
+                coro = obs.traced(handler(args, ctx), "tool.call", tool=tool.name, decision=decision.action)
                 if lock is not None:
                     async with lock:
                         raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)

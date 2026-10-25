@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import func, select
 
+from auoreo.core import observability as obs
 from auoreo.core.db import MessageRow
 from auoreo.core.permissions import PermissionEngine
 from auoreo.core.redaction import StreamRedactor
@@ -201,7 +202,10 @@ class AgentRunner:
             emit=emit,
             services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec},
         )
-        result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_msg, options)
+        with obs.span("agent.run", model=spec.model, agent=spec.name) as span:  # --- W0-D
+            result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_msg, options)
+            span.set("status", result.status)
+            obs.count("run_completed_total", status=result.status)
         if self.s.memory is not None and result.text:
             await self.s.memory.record_message(sid, "assistant", result.text)
         await self.s.set_session_status(sid, "idle")
@@ -437,7 +441,10 @@ class AgentRunner:
         parts: list[str] = []
         calls: list[ToolCall] = []
         scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
-        async for item in self.s.gateway.stream(request):
+        purpose = str(request.metadata.get("purpose", "turn"))
+        async for item in obs.traced_stream(
+            self.s.gateway.stream(request), model=request.model, purpose=purpose
+        ):
             match item:
                 case TextDelta(text=t):
                     parts.append(t)
