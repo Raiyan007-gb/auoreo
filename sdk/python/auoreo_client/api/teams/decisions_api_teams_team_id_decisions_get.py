@@ -15,7 +15,6 @@ def _get_kwargs(
     team_id: str,
     *,
     limit: int | Unset = 200,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -30,13 +29,6 @@ def _get_kwargs(
     params: dict[str, Any] = {}
 
     params["limit"] = limit
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -93,7 +85,6 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     limit: int | Unset = 200,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[TeamDecision]]:
@@ -102,7 +93,6 @@ def sync_detailed(
     Args:
         team_id (str):
         limit (int | Unset):  Default: 200.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -117,7 +107,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         team_id=team_id,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -134,7 +123,6 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     limit: int | Unset = 200,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[TeamDecision] | None:
@@ -143,7 +131,6 @@ def sync(
     Args:
         team_id (str):
         limit (int | Unset):  Default: 200.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -159,7 +146,6 @@ def sync(
         team_id=team_id,
         client=client,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -170,7 +156,6 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     limit: int | Unset = 200,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[TeamDecision]]:
@@ -179,7 +164,6 @@ async def asyncio_detailed(
     Args:
         team_id (str):
         limit (int | Unset):  Default: 200.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -194,7 +178,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         team_id=team_id,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -209,7 +192,6 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     limit: int | Unset = 200,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[TeamDecision] | None:
@@ -218,7 +200,6 @@ async def asyncio(
     Args:
         team_id (str):
         limit (int | Unset):  Default: 200.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -235,7 +216,6 @@ async def asyncio(
             team_id=team_id,
             client=client,
             limit=limit,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

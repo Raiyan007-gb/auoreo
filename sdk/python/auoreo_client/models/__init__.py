@@ -14,6 +14,7 @@ from .audit_entry import AuditEntry
 from .audit_entry_detail import AuditEntryDetail
 from .audit_page import AuditPage
 from .audit_verify import AuditVerify
+from .auth_status import AuthStatus
 from .bandit_arm_info import BanditArmInfo
 from .bandit_arm_info_effort_type_0 import BanditArmInfoEffortType0
 from .bandit_arm_stats import BanditArmStats
@@ -62,6 +63,8 @@ from .doctor_report import DoctorReport
 from .doctor_summary import DoctorSummary
 from .environment_info import EnvironmentInfo
 from .environment_info_kind import EnvironmentInfoKind
+from .events_tail import EventsTail
+from .events_tail_request import EventsTailRequest
 from .export_api_sessions_session_id_export_get_format import ExportApiSessionsSessionIdExportGetFormat
 from .fact_action_result import FactActionResult
 from .fact_feedback import FactFeedback
@@ -88,6 +91,7 @@ from .latest_seq import LatestSeq
 from .list_goals_api_goals_get_status_type_0 import ListGoalsApiGoalsGetStatusType0
 from .list_suggestions_api_suggestions_get_status_type_0 import ListSuggestionsApiSuggestionsGetStatusType0
 from .list_tasks_api_kanban_get_status_type_0 import ListTasksApiKanbanGetStatusType0
+from .login_request import LoginRequest
 from .mail_message import MailMessage
 from .meeting_attach_request import MeetingAttachRequest
 from .meeting_chunk_info import MeetingChunkInfo
@@ -146,6 +150,8 @@ from .rtc_left import RtcLeft
 from .rtc_offer import RtcOffer
 from .rtc_peer_info import RtcPeerInfo
 from .search_hit import SearchHit
+from .server_event import ServerEvent
+from .server_event_data import ServerEventData
 from .session_create import SessionCreate
 from .session_deleted import SessionDeleted
 from .session_detail import SessionDetail
@@ -191,6 +197,7 @@ __all__ = (
     "AuditEntryDetail",
     "AuditPage",
     "AuditVerify",
+    "AuthStatus",
     "BanditArmInfo",
     "BanditArmInfoEffortType0",
     "BanditArmStats",
@@ -235,6 +242,8 @@ __all__ = (
     "DoctorSummary",
     "EnvironmentInfo",
     "EnvironmentInfoKind",
+    "EventsTail",
+    "EventsTailRequest",
     "ExportApiSessionsSessionIdExportGetFormat",
     "FactActionResult",
     "FactFeedback",
@@ -261,6 +270,7 @@ __all__ = (
     "ListGoalsApiGoalsGetStatusType0",
     "ListSuggestionsApiSuggestionsGetStatusType0",
     "ListTasksApiKanbanGetStatusType0",
+    "LoginRequest",
     "MailMessage",
     "MeetingAttachRequest",
     "MeetingChunkInfo",
@@ -317,6 +327,8 @@ __all__ = (
     "RtcOffer",
     "RtcPeerInfo",
     "SearchHit",
+    "ServerEvent",
+    "ServerEventData",
     "SessionCreate",
     "SessionDeleted",
     "SessionDetail",

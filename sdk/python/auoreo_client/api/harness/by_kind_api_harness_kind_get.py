@@ -14,7 +14,6 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     kind: str,
     *,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -26,23 +25,11 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "get",
         "url": "/api/harness/{kind}".format(
             kind=quote(str(kind), safe=""),
         ),
-        "params": params,
         "cookies": cookies,
     }
 
@@ -89,7 +76,6 @@ def sync_detailed(
     kind: str,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[HarnessEntry]]:
@@ -97,7 +83,6 @@ def sync_detailed(
 
     Args:
         kind (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -111,7 +96,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         kind=kind,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -127,7 +111,6 @@ def sync(
     kind: str,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[HarnessEntry] | None:
@@ -135,7 +118,6 @@ def sync(
 
     Args:
         kind (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -150,7 +132,6 @@ def sync(
     return sync_detailed(
         kind=kind,
         client=client,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -160,7 +141,6 @@ async def asyncio_detailed(
     kind: str,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[HarnessEntry]]:
@@ -168,7 +148,6 @@ async def asyncio_detailed(
 
     Args:
         kind (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -182,7 +161,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         kind=kind,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -196,7 +174,6 @@ async def asyncio(
     kind: str,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[HarnessEntry] | None:
@@ -204,7 +181,6 @@ async def asyncio(
 
     Args:
         kind (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -220,7 +196,6 @@ async def asyncio(
         await asyncio_detailed(
             kind=kind,
             client=client,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

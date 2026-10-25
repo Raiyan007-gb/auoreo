@@ -18,7 +18,7 @@ from auoreo.harness.manifests import WorkflowManifest
 from auoreo.harness.orchestrator import render
 from auoreo.runtime import commands
 from auoreo.runtime.hooks import hooks_of
-from auoreo.runtime.inbox import InputKind, RunOptions, TurnRequest
+from auoreo.runtime.inbox import InboxFull, InputKind, RunOptions, TurnRequest
 from auoreo.runtime.runner import AgentRunner, SessionRuntime, TurnResult
 from auoreo.runtime.titles import generate_title
 from auoreo.tools.context import restore_state
@@ -94,6 +94,9 @@ class SessionRunCoordinator:
         if kind == "steer" and rt.running:
             rt.inbox.steer(text)
             return None
+        bound = self.s.settings.http.queue_bound
+        if rt.inbox.full(bound):  # --- G1a: bounded inbox (429 at the API edge)
+            raise InboxFull(session_id, bound, self.s.settings.http.queue_retry_after_s)
         run_id = f"run_{uuid.uuid4().hex[:12]}"
         rt.inbox.followup(TurnRequest(run_id, text, agent, workflow, model, options))
         self._idle.setdefault(session_id, asyncio.Event()).clear()

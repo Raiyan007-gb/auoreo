@@ -6,7 +6,7 @@ authentication. Requests over the daemon's Unix socket are trusted by file permi
 
 from fastapi import APIRouter, HTTPException, Request
 
-from auoreo.api.deps import ServicesDep
+from auoreo.api.deps import IDEMPOTENT, ServicesDep
 from auoreo.remote import bridge
 from auoreo.remote.uds import is_unix_scope
 from auoreo.schema.bridge import BridgeDelivered, BridgeEnvelope
@@ -30,7 +30,7 @@ def _nonces(request: Request) -> bridge.NonceCache:
     return state.bridge_nonces  # type: ignore[no-any-return]
 
 
-@router.post("/inbox", response_model=BridgeDelivered, responses=_ERRORS)  # type: ignore[arg-type]
+@router.post("/inbox", dependencies=[IDEMPOTENT], response_model=BridgeDelivered, responses=_ERRORS)  # type: ignore[arg-type]
 async def inbox(envelope: BridgeEnvelope, request: Request, svc: ServicesDep) -> BridgeDelivered:
     """Verify `X-Auoreo-Signature` and deliver into the local team mailbox as
     `from: bridge:<sender>/<member>`. The signature covers the raw body bytes."""

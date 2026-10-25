@@ -14,7 +14,6 @@ def _get_kwargs(
     *,
     dry_run: bool | Unset = False,
     force: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -31,13 +30,6 @@ def _get_kwargs(
     params["dry_run"] = dry_run
 
     params["force"] = force
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -87,7 +79,6 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     dry_run: bool | Unset = False,
     force: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[CuratorReport | HTTPValidationError]:
@@ -98,7 +89,6 @@ def sync_detailed(
     Args:
         dry_run (bool | Unset):  Default: False.
         force (bool | Unset):  Default: False.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -113,7 +103,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         dry_run=dry_run,
         force=force,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -130,7 +119,6 @@ def sync(
     client: AuthenticatedClient | Client,
     dry_run: bool | Unset = False,
     force: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> CuratorReport | HTTPValidationError | None:
@@ -141,7 +129,6 @@ def sync(
     Args:
         dry_run (bool | Unset):  Default: False.
         force (bool | Unset):  Default: False.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -157,7 +144,6 @@ def sync(
         client=client,
         dry_run=dry_run,
         force=force,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -168,7 +154,6 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     dry_run: bool | Unset = False,
     force: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[CuratorReport | HTTPValidationError]:
@@ -179,7 +164,6 @@ async def asyncio_detailed(
     Args:
         dry_run (bool | Unset):  Default: False.
         force (bool | Unset):  Default: False.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -194,7 +178,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         dry_run=dry_run,
         force=force,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -209,7 +192,6 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     dry_run: bool | Unset = False,
     force: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> CuratorReport | HTTPValidationError | None:
@@ -220,7 +202,6 @@ async def asyncio(
     Args:
         dry_run (bool | Unset):  Default: False.
         force (bool | Unset):  Default: False.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -237,7 +218,6 @@ async def asyncio(
             client=client,
             dry_run=dry_run,
             force=force,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

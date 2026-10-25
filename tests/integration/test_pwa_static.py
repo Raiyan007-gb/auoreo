@@ -25,7 +25,7 @@ async def test_pwa_files_served_with_pwa_headers(
     app = create_app(settings, services=services, web_dist=dist)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         manifest = await c.get("/manifest.webmanifest")
         assert manifest.status_code == 200

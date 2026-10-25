@@ -14,7 +14,6 @@ def _get_kwargs(
     *,
     q: str,
     limit: int | Unset = 8,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -31,13 +30,6 @@ def _get_kwargs(
     params["q"] = q
 
     params["limit"] = limit
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -92,7 +84,6 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     q: str,
     limit: int | Unset = 8,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[SearchHit]]:
@@ -101,7 +92,6 @@ def sync_detailed(
     Args:
         q (str):
         limit (int | Unset):  Default: 8.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -116,7 +106,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         q=q,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -133,7 +122,6 @@ def sync(
     client: AuthenticatedClient | Client,
     q: str,
     limit: int | Unset = 8,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[SearchHit] | None:
@@ -142,7 +130,6 @@ def sync(
     Args:
         q (str):
         limit (int | Unset):  Default: 8.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -158,7 +145,6 @@ def sync(
         client=client,
         q=q,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -169,7 +155,6 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     q: str,
     limit: int | Unset = 8,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[SearchHit]]:
@@ -178,7 +163,6 @@ async def asyncio_detailed(
     Args:
         q (str):
         limit (int | Unset):  Default: 8.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -193,7 +177,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         q=q,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -208,7 +191,6 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     q: str,
     limit: int | Unset = 8,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[SearchHit] | None:
@@ -217,7 +199,6 @@ async def asyncio(
     Args:
         q (str):
         limit (int | Unset):  Default: 8.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -234,7 +215,6 @@ async def asyncio(
             client=client,
             q=q,
             limit=limit,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

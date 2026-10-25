@@ -24,6 +24,7 @@ export function setStoredToken(token: string): void {
   } catch {
     /* storage blocked */
   }
+  syncCookie(token); // --- G1a
 }
 
 export function getStoredToken(): string {
@@ -38,3 +39,15 @@ export const api: Client = createClient({
   baseUrl: import.meta.env.VITE_AUOREO_URL as string | undefined,
   getToken,
 });
+
+// --- G1a: EventSource cannot send `Authorization` and the server no longer accepts
+// `?token=` on /api/events, so a token typed into Settings is exchanged for the HttpOnly
+// cookie (which also makes the server inject the token meta on the next page load).
+function syncCookie(token: string): void {
+  const done = token ? api.login(token) : api.logout();
+  done.catch(() => {
+    /* wrong token or unsecured server: requests will show the error */
+  });
+}
+
+if (!hasMetaToken() && getStoredToken()) syncCookie(getStoredToken());

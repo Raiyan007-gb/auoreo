@@ -10,7 +10,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core.services import Services
 from auoreo.schema.voice_meeting import (
     MeetingAttachRequest,
@@ -61,7 +61,9 @@ async def list_meetings(svc: ServicesDep) -> list[MeetingInfo]:
     return [MeetingInfo(**m) for m in _meetings(svc).list_meetings()]
 
 
-@router.post("", response_model=MeetingStarted, status_code=201, responses=_RESPONSES)
+@router.post(
+    "", dependencies=[IDEMPOTENT], response_model=MeetingStarted, status_code=201, responses=_RESPONSES
+)
 async def start_meeting(body: MeetingStartRequest, svc: ServicesDep) -> MeetingStarted:
     """Start a listen-only meeting (`speak: true` lets the agent answer over an attached RTC peer)."""
     meetings = _meetings(svc)

@@ -14,33 +14,24 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     *,
     body: MeetingStartRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
     if not isinstance(authorization, Unset):
         headers["authorization"] = authorization
 
+    if not isinstance(idempotency_key, Unset):
+        headers["idempotency-key"] = idempotency_key
+
     cookies = {}
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/voice/meetings",
-        "params": params,
         "cookies": cookies,
     }
 
@@ -98,8 +89,8 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: MeetingStartRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | MeetingStarted]:
     """Start Meeting
@@ -107,8 +98,9 @@ def sync_detailed(
      Start a listen-only meeting (`speak: true` lets the agent answer over an attached RTC peer).
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (MeetingStartRequest):
 
@@ -122,8 +114,8 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -138,8 +130,8 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: MeetingStartRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | MeetingStarted | None:
     """Start Meeting
@@ -147,8 +139,9 @@ def sync(
      Start a listen-only meeting (`speak: true` lets the agent answer over an attached RTC peer).
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (MeetingStartRequest):
 
@@ -163,8 +156,8 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     ).parsed
 
@@ -173,8 +166,8 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: MeetingStartRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | MeetingStarted]:
     """Start Meeting
@@ -182,8 +175,9 @@ async def asyncio_detailed(
      Start a listen-only meeting (`speak: true` lets the agent answer over an attached RTC peer).
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (MeetingStartRequest):
 
@@ -197,8 +191,8 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -211,8 +205,8 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: MeetingStartRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | MeetingStarted | None:
     """Start Meeting
@@ -220,8 +214,9 @@ async def asyncio(
      Start a listen-only meeting (`speak: true` lets the agent answer over an attached RTC peer).
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (MeetingStartRequest):
 
@@ -237,8 +232,8 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
-            token=token,
             authorization=authorization,
+            idempotency_key=idempotency_key,
             auoreo_token=auoreo_token,
         )
     ).parsed

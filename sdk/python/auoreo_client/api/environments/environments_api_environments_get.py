@@ -12,7 +12,6 @@ from ...types import UNSET, Response, Unset
 
 def _get_kwargs(
     *,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -24,21 +23,9 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "get",
         "url": "/api/environments",
-        "params": params,
         "cookies": cookies,
     }
 
@@ -84,7 +71,6 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[EnvironmentInfo]]:
@@ -93,7 +79,6 @@ def sync_detailed(
      Environment backends, named environments, the exec-server and bridge peers. No secrets.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -106,7 +91,6 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -121,7 +105,6 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[EnvironmentInfo] | None:
@@ -130,7 +113,6 @@ def sync(
      Environment backends, named environments, the exec-server and bridge peers. No secrets.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -144,7 +126,6 @@ def sync(
 
     return sync_detailed(
         client=client,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -153,7 +134,6 @@ def sync(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[EnvironmentInfo]]:
@@ -162,7 +142,6 @@ async def asyncio_detailed(
      Environment backends, named environments, the exec-server and bridge peers. No secrets.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -175,7 +154,6 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -188,7 +166,6 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[EnvironmentInfo] | None:
@@ -197,7 +174,6 @@ async def asyncio(
      Environment backends, named environments, the exec-server and bridge peers. No secrets.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -212,7 +188,6 @@ async def asyncio(
     return (
         await asyncio_detailed(
             client=client,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

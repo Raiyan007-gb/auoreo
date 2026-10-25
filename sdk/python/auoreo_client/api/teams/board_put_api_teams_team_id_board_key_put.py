@@ -17,7 +17,6 @@ def _get_kwargs(
     key: str,
     *,
     body: BoardPut,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -29,24 +28,12 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "put",
         "url": "/api/teams/{team_id}/board/{key}".format(
             team_id=quote(str(team_id), safe=""),
             key=quote(str(key), safe=""),
         ),
-        "params": params,
         "cookies": cookies,
     }
 
@@ -94,7 +81,6 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: BoardPut,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[BoardArtifact | HTTPValidationError]:
@@ -105,7 +91,6 @@ def sync_detailed(
     Args:
         team_id (str):
         key (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (BoardPut):
@@ -122,7 +107,6 @@ def sync_detailed(
         team_id=team_id,
         key=key,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -140,7 +124,6 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: BoardPut,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> BoardArtifact | HTTPValidationError | None:
@@ -151,7 +134,6 @@ def sync(
     Args:
         team_id (str):
         key (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (BoardPut):
@@ -169,7 +151,6 @@ def sync(
         key=key,
         client=client,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -181,7 +162,6 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: BoardPut,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[BoardArtifact | HTTPValidationError]:
@@ -192,7 +172,6 @@ async def asyncio_detailed(
     Args:
         team_id (str):
         key (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (BoardPut):
@@ -209,7 +188,6 @@ async def asyncio_detailed(
         team_id=team_id,
         key=key,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -225,7 +203,6 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: BoardPut,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> BoardArtifact | HTTPValidationError | None:
@@ -236,7 +213,6 @@ async def asyncio(
     Args:
         team_id (str):
         key (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (BoardPut):
@@ -255,7 +231,6 @@ async def asyncio(
             key=key,
             client=client,
             body=body,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

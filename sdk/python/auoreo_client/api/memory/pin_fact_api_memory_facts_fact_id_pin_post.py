@@ -16,7 +16,6 @@ def _get_kwargs(
     fact_id: int,
     *,
     body: FactPin,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -28,23 +27,11 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/memory/facts/{fact_id}/pin".format(
             fact_id=quote(str(fact_id), safe=""),
         ),
-        "params": params,
         "cookies": cookies,
     }
 
@@ -91,7 +78,6 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: FactPin,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[FactActionResult | HTTPValidationError]:
@@ -101,7 +87,6 @@ def sync_detailed(
 
     Args:
         fact_id (int):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (FactPin):
@@ -117,7 +102,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         fact_id=fact_id,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -134,7 +118,6 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: FactPin,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> FactActionResult | HTTPValidationError | None:
@@ -144,7 +127,6 @@ def sync(
 
     Args:
         fact_id (int):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (FactPin):
@@ -161,7 +143,6 @@ def sync(
         fact_id=fact_id,
         client=client,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -172,7 +153,6 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: FactPin,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[FactActionResult | HTTPValidationError]:
@@ -182,7 +162,6 @@ async def asyncio_detailed(
 
     Args:
         fact_id (int):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (FactPin):
@@ -198,7 +177,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         fact_id=fact_id,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -213,7 +191,6 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: FactPin,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> FactActionResult | HTTPValidationError | None:
@@ -223,7 +200,6 @@ async def asyncio(
 
     Args:
         fact_id (int):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (FactPin):
@@ -241,7 +217,6 @@ async def asyncio(
             fact_id=fact_id,
             client=client,
             body=body,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

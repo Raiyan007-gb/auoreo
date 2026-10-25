@@ -12,7 +12,6 @@ from ...types import UNSET, Response, Unset
 
 def _get_kwargs(
     *,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -24,21 +23,9 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "get",
         "url": "/api/rtc/ice",
-        "params": params,
         "cookies": cookies,
     }
 
@@ -79,7 +66,6 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | RtcIceConfig]:
@@ -90,7 +76,6 @@ def sync_detailed(
     The shared secret is never returned; fetch this right before each offer.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -103,7 +88,6 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -118,7 +102,6 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | RtcIceConfig | None:
@@ -129,7 +112,6 @@ def sync(
     The shared secret is never returned; fetch this right before each offer.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -143,7 +125,6 @@ def sync(
 
     return sync_detailed(
         client=client,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -152,7 +133,6 @@ def sync(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | RtcIceConfig]:
@@ -163,7 +143,6 @@ async def asyncio_detailed(
     The shared secret is never returned; fetch this right before each offer.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -176,7 +155,6 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -189,7 +167,6 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | RtcIceConfig | None:
@@ -200,7 +177,6 @@ async def asyncio(
     The shared secret is never returned; fetch this right before each offer.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -215,7 +191,6 @@ async def asyncio(
     return (
         await asyncio_detailed(
             client=client,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

@@ -6,7 +6,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, status
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.automation.deliveries import outbox_of
 from auoreo.automation.views import delivery_info
 from auoreo.schema.chat import DeliveryInfo, DeliveryReplay
@@ -25,7 +25,7 @@ NOT_REPLAYABLE = "suggestion"
 """Plain-text suggestion rows carry no agent prompt; replaying would run an empty turn."""
 
 
-@router.post("/{delivery_id}/replay", response_model=DeliveryReplay)
+@router.post("/{delivery_id}/replay", dependencies=[IDEMPOTENT], response_model=DeliveryReplay)
 async def replay_delivery(delivery_id: int, svc: ServicesDep, dry_run: bool = True) -> DeliveryReplay:
     """`dry_run=true` (default) only shows the stored prompt; otherwise a new pending row
     with the same payload is queued (the original is untouched)."""

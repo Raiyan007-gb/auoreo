@@ -15,7 +15,6 @@ def _get_kwargs(
     session_id: None | str | Unset = UNSET,
     limit: int | Unset = 200,
     children: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -39,13 +38,6 @@ def _get_kwargs(
     params["limit"] = limit
 
     params["children"] = children
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -101,7 +93,6 @@ def sync_detailed(
     session_id: None | str | Unset = UNSET,
     limit: int | Unset = 200,
     children: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[UsageRecord]]:
@@ -113,7 +104,6 @@ def sync_detailed(
         session_id (None | str | Unset):
         limit (int | Unset):  Default: 200.
         children (bool | Unset):  Default: False.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -129,7 +119,6 @@ def sync_detailed(
         session_id=session_id,
         limit=limit,
         children=children,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -147,7 +136,6 @@ def sync(
     session_id: None | str | Unset = UNSET,
     limit: int | Unset = 200,
     children: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[UsageRecord] | None:
@@ -159,7 +147,6 @@ def sync(
         session_id (None | str | Unset):
         limit (int | Unset):  Default: 200.
         children (bool | Unset):  Default: False.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -176,7 +163,6 @@ def sync(
         session_id=session_id,
         limit=limit,
         children=children,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -188,7 +174,6 @@ async def asyncio_detailed(
     session_id: None | str | Unset = UNSET,
     limit: int | Unset = 200,
     children: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[UsageRecord]]:
@@ -200,7 +185,6 @@ async def asyncio_detailed(
         session_id (None | str | Unset):
         limit (int | Unset):  Default: 200.
         children (bool | Unset):  Default: False.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -216,7 +200,6 @@ async def asyncio_detailed(
         session_id=session_id,
         limit=limit,
         children=children,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -232,7 +215,6 @@ async def asyncio(
     session_id: None | str | Unset = UNSET,
     limit: int | Unset = 200,
     children: bool | Unset = False,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[UsageRecord] | None:
@@ -244,7 +226,6 @@ async def asyncio(
         session_id (None | str | Unset):
         limit (int | Unset):  Default: 200.
         children (bool | Unset):  Default: False.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -262,7 +243,6 @@ async def asyncio(
             session_id=session_id,
             limit=limit,
             children=children,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

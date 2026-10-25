@@ -1,34 +1,37 @@
-from typing import Annotated
+from fastapi import APIRouter, HTTPException, Request, status
 
-from fastapi import APIRouter, Header, HTTPException, Response, status
-
-from auoreo.api.deps import AUTH, ServicesDep
-from auoreo.core.idempotency import valid_key
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep, admit_request
+from auoreo.runtime.inbox import InboxFull
 from auoreo.schema.chat import ChatAccepted, ChatRequest
 
 router = APIRouter(prefix="/api", tags=["chat"], dependencies=AUTH)
 
 
+def queue_full(exc: InboxFull) -> HTTPException:
+    """Inbox overflow → 429 with a retry hint (header + body)."""
+    return HTTPException(
+        status.HTTP_429_TOO_MANY_REQUESTS,
+        {"message": str(exc), "retry_after_s": exc.retry_after_s},
+        headers={"Retry-After": str(exc.retry_after_s)},
+    )
+
+
 @router.post(
     "/chat",
+    dependencies=[IDEMPOTENT],
     response_model=ChatAccepted,
     status_code=status.HTTP_202_ACCEPTED,
-    responses={200: {"model": ChatAccepted, "description": "Duplicate request (deduped)"}},
+    responses={
+        200: {"model": ChatAccepted, "description": "Duplicate request (deduped)"},
+        409: {"description": "A request with the same idempotency key is still running"},
+        429: {"description": "Session queue full (`Retry-After`)"},
+    },
 )
-async def chat(
-    body: ChatRequest,
-    svc: ServicesDep,
-    response: Response,
-    idempotency_key: Annotated[str | None, Header()] = None,
-) -> ChatAccepted:
-    """Queue a message. Returns immediately; follow progress on `GET /api/events`."""
-    key = idempotency_key or body.request_id
-    if key is not None:
-        if not valid_key(key):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "idempotency key must be a UUID")
-        if (prior := await svc.idempotency.lookup(key)) is not None:
-            response.status_code = status.HTTP_200_OK
-            return ChatAccepted(**{**prior, "deduped": True})
+async def chat(body: ChatRequest, svc: ServicesDep, request: Request) -> ChatAccepted:
+    """Queue a message. Returns immediately; follow progress on `GET /api/events`.
+    `Idempotency-Key` header (or body `request_id`) makes retries safe."""
+    if body.request_id is not None and "idempotency-key" not in request.headers:
+        await admit_request(request, body.request_id)
     try:
         session_id = body.session_id
         if session_id is None:
@@ -46,10 +49,6 @@ async def chat(
         )
     except KeyError as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc).strip("'\"")) from exc
-    result = {"session_id": session_id, "run_id": run_id}
-    if key is not None:
-        stored = await svc.idempotency.store(key, result)
-        if stored != result:
-            response.status_code = status.HTTP_200_OK
-            return ChatAccepted(**{**stored, "deduped": True})
-    return ChatAccepted(**result)
+    except InboxFull as exc:
+        raise queue_full(exc) from exc
+    return ChatAccepted(session_id=session_id, run_id=run_id)

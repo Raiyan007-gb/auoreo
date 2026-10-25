@@ -4,7 +4,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core.redaction import redact
 from auoreo.memory import curator as curator_mod
 from auoreo.memory.files import FILES
@@ -36,7 +36,7 @@ async def search(q: str, svc: ServicesDep, limit: int = 8) -> list[SearchHit]:
     return [SearchHit(kind=h.kind, id=h.id, text=h.text, score=h.score, source=h.source) for h in hits]
 
 
-@router.post("/facts", status_code=status.HTTP_201_CREATED)
+@router.post("/facts", dependencies=[IDEMPOTENT], status_code=status.HTTP_201_CREATED)
 async def add_fact(body: FactIn, svc: ServicesDep) -> dict[str, int | bool]:
     if svc.memory is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "memory is disabled")

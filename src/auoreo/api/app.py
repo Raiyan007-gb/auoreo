@@ -17,8 +17,9 @@ from starlette.routing import Route
 from starlette.types import ASGIApp, Scope
 
 from auoreo import __version__
-from auoreo.api import mcp_server, ws
+from auoreo.api import mcp_server, security, ws
 from auoreo.api.routers import acp as acp_router
+from auoreo.api.routers import auth as auth_router  # --- G1a
 from auoreo.api.routers import bridge as bridge_router  # --- W2-B
 from auoreo.api.routers import (
     chat,
@@ -51,6 +52,7 @@ from auoreo.api.routers import suggestions as suggestions_router
 from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import voice as voice_router
 from auoreo.api.routers import webhooks as webhooks_router
+from auoreo.automation.webhooks import enforce_secrets  # --- G1a
 from auoreo.core import observability as obs
 from auoreo.core.paths import web_dist_dir
 from auoreo.core.services import Services
@@ -60,6 +62,7 @@ from auoreo.gateway.types import Gateway
 log = logging.getLogger(__name__)
 ROUTERS = (
     health,
+    auth_router,  # --- G1a
     sessions,
     chat,
     events,
@@ -111,6 +114,9 @@ class SpaStaticFiles(StaticFiles):
     """Static files with an SPA fallback: unknown extension-less paths get index.html (200),
     so deep links like /session/<id> work; missing assets still 404."""
 
+    password: str | None = None
+    """Set by `create_app`: `index.html` gets the token meta only for a valid cookie."""
+
     async def get_response(self, path: str, scope: Scope) -> Response:
         try:
             response = await super().get_response(path, scope)
@@ -122,6 +128,9 @@ class SpaStaticFiles(StaticFiles):
             path, response = "index.html", await super().get_response("index.html", scope)
         if path.lstrip("/") in NO_CACHE or path in ("", "."):
             response.headers["Cache-Control"] = "no-cache"
+        if path.lstrip("/") in ("index.html", "", ".") and self.directory is not None:
+            index = Path(self.directory) / "index.html"
+            response = security.index_with_token(index, scope, self.password) or response
         if path.lstrip("/") == "sw.js":
             response.headers["Service-Worker-Allowed"] = "/"
         return response
@@ -142,6 +151,7 @@ def create_app(
         owned = services is None
         svc = services or await Services.create(settings, cwd=cwd, gateway=gateway)
         app.state.services = svc
+        enforce_secrets(svc)  # --- G1a: webhooks.strict_secrets refuses to start
         if not settings.server_password:
             log.warning("server is unsecured: AUOREO_SERVER_PASSWORD is not set")
         try:
@@ -164,6 +174,7 @@ def create_app(
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    security.install(app, settings)  # --- G1a: Host check (outermost) + idempotency capture
     for module in ROUTERS:
         app.include_router(module.router)
     app.state.mounts = []
@@ -174,5 +185,7 @@ def create_app(
     obs.instrument_app(app, settings)  # --- W0-D: no-op unless AUOREO_OTEL_MODE=local|otlp
     dist = web_dist or web_dist_dir()
     if (dist / "index.html").is_file():  # mounted AFTER routers so /api/* wins
-        app.mount("/", SpaStaticFiles(directory=dist, html=True), name="ui")
+        spa = SpaStaticFiles(directory=dist, html=True)
+        spa.password = settings.server_password
+        app.mount("/", spa, name="ui")
     return app

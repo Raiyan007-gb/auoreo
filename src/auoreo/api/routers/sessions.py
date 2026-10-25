@@ -3,7 +3,7 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Response, status
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core import sessions_ops as ops
 from auoreo.core.db import SessionRow
 from auoreo.schema.chat import MessageOut, SessionCreate, SessionDeleted, SessionDetail, SessionInfo
@@ -38,7 +38,7 @@ async def _guard[T](op: Awaitable[T]) -> T:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
 
 
-@router.post("", response_model=SessionInfo, status_code=status.HTTP_201_CREATED)
+@router.post("", dependencies=[IDEMPOTENT], response_model=SessionInfo, status_code=status.HTTP_201_CREATED)
 async def create_session(body: SessionCreate, svc: ServicesDep) -> SessionInfo:
     try:
         row = await svc.create_session(
@@ -88,7 +88,12 @@ async def cancel(session_id: str, svc: ServicesDep) -> dict[str, bool]:
     return {"cancelled": await svc.coordinator.cancel(session_id)}
 
 
-@router.post("/{session_id}/fork", response_model=SessionDetail, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{session_id}/fork",
+    dependencies=[IDEMPOTENT],
+    response_model=SessionDetail,
+    status_code=status.HTTP_201_CREATED,
+)
 async def fork(session_id: str, svc: ServicesDep) -> SessionDetail:
     """New session (same agent/workflow/model, `parent_id` set) with every committed message."""
     return _detail(await _guard(ops.fork_session(svc, session_id)))

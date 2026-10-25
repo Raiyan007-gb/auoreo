@@ -22,7 +22,9 @@ async def client(services: Services) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(services.settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test", timeout=20) as c,
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1", timeout=20
+        ) as c,
     ):
         yield c
 
@@ -65,6 +67,6 @@ async def test_ice_requires_auth(services: Services) -> None:
     app = create_app(services.settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         assert (await c.get("/api/rtc/ice")).status_code == 401

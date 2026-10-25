@@ -15,6 +15,16 @@ OUT_OF_BAND = "[OUT-OF-BAND]"  # == runtime.budget.OUT_OF_BAND (kept import-free
 InputKind = Literal["followup", "steer", "inject"]
 
 
+class InboxFull(Exception):
+    """`queue_bound` queued followups already wait; the API maps this to 429 + Retry-After."""
+
+    def __init__(self, session_id: str, bound: int, retry_after_s: int = 2) -> None:
+        super().__init__(f"session {session_id} has {bound} queued messages; retry after {retry_after_s}s")
+        self.session_id = session_id
+        self.bound = bound
+        self.retry_after_s = retry_after_s
+
+
 @dataclass(frozen=True)
 class RunOptions:
     """Per-run overrides that automation, jobs and delegation apply to a turn."""
@@ -44,6 +54,17 @@ class Inbox:
     def followup(self, req: TurnRequest) -> None:
         self.next_turn.append(req)
         self.wake.set()
+
+    def full(self, bound: int | None) -> bool:
+        return bound is not None and len(self.next_turn) >= bound
+
+    def edit(self, run_id: str, text: str) -> bool:
+        """Replace the text of a queued (not yet started) followup; False once it has run."""
+        for req in self.next_turn:
+            if req.run_id == run_id:
+                req.text = text
+                return True
+        return False
 
     def steer(self, text: str) -> None:
         self.next_step.append(text)

@@ -1,23 +1,43 @@
 """Webhook ingress (spec §5.1, §19.11): `POST /hooks/<route>` → verify → filter → enqueue → 202.
 
-Order: route (404) → body cap (413) → secret present (503, fail closed) → HMAC on the raw
-body (401) → JSON content type / object (415 / 400) → event + filters (200 ignored) →
-duplicate delivery id (200 duplicate) → rate limit (429) → enqueue → 202. Every decision is
-audited without the body.
+Order: route (404) → body cap (413) → challenge (`challenge: true` routes only, 200) →
+secret present (403, fail closed) → provider signature on the raw body, current then `#prev`
+within the rotation grace (401) → JSON content type / object (415 / 400) → event + filters
+(200 ignored) → duplicate delivery id (200 duplicate) → rate limit (429) → enqueue → 202, or
+for `deliver_only` routes deliver now → 200 / 502. Every decision is audited without the body.
+Signature schemes live in `webhook_verify`.
 """
 
 from __future__ import annotations
 
 import hashlib
-import hmac
 import json
 import logging
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from auoreo.automation.deliveries import outbox_of
+from sqlalchemy.exc import IntegrityError
+
+from auoreo.automation.deliveries import DeliveryWorker, outbox_of
 from auoreo.automation.templating import dotted, first_failing, render, untrusted
+from auoreo.automation.webhook_verify import (
+    DELIVERY_HEADER,
+    DELIVERY_HEADERS,
+    EVENT_HEADER,
+    SIGNATURE_HEADER,
+    TIMESTAMP_SKEW_S,
+    VERIFIERS,
+    body_challenge,
+    candidates,
+    missing_secrets,
+    query_challenge,
+    secret_name,
+    sign,
+    sign_v2,
+)
+from auoreo.core.db import DeliveryRow, utcnow
 from auoreo.harness.manifests import WebhookManifest
 
 if TYPE_CHECKING:
@@ -26,9 +46,16 @@ if TYPE_CHECKING:
     from auoreo.core.services import Services
 
 log = logging.getLogger(__name__)
-TIMESTAMP_SKEW_S = 300
-SIGNATURE_HEADER = {"github": "x-hub-signature-256", "generic": "x-signature-256"}
-DELIVERY_HEADER = {"github": "x-github-delivery", "generic": "x-delivery-id"}
+__all__ = [
+    "DELIVERY_HEADER",
+    "SIGNATURE_HEADER",
+    "TIMESTAMP_SKEW_S",
+    "HookResult",
+    "WebhookIngress",
+    "secret_name",
+    "sign",
+    "sign_v2",
+]
 
 
 @dataclass
@@ -42,26 +69,18 @@ class BodyTooLarge(Exception):
     pass
 
 
-def sign(secret: str, body: bytes) -> str:
-    """`sha256=<hex>` HMAC-SHA256 of the raw body (GitHub's `X-Hub-Signature-256` format)."""
-    return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-
-
-def verify(secret: str, body: bytes, header: str | None) -> bool:
-    if not header or not header.startswith("sha256="):
-        return False
-    return hmac.compare_digest(sign(secret, body).encode(), header.strip().encode())
-
-
-def secret_name(manifest: WebhookManifest) -> str:
-    return manifest.secret.removeprefix("secret:")
-
-
-def event_name(manifest: WebhookManifest, headers: dict[str, str], payload: dict[str, Any]) -> str:
-    if manifest.provider == "github":
-        return headers.get("x-github-event", "")
-    ev = payload.get("event")
+def event_name(manifest: WebhookManifest, headers: Mapping[str, str], payload: dict[str, Any]) -> str:
+    if manifest.provider in {"github", "gitlab"}:
+        return headers.get(EVENT_HEADER[manifest.provider], "")
+    ev = payload.get("type" if manifest.provider == "svix" else "event")
     return ev if isinstance(ev, str) else headers.get("x-event", "")
+
+
+def delivery_id_of(manifest: WebhookManifest, headers: Mapping[str, str], body: bytes) -> str:
+    for name in DELIVERY_HEADERS[manifest.provider]:
+        if value := headers.get(name):
+            return value
+    return hashlib.sha256(body).hexdigest()
 
 
 def github_target(payload: dict[str, Any]) -> str:
@@ -88,6 +107,16 @@ class WebhookIngress:
     def enabled_routes(self) -> list[str]:
         return sorted(n for n, m in self.routes().items() if m.enabled)
 
+    def route(self, name: str, provider: str | None = None) -> WebhookManifest | None:
+        """An enabled route (optionally of one provider); unknown/disabled/mismatch → None."""
+        m = self.routes().get(name)
+        if m is None or not m.enabled or (provider is not None and m.provider != provider):
+            return None
+        return m
+
+    def missing_secrets(self) -> list[str]:
+        return missing_secrets(self.routes(), self.services.secrets.get)
+
     def _rate_ok(self, route: str, limit: int) -> bool:
         window = int(time.time() // 60)
         start, count = self._windows.get(route, (window, 0))
@@ -99,7 +128,7 @@ class WebhookIngress:
         return True
 
     async def _audit(self, route: str, res: HookResult, extra: dict[str, Any]) -> HookResult:
-        accepted = res.status_code == 202
+        accepted = res.status_code == 202 or res.body.get("status") == "delivered"
         await self.services.audit.record(
             actor="webhook",
             action="webhook.accepted" if accepted else "webhook.rejected",
@@ -109,9 +138,19 @@ class WebhookIngress:
         )
         return res
 
-    async def receive(self, route: str, request: Request) -> HookResult:
-        manifest = self.routes().get(route)
-        if manifest is None or not manifest.enabled:
+    async def challenge(self, route: str, query: Mapping[str, str]) -> HookResult:
+        """`GET /hooks/<route>?challenge=<v>`: echo for `challenge: true` routes only."""
+        manifest = self.route(route)
+        if manifest is None:
+            return HookResult(404, {"detail": "not found"}, "unknown route")
+        value = query_challenge(query) if manifest.challenge else None
+        if value is None:
+            return HookResult(405, {"detail": "method not allowed"}, "non-POST")
+        return await self._audit(route, HookResult(200, {"challenge": value}, "challenge"), {})
+
+    async def receive(self, route: str, request: Request, provider: str | None = None) -> HookResult:
+        manifest = self.route(route, provider)
+        if manifest is None:
             return await self._audit(route, HookResult(404, {"detail": "not found"}, "unknown route"), {})
         try:
             body = await read_capped(request, manifest.max_body_bytes)
@@ -120,28 +159,49 @@ class WebhookIngress:
         headers = {k.lower(): v for k, v in request.headers.items()}
         return await self.process(manifest, headers, body)
 
-    async def process(self, manifest: WebhookManifest, headers: dict[str, str], body: bytes) -> HookResult:
+    async def _verify(
+        self, manifest: WebhookManifest, headers: dict[str, str], body: bytes
+    ) -> HookResult | None:
         route = manifest.name
-        secret = self.services.secrets.get(secret_name(manifest))
-        if not secret:
+        now = time.time()
+        grace = self.services.settings.webhooks.rotation_grace_s
+        keys = candidates(self.services.secrets.get, secret_name(manifest), grace, now)
+        if not keys:
             if route not in self._warned:
                 self._warned.add(route)
-                log.error("webhook route %s: secret %s is not set; rejecting (503)", route, manifest.secret)
-            res = HookResult(503, {"detail": "webhook secret not configured"}, "missing secret")
-            return await self._audit(route, res, {})
-        if not verify(secret, body, headers.get(SIGNATURE_HEADER[manifest.provider])):
-            return await self._audit(route, HookResult(401, {"detail": "bad signature"}, "bad signature"), {})
-        if manifest.provider == "generic" and not _timestamp_ok(headers.get("x-timestamp")):
-            return await self._audit(route, HookResult(401, {"detail": "stale timestamp"}, "timestamp"), {})
+                log.error("webhook route %s: secret %s is not set; rejecting (403)", route, manifest.secret)
+            return await self._audit(route, HookResult(403, {"detail": "forbidden"}, "missing secret"), {})
+        verifier = VERIFIERS[manifest.provider]
+        reason = "bad signature"
+        for which, secret in keys:
+            failed = verifier(secret, headers, body, now)
+            if failed is None:
+                if which == "prev":
+                    await self.services.audit.record(
+                        actor="webhook",
+                        action="webhook.secret.rotated_used",
+                        decision="allow",
+                        reason="previous secret within the rotation grace",
+                        detail={"route": route[:64]},
+                    )
+                return None
+            reason = failed if which == "current" else reason
+        if "timestamp" in reason:
+            log.warning("webhook route %s: %s", route, reason)
+        return await self._audit(route, HookResult(401, {"detail": reason}, reason), {})
+
+    async def process(self, manifest: WebhookManifest, headers: dict[str, str], body: bytes) -> HookResult:
+        route = manifest.name
+        payload = _json_object(body)
+        if manifest.challenge and (value := body_challenge(payload)) is not None:
+            return await self._audit(route, HookResult(200, {"challenge": value}, "challenge"), {})
+        if (rejected := await self._verify(manifest, headers, body)) is not None:
+            return rejected
         ctype = headers.get("content-type", "").split(";")[0].strip().lower()
         if ctype != "application/json" and not ctype.endswith("+json"):
             res = HookResult(415, {"detail": "content type must be application/json"}, "content type")
             return await self._audit(route, res, {})
-        try:
-            payload = json.loads(body)
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            payload = None
-        if not isinstance(payload, dict):
+        if payload is None:
             res = HookResult(400, {"detail": "body must be a JSON object"}, "bad json")
             return await self._audit(route, res, {})
         return await self._accept(manifest, headers, body, payload)
@@ -152,7 +212,7 @@ class WebhookIngress:
         route = manifest.name
         event = event_name(manifest, headers, payload)
         action = payload.get("action")
-        delivery_id = headers.get(DELIVERY_HEADER[manifest.provider]) or hashlib.sha256(body).hexdigest()
+        delivery_id = delivery_id_of(manifest, headers, body)
         info = {"event": event, "delivery_id": delivery_id[:128]}
         names = {event, f"{event}.{action}"} if isinstance(action, str) else {event}
         if manifest.events and not names & set(manifest.events):
@@ -168,20 +228,69 @@ class WebhookIngress:
         if not self._rate_ok(route, manifest.rate_limit_per_minute):
             res = HookResult(429, {"detail": "rate limit exceeded"}, "rate limit")
             return await self._audit(route, res, info)
+        built = build_payload(manifest, payload, event, delivery_id)
+        if manifest.deliver_only:
+            return await self._deliver_now(manifest, payload, built, info)
         row = await outbox.enqueue(
-            "webhook",
-            route,
-            delivery_id,
-            build_payload(manifest, payload, event, delivery_id),
-            manifest.deliver[0] if manifest.deliver else "log",
+            "webhook", route, delivery_id, built, manifest.deliver[0] if manifest.deliver else "log"
         )
         if row is None:  # lost an insert race with the same delivery id
             return await self._audit(route, dup, info)
         body_out = {"status": "accepted", "route": route, "event": event, "delivery_id": row.id}
         return await self._audit(route, HookResult(202, body_out, "enqueued"), info | {"row": row.id})
 
+    async def _deliver_now(
+        self, manifest: WebhookManifest, payload: dict[str, Any], built: dict[str, Any], info: dict[str, Any]
+    ) -> HookResult:
+        """`deliver_only`: the row is born `delivering` (the worker never claims it, so no agent
+        runs); the rendered template goes to the targets in order. 200 delivered / 502."""
+        route, svc = manifest.name, self.services
+        text = render(manifest.prompt, {"event": payload, "route": route, "delivery_id": info["delivery_id"]})
+        row = DeliveryRow(
+            kind="webhook",
+            source=route,
+            external_id=str(info["delivery_id"]),
+            payload=built | {"deliver_only": True},
+            result={},
+            target=(manifest.deliver[0] if manifest.deliver else "log")[:64],
+            status="delivering",
+            attempts=1,
+            claimed_at=utcnow(),
+        )
+        try:
+            async with svc.db.session() as s:
+                s.add(row)
+                await s.commit()
+        except IntegrityError:
+            dup = HookResult(200, {"status": "duplicate"}, "duplicate delivery id")
+            return await self._audit(route, dup, info)
+        meta = {"kind": "webhook", "source": route, "external_id": row.external_id, "delivery_id": row.id}
+        provider, attempts = await DeliveryWorker(svc)._deliver(row, text, meta)
+        error = None
+        if provider is None:
+            error = "; ".join(f"{a['provider']}: {a['detail']}" for a in attempts) or "no delivery target"
+        await outbox_of(svc).finish(
+            row.id, error is None, {"provider": provider, "attempts": attempts}, error
+        )
+        status = "delivered" if error is None else "failed"
+        extra = {"provider": provider} | ({"error": error} if error else {})
+        await svc.emit("server", f"delivery.{status}", meta | extra)
+        out = {"status": status, "route": route, "event": built["event"], "delivery_id": row.id}
+        if error is not None:
+            res = HookResult(502, out | {"detail": error[:300]}, "deliver failed")
+            return await self._audit(route, res, info)
+        return await self._audit(route, HookResult(200, out, "delivered"), info | {"row": row.id})
+
     async def close(self) -> None:
         self._windows.clear()
+
+
+def _json_object(body: bytes) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def build_payload(
@@ -199,16 +308,6 @@ def build_payload(
         "action": payload.get("action") if isinstance(payload.get("action"), str) else None,
         "delivery_target": github_target(payload) if manifest.provider == "github" else "",
     }
-
-
-def _timestamp_ok(value: str | None) -> bool:
-    if value is None:
-        return True
-    try:
-        ts = float(value)
-    except ValueError:
-        return False
-    return abs(time.time() - ts) <= TIMESTAMP_SKEW_S
 
 
 async def read_capped(request: Request, cap: int) -> bytes:
@@ -229,4 +328,29 @@ async def read_capped(request: Request, cap: int) -> bytes:
 
 
 async def start(services: Services) -> WebhookIngress:
-    return WebhookIngress(services)
+    """Warn (log + audit row) per enabled route whose secret is missing; such a route answers
+    403. `webhooks.strict_secrets` turns this into a refusal to start (see `enforce_secrets`)."""
+    ing = WebhookIngress(services)
+    for route in ing.missing_secrets():
+        manifest = ing.routes()[route]
+        log.warning("webhook route %s: secret %s is not set; it will answer 403", route, manifest.secret)
+        await services.audit.record(
+            actor="webhook",
+            action="webhook.secret.missing",
+            decision="warn",
+            reason="secret not set at startup",
+            detail={"route": route[:64]},
+        )
+    return ing
+
+
+def enforce_secrets(services: Services) -> None:
+    """Startup gate: with `webhooks.strict_secrets`, a missing route secret refuses to start."""
+    if not services.settings.webhooks.strict_secrets:
+        return
+    missing = WebhookIngress(services).missing_secrets()
+    if missing:
+        raise RuntimeError(
+            f"webhooks.strict_secrets: route secret(s) missing for {', '.join(missing)} "
+            "(auoreo webhook rotate <route>)"
+        )

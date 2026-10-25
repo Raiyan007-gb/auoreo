@@ -9,13 +9,42 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+import re
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 
 from auoreo.schema.events import COALESCABLE, ServerEvent
 
 log = logging.getLogger(__name__)
 QUEUE_MAX = 256
+CHANNEL_RE = re.compile(r"^(server|session:[A-Za-z0-9_.:-]{1,128}|job:[A-Za-z0-9_.:-]{1,128})$")
+"""Channels (spec §5): `session:<id>` | `job:<id>` (events whose `data.job` is the id) | `server`."""
+
+
+def valid_channel(channel: str) -> bool:
+    return bool(CHANNEL_RE.match(channel))
+
+
+def invalid_channels(channels: Iterable[str]) -> list[str]:
+    return [c for c in channels if not valid_channel(c)]
+
+
+def channel_matches(event: ServerEvent, channels: frozenset[str] | None) -> bool:
+    if channels is None:
+        return True
+    if f"session:{event.aggregate_id}" in channels or (
+        event.aggregate_id == "server" and "server" in channels
+    ):
+        return True
+    job = event.data.get("job") if isinstance(event.data, dict) else None
+    return job is not None and f"job:{job}" in channels
+
+
+def store_channels(channels: frozenset[str] | None) -> frozenset[str] | None:
+    """What the event store can filter by aggregate (job channels need the payload → None)."""
+    if channels is None or any(c.startswith("job:") for c in channels):
+        return None
+    return channels
 
 
 @dataclass(eq=False)
@@ -26,11 +55,7 @@ class Subscriber:
     dropped: int = 0
 
     def wants(self, event: ServerEvent) -> bool:
-        if self.channels is None:
-            return True
-        return f"session:{event.aggregate_id}" in self.channels or (
-            event.aggregate_id == "server" and "server" in self.channels
-        )
+        return channel_matches(event, self.channels)
 
 
 class EventBus:

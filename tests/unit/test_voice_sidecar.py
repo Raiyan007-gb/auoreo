@@ -156,7 +156,7 @@ async def test_api_transcribe_through_the_sidecar(home: Path, workdir: Path, gat
         app = create_app(st, services=svc)
         async with (
             LifespanManager(app),
-            httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+            httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
         ):
             r = await c.post(
                 "/api/voice/transcribe",

@@ -15,7 +15,6 @@ def _get_kwargs(
     *,
     board: None | str | Unset = UNSET,
     status: ListTasksApiKanbanGetStatusType0 | None | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -44,13 +43,6 @@ def _get_kwargs(
     else:
         json_status = status
     params["status"] = json_status
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -105,7 +97,6 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     board: None | str | Unset = UNSET,
     status: ListTasksApiKanbanGetStatusType0 | None | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[KanbanTask]]:
@@ -114,7 +105,6 @@ def sync_detailed(
     Args:
         board (None | str | Unset):
         status (ListTasksApiKanbanGetStatusType0 | None | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -129,7 +119,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         board=board,
         status=status,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -146,7 +135,6 @@ def sync(
     client: AuthenticatedClient | Client,
     board: None | str | Unset = UNSET,
     status: ListTasksApiKanbanGetStatusType0 | None | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[KanbanTask] | None:
@@ -155,7 +143,6 @@ def sync(
     Args:
         board (None | str | Unset):
         status (ListTasksApiKanbanGetStatusType0 | None | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -171,7 +158,6 @@ def sync(
         client=client,
         board=board,
         status=status,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -182,7 +168,6 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     board: None | str | Unset = UNSET,
     status: ListTasksApiKanbanGetStatusType0 | None | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[KanbanTask]]:
@@ -191,7 +176,6 @@ async def asyncio_detailed(
     Args:
         board (None | str | Unset):
         status (ListTasksApiKanbanGetStatusType0 | None | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -206,7 +190,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         board=board,
         status=status,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -221,7 +204,6 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     board: None | str | Unset = UNSET,
     status: ListTasksApiKanbanGetStatusType0 | None | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[KanbanTask] | None:
@@ -230,7 +212,6 @@ async def asyncio(
     Args:
         board (None | str | Unset):
         status (ListTasksApiKanbanGetStatusType0 | None | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -247,7 +228,6 @@ async def asyncio(
             client=client,
             board=board,
             status=status,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

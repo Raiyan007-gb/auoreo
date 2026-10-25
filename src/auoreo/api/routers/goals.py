@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core.db import GoalRow
 from auoreo.goals.service import GoalError, goal_data, goals_of
 from auoreo.schema.goals import GoalAbsorb, GoalCreate, GoalInfo, GoalPatch
@@ -34,7 +34,7 @@ async def list_goals(
     return [_info(r) for r in await goals_of(svc).list(status, limit)]
 
 
-@router.post("", response_model=GoalInfo, status_code=201)
+@router.post("", dependencies=[IDEMPOTENT], response_model=GoalInfo, status_code=201)
 async def create_goal(svc: ServicesDep, body: GoalCreate) -> GoalInfo:
     try:
         return _info(await goals_of(svc).create(body.title, body.description))

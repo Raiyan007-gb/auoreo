@@ -14,7 +14,6 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     suggestion_id: int,
     *,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -26,23 +25,11 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/suggestions/{suggestion_id}/deny".format(
             suggestion_id=quote(str(suggestion_id), safe=""),
         ),
-        "params": params,
         "cookies": cookies,
     }
 
@@ -84,7 +71,6 @@ def sync_detailed(
     suggestion_id: int,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | SuggestionInfo]:
@@ -92,7 +78,6 @@ def sync_detailed(
 
     Args:
         suggestion_id (int):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -106,7 +91,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         suggestion_id=suggestion_id,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -122,7 +106,6 @@ def sync(
     suggestion_id: int,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | SuggestionInfo | None:
@@ -130,7 +113,6 @@ def sync(
 
     Args:
         suggestion_id (int):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -145,7 +127,6 @@ def sync(
     return sync_detailed(
         suggestion_id=suggestion_id,
         client=client,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -155,7 +136,6 @@ async def asyncio_detailed(
     suggestion_id: int,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | SuggestionInfo]:
@@ -163,7 +143,6 @@ async def asyncio_detailed(
 
     Args:
         suggestion_id (int):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -177,7 +156,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         suggestion_id=suggestion_id,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -191,7 +169,6 @@ async def asyncio(
     suggestion_id: int,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | SuggestionInfo | None:
@@ -199,7 +176,6 @@ async def asyncio(
 
     Args:
         suggestion_id (int):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -215,7 +191,6 @@ async def asyncio(
         await asyncio_detailed(
             suggestion_id=suggestion_id,
             client=client,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

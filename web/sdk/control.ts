@@ -79,7 +79,9 @@ export const WS_CLOSE = {
   POLICY: 1008,
   KEEPALIVE: 1011,
   TRY_LATER: 1013,
+  AUTH_EXPIRED: 4001, // transient: re-authenticate, at most 3 retries
   UNAUTHORIZED: 4003,
+  REVOKED: 4401, // terminal
 } as const;
 
 export type ControlState = "connecting" | "open" | "reconnecting" | "unavailable" | "closed";
@@ -127,7 +129,8 @@ function newRequestId(): string {
 /**
  * Connect the WebSocket control plane: send `hello{last_seq, channels}`, answer `ping` with
  * `pong`, resolve `ack`s, forward ServerEvent frames (deduped by seq), reconnect with
- * linear backoff (2s × attempt, 5 attempts), never retry after 4003/1008. `respond()` is
+ * linear backoff (2s × attempt, 5 attempts), never retry after 4003/4401/1008 and at most
+ * 3 times after 4001 (auth expired). `respond()` is
  * idempotent per `request_id` (a second answer for the same id is never sent).
  */
 export function connectControl(opts: ControlOptions): ControlConnection {
@@ -138,6 +141,7 @@ export function connectControl(opts: ControlOptions): ControlConnection {
   let ws: WebSocket | null = null;
   let state: ControlState = "connecting";
   let attempts = 0;
+  let authRetries = 0;
   // null = live only (no replay) on the first connect; afterwards the last seen seq.
   let lastSeq: number | null = opts.lastSeq ?? null;
   let channels = opts.channels ?? null;
@@ -231,7 +235,10 @@ export function connectControl(opts: ControlOptions): ControlConnection {
       ws = null;
       settleAll(false);
       if (stopped) return setState("closed");
-      if (c.code === WS_CLOSE.UNAUTHORIZED || c.code === WS_CLOSE.POLICY) {
+      if (c.code === WS_CLOSE.UNAUTHORIZED || c.code === WS_CLOSE.POLICY || c.code === WS_CLOSE.REVOKED) {
+        return setState("unavailable");
+      }
+      if (c.code === WS_CLOSE.AUTH_EXPIRED && ++authRetries > 3) {
         return setState("unavailable");
       }
       scheduleRetry();

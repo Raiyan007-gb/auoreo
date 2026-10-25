@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.automation.scheduler import JobScheduler, scheduler_of
 from auoreo.automation.views import job_infos, run_info
 from auoreo.schema.chat import CronJobInfo, CronPaused, CronRunAccepted, CronRunInfo
@@ -24,7 +24,12 @@ async def list_jobs(svc: ServicesDep) -> list[CronJobInfo]:
     return await job_infos(scheduler_of(svc))
 
 
-@router.post("/{name}/run", response_model=CronRunAccepted, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{name}/run",
+    dependencies=[IDEMPOTENT],
+    response_model=CronRunAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def run_job(name: str, svc: ServicesDep) -> CronRunAccepted:
     """Fire now (outside the schedule); the run continues in the background."""
     sched = _job(svc, name)

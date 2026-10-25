@@ -12,7 +12,6 @@ from ...types import UNSET, Response, Unset
 
 def _get_kwargs(
     *,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -24,21 +23,9 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "get",
         "url": "/api/voice/status",
-        "params": params,
         "cookies": cookies,
     }
 
@@ -79,7 +66,6 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | VoiceStatus]:
@@ -88,7 +74,6 @@ def sync_detailed(
      Selected stt/tts/vad/wake/desktop backends and their readiness (`check()`).
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -101,7 +86,6 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -116,7 +100,6 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | VoiceStatus | None:
@@ -125,7 +108,6 @@ def sync(
      Selected stt/tts/vad/wake/desktop backends and their readiness (`check()`).
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -139,7 +121,6 @@ def sync(
 
     return sync_detailed(
         client=client,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -148,7 +129,6 @@ def sync(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | VoiceStatus]:
@@ -157,7 +137,6 @@ async def asyncio_detailed(
      Selected stt/tts/vad/wake/desktop backends and their readiness (`check()`).
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -170,7 +149,6 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -183,7 +161,6 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | VoiceStatus | None:
@@ -192,7 +169,6 @@ async def asyncio(
      Selected stt/tts/vad/wake/desktop backends and their readiness (`check()`).
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -207,7 +183,6 @@ async def asyncio(
     return (
         await asyncio_detailed(
             client=client,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

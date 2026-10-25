@@ -1,5 +1,5 @@
 from http import HTTPStatus
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -14,37 +14,24 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     *,
     body: ChatRequest,
-    token: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
-    if not isinstance(idempotency_key, Unset):
-        headers["idempotency-key"] = idempotency_key
-
     if not isinstance(authorization, Unset):
         headers["authorization"] = authorization
+
+    if not isinstance(idempotency_key, Unset):
+        headers["idempotency-key"] = idempotency_key
 
     cookies = {}
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/chat",
-        "params": params,
         "cookies": cookies,
     }
 
@@ -58,7 +45,7 @@ def _get_kwargs(
 
 def _parse_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> ChatAccepted | HTTPValidationError | None:
+) -> Any | ChatAccepted | HTTPValidationError | None:
     if response.status_code == 200:
         response_200 = ChatAccepted.from_dict(response.json())
 
@@ -69,10 +56,18 @@ def _parse_response(
 
         return response_202
 
+    if response.status_code == 409:
+        response_409 = cast(Any, None)
+        return response_409
+
     if response.status_code == 422:
         response_422 = HTTPValidationError.from_dict(response.json())
 
         return response_422
+
+    if response.status_code == 429:
+        response_429 = cast(Any, None)
+        return response_429
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)
@@ -82,7 +77,7 @@ def _parse_response(
 
 def _build_response(
     *, client: AuthenticatedClient | Client, response: httpx.Response
-) -> Response[ChatAccepted | HTTPValidationError]:
+) -> Response[Any | ChatAccepted | HTTPValidationError]:
     return Response(
         status_code=HTTPStatus(response.status_code),
         content=response.content,
@@ -95,19 +90,19 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: ChatRequest,
-    token: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
-) -> Response[ChatAccepted | HTTPValidationError]:
+) -> Response[Any | ChatAccepted | HTTPValidationError]:
     """Chat
 
      Queue a message. Returns immediately; follow progress on `GET /api/events`.
+    `Idempotency-Key` header (or body `request_id`) makes retries safe.
 
     Args:
-        token (None | str | Unset):
-        idempotency_key (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (ChatRequest):
 
@@ -116,14 +111,13 @@ def sync_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ChatAccepted | HTTPValidationError]
+        Response[Any | ChatAccepted | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
         body=body,
-        token=token,
-        idempotency_key=idempotency_key,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -138,19 +132,19 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: ChatRequest,
-    token: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
-) -> ChatAccepted | HTTPValidationError | None:
+) -> Any | ChatAccepted | HTTPValidationError | None:
     """Chat
 
      Queue a message. Returns immediately; follow progress on `GET /api/events`.
+    `Idempotency-Key` header (or body `request_id`) makes retries safe.
 
     Args:
-        token (None | str | Unset):
-        idempotency_key (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (ChatRequest):
 
@@ -159,15 +153,14 @@ def sync(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ChatAccepted | HTTPValidationError
+        Any | ChatAccepted | HTTPValidationError
     """
 
     return sync_detailed(
         client=client,
         body=body,
-        token=token,
-        idempotency_key=idempotency_key,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     ).parsed
 
@@ -176,19 +169,19 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: ChatRequest,
-    token: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
-) -> Response[ChatAccepted | HTTPValidationError]:
+) -> Response[Any | ChatAccepted | HTTPValidationError]:
     """Chat
 
      Queue a message. Returns immediately; follow progress on `GET /api/events`.
+    `Idempotency-Key` header (or body `request_id`) makes retries safe.
 
     Args:
-        token (None | str | Unset):
-        idempotency_key (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (ChatRequest):
 
@@ -197,14 +190,13 @@ async def asyncio_detailed(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        Response[ChatAccepted | HTTPValidationError]
+        Response[Any | ChatAccepted | HTTPValidationError]
     """
 
     kwargs = _get_kwargs(
         body=body,
-        token=token,
-        idempotency_key=idempotency_key,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -217,19 +209,19 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: ChatRequest,
-    token: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
-) -> ChatAccepted | HTTPValidationError | None:
+) -> Any | ChatAccepted | HTTPValidationError | None:
     """Chat
 
      Queue a message. Returns immediately; follow progress on `GET /api/events`.
+    `Idempotency-Key` header (or body `request_id`) makes retries safe.
 
     Args:
-        token (None | str | Unset):
-        idempotency_key (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (ChatRequest):
 
@@ -238,16 +230,15 @@ async def asyncio(
         httpx.TimeoutException: If the request takes longer than Client.timeout.
 
     Returns:
-        ChatAccepted | HTTPValidationError
+        Any | ChatAccepted | HTTPValidationError
     """
 
     return (
         await asyncio_detailed(
             client=client,
             body=body,
-            token=token,
-            idempotency_key=idempotency_key,
             authorization=authorization,
+            idempotency_key=idempotency_key,
             auoreo_token=auoreo_token,
         )
     ).parsed

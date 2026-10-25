@@ -17,7 +17,6 @@ def _get_kwargs(
     pinned: bool | None | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -50,13 +49,6 @@ def _get_kwargs(
     params["limit"] = limit
 
     params["offset"] = offset
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -109,7 +101,6 @@ def sync_detailed(
     pinned: bool | None | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | MemoryFactPage]:
@@ -124,7 +115,6 @@ def sync_detailed(
         pinned (bool | None | Unset):
         limit (int | Unset):  Default: 100.
         offset (int | Unset):  Default: 0.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -142,7 +132,6 @@ def sync_detailed(
         pinned=pinned,
         limit=limit,
         offset=offset,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -162,7 +151,6 @@ def sync(
     pinned: bool | None | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | MemoryFactPage | None:
@@ -177,7 +165,6 @@ def sync(
         pinned (bool | None | Unset):
         limit (int | Unset):  Default: 100.
         offset (int | Unset):  Default: 0.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -196,7 +183,6 @@ def sync(
         pinned=pinned,
         limit=limit,
         offset=offset,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -210,7 +196,6 @@ async def asyncio_detailed(
     pinned: bool | None | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | MemoryFactPage]:
@@ -225,7 +210,6 @@ async def asyncio_detailed(
         pinned (bool | None | Unset):
         limit (int | Unset):  Default: 100.
         offset (int | Unset):  Default: 0.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -243,7 +227,6 @@ async def asyncio_detailed(
         pinned=pinned,
         limit=limit,
         offset=offset,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -261,7 +244,6 @@ async def asyncio(
     pinned: bool | None | Unset = UNSET,
     limit: int | Unset = 100,
     offset: int | Unset = 0,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | MemoryFactPage | None:
@@ -276,7 +258,6 @@ async def asyncio(
         pinned (bool | None | Unset):
         limit (int | Unset):  Default: 100.
         offset (int | Unset):  Default: 0.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -296,7 +277,6 @@ async def asyncio(
             pinned=pinned,
             limit=limit,
             offset=offset,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

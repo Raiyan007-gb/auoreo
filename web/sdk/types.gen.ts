@@ -65,6 +65,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Login */
+        post: operations["login_api_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Logout */
+        post: operations["logout_api_auth_logout_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Auth Status */
+        get: operations["auth_status_api_auth_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/bridge/inbox": {
         parameters: {
             query?: never;
@@ -98,6 +149,7 @@ export interface paths {
         /**
          * Chat
          * @description Queue a message. Returns immediately; follow progress on `GET /api/events`.
+         *     `Idempotency-Key` header (or body `request_id`) makes retries safe.
          */
         post: operations["chat_api_chat_post"];
         delete?: never;
@@ -298,8 +350,10 @@ export interface paths {
         };
         /**
          * Events
-         * @description `Last-Event-ID` wins over `?after_seq=`. Filter with repeated `?session_id=`.
-         *     `follow=false` returns the replay only (useful for tests and scripts).
+         * @description `Last-Event-ID` wins over `?after_seq=`. Filter with repeated `?session_id=` or
+         *     `?channels=` (`session:<id>`, `job:<id>`, `server`). `follow=false` returns the replay
+         *     only. A replay over `http.replay_cap` answers 206 and ends with `cap_warning`: reconnect
+         *     with `Last-Event-ID` to continue.
          */
         get: operations["events_api_events_get"];
         put?: never;
@@ -324,6 +378,26 @@ export interface paths {
         get: operations["latest_api_events_latest_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events:tail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Events Tail
+         * @description Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones.
+         */
+        post: operations["events_tail_api_events_tail_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1567,6 +1641,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/hooks/github/{route}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Receive Github Hook
+         * @description Alias of `/hooks/{route}` that only matches `provider: github` routes.
+         */
+        post: operations["receive_github_hook_hooks_github__route__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hooks/health": {
         parameters: {
             query?: never;
@@ -1591,7 +1685,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Hook Challenge
+         * @description Echo `?challenge=` as text/plain — only for routes with `challenge: true`.
+         */
+        get: operations["hook_challenge_hooks__route__get"];
         put?: never;
         /** Receive Hook */
         post: operations["receive_hook_hooks__route__post"];
@@ -1733,6 +1831,13 @@ export interface components {
              * @description Total audit rows checked
              */
             rows: number;
+        };
+        /** AuthStatus */
+        AuthStatus: {
+            /** Authenticated */
+            authenticated: boolean;
+            /** Secured */
+            secured: boolean;
         };
         /**
          * BanditArmInfo
@@ -2341,6 +2446,25 @@ export interface components {
              */
             url?: string | null;
         };
+        /** EventsTail */
+        EventsTail: {
+            /** Events */
+            events: components["schemas"]["ServerEvent"][];
+            /** Seq */
+            seq: number;
+        };
+        /** EventsTailRequest */
+        EventsTailRequest: {
+            /** After Seq */
+            after_seq?: number | null;
+            /** Channels */
+            channels?: string[] | null;
+            /**
+             * Limit
+             * @default 50
+             */
+            limit: number;
+        };
         /** FactActionResult */
         FactActionResult: {
             /** Id */
@@ -2497,7 +2621,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "accepted" | "ignored" | "duplicate";
+            status: "accepted" | "ignored" | "duplicate" | "delivered" | "failed";
         };
         /** HooksHealth */
         HooksHealth: {
@@ -2560,6 +2684,11 @@ export interface components {
         LatestSeq: {
             /** Seq */
             seq: number;
+        };
+        /** LoginRequest */
+        LoginRequest: {
+            /** Password */
+            password: string;
         };
         /** MailMessage */
         MailMessage: {
@@ -3310,6 +3439,43 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** ServerEvent */
+        ServerEvent: {
+            /**
+             * Aggregate Id
+             * @description Session id, or 'server'
+             */
+            aggregate_id: string;
+            /**
+             * Aggregate Seq
+             * @description Monotonic sequence within the aggregate
+             */
+            aggregate_seq: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Data */
+            data: {
+                [key: string]: unknown;
+            };
+            /**
+             * Id
+             * @description str(seq) — use as SSE id / Last-Event-ID
+             */
+            id: string;
+            /**
+             * Seq
+             * @description Global monotonic sequence (DB autoincrement)
+             */
+            seq: number;
+            /**
+             * Type
+             * @description e.g. run.started, message.delta, tool.completed
+             */
+            type: string;
+        };
         /** SessionCreate */
         SessionCreate: {
             /** Agent */
@@ -3822,9 +3988,7 @@ export type $defs = Record<string, never>;
 export interface operations {
     acp_acp_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -3876,7 +4040,6 @@ export interface operations {
                 session_id?: string | null;
                 action?: string | null;
                 newest_first?: boolean;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -3910,9 +4073,7 @@ export interface operations {
     };
     audit_verify_api_audit_verify_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -3943,10 +4104,106 @@ export interface operations {
             };
         };
     };
-    inbox_api_bridge_inbox_post: {
+    login_api_auth_login_post: {
         parameters: {
             query?: never;
             header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatus"];
+                };
+            };
+            /** @description Wrong password */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_api_auth_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatus"];
+                };
+            };
+        };
+    };
+    auth_status_api_auth_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inbox_api_bridge_inbox_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
             path?: never;
             cookie?: never;
         };
@@ -4006,12 +4263,11 @@ export interface operations {
     };
     chat_api_chat_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
-                "idempotency-key"?: string | null;
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -4042,6 +4298,13 @@ export interface operations {
                     "application/json": components["schemas"]["ChatAccepted"];
                 };
             };
+            /** @description A request with the same idempotency key is still running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4051,13 +4314,18 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description Session queue full (`Retry-After`) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_commands_api_commands_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4090,9 +4358,7 @@ export interface operations {
     };
     list_jobs_api_cron_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4125,9 +4391,7 @@ export interface operations {
     };
     pause_job_api_cron__name__pause_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4162,9 +4426,7 @@ export interface operations {
     };
     resume_job_api_cron__name__resume_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4199,11 +4461,11 @@ export interface operations {
     };
     run_job_api_cron__name__run_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path: {
                 name: string;
@@ -4238,7 +4500,6 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -4278,7 +4539,6 @@ export interface operations {
                 status?: string | null;
                 kind?: string | null;
                 limit?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -4314,10 +4574,11 @@ export interface operations {
         parameters: {
             query?: {
                 dry_run?: boolean;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path: {
                 delivery_id: number;
@@ -4350,9 +4611,7 @@ export interface operations {
     };
     doctor_api_doctor_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4385,9 +4644,7 @@ export interface operations {
     };
     environments_api_environments_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4421,14 +4678,15 @@ export interface operations {
     events_api_events_get: {
         parameters: {
             query?: {
+                follow?: boolean;
                 after_seq?: number;
                 session_id?: string[] | null;
-                follow?: boolean;
-                token?: string | null;
+                /** @description `session:<id>`, `job:<id>`, `server` (comma-separated) */
+                channels?: string[] | null;
             };
             header?: {
-                "last-event-id"?: string | null;
                 authorization?: string | null;
+                "last-event-id"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -4446,6 +4704,13 @@ export interface operations {
                     "text/event-stream": unknown;
                 };
             };
+            /** @description Replay truncated at `http.replay_cap`; a `cap_warning` event ends it */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -4459,9 +4724,7 @@ export interface operations {
     };
     latest_api_events_latest_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4492,12 +4755,48 @@ export interface operations {
             };
         };
     };
+    events_tail_api_events_tail_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EventsTailRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventsTail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_goals_api_goals_get: {
         parameters: {
             query?: {
                 status?: ("active" | "paused" | "done" | "dropped" | "absorbed" | "all") | null;
                 limit?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -4531,11 +4830,11 @@ export interface operations {
     };
     create_goal_api_goals_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -4570,9 +4869,7 @@ export interface operations {
     };
     get_goal_api_goals__goal_id__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4607,9 +4904,7 @@ export interface operations {
     };
     update_goal_api_goals__goal_id__patch: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4648,9 +4943,7 @@ export interface operations {
     };
     absorb_goal_api_goals__goal_id__absorb_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4689,9 +4982,7 @@ export interface operations {
     };
     listing_api_harness_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4724,9 +5015,7 @@ export interface operations {
     };
     reload_api_harness_reload_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4759,9 +5048,7 @@ export interface operations {
     };
     by_kind_api_harness__kind__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4819,7 +5106,6 @@ export interface operations {
             query?: {
                 board?: string | null;
                 status?: ("ready" | "claimed" | "blocked" | "done") | null;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -4853,11 +5139,11 @@ export interface operations {
     };
     create_task_api_kanban_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -4892,9 +5178,7 @@ export interface operations {
     };
     curator_report_api_memory_curator_report_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -4930,7 +5214,6 @@ export interface operations {
             query?: {
                 dry_run?: boolean;
                 force?: boolean;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -4970,7 +5253,6 @@ export interface operations {
                 pinned?: boolean | null;
                 limit?: number;
                 offset?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -5004,11 +5286,11 @@ export interface operations {
     };
     add_fact_api_memory_facts_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -5045,9 +5327,7 @@ export interface operations {
     };
     feedback_fact_api_memory_facts__fact_id__feedback_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5086,9 +5366,7 @@ export interface operations {
     };
     forget_fact_api_memory_facts__fact_id__forget_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5123,9 +5401,7 @@ export interface operations {
     };
     pin_fact_api_memory_facts__fact_id__pin_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5164,9 +5440,7 @@ export interface operations {
     };
     memory_files_api_memory_files_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5202,7 +5476,6 @@ export interface operations {
             query: {
                 q: string;
                 limit?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -5238,7 +5511,6 @@ export interface operations {
         parameters: {
             query?: {
                 session_id?: string | null;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -5272,9 +5544,7 @@ export interface operations {
     };
     reply_api_permissions__request_id__reply_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5315,9 +5585,7 @@ export interface operations {
     };
     list_plugins_api_plugins_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5350,11 +5618,11 @@ export interface operations {
     };
     pair_api_plugins__name__pair_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path: {
                 name: string;
@@ -5391,9 +5659,7 @@ export interface operations {
     };
     reload_plugin_api_plugins__name__reload_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5428,9 +5694,7 @@ export interface operations {
     };
     plugin_skills_api_plugins__name__skills_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5465,9 +5729,7 @@ export interface operations {
     };
     start_plugin_api_plugins__name__start_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5502,9 +5764,7 @@ export interface operations {
     };
     stop_plugin_api_plugins__name__stop_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5539,9 +5799,7 @@ export interface operations {
     };
     bandit_status_api_policy_bandit_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5574,9 +5832,7 @@ export interface operations {
     };
     bandit_reset_api_policy_bandit_reset_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5615,7 +5871,6 @@ export interface operations {
         parameters: {
             query?: {
                 session_id?: string | null;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -5649,9 +5904,7 @@ export interface operations {
     };
     answer_api_questions__request_id__answer_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5692,9 +5945,7 @@ export interface operations {
     };
     list_peers_api_rtc_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5727,9 +5978,7 @@ export interface operations {
     };
     ice_api_rtc_ice_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5762,11 +6011,11 @@ export interface operations {
     };
     join_api_rtc_join_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -5829,9 +6078,7 @@ export interface operations {
     };
     leave_api_rtc_join__join_id__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5866,11 +6113,11 @@ export interface operations {
     };
     offer_api_rtc_offer_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -5933,9 +6180,7 @@ export interface operations {
     };
     close_api_rtc__rtc_id__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -5973,7 +6218,6 @@ export interface operations {
             query?: {
                 limit?: number;
                 archived?: boolean;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6007,11 +6251,11 @@ export interface operations {
     };
     create_session_api_sessions_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -6046,9 +6290,7 @@ export interface operations {
     };
     get_session_api_sessions__session_id__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6083,9 +6325,7 @@ export interface operations {
     };
     delete_api_sessions__session_id__delete: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6122,7 +6362,6 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6158,9 +6397,7 @@ export interface operations {
     };
     archive_api_sessions__session_id__archive_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6195,9 +6432,7 @@ export interface operations {
     };
     cancel_api_sessions__session_id__cancel_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6234,9 +6469,7 @@ export interface operations {
     };
     compact_api_sessions__session_id__compact_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6277,7 +6510,6 @@ export interface operations {
         parameters: {
             query?: {
                 format?: "json" | "md";
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6314,11 +6546,11 @@ export interface operations {
     };
     fork_api_sessions__session_id__fork_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path: {
                 session_id: string;
@@ -6351,9 +6583,7 @@ export interface operations {
     };
     get_messages_api_sessions__session_id__messages_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6388,9 +6618,7 @@ export interface operations {
     };
     unarchive_api_sessions__session_id__unarchive_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6428,7 +6656,6 @@ export interface operations {
             query?: {
                 status?: ("pending" | "accepted" | "denied" | "expired" | "tombstoned" | "all") | null;
                 limit?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6462,11 +6689,11 @@ export interface operations {
     };
     propose_suggestion_api_suggestions_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -6501,9 +6728,7 @@ export interface operations {
     };
     accept_suggestion_api_suggestions__suggestion_id__accept_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6538,9 +6763,7 @@ export interface operations {
     };
     deny_suggestion_api_suggestions__suggestion_id__deny_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6575,9 +6798,7 @@ export interface operations {
     };
     list_teams_api_teams_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6610,9 +6831,7 @@ export interface operations {
     };
     get_team_api_teams__team_id__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6649,7 +6868,6 @@ export interface operations {
         parameters: {
             query?: {
                 prefix?: string;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6685,9 +6903,7 @@ export interface operations {
     };
     board_get_api_teams__team_id__board__key__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6723,9 +6939,7 @@ export interface operations {
     };
     board_put_api_teams__team_id__board__key__put: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6767,7 +6981,6 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6805,7 +7018,6 @@ export interface operations {
         parameters: {
             query?: {
                 member?: string | null;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6845,7 +7057,6 @@ export interface operations {
                 session_id?: string | null;
                 limit?: number;
                 children?: boolean;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6881,7 +7092,6 @@ export interface operations {
         parameters: {
             query?: {
                 days?: number;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -6915,9 +7125,7 @@ export interface operations {
     };
     list_meetings_api_voice_meetings_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -6950,11 +7158,11 @@ export interface operations {
     };
     start_meeting_api_voice_meetings_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -7010,9 +7218,7 @@ export interface operations {
     };
     get_meeting_api_voice_meetings__meeting_id__get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7068,9 +7274,7 @@ export interface operations {
     };
     attach_peer_api_voice_meetings__meeting_id__attach_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7130,9 +7334,7 @@ export interface operations {
     };
     upload_audio_api_voice_meetings__meeting_id__audio_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7197,9 +7399,7 @@ export interface operations {
     };
     stop_meeting_api_voice_meetings__meeting_id__stop_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7255,9 +7455,7 @@ export interface operations {
     };
     summarize_meeting_api_voice_meetings__meeting_id__summarize_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7313,9 +7511,7 @@ export interface operations {
     };
     speak_api_voice_speak_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7359,9 +7555,7 @@ export interface operations {
     };
     voice_status_api_voice_status_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7398,7 +7592,6 @@ export interface operations {
                 language?: string | null;
                 session_id?: string | null;
                 translate_to?: string | null;
-                token?: string | null;
             };
             header?: {
                 authorization?: string | null;
@@ -7448,9 +7641,7 @@ export interface operations {
     };
     list_webhooks_api_webhooks_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7483,9 +7674,7 @@ export interface operations {
     };
     welcome_event_api_welcome_event_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7518,27 +7707,7 @@ export interface operations {
             };
         };
     };
-    hooks_health_hooks_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HooksHealth"];
-                };
-            };
-        };
-    };
-    receive_hook_hooks__route__post: {
+    receive_github_hook_hooks_github__route__post: {
         parameters: {
             query?: never;
             header?: never;
@@ -7549,7 +7718,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Ignored by event/filter, or a duplicate delivery id */
+            /** @description Ignored, duplicate, delivered (deliver_only) or a challenge */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7567,14 +7736,28 @@ export interface operations {
                     "application/json": components["schemas"]["HookAck"];
                 };
             };
-            /** @description Missing or bad signature */
+            /** @description Body is not a JSON object */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/bad signature, or a missing/stale timestamp */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Unknown or disabled route */
+            /** @description Route secret not configured (fail closed) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or disabled route (or provider mismatch on /hooks/github/…) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7611,8 +7794,169 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description deliver_only: every delivery target failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    hooks_health_hooks_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HooksHealth"];
+                };
+            };
+        };
+    };
+    hook_challenge_hooks__route__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": string;
+                };
+            };
+            /** @description Unknown route */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not a challenge route */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    receive_hook_hooks__route__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                route: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Ignored, duplicate, delivered (deliver_only) or a challenge */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookAck"];
+                };
+            };
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HookAck"];
+                };
+            };
+            /** @description Body is not a JSON object */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing/bad signature, or a missing/stale timestamp */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Route secret not configured (fail closed) */
-            503: {
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown or disabled route (or provider mismatch on /hooks/github/…) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Body over max_body_bytes */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not JSON */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Route rate limit exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description deliver_only: every delivery target failed */
+            502: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7622,9 +7966,7 @@ export interface operations {
     };
     chat_completions_v1_chat_completions_post: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };
@@ -7697,9 +8039,7 @@ export interface operations {
     };
     list_models_v1_models_get: {
         parameters: {
-            query?: {
-                token?: string | null;
-            };
+            query?: never;
             header?: {
                 authorization?: string | null;
             };

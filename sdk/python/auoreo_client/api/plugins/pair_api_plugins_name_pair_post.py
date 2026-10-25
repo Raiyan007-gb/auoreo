@@ -16,35 +16,26 @@ def _get_kwargs(
     name: str,
     *,
     body: PluginPair,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
     if not isinstance(authorization, Unset):
         headers["authorization"] = authorization
 
+    if not isinstance(idempotency_key, Unset):
+        headers["idempotency-key"] = idempotency_key
+
     cookies = {}
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
-
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/plugins/{name}/pair".format(
             name=quote(str(name), safe=""),
         ),
-        "params": params,
         "cookies": cookies,
     }
 
@@ -91,8 +82,8 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: PluginPair,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | PluginPaired]:
     """Pair
@@ -101,8 +92,9 @@ def sync_detailed(
 
     Args:
         name (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (PluginPair):
 
@@ -117,8 +109,8 @@ def sync_detailed(
     kwargs = _get_kwargs(
         name=name,
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -134,8 +126,8 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: PluginPair,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | PluginPaired | None:
     """Pair
@@ -144,8 +136,9 @@ def sync(
 
     Args:
         name (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (PluginPair):
 
@@ -161,8 +154,8 @@ def sync(
         name=name,
         client=client,
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     ).parsed
 
@@ -172,8 +165,8 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: PluginPair,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | PluginPaired]:
     """Pair
@@ -182,8 +175,9 @@ async def asyncio_detailed(
 
     Args:
         name (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (PluginPair):
 
@@ -198,8 +192,8 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         name=name,
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -213,8 +207,8 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: PluginPair,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | PluginPaired | None:
     """Pair
@@ -223,8 +217,9 @@ async def asyncio(
 
     Args:
         name (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (PluginPair):
 
@@ -241,8 +236,8 @@ async def asyncio(
             name=name,
             client=client,
             body=body,
-            token=token,
             authorization=authorization,
+            idempotency_key=idempotency_key,
             auoreo_token=auoreo_token,
         )
     ).parsed

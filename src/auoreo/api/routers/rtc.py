@@ -10,7 +10,7 @@ from typing import Any, NoReturn
 
 from fastapi import APIRouter, HTTPException, Response, status
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core.services import Services
 from auoreo.rtc.peers import RtcLimitError, RtcManager, RtcUnavailable, SdpTooLarge, manager_for
 from auoreo.rtc.turn import ice_servers
@@ -42,6 +42,7 @@ def manager(svc: Services) -> RtcManager:
 
 @router.post(
     "/offer",
+    dependencies=[IDEMPOTENT],
     response_model=RtcAnswer,
     status_code=status.HTTP_201_CREATED,
     responses={
@@ -116,6 +117,7 @@ def transport(svc: Services) -> Any:
 
 @router.post(
     "/join",
+    dependencies=[IDEMPOTENT],
     response_model=RtcJoinInfo,
     status_code=status.HTTP_201_CREATED,
     responses={

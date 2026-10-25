@@ -170,7 +170,10 @@ async def test_instrument_app_adds_server_spans(local: None, settings: Settings,
 
     settings.otel_mode = "local"
     app = create_app(settings, gateway=FakeGateway(), cwd=workdir)
-    async with LifespanManager(app), AsyncClient(transport=ASGITransport(app=app), base_url="http://t") as c:
+    async with (
+        LifespanManager(app),
+        AsyncClient(transport=ASGITransport(app=app), base_url="http://127.0.0.1") as c,
+    ):
         assert (await c.get("/api/sessions")).status_code == 200
     names = [s.name for s in obs.memory_exporter().get_finished_spans()]
     assert any("/api/sessions" in n for n in names)

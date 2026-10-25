@@ -14,7 +14,6 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     name: str,
     *,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -26,23 +25,11 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "get",
         "url": "/api/plugins/{name}/skills".format(
             name=quote(str(name), safe=""),
         ),
-        "params": params,
         "cookies": cookies,
     }
 
@@ -89,7 +76,6 @@ def sync_detailed(
     name: str,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[PluginSkillInfo]]:
@@ -97,7 +83,6 @@ def sync_detailed(
 
     Args:
         name (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -111,7 +96,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         name=name,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -127,7 +111,6 @@ def sync(
     name: str,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[PluginSkillInfo] | None:
@@ -135,7 +118,6 @@ def sync(
 
     Args:
         name (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -150,7 +132,6 @@ def sync(
     return sync_detailed(
         name=name,
         client=client,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -160,7 +141,6 @@ async def asyncio_detailed(
     name: str,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[PluginSkillInfo]]:
@@ -168,7 +148,6 @@ async def asyncio_detailed(
 
     Args:
         name (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -182,7 +161,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         name=name,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -196,7 +174,6 @@ async def asyncio(
     name: str,
     *,
     client: AuthenticatedClient | Client,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[PluginSkillInfo] | None:
@@ -204,7 +181,6 @@ async def asyncio(
 
     Args:
         name (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -220,7 +196,6 @@ async def asyncio(
         await asyncio_detailed(
             name=name,
             client=client,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )
