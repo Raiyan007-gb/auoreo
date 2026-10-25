@@ -106,6 +106,15 @@ class Settings(BaseSettings):
     backends: dict[str, str] = Field(default_factory=dict)
     """Backend selection per kind, e.g. {"capture": "mss", "browser": "playwright"}; unset kinds
     fall back to the manifest marked `default: true`, then to the only candidate."""
+    # --- M4e
+    rtc_max_peers: int = 8
+    """Concurrent WebRTC peers (`POST /api/rtc/offer`); one more answers 429."""
+    rtc_ice_servers: list[str] = Field(default_factory=lambda: ["stun:stun.l.google.com:19302"])
+    """STUN/TURN URLs for the server peer; `[]` = host candidates only (loopback/LAN)."""
+    rtc_audio_level_interval_s: float = 1.0
+    """Window (and minimum spacing) of `rtc.audio_level` events per inbound audio track."""
+    rtc_speaking_rms: float = 0.02
+    """Normalised RMS (0..1) above which a window counts as `speaking`."""
 
     # --- M4b
     allow_private_urls: bool = False

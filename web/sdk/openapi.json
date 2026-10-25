@@ -635,6 +635,114 @@
         "title": "ReloadResult",
         "type": "object"
       },
+      "RtcAnswer": {
+        "properties": {
+          "rtc_id": {
+            "title": "Rtc Id",
+            "type": "string"
+          },
+          "sdp": {
+            "title": "Sdp",
+            "type": "string"
+          },
+          "type": {
+            "const": "answer",
+            "default": "answer",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rtc_id",
+          "sdp"
+        ],
+        "title": "RtcAnswer",
+        "type": "object"
+      },
+      "RtcClosed": {
+        "properties": {
+          "closed": {
+            "title": "Closed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "closed"
+        ],
+        "title": "RtcClosed",
+        "type": "object"
+      },
+      "RtcOffer": {
+        "additionalProperties": false,
+        "description": "Client SDP offer. The client must create the `auoreo-events` data channel first.",
+        "properties": {
+          "sdp": {
+            "description": "Offer SDP (\u2264 64 KiB, else 413); never logged",
+            "title": "Sdp",
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Auto-subscribe the events channel to it",
+            "title": "Session Id"
+          },
+          "type": {
+            "const": "offer",
+            "default": "offer",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sdp"
+        ],
+        "title": "RtcOffer",
+        "type": "object"
+      },
+      "RtcPeerInfo": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "rtc_id": {
+            "title": "Rtc Id",
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "state": {
+            "description": "RTCPeerConnection.connectionState",
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rtc_id",
+          "session_id",
+          "state",
+          "created_at"
+        ],
+        "title": "RtcPeerInfo",
+        "type": "object"
+      },
       "SearchHit": {
         "properties": {
           "id": {
@@ -2383,6 +2491,283 @@
         "summary": "Answer",
         "tags": [
           "questions"
+        ]
+      }
+    },
+    "/api/rtc": {
+      "get": {
+        "operationId": "list_peers_api_rtc_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RtcPeerInfo"
+                  },
+                  "title": "Response List Peers Api Rtc Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Peers",
+        "tags": [
+          "rtc"
+        ]
+      }
+    },
+    "/api/rtc/offer": {
+      "post": {
+        "description": "Answer an SDP offer (non-trickle: send the offer after ICE gathering completes).",
+        "operationId": "offer_api_rtc_offer_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RtcOffer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RtcAnswer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "413": {
+            "description": "SDP over 64 KiB"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Too many peers (`rtc_max_peers`)"
+          },
+          "501": {
+            "description": "aiortc not installed: `install auoreo[rtc]`"
+          }
+        },
+        "summary": "Offer",
+        "tags": [
+          "rtc"
+        ]
+      }
+    },
+    "/api/rtc/{rtc_id}": {
+      "delete": {
+        "description": "Idempotent: 200 with `closed: false` for an unknown or already-closed peer.",
+        "operationId": "close_api_rtc__rtc_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rtc_id",
+            "required": true,
+            "schema": {
+              "title": "Rtc Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RtcClosed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Close",
+        "tags": [
+          "rtc"
         ]
       }
     },

@@ -255,6 +255,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rtc": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Peers */
+        get: operations["list_peers_api_rtc_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rtc/offer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Offer
+         * @description Answer an SDP offer (non-trickle: send the offer after ICE gathering completes).
+         */
+        post: operations["offer_api_rtc_offer_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rtc/{rtc_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Close
+         * @description Idempotent: 200 with `closed: false` for an unknown or already-closed peer.
+         */
+        delete: operations["close_api_rtc__rtc_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sessions": {
         parameters: {
             query?: never;
@@ -689,6 +746,63 @@ export interface components {
             errors: string[];
             /** Generation */
             generation: number;
+        };
+        /** RtcAnswer */
+        RtcAnswer: {
+            /** Rtc Id */
+            rtc_id: string;
+            /** Sdp */
+            sdp: string;
+            /**
+             * Type
+             * @default answer
+             * @constant
+             */
+            type: "answer";
+        };
+        /** RtcClosed */
+        RtcClosed: {
+            /** Closed */
+            closed: boolean;
+        };
+        /**
+         * RtcOffer
+         * @description Client SDP offer. The client must create the `auoreo-events` data channel first.
+         */
+        RtcOffer: {
+            /**
+             * Sdp
+             * @description Offer SDP (≤ 64 KiB, else 413); never logged
+             */
+            sdp: string;
+            /**
+             * Session Id
+             * @description Auto-subscribe the events channel to it
+             */
+            session_id?: string | null;
+            /**
+             * Type
+             * @default offer
+             * @constant
+             */
+            type: "offer";
+        };
+        /** RtcPeerInfo */
+        RtcPeerInfo: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Rtc Id */
+            rtc_id: string;
+            /** Session Id */
+            session_id: string | null;
+            /**
+             * State
+             * @description RTCPeerConnection.connectionState
+             */
+            state: string;
         };
         /** SearchHit */
         SearchHit: {
@@ -1360,6 +1474,138 @@ export interface operations {
                     "application/json": {
                         [key: string]: boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_peers_api_rtc_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RtcPeerInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    offer_api_rtc_offer_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RtcOffer"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RtcAnswer"];
+                };
+            };
+            /** @description SDP over 64 KiB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many peers (`rtc_max_peers`) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description aiortc not installed: `install auoreo[rtc]` */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    close_api_rtc__rtc_id__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                rtc_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RtcClosed"];
                 };
             };
             /** @description Validation Error */

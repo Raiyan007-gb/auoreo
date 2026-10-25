@@ -168,3 +168,29 @@ class CommandInfo(BaseModel):
     description: str
     handler: Literal["prompt", "compact", "model", "plan"]
     args_hint: str
+
+
+# --- M4e WebRTC signaling
+class RtcOffer(_In):
+    """Client SDP offer. The client must create the `auoreo-events` data channel first."""
+
+    sdp: str = Field(description="Offer SDP (≤ 64 KiB, else 413); never logged")
+    type: Literal["offer"] = "offer"
+    session_id: str | None = Field(default=None, description="Auto-subscribe the events channel to it")
+
+
+class RtcAnswer(BaseModel):
+    rtc_id: str
+    sdp: str
+    type: Literal["answer"] = "answer"
+
+
+class RtcPeerInfo(BaseModel):
+    rtc_id: str
+    session_id: str | None
+    state: str = Field(description="RTCPeerConnection.connectionState")
+    created_at: datetime
+
+
+class RtcClosed(BaseModel):
+    closed: bool
