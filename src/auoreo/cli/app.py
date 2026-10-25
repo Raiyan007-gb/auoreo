@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from auoreo import __version__
-from auoreo.cli.commands import config, doctor, harness, memory, run, secrets, serve, session
+from auoreo.cli.commands import config, db, doctor, harness, memory, run, secrets, serve, session, stats
 
 app = typer.Typer(
     help="AUOREO — filesystem-native agent harness.",
@@ -21,6 +21,8 @@ app.add_typer(config.app, name="config", help="Read and write settings.json.")
 app.add_typer(session.app, name="session", help="List sessions.")
 app.add_typer(secrets.app, name="secrets", help="Manage the encrypted secret store.")
 app.add_typer(memory.app, name="memory", help="Search and add long-term memory.")
+app.command("stats")(stats.stats)
+app.add_typer(db.app, name="db", help="Migrate and inspect state.db (Alembic).")
 
 
 @app.command("version")

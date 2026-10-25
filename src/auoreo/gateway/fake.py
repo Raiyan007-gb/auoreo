@@ -31,9 +31,11 @@ class Scripted:
 class FakeGateway:
     name = "fake"
 
-    def __init__(self, script: list[Scripted] | None = None) -> None:
+    def __init__(self, script: list[Scripted] | None = None, context_window_tokens: int = 128_000) -> None:
         self.script: deque[Scripted] = deque(script or [])
+        self.compaction_script: deque[Scripted] = deque()
         self.requests: list[LLMRequest] = []
+        self.context_window_tokens = context_window_tokens
         self._n = 0
 
     def queue(self, *items: Scripted) -> None:
@@ -41,7 +43,10 @@ class FakeGateway:
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[StreamItem]:
         self.requests.append(request)
-        item = self.script.popleft() if self.script else self._auto(request)
+        if request.metadata.get("purpose") == "compaction":  # aux call never eats the main script
+            item = self.compaction_script.popleft() if self.compaction_script else _summary(request)
+        else:
+            item = self.script.popleft() if self.script else self._auto(request)
         if item.error:
             raise item.error
         for word in _chunks(item.text):
@@ -74,6 +79,24 @@ class FakeGateway:
 
     def count_tokens(self, model: str, text: str) -> int:
         return max(1, len(text) // 4)
+
+    def context_window(self, model: str) -> int:
+        return self.context_window_tokens
+
+    def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
+        return 0.0
+
+
+def _summary(request: LLMRequest) -> Scripted:
+    """Deterministic compaction summary: the template headings plus a short digest."""
+    transcript = str(request.messages[1].get("content") or "") if len(request.messages) > 1 else ""
+    lines = [ln for ln in transcript.splitlines() if ln.strip()]
+    heads = ("Objective", "Key concepts", "Files and code", "Errors and fixes", "Pending/blocked")
+    body = [f"## {h}\n- (fake summary)" for h in heads]
+    body.append(f"## Current work\n- {len(lines)} transcript lines summarized")
+    body.append(f'## Next step\n> "{(lines[-1] if lines else "")[:120]}"')
+    body.append("## Critical context\n- none")
+    return Scripted(text="\n\n".join(body))
 
 
 def _chunks(text: str, size: int = 16) -> list[str]:

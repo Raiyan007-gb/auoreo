@@ -60,6 +60,10 @@ class LoopSettings(BaseModel):
     outer_loop_errors: int = 8
     doom_loop_repeats: int = 3
     tool_result_inline_chars: int = 64_000
+    compaction_threshold_ratio: float = 0.80
+    """Only used when set explicitly in settings.json: auto-compact at ratio × window."""
+    compaction_retain_ratio: float = 0.16
+    compaction_enabled: bool = True
 
 
 class Settings(BaseSettings):
@@ -92,6 +96,8 @@ class Settings(BaseSettings):
     loop: LoopSettings = Field(default_factory=LoopSettings)
     extra_roots: list[Path] = Field(default_factory=list)
     """Additional definition roots (lowest precedence after bundled), e.g. `.claude`."""
+    max_cost_usd: float | None = None
+    """Per-session spend cap; a turn that crosses it finishes as `blocked` (code BUDGET)."""
 
     @property
     def db_path(self) -> Path:

@@ -13,17 +13,21 @@ import json
 import logging
 import uuid
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import func, select
 
 from auoreo.core.db import MessageRow
 from auoreo.core.permissions import PermissionEngine
+from auoreo.core.usage import UsageLedger
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Finish, LLMRequest, TextDelta, ToolCall, Usage, tool_schema
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
+from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
 from auoreo.runtime.inbox import Inbox
 from auoreo.tools.context import SessionState, ToolContext, ToolResult
 from auoreo.tools.executor import ToolExecutor, ToolOutcome
@@ -70,6 +74,8 @@ class AgentRunner:
     def __init__(self, services: Services) -> None:
         self.s = services
         self.executor = ToolExecutor(services)
+        self.usage = UsageLedger(services.db, services.gateway.price)
+        self.compaction = CompactionService(services, self.usage)
 
     # ------------------------------------------------------------ persistence
     async def load_history(self, session_id: str) -> list[dict[str, Any]]:
@@ -152,7 +158,7 @@ class AgentRunner:
         user_msg = {"role": "user", "content": text}
         await self._persist(rt, user_msg)
         await self.s.emit(sid, "message.created", {"run_id": run_id, "role": "user", "content": text})
-        turn_user_idx = len(rt.history) - 1
+        turn_msg = rt.history[-1]  # located by identity each step: compaction moves indices
         if self.s.memory is not None:
             await self.s.memory.record_message(sid, "user", text)
 
@@ -181,7 +187,7 @@ class AgentRunner:
             emit=emit,
             services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec},
         )
-        result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_user_idx)
+        result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_msg)
         if self.s.memory is not None and result.text:
             await self.s.memory.record_message(sid, "assistant", result.text)
         await self.s.set_session_status(sid, "idle")
@@ -204,7 +210,7 @@ class AgentRunner:
         ctx: ToolContext,
         run_id: str,
         context: str,
-        turn_user_idx: int,
+        turn_msg: dict[str, Any],
     ) -> TurnResult:
         sid = rt.session_id
         loop_cfg = self.s.settings.loop
@@ -223,15 +229,13 @@ class AgentRunner:
                     )
                 last_step = step == max_steps
                 tools = self._available(spec, rt.state)
-                request = self._request(spec, rt, tools, context, turn_user_idx, last_step, run_id)
-                await self.s.emit(
-                    sid,
-                    "step.started",
-                    {"run_id": run_id, "step": step, "tools": len(request.tools)},
-                )
-                text, calls = await self._stream(sid, run_id, request)
-                if last_step:
-                    calls = []  # tool calls on the forced final step are ignored
+                build = partial(self._request, spec, rt, tools, context, turn_msg, last_step, run_id)
+                await self.compaction.pre_step(rt, build())  # `build` re-renders after compaction
+                await self.s.emit(sid, "step.started", {"run_id": run_id, "step": step, "tools": len(tools)})
+                text, calls = await self._stream_step(rt, run_id, build)
+                over_budget = await self.usage.over_budget(sid, self.s.settings.max_cost_usd)
+                if last_step or over_budget:
+                    calls = []  # forced final step / budget: no further tool calls
                 assistant: dict[str, Any] = {"role": "assistant", "content": text or None}
                 if calls:
                     assistant["tool_calls"] = [
@@ -254,6 +258,9 @@ class AgentRunner:
                     },
                 )
                 final_text = text or final_text
+                if over_budget:
+                    msg = f"session cost reached max_cost_usd={self.s.settings.max_cost_usd}"
+                    return TurnResult(run_id, "blocked", final_text, {"code": "BUDGET", "message": msg})
                 if not calls:
                     status: TurnStatus = "max_steps" if last_step and max_steps > 1 else "completed"
                     return TurnResult(run_id, status, final_text)
@@ -290,6 +297,8 @@ class AgentRunner:
             return TurnResult(run_id, "max_steps", final_text)
         except GatewayError as exc:
             return TurnResult(run_id, "failed", final_text, {"code": exc.code, "message": exc.message})
+        except CompactionError as exc:  # only raised once the circuit breaker trips
+            return TurnResult(run_id, "failed", final_text, {"code": "COMPACTION", "message": exc.reason})
         except asyncio.CancelledError:
             for call in open_calls:
                 await self._persist(
@@ -319,11 +328,12 @@ class AgentRunner:
         rt: SessionRuntime,
         tools: list[ToolDef],
         context: str,
-        turn_user_idx: int,
+        turn_msg: dict[str, Any],
         last_step: bool,
         run_id: str,
     ) -> LLMRequest:
         msgs: list[dict[str, Any]] = [{"role": "system", "content": spec.system_prompt}]
+        turn_user_idx = turn_index(rt.history, turn_msg)
         for i, m in enumerate(rt.history):
             if i == turn_user_idx and context:
                 m = {**m, "content": f"<context>\n{context}\n</context>\n\n{m['content']}"}
@@ -344,6 +354,17 @@ class AgentRunner:
             metadata={"session_id": rt.session_id, "run_id": run_id},
         )
 
+    async def _stream_step(
+        self, rt: SessionRuntime, run_id: str, build: Callable[[], LLMRequest]
+    ) -> tuple[str, list[ToolCall]]:
+        """Stream one step; on a provider CONTEXT overflow compact (retain=0) and retry once."""
+        request = build()
+        try:
+            return await self._stream(rt.session_id, run_id, request)
+        except GatewayError as exc:
+            await self.compaction.recover_overflow(rt, exc, request.model)  # or re-raises
+        return await self._stream(rt.session_id, run_id, build())
+
     async def _stream(self, sid: str, run_id: str, request: LLMRequest) -> tuple[str, list[ToolCall]]:
         parts: list[str] = []
         calls: list[ToolCall] = []
@@ -355,6 +376,7 @@ class AgentRunner:
                 case ToolCall():
                     calls.append(item)
                 case Usage():
+                    await self.usage.record(sid, run_id, request.model, item)
                     await self.s.emit(
                         sid,
                         "usage",

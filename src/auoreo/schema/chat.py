@@ -94,3 +94,54 @@ class Health(BaseModel):
     version: str
     generation: int
     gateway: str
+
+
+class UsageRecord(BaseModel):
+    id: int
+    session_id: str
+    run_id: str
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    cached_tokens: int
+    cost_usd: float | None
+    estimated: bool
+    created_at: datetime
+
+
+class UsageTotals(BaseModel):
+    key: str
+    calls: int
+    prompt_tokens: int
+    completion_tokens: int
+    cost_usd: float
+
+
+class UsageSummary(BaseModel):
+    days: int
+    total: UsageTotals
+    by_model: list[UsageTotals]
+    by_session: list[UsageTotals]
+
+
+class CompactRequest(_In):
+    retain_ratio: float | None = Field(default=None, ge=0, le=1)
+
+
+class CompactionOut(BaseModel):
+    compaction_id: str
+    pre_tokens: int
+    post_tokens: int
+    archived: int
+    pruned: int
+    summary_chars: int
+
+
+class ArchivedMessage(BaseModel):
+    compaction_id: str
+    idx: int
+    role: str
+    content: str | None
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
+    archived_at: datetime

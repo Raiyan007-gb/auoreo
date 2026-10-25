@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import sqlite3
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -29,6 +32,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
 SCHEMA_VERSION = 2  # 2: sessions.archived, usage, messages_archive (M3)
+ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
+BASELINE_REVISION = "0001"  # the M2 schema; pre-Alembic databases are stamped here
 
 
 def utcnow() -> datetime:
@@ -151,8 +156,54 @@ class SchemaTooNewError(RuntimeError):
     pass
 
 
+def alembic_config(url: str) -> Any:
+    """Programmatic Alembic config (no .ini needed) pointing at the packaged scripts."""
+    from alembic.config import Config
+
+    cfg = Config(stdout=sys.stdout)  # resolved per call so CLI output can be captured
+    cfg.set_main_option("script_location", str(ALEMBIC_DIR))
+    cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    return cfg
+
+
+def _stored_version(path: Path) -> int | None:
+    if not path.is_file():
+        return None
+    con = sqlite3.connect(path)
+    try:
+        row = con.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+    except sqlite3.OperationalError:  # brand new / no schema_meta yet
+        return None
+    finally:
+        con.close()
+    return int(row[0]) if row else None
+
+
+def migrate(path: Path | str, revision: str = "head") -> None:
+    """`alembic upgrade` on a file database (sync; run it in a thread from async code).
+
+    A pre-Alembic (M2) database has tables but no `alembic_version`: stamp the baseline
+    first so only the newer revisions run."""
+    from alembic import command
+    from sqlalchemy import create_engine, inspect
+
+    url = f"sqlite:///{path}"
+    engine = create_engine(url)
+    try:
+        with engine.begin() as conn:
+            cfg = alembic_config(url)
+            cfg.attributes["connection"] = conn
+            tables = set(inspect(conn).get_table_names())
+            if tables and "alembic_version" not in tables:
+                command.stamp(cfg, BASELINE_REVISION)
+            command.upgrade(cfg, revision)
+    finally:
+        engine.dispose()
+
+
 class Database:
     def __init__(self, path: Path | str) -> None:
+        self.path = None if str(path) == ":memory:" else Path(path)
         url = "sqlite+aiosqlite:///:memory:" if str(path) == ":memory:" else f"sqlite+aiosqlite:///{path}"
         self.engine: AsyncEngine = create_async_engine(url)
         self.sessionmaker = async_sessionmaker(self.engine, expire_on_commit=False)
@@ -166,8 +217,16 @@ class Database:
             cur.close()
 
     async def init(self) -> None:
-        async with self.engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
+        if self.path is None:  # tests: no migration history needed
+            async with self.engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        else:
+            stored = await asyncio.to_thread(_stored_version, self.path)
+            if stored is not None and stored > SCHEMA_VERSION:  # refuse before touching it
+                raise SchemaTooNewError(
+                    f"state.db schema v{stored} is newer than this build (v{SCHEMA_VERSION})"
+                )
+            await asyncio.to_thread(migrate, self.path)
         async with self.session() as s:
             row = await s.get(Meta, "schema_version")
             if row is None:
@@ -192,11 +251,14 @@ class Database:
 __all__ = [
     "AuditRow",
     "Database",
+    "SchemaTooNewError",
     "EventRow",
     "IdempotencyRow",
     "MessageArchiveRow",
     "MessageRow",
     "SessionRow",
     "UsageRow",
+    "alembic_config",
+    "migrate",
     "utcnow",
 ]
