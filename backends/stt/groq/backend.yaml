@@ -1,0 +1,11 @@
+kind: stt
+name: groq
+description: >-
+  Groq /openai/v1/audio/transcriptions (whisper-large-v3-turbo, verbose_json segments).
+  Key GROQ_API_KEY from the secret store; 25 MB upload cap checked before sending.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API (Whisper weights MIT)
+posture: ok

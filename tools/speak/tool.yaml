@@ -1,0 +1,19 @@
+name: speak
+toolset: voice
+description: >-
+  Synthesize speech from text with the selected text-to-speech backend and save it under the
+  session's audio folder. Markdown, code and emoji are stripped first. Returns the file path.
+parameters:
+  type: object
+  properties:
+    text: {type: string, minLength: 1, maxLength: 5000, description: "What to say (plain text works best)."}
+    voice: {type: string, description: "Backend-specific voice name or id; omit for the default."}
+  required: [text]
+  additionalProperties: false
+permission: speak
+default_action: allow
+is_read_only: false
+is_concurrency_safe: false
+exposure: deferred
+timeout_ms: 300000
+search_hint: speak text to speech tts voice say audio read aloud

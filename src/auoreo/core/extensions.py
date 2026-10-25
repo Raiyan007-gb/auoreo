@@ -23,6 +23,7 @@ STARTERS: list[str] = [
     "auoreo.automation.webhooks:start",
     "auoreo.teams:start",  # key = last dotted part → services.ext["teams"]
     "auoreo.plugins:start",  # → services.ext["plugins"]
+    "auoreo.voice:start",  # M4c → services.ext["voice"]
 ]
 
 

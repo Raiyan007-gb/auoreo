@@ -1,0 +1,11 @@
+kind: tts
+name: elevenlabs
+description: >-
+  ElevenLabs /v1/text-to-speech/{voice_id} (eleven_flash_v2_5, output_format opus_48000_64).
+  Key ELEVENLABS_API_KEY from the secret store.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API
+posture: ok

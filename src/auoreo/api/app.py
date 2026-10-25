@@ -36,6 +36,7 @@ from auoreo.api.routers import kanban as kanban_router
 from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import rtc as rtc_router
 from auoreo.api.routers import teams as teams_router
+from auoreo.api.routers import voice as voice_router
 from auoreo.api.routers import webhooks as webhooks_router
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings, get_settings
@@ -63,6 +64,7 @@ ROUTERS = (
     teams_router,
     kanban_router,
     plugins_router,  # M5e
+    voice_router,  # M4c
 )
 
 

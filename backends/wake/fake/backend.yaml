@@ -1,0 +1,11 @@
+kind: wake
+name: fake
+description: >-
+  Test wake word - a hit when settings.voice_wake_phrase appears in the stt/fake transcript
+  (the WAV's ICMT comment). Default until a local keyword spotter (sherpa_onnx) is set up.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

@@ -1,0 +1,11 @@
+kind: vad
+name: silero
+description: >-
+  Silero VAD (ONNX model via the silero-vad package; torch + onnxruntime). Needs
+  `pip install silero-vad onnxruntime`; imported lazily on first use.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

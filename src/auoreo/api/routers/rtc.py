@@ -24,6 +24,8 @@ _ERRORS: dict[type[Exception], int] = {
 def manager(svc: Services) -> RtcManager:
     if svc.rtc is None:
         svc.rtc = RtcManager(svc)
+        if (voice := svc.ext.get("voice")) is not None:  # M4c: live transcription hook
+            voice.attach(svc.rtc)
     mgr: RtcManager = svc.rtc
     return mgr
 

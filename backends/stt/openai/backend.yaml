@@ -1,0 +1,11 @@
+kind: stt
+name: openai
+description: >-
+  OpenAI /v1/audio/transcriptions (default gpt-4o-transcribe; whisper-1 returns segments).
+  Key OPENAI_API_KEY from the secret store; 25 MB upload cap checked before sending.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API (client code MIT)
+posture: ok

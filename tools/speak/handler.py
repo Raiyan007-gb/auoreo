@@ -1,0 +1,33 @@
+import asyncio
+import re
+from pathlib import Path
+
+from auoreo.tools.context import ToolContext, ToolError, ToolResult
+from auoreo.voice import voice_for
+from auoreo.voice.audio import MEDIA_EXT
+
+_SAFE = re.compile(r"[^A-Za-z0-9_.-]")
+
+
+def _write(folder: Path, ext: str, data: bytes) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    n = 1 + sum(1 for p in folder.iterdir() if p.is_file())
+    while (path := folder / f"{n}.{ext}").exists():
+        n += 1
+    path.write_bytes(data)
+    return path
+
+
+async def run(args: dict, ctx: ToolContext) -> ToolResult:
+    svc = ctx.services.get("services")
+    if svc is None:
+        raise ToolError("no services attached; the voice service is unavailable")
+    audio = await voice_for(svc).speak(
+        args["text"], voice=args.get("voice"), session_id=ctx.session_id or None
+    )
+    folder = ctx.home / "sessions" / _SAFE.sub("_", ctx.session_id or "default") / "audio"
+    path = await asyncio.to_thread(_write, folder, MEDIA_EXT.get(audio.media_type, "bin"), audio.data)
+    return ToolResult(
+        f"Saved speech ({audio.media_type}, {len(audio.data)} bytes) to {path}",
+        meta={"path": str(path), "media_type": audio.media_type, "bytes": len(audio.data)},
+    )

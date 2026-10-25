@@ -826,6 +826,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voice/speak": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Speak
+         * @description Text (≤ 5000 chars) → audio in the backend's format, or `format` via ffmpeg.
+         */
+        post: operations["speak_api_voice_speak_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Voice Status
+         * @description Selected stt/tts/vad/wake/desktop backends and their readiness (`check()`).
+         */
+        get: operations["voice_status_api_voice_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/transcribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Transcribe
+         * @description Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup.
+         */
+        post: operations["transcribe_api_voice_transcribe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webhooks": {
         parameters: {
             query?: never;
@@ -909,6 +969,18 @@ export interface components {
             tool_calls?: {
                 [key: string]: unknown;
             }[] | null;
+        };
+        /** Body_transcribe_api_voice_transcribe_post */
+        Body_transcribe_api_voice_transcribe_post: {
+            /**
+             * File
+             * @description Audio (wav, webm, ogg, mp3, m4a, …)
+             */
+            file: string;
+            /** Language */
+            language?: string | null;
+            /** Session Id */
+            session_id?: string | null;
         };
         /** ChatAccepted */
         ChatAccepted: {
@@ -1658,6 +1730,94 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VoiceBackendStatus */
+        VoiceBackendStatus: {
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /** Kind */
+            kind: string;
+            /**
+             * License
+             * @default
+             */
+            license: string;
+            /** Name */
+            name?: string | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Posture
+             * @default ok
+             */
+            posture: string;
+            /**
+             * Remedy
+             * @default
+             */
+            remedy: string;
+        };
+        /** VoiceSegment */
+        VoiceSegment: {
+            /** End */
+            end: number;
+            /** Start */
+            start: number;
+            /** Text */
+            text: string;
+        };
+        /** VoiceSpeakRequest */
+        VoiceSpeakRequest: {
+            /**
+             * Format
+             * @description Transcode the backend output (ffmpeg); default = backend native
+             */
+            format?: ("wav" | "mp3" | "opus") | null;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Speed
+             * @default 1
+             */
+            speed: number;
+            /** Text */
+            text: string;
+            /** Voice */
+            voice?: string | null;
+        };
+        /** VoiceStatus */
+        VoiceStatus: {
+            /** Backends */
+            backends: components["schemas"]["VoiceBackendStatus"][];
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** VoiceTranscription */
+        VoiceTranscription: {
+            /**
+             * Backend
+             * @description Selected stt backend
+             */
+            backend: string;
+            /**
+             * Duration S
+             * @description Duration of the normalized audio
+             */
+            duration_s: number;
+            /** Language */
+            language?: string | null;
+            /**
+             * Run Id
+             * @description Followup run when `session_id` was given
+             */
+            run_id?: string | null;
+            /** Segments */
+            segments: components["schemas"]["VoiceSegment"][];
+            /** Text */
+            text: string;
         };
         /** WebhookRouteInfo */
         WebhookRouteInfo: {
@@ -3554,6 +3714,140 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    speak_api_voice_speak_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceSpeakRequest"];
+            };
+        };
+        responses: {
+            /** @description Audio bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/mpeg": unknown;
+                    "audio/ogg": unknown;
+                    "audio/wav": unknown;
+                };
+            };
+            /** @description Nothing to speak or synthesis failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voice disabled or the TTS backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    voice_status_api_voice_status_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transcribe_api_voice_transcribe_post: {
+        parameters: {
+            query?: {
+                language?: string | null;
+                session_id?: string | null;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_transcribe_api_voice_transcribe_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceTranscription"];
+                };
+            };
+            /** @description Upload over 25 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No speech detected, or undecodable audio */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voice disabled or the STT backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

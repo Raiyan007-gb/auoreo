@@ -1,0 +1,11 @@
+kind: vad
+name: fake
+description: >-
+  Energy VAD - a 30 ms frame is speech when its RMS exceeds settings.voice_speaking_rms.
+  Default (no local VAD is installed by default); pick silero for real speech detection.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok
