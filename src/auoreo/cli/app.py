@@ -77,3 +77,32 @@ app.command("upgrade")(upgrade.upgrade)
 from auoreo.cli.commands import trace  # noqa: E402
 
 app.add_typer(trace.app, name="trace", help="Perfetto trace files (AUOREO_TRACE_FILE): summarize.")
+
+
+# --- F6: out-of-process voice media sidecar
+@app.command("voice-host")
+def voice_host(
+    check: bool = typer.Option(False, "--check", help="Start the sidecar, print its health, stop it."),
+) -> None:
+    """Serve the voice media sidecar on stdio (JSON-RPC), or `--check` it from the control plane."""
+    if not check:
+        from auoreo.voice.host import main
+
+        main()
+        return
+    import asyncio
+
+    from auoreo.cli.common import settings
+    from auoreo.voice.sidecar import VoiceHost
+
+    async def _probe() -> tuple[bool, str]:
+        host = VoiceHost(settings())
+        try:
+            st = await host.check()
+            return st.ok, st.detail if st.ok else f"{st.detail} ({st.remedy})"
+        finally:
+            await host.close()
+
+    ok, detail = asyncio.run(_probe())
+    typer.echo(detail)
+    raise typer.Exit(0 if ok else 1)

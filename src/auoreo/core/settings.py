@@ -28,6 +28,7 @@ from auoreo.core.settings_models import (
     ModelGroup,
     NamedEnvironment,
     SshEnvironment,
+    VoiceHostBackends,
 )
 from auoreo.policy.config import BanditSettings
 from auoreo.remote.config import BridgePeer, RemoteEnvironment  # --- W2-B
@@ -350,6 +351,15 @@ class Settings(BaseSettings):
     trace_file: Path | None = None
     """`AUOREO_TRACE_FILE`: write a Chrome/Perfetto Trace-Event JSON file (works with OTel off)."""
 
+    # --- F6: out-of-process voice media sidecar (`backends.{stt,tts,vad} = "sidecar"`)
+    voice_host_python: str | None = None
+    """Interpreter for `python -m auoreo.voice.host` (e.g. a GPU venv with auoreo + torch);
+    unset = this server's own interpreter."""
+    voice_host_backends: VoiceHostBackends = Field(default_factory=VoiceHostBackends)
+    """Inner stt/tts/vad backends the sidecar loads (defaults: fake)."""
+    voice_host_timeout_s: float = Field(default=60.0, gt=0, le=3600)
+    """Per-request timeout for sidecar calls (a timed-out request fails; the process keeps running)."""
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""
@@ -404,4 +414,5 @@ __all__ = [
     "ModelGroup",
     "NamedEnvironment",
     "SshEnvironment",
+    "VoiceHostBackends",
 ]

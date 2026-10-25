@@ -1,0 +1,12 @@
+kind: stt
+name: sidecar
+description: >-
+  Proxies speech-to-text to the out-of-process voice media sidecar (`python -m auoreo.voice.host`,
+  one process shared by stt/tts/vad) that loads settings.voice_host_backends.stt - heavy models
+  and GPL/NC engines stay out of the server process. Lazy start, health check, restart with backoff.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

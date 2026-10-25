@@ -177,11 +177,59 @@ line of defence), real speech against the energy VAD, and Opus over lossy networ
 - `speak {text, voice?}` — `speak` permission, allowed by default, deferred; writes
   `~/.auoreo/sessions/<id>/audio/<n>.wav` (or `.mp3`/`.ogg`) and returns the path.
 
-## Later: the media sidecar
+## The media sidecar (`auoreo voice-host`, F6)
 
-The spec's end state runs capture, VAD, wake and local models in a separate
-`auoreo-voice-host` process (stdio JSON-lines `Hello/Ready/Capture/Transcript/Speak/Stop`) so
-audio libraries never load in the server. The backend ABCs are the seam: a sidecar backend
-implements the same `transcribe`/`synthesize`/`speech_segments`/`detect` calls over that
-protocol, and nothing above the ABC changes. Until then the local backends run in worker
-threads of the server process, loaded only when selected.
+Heavy or licence-encumbered engines can run out of the server process. Select the sidecar
+backends and name what the sidecar itself should load:
+
+```json
+{
+  "backends": {"stt": "sidecar", "tts": "sidecar", "vad": "sidecar"},
+  "voice_host_backends": {"stt": "faster_whisper", "tts": "piper", "vad": "silero"},
+  "voice_host_python": "/opt/auoreo-gpu/.venv/bin/python",
+  "voice_host_timeout_s": 60
+}
+```
+
+```
+server process                                   sidecar process (own venv, optional GPU)
+VoiceService ─ stt/tts/vad "sidecar" backends ─┐  python -m auoreo.voice.host
+                                               └─ VoiceHost ══ JSON-RPC 2.0 over stdio ══▶ inner
+                                                  (auoreo.voice.sidecar)                  backends
+```
+
+- **One shared process** for the stt/tts/vad trio (`auoreo.voice.sidecar.VoiceHost`), started
+  lazily on the first call. Wire format is the plugin host's `RpcPeer` framing (one JSON object
+  per line): `check`, `transcribe {wav_b64, language, keyterms}`, `synthesize {text, voice,
+  speed}`, `vad {wav_b64}`, `shutdown`. Audio travels base64, capped at 25 MB decoded in both
+  directions (checked before sending and again in the sidecar).
+- **Crash isolation**: a segfault in a model kills only the sidecar. The failing request errors,
+  the next call restarts it with backoff (0 / 0.25 / 0.5 / 1 s), at most 3 restarts per 60 s;
+  after that every call and `check()` (doctor, `/api/voice/status`) fails honestly with the
+  last stderr lines until the crashes age out. A request that exceeds `voice_host_timeout_s`
+  fails alone; the process keeps running. The sidecar shuts down with the server
+  (`Services.close_backends` → each sidecar backend's `close()`).
+- **Scrubbed env**: the child gets `core.secrets.child_env` (PATH, HOME, LANG, …) plus only the
+  secrets the *inner* backends declare in `requires_env`, `AUOREO_HOME`, and a JSON snapshot of
+  the non-secret `voice_*` / `backends` settings. Provider keys such as `OPENROUTER_API_KEY`
+  never reach it. The sidecar's real stdout is reserved for the protocol (library prints go to
+  stderr).
+- **Licence isolation**: piper (GPL-3.0) and openwakeword (model weights CC BY-NC-SA) are never
+  imported by the server; with `voice_host_backends` they load only in the sidecar's
+  interpreter, which can be a separate venv you install them into.
+- **Live audio**: per-frame `is_speech` (20–30 ms RTC frames, synchronous) stays local as an
+  energy test against `voice_speaking_rms`; the pre-STT silence gate (`speech_segments`),
+  transcription and synthesis go through the sidecar. Wake word is not proxied yet.
+
+### Pointing it at a GPU venv
+
+```bash
+uv venv /opt/auoreo-gpu/.venv
+uv pip install --python /opt/auoreo-gpu/.venv/bin/python auoreo==<server version> faster-whisper silero-vad torch
+auoreo config set voice_host_python /opt/auoreo-gpu/.venv/bin/python
+auoreo voice-host --check     # starts the sidecar, prints `voice-host pid N (stt=…, tts=…, vad=…)`
+```
+
+The sidecar imports `auoreo` itself (for the backend ABCs and discovery), so its venv needs the
+same auoreo version. `voice_host_backends.*` cannot be `sidecar` (refused: it would recurse).
+A PyInstaller build has no `-m`; point `voice_host_python` at a real interpreter there.
