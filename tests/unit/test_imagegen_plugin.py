@@ -87,7 +87,7 @@ def test_manifest_is_off_by_default_tools_only_and_declares_both_secrets() -> No
     m = PluginManifest.model_validate(yaml.safe_load((PLUGIN_DIR / "plugin.yaml").read_text()))
     assert m.enabled is False
     assert m.provides == ["tools"]
-    assert set(m.consumes) == {"secrets:OPENAI_API_KEY", "secrets:FAL_KEY"}
+    assert set(m.consumes) == {"secrets:OPENAI_API_KEY", "secrets:FAL_KEY", "usage"}
     assert m.permissions == ["plugin__imagegen__imagegen_generate"]
     assert m.config_schema["properties"]["backend"]["default"] == "fake"
 

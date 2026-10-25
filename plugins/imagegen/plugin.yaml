@@ -7,7 +7,7 @@ description: >-
   default to ask) and its estimated cost is returned, logged as imagegen.cost and appended
   to costs.jsonl next to the images.
 provides: [tools]
-consumes: ["secrets:OPENAI_API_KEY", "secrets:FAL_KEY"]
+consumes: ["secrets:OPENAI_API_KEY", "secrets:FAL_KEY", "usage"]
 permissions: [plugin__imagegen__imagegen_generate]
 config_schema:
   type: object

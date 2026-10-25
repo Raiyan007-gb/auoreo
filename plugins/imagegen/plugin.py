@@ -13,8 +13,8 @@ permission rule allows that name. Backends (config `backend`):
 
 Images are written to `<output_dir>/<session_id>/imagegen/` and returned as paths in the tool
 result (the plugin wire protocol carries text only, so no inline image part). The estimated
-cost is part of the result, sent to the host log as `imagegen.cost {...}` and appended to
-`costs.jsonl` in the same folder: the host has no plugin -> usage-ledger/audit call yet.
+cost is part of the result, recorded in the host usage ledger (`consumes: [usage]`) and as an
+audit row `plugin.imagegen.cost`, logged as `imagegen.cost {...}` and appended to `costs.jsonl`.
 """
 
 from __future__ import annotations
@@ -198,6 +198,7 @@ class Plugin:
         }
         saved = await asyncio.to_thread(save, folder, images, formats, cost)
         self.host.log("info", "imagegen.cost " + json.dumps(cost))
+        await self._report(cost, session_id)
         return {
             "images": saved,
             "backend": backend,
@@ -215,6 +216,23 @@ class Plugin:
         if not value:
             raise GenError(f"secret {name} is not set (auoreo secrets set {name})")
         return str(value)
+
+    async def _report(self, cost: dict[str, Any], session_id: str | None) -> None:
+        """Usage ledger + audit through the host (older hosts without these calls: log only)."""
+        model = f"{cost['backend']}/{cost['model']}"
+        detail = {k: cost[k] for k in ("backend", "model", "n", "usd_estimate")}
+        calls = (
+            ("usage", (session_id, model, float(cost["usd_estimate"]))),
+            ("audit", ("cost", detail)),
+        )
+        for name, args in calls:
+            fn = getattr(self.host, name, None)
+            if fn is None:
+                continue
+            try:
+                await fn(*args)
+            except Exception as exc:  # host refused or does not support it
+                self.host.log("warning", f"imagegen: cost report failed: {exc}")
 
     async def _fake(self, prompt: str, size: str, n: int) -> tuple[list[bytes], str, float, str]:
         return [placeholder(prompt, size, i) for i in range(n)], "fake-placeholder", 0.0, "fake backend"

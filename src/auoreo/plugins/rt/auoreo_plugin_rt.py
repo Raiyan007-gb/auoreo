@@ -86,6 +86,17 @@ class HostAPI:
     def log(self, level: str, message: str) -> None:
         self._rt.notify("log", {"level": level, "message": message})
 
+    async def audit(self, action: str, detail: dict[str, Any], decision: str = "") -> None:
+        """Append an audit row `plugin.<name>.<action>` (detail redacted, ≤ 4 KiB)."""
+        await self._rt.request("audit.record", {"action": action, "detail": detail, "decision": decision})
+
+    async def usage(
+        self, session_id: str | None, model: str, cost_usd: float, *, estimated: bool = True
+    ) -> None:
+        """Record spend in the host's usage ledger; needs `consumes: [usage]`."""
+        params = {"session_id": session_id, "model": model, "cost_usd": cost_usd, "estimated": estimated}
+        await self._rt.request("usage.record", params)
+
 
 def _load_attr(path: Path, attr: str) -> Any:
     spec = importlib.util.spec_from_file_location(f"auoreo_plugin_{path.stem}", path)

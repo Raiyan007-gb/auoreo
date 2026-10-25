@@ -154,6 +154,9 @@ concurrently, answered in order). camelCase wire names, absolute paths, 1-based 
 | `session/prompt {sessionId, prompt}` | runs one non-interactive turn; `{stopReason}` when it ends (streams `session/update` first with `Accept: text/event-stream`) |
 | `session/set_mode {sessionId, modeId}` | `{}`; `modeId` = `manual` \| `acceptEdits` \| `plan`, the session's permission mode for later turns (audited `acp.session.set_mode`) |
 | `session/cancel {sessionId}` | notification; advisory and idempotent, never an error |
+| `session/list {cursor?}` | `{sessions: [{sessionId, title, updatedAt}], nextCursor}` (advertised under `sessionCapabilities`) |
+| `session/resume {sessionId}` | same as `session/load` (no history replay over `POST /acp`) |
+| `session/close {sessionId}` | archives the session; unknown ids are an error (strict, unlike cancel) |
 
 - `prompt` blocks: `text`, `resource` with `resource.text` (embedded context, wrapped in
   `<resource uri="…">`), `resource_link` (referenced by uri). Images/audio/blob resources are

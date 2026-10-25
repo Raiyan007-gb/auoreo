@@ -34,8 +34,8 @@ from auoreo.plugins.bridge import (
     unregister_delivery,
 )
 from auoreo.plugins.connectors import InboundRouter, PairingStore, file_config
-from auoreo.plugins.grants import secret_granted
 from auoreo.plugins.protocol import RpcError, RpcPeer
+from auoreo.plugins.requests import HOST_REQUESTS
 from auoreo.tools.context import ToolResult
 
 if TYPE_CHECKING:
@@ -207,7 +207,11 @@ class PluginHost:
         )
         st.peer = peer
         await peer.start()
-        granted = [c for c in st.manifest.consumes if c in {"sessions", "memory"} or c.startswith("secrets:")]
+        granted = [
+            c
+            for c in st.manifest.consumes
+            if c in {"sessions", "memory", "usage"} or c.startswith("secrets:")
+        ]
         info = await peer.request(
             "initialize", {"config": st.config, "consumes_granted": granted}, timeout=30
         )
@@ -384,31 +388,10 @@ class PluginHost:
         return send
 
     async def _on_request(self, st: PluginState, method: str, params: dict[str, Any]) -> Any:
-        if method == "secret.get":
-            name = str(params.get("name", ""))
-            allowed = secret_granted(name, st.manifest.consumes)
-            await self.s.audit.record(
-                actor=f"plugin:{st.name}",
-                action="plugin.secret",
-                decision="allow" if allowed else "deny",
-                detail={"secret": name},
-            )
-            if not allowed:
-                raise RpcError(f"secret '{name}' is not declared in consumes", code=-32001)
-            return {"value": self.s.secrets.get(name)}
-        if method == "pairing.request":
-            store = PairingStore(self.home, st.name)
-            chat_id = str(params.get("chat_id", ""))
-            if chat_id in store.allowlist(list(st.config.get("allowlist", []))):
-                return {"allowed": True}
-            code = store.request(chat_id, str(params.get("user", "")), str(params.get("name", "")))
-            await self.s.emit(
-                "server",
-                "plugin.pairing_requested",
-                {"name": st.name, "chat_id": chat_id, "user": params.get("user")},
-            )
-            return {"allowed": False, "code": code}
-        raise RpcError(f"unknown method {method}", code=-32601)
+        handler = HOST_REQUESTS.get(method)
+        if handler is None:
+            raise RpcError(f"unknown method {method}", code=-32601)
+        return await handler(self, st, params)
 
     async def _on_notify(self, st: PluginState, method: str, params: dict[str, Any]) -> None:
         if method == "log":

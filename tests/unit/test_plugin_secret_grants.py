@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from auoreo.plugins.host import secret_granted
+from auoreo.plugins.grants import secret_granted
 
 
 @pytest.mark.parametrize(
