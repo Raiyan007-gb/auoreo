@@ -1,0 +1,6 @@
+[project]
+name = "auoreo-plugin-imagegen"
+version = "0.1.0"
+description = "AUOREO image generation toolset (OpenAI Images / fal / fake)"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.28.1,<0.29", "pillow>=11"]

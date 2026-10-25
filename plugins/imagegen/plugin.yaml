@@ -1,0 +1,38 @@
+name: imagegen
+version: 0.1.0
+description: >-
+  Image generation toolset (F7 spike, docs/spikes/imagegen.md): tool imagegen_generate
+  {prompt, size, n<=2} via OpenAI Images (gpt-image-1), fal (FLUX) or a local fake
+  placeholder. Not core and off by default; every call asks for approval (plugin tools
+  default to ask) and its estimated cost is returned, logged as imagegen.cost and appended
+  to costs.jsonl next to the images.
+provides: [tools]
+consumes: ["secrets:OPENAI_API_KEY", "secrets:FAL_KEY"]
+permissions: [plugin__imagegen__imagegen_generate]
+config_schema:
+  type: object
+  properties:
+    backend:
+      type: string
+      enum: [fake, openai, fal]
+      default: fake
+      description: fake draws a Pillow placeholder (no network, $0); openai and fal are hosted.
+    openai_model: {type: string, default: gpt-image-1}
+    openai_quality: {type: string, enum: [low, medium, high], default: low}
+    openai_base_url: {type: string, default: "https://api.openai.com/v1"}
+    fal_model: {type: string, default: fal-ai/flux/schnell, pattern: "^[A-Za-z0-9_./-]+$"}
+    fal_base_url: {type: string, default: "https://fal.run"}
+    output_dir:
+      type: string
+      default: "~/.auoreo/sessions"
+      description: >-
+        Images go to <output_dir>/<session_id>/imagegen/. Set it when AUOREO_HOME is not
+        ~/.auoreo (plugins get a scrubbed environment and do not see AUOREO_HOME).
+    usd_per_image:
+      type: number
+      minimum: 0
+      description: Override the built-in per-image price estimate (USD).
+    timeout_s: {type: number, minimum: 5, maximum: 600, default: 120}
+  additionalProperties: false
+entry: plugin.py:Plugin
+enabled: false
