@@ -145,3 +145,7 @@ class ArchivedMessage(BaseModel):
     tool_calls: list[dict[str, Any]] | None = None
     tool_call_id: str | None = None
     archived_at: datetime
+
+
+class LatestSeq(BaseModel):
+    seq: int

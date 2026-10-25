@@ -225,3 +225,13 @@ async def test_routes_win_over_spa_mount(services: Services, settings: Settings,
         assert (await c.get("/api/health")).json()["status"] == "ok"
         assert "spa" in (await c.get("/")).text
         assert (await c.get("/openapi.json")).status_code == 200
+
+
+async def test_events_latest_seq(client: httpx.AsyncClient, services: Services) -> None:
+    before = (await client.get("/api/events/latest")).json()["seq"]
+    sid = (await client.post("/api/chat", json={"message": "x"})).json()["session_id"]
+    await wait_done(services, sid)
+    after = (await client.get("/api/events/latest")).json()["seq"]
+    assert after > before
+    r = await client.get("/api/events", params={"after_seq": after, "follow": "false"})
+    assert parse_sse(r.text) == []

@@ -9,8 +9,15 @@ from fastapi.sse import EventSourceResponse, ServerSentEvent
 
 from auoreo.api.deps import AUTH, ServicesDep
 from auoreo.core.event_store import REPLAY_LIMIT
+from auoreo.schema.chat import LatestSeq
 
 router = APIRouter(prefix="/api", tags=["events"], dependencies=AUTH)
+
+
+@router.get("/events/latest", response_model=LatestSeq)
+async def latest(svc: ServicesDep) -> LatestSeq:
+    """Highest event seq so far — lets a client tail from 'now' without replaying history."""
+    return LatestSeq(seq=await svc.events.last_seq())
 
 
 @router.get("/events", response_class=EventSourceResponse)
