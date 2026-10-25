@@ -53,6 +53,13 @@ export interface CompactionFailedData {
   readonly failures: number;
 }
 
+/** `compaction.skipped` — benign: every message was protected (short session). */
+export interface CompactionSkippedData {
+  readonly trigger: string;
+  readonly compaction_id: string;
+  readonly reason: string;
+}
+
 /** `session.title_updated` */
 export interface TitleUpdatedData {
   readonly title: string;

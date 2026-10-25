@@ -78,8 +78,8 @@ test("/compact on a tiny session shows the nothing-to-compact notice", async ({ 
   await send(page, "/compact");
   await expect(page.getByTestId("action-notice")).toContainText(/nothing to compact/i);
   await expect(page.getByTestId("action-notice")).toHaveAttribute("data-level", "warn");
-  // compaction.started / compaction.failed land in the thread as system notices.
-  await expect(page.locator('[data-testid="thread-notice"][data-code="compaction.failed"]')).toContainText(
+  // compaction.started / compaction.skipped land in the thread as system notices.
+  await expect(page.locator('[data-testid="thread-notice"][data-code="compaction.skipped"]')).toContainText(
     /nothing to compact/i,
   );
   await expect(page.getByTestId("composer")).toHaveValue("");

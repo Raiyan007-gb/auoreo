@@ -7,6 +7,7 @@ import type { MessageOut, ServerEvent } from "@sdk/client";
 import type {
   CompactionCompletedData,
   CompactionFailedData,
+  CompactionSkippedData,
   PermissionRequestedData,
   QuestionAskedData,
   RunErrorData,
@@ -264,6 +265,10 @@ const HANDLERS: Record<string, Handler> = {
   "compaction.failed": (s, d, e) => {
     const c = d as unknown as CompactionFailedData;
     return notice(s, e, "warn", `Compaction did not run: ${str(c.reason)}`, "compaction.failed");
+  },
+  "compaction.skipped": (s, d, e) => {
+    const c = d as unknown as CompactionSkippedData;
+    return notice(s, e, "warn", `Compaction skipped: ${str(c.reason)}`, "compaction.skipped");
   },
   "session.title_updated": (s, d) => ({ ...s, title: str(d.title) || s.title }),
   "session.model_changed": (s, d, e) => ({

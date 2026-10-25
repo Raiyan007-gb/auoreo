@@ -83,6 +83,7 @@ export const EVENT_TYPES = [
   "compaction.started",
   "compaction.completed",
   "compaction.failed",
+  "compaction.skipped",
   "harness.reloaded",
   "message",
 ] as const;
