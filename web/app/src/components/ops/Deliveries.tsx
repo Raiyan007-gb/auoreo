@@ -15,7 +15,7 @@ import { relTime } from "@/lib/utils";
 const STATUSES = ["pending", "delivering", "delivered", "failed", "unknown"] as const;
 
 /** Replay: always a dry run first (shows the stored prompt), then an explicit "Queue replay". */
-function ReplayDialog({
+export function ReplayDialog({
   delivery,
   onClose,
   onQueued,

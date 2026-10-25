@@ -1,9 +1,10 @@
 import type { UsageRecord } from "@sdk/client";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDownIcon, NavigationIcon, SendIcon, SquareIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ArrowDownIcon, NavigationIcon, PhoneIcon, SendIcon, SquareIcon } from "lucide-react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ApprovalCard } from "@/components/ApprovalCard";
+import { ContextGauge } from "@/components/ContextGauge"; // --- G5b
 import { INSERT_COMMAND_EVENT } from "@/components/CommandPalette";
 import { ErrorNote } from "@/components/AppShell";
 import { QuestionForm } from "@/components/QuestionForm";
@@ -23,6 +24,8 @@ import { compactSession, type OpNotice, RUN_COMPACT_EVENT } from "@/lib/sessionO
 import { STATUS_VARIANT } from "@/lib/status";
 import type { Item } from "@/lib/thread";
 import { cn, errorText, fmtTokens, fmtUsd } from "@/lib/utils";
+
+const CallPanel = lazy(() => import("@/components/call/CallPanel").then((m) => ({ default: m.CallPanel }))); // --- G5b
 
 function ItemView({ item, awaiting }: { item: Item; awaiting: boolean }) {
   switch (item.kind) {
@@ -89,6 +92,7 @@ function SessionPage({ id }: { id: string }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const didInitialScroll = useRef(false);
   const [atEnd, setAtEnd] = useState(true);
+  const [callOpen, setCallOpen] = useState(false); // --- G5b
 
   const items = t.items;
   const pendingPerms = Object.values(t.state.permissions);
@@ -160,7 +164,10 @@ function SessionPage({ id }: { id: string }) {
     setBusy(true);
     await guard(async () => {
       // `/compact` runs directly so "nothing to compact" (422) comes back as a notice.
+      const verb = /^\/(steer|queue)\s+([\s\S]+)$/.exec(message); // --- G5b palette verbs
       if (/^\/compact\s*$/.test(message)) setNotice(await compactSession(id));
+      else if (verb?.[1] === "steer") setNotice(`Steer sent (${await control.steer(id, verb[2] ?? "")})`);
+      else if (verb) await api.chat({ session_id: id, message: verb[2] ?? "", mode: "followup" });
       else await api.chat({ session_id: id, message });
       setText("");
     });
@@ -249,7 +256,17 @@ function SessionPage({ id }: { id: string }) {
               {fmtTokens(totalTokens)} tok · {fmtUsd(t.state.usage.cost)}
             </Badge>
           </Tip>
+          <ContextGauge sessionId={id} refreshKey={`${running}:${t.state.usage.prompt}:${items.length}`} />
           {!t.streamOk && <Badge variant="warning">stream reconnecting</Badge>}
+          <Button
+            size="sm"
+            variant={callOpen ? "secondary" : "outline"}
+            aria-pressed={callOpen}
+            onClick={() => setCallOpen((o) => !o)}
+            data-testid="call-toggle"
+          >
+            <PhoneIcon aria-hidden /> Call
+          </Button>
         </div>
         <SessionActions
           id={id}
@@ -260,6 +277,11 @@ function SessionPage({ id }: { id: string }) {
           onNotice={setNotice}
         />
       </header>
+      {callOpen && (
+        <Suspense>
+          <CallPanel sessionId={id} />
+        </Suspense>
+      )}
 
       <div className="relative min-h-0 flex-1">
         <div

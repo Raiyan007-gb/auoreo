@@ -870,6 +870,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rtc/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Capabilities
+         * @description What the browser call client may request (G5b): the "allow remote control" switch asks
+         *     for `input: true` only when `teleop_input_enabled` is reported here.
+         */
+        get: operations["capabilities_api_rtc_capabilities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rtc/ice": {
         parameters: {
             query?: never;
@@ -1067,6 +1088,26 @@ export interface paths {
         put?: never;
         /** Compact */
         post: operations["compact_api_sessions__session_id__compact_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Session Context
+         * @description System / tools / messages token breakdown against the model's context window.
+         */
+        get: operations["session_context_api_sessions__session_id__context_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3144,6 +3185,32 @@ export interface components {
              */
             type: "answer";
         };
+        /**
+         * RtcCapabilities
+         * @description What a browser call client may ask for in `POST /api/rtc/offer`.
+         */
+        RtcCapabilities: {
+            /**
+             * Available
+             * @description aiortc is installed (else offers answer 501)
+             */
+            available: boolean;
+            /**
+             * Speak
+             * @description An outbound speech track is attached unless the offer says `speak: false`
+             */
+            speak: boolean;
+            /**
+             * Teleop Input Enabled
+             * @description `settings.teleop_input_enabled`: offers may set `input: true` (`auoreo-input` channel)
+             */
+            teleop_input_enabled: boolean;
+            /**
+             * Voice Enabled
+             * @description `settings.voice_enabled`: live transcription runs
+             */
+            voice_enabled: boolean;
+        };
         /** RtcClosed */
         RtcClosed: {
             /** Closed */
@@ -3309,6 +3376,39 @@ export interface components {
             source?: string | null;
             /** Text */
             text: string;
+        };
+        /**
+         * SessionContext
+         * @description Context occupancy of a session's next request (the `ctx_viz` gauge).
+         *
+         *     `pressure` is the token count of the assembled request (system prompt + history) as the
+         *     compaction meter counts it; `tools_tokens` is the tool-schema overhead sent alongside.
+         */
+        SessionContext: {
+            /**
+             * Auto Compact At
+             * @description Pressure at which automatic compaction runs
+             */
+            auto_compact_at: number;
+            /** Context Window */
+            context_window: number;
+            /** Messages Tokens */
+            messages_tokens: number;
+            /** Model */
+            model: string;
+            /** Pressure */
+            pressure: number;
+            /**
+             * Ratio
+             * @description `(pressure + tools_tokens) / context_window`, 0..1+
+             */
+            ratio: number;
+            /** Session Id */
+            session_id: string;
+            /** System Tokens */
+            system_tokens: number;
+            /** Tools Tokens */
+            tools_tokens: number;
         };
         /** SessionCreate */
         SessionCreate: {
@@ -5725,6 +5825,41 @@ export interface operations {
             };
         };
     };
+    capabilities_api_rtc_capabilities_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RtcCapabilities"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     ice_api_rtc_ice_get: {
         parameters: {
             query?: {
@@ -6260,6 +6395,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompactionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    session_context_api_sessions__session_id__context_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionContext"];
                 };
             };
             /** @description Validation Error */

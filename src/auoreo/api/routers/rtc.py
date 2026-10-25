@@ -12,7 +12,14 @@ from fastapi import APIRouter, HTTPException, Response, status
 
 from auoreo.api.deps import AUTH, ServicesDep
 from auoreo.core.services import Services
-from auoreo.rtc.peers import RtcLimitError, RtcManager, RtcUnavailable, SdpTooLarge, manager_for
+from auoreo.rtc.peers import (
+    RtcLimitError,
+    RtcManager,
+    RtcUnavailable,
+    SdpTooLarge,
+    aiortc_available,
+    manager_for,
+)
 from auoreo.rtc.turn import ice_servers
 from auoreo.schema.chat import RtcAnswer, RtcClosed, RtcPeerInfo
 from auoreo.schema.rtc_transport import (
@@ -23,6 +30,7 @@ from auoreo.schema.rtc_transport import (
     RtcLeft,
     RtcOffer,
 )
+from auoreo.schema.ui import RtcCapabilities
 
 router = APIRouter(prefix="/api/rtc", tags=["rtc"], dependencies=AUTH)
 
@@ -78,6 +86,19 @@ async def ice(svc: ServicesDep, response: Response) -> RtcIceConfig:
         iceServers=[RtcIceServer(**s) for s in servers],
         expires_at=expires,
         ttl_s=int(svc.settings.turn_ttl_s) if expires else None,
+    )
+
+
+@router.get("/capabilities", response_model=RtcCapabilities)
+async def capabilities(svc: ServicesDep) -> RtcCapabilities:
+    """What the browser call client may request (G5b): the "allow remote control" switch asks
+    for `input: true` only when `teleop_input_enabled` is reported here."""
+    st = svc.settings
+    return RtcCapabilities(
+        available=aiortc_available(),
+        voice_enabled=bool(st.voice_enabled),
+        speak=bool(st.voice_enabled and st.voice_speak_over_rtc),
+        teleop_input_enabled=bool(st.teleop_input_enabled),
     )
 
 

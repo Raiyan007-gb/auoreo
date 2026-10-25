@@ -3,6 +3,7 @@ import { RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
+import { ContextCell } from "@/components/ContextGauge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,10 +33,13 @@ function TotalsTable({
   label,
   rows,
   renderKey,
+  extra,
 }: {
   label: string;
   rows: readonly UsageTotals[];
   renderKey: (r: UsageTotals) => React.ReactNode;
+  /** Optional trailing column (G5b: per-session context gauge). */
+  extra?: { head: string; cell: (r: UsageTotals) => React.ReactNode };
 }) {
   return (
     <Table aria-label={`Usage by ${label.toLowerCase()}`}>
@@ -47,6 +51,7 @@ function TotalsTable({
           <TableHead className="text-right">Completion</TableHead>
           <TableHead className="text-right">Total</TableHead>
           <TableHead className="text-right">Cost</TableHead>
+          {extra && <TableHead>{extra.head}</TableHead>}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -58,6 +63,7 @@ function TotalsTable({
             <TableCell className="text-right tabular-nums">{fmtTokens(r.completion_tokens)}</TableCell>
             <TableCell className="text-right tabular-nums">{fmtTokens(tokens(r))}</TableCell>
             <TableCell className="text-right tabular-nums">{fmtUsd(r.cost_usd)}</TableCell>
+            {extra && <TableCell>{extra.cell(r)}</TableCell>}
           </TableRow>
         ))}
       </TableBody>
@@ -204,6 +210,7 @@ export function UsagePage() {
                       {sessions.data?.[r.key]?.title || <span className="font-mono text-xs">{r.key}</span>}
                     </Link>
                   )}
+                  extra={{ head: "Context", cell: (r) => <ContextCell sessionId={r.key} /> }}
                 />
               </section>
             )}

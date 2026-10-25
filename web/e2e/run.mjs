@@ -35,7 +35,8 @@ async function main() {
       ...process.env,
       AUOREO_HOME: home,
       AUOREO_GATEWAY: "fake",
-      AUOREO_BACKENDS: '{"stt":"fake","tts":"fake"}',
+      // vad:fake = energy VAD, so the RTC call e2e endpoints the fake-mic tone into utterances
+      AUOREO_BACKENDS: '{"stt":"fake","tts":"fake","vad":"fake"}',
     },
     stdio: ["ignore", "pipe", "pipe"],
   });

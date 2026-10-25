@@ -3,6 +3,7 @@ import { TERMINAL_RUN_EVENTS } from "@sdk/client";
 import type { PermissionRequestedData, QuestionAskedData } from "@sdk/events";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { useEventHub } from "@/lib/eventsHub";
 import { emptyThread, fromMessages, type Item, reduceEvents, type ThreadState } from "@/lib/thread";
 
 export interface ThreadView {
@@ -19,9 +20,9 @@ export interface ThreadView {
 }
 
 /**
- * Thread for one session: first paint from `/messages`, then the per-session SSE stream
- * replays from seq 0 (events are the source of truth) and tails live. Events are batched
- * per animation frame; during the initial replay they are flushed once the burst settles.
+ * Thread for one session: first paint from `/messages`, then the shared tab event stream
+ * replays this session from seq 0 (events are the source of truth) and tails live. Events
+ * are batched per animation frame; the replay is flushed in one batch when it completes.
  */
 export function useThread(sessionId: string): ThreadView {
   const [session, setSession] = useState<SessionDetail | undefined>(undefined);
@@ -32,6 +33,7 @@ export function useThread(sessionId: string): ThreadView {
   const [error, setError] = useState<unknown>(null);
   const [sessionTick, setSessionTick] = useState(0);
   const buffer = useRef<ServerEvent[]>([]);
+  const hub = useEventHub();
 
   useEffect(() => {
     let cancelled = false;
@@ -55,7 +57,6 @@ export function useThread(sessionId: string): ThreadView {
 
     let isLive = false;
     let raf = 0;
-    let settle: ReturnType<typeof setTimeout> | null = null;
     let maxWait: ReturnType<typeof setTimeout> | null = null;
 
     const flush = () => {
@@ -71,7 +72,6 @@ export function useThread(sessionId: string): ThreadView {
     const goLive = () => {
       if (isLive || cancelled) return;
       isLive = true;
-      if (settle) clearTimeout(settle);
       if (maxWait) clearTimeout(maxWait);
       flush();
       setLive(true);
@@ -98,35 +98,27 @@ export function useThread(sessionId: string): ThreadView {
       }
     };
 
-    const unsubscribe = api.subscribeEvents(
-      { sessionId, afterSeq: 0 },
+    // Shared tab stream (EventsContext): replay this session from seq 0, then tail live.
+    maxWait = setTimeout(goLive, 5000); // never stay on the snapshot if the replay hangs
+    const unsubscribe = hub.subscribe(
+      { channel: sessionId, afterSeq: 0 },
       (e) => {
         buffer.current.push(e);
-        if (isLive) {
-          raf ||= requestAnimationFrame(flush);
-          return;
-        }
-        if (settle) clearTimeout(settle);
-        settle = setTimeout(goLive, 150);
-        maxWait ??= setTimeout(goLive, 1500);
+        if (isLive) raf ||= requestAnimationFrame(flush);
       },
       {
-        onOpen: () => {
-          setStreamOk(true);
-          // A session with no events at all still goes live.
-          if (!isLive) settle ??= setTimeout(goLive, 400);
-        },
+        onOpen: () => setStreamOk(true),
         onError: () => setStreamOk(false),
+        onReplayed: goLive,
       },
     );
     return () => {
       cancelled = true;
       unsubscribe();
       if (raf) cancelAnimationFrame(raf);
-      if (settle) clearTimeout(settle);
       if (maxWait) clearTimeout(maxWait);
     };
-  }, [sessionId]);
+  }, [sessionId, hub]);
 
   const items = useMemo(() => {
     // A fork's inherited history lives only in `/messages` (no events in this session).

@@ -1,63 +1,26 @@
 import type { ServerEvent } from "@sdk/client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import type { BadgeVariant } from "@/components/ui/badge";
-import { api } from "@/lib/api";
+import { EXTRA_EVENT_TYPES, useEvents } from "@/lib/eventsHub";
 import { errorText } from "@/lib/utils";
 
 /** Server-scoped event names the ops pages care about (not in the SDK's `EVENT_TYPES`). */
-export const OPS_EVENT_TYPES = [
-  "plugin.started",
-  "plugin.stopped",
-  "plugin.restarted",
-  "plugin.crashed",
-  "plugin.invalid_config",
-  "plugin.paired",
-  "cron.fired",
-  "cron.delivered",
-  "cron.failed",
-  "delivery.queued",
-  "delivery.sent",
-  "delivery.delivered",
-  "delivery.failed",
-  "delivery.unknown",
-] as const;
+export const OPS_EVENT_TYPES = EXTRA_EVENT_TYPES.filter((t) => /^(plugin|cron|delivery)\./.test(t));
 
 /**
- * Replay + follow the durable stream for `aggregate_id = "server"` (harness reloads, plugin,
- * cron and delivery events) and call `onEvent` for each event whose type matches `prefixes`.
- * `liveOnly` skips the history (starts after the current latest seq).
+ * Replay + follow the shared stream's `aggregate_id = "server"` channel (harness reloads,
+ * plugin, cron and delivery events) and call `onEvent` for each event whose type matches
+ * `prefixes`. `liveOnly` skips the history.
  */
 export function useServerEvents(
   prefixes: readonly string[],
   onEvent: (e: ServerEvent) => void,
   liveOnly = false,
 ): void {
-  const cb = useRef(onEvent);
-  useEffect(() => {
-    cb.current = onEvent;
-  });
   const key = prefixes.join(",");
-  useEffect(() => {
-    const want = key.split(",");
-    let stop: (() => void) | null = null;
-    let cancelled = false;
-    const start = (afterSeq: number) => {
-      if (cancelled) return;
-      stop = api.subscribeEvents({ sessionId: "server", afterSeq, extraTypes: OPS_EVENT_TYPES }, (e) => {
-        if (want.some((p) => e.type.startsWith(p))) cb.current(e);
-      });
-    };
-    if (liveOnly)
-      api
-        .latestSeq()
-        .then((l) => start(l.seq))
-        .catch(() => start(0));
-    else start(0);
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
-  }, [key, liveOnly]);
+  useEvents({ channel: "server", afterSeq: liveOnly ? "live" : 0, types: OPS_EVENT_TYPES }, (e) => {
+    if (key.split(",").some((p) => e.type.startsWith(p))) onEvent(e);
+  });
 }
 
 /** Collect matching server events, newest first (bounded). */

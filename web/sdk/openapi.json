@@ -3643,6 +3643,39 @@
         "title": "RtcAnswer",
         "type": "object"
       },
+      "RtcCapabilities": {
+        "description": "What a browser call client may ask for in `POST /api/rtc/offer`.",
+        "properties": {
+          "available": {
+            "description": "aiortc is installed (else offers answer 501)",
+            "title": "Available",
+            "type": "boolean"
+          },
+          "speak": {
+            "description": "An outbound speech track is attached unless the offer says `speak: false`",
+            "title": "Speak",
+            "type": "boolean"
+          },
+          "teleop_input_enabled": {
+            "description": "`settings.teleop_input_enabled`: offers may set `input: true` (`auoreo-input` channel)",
+            "title": "Teleop Input Enabled",
+            "type": "boolean"
+          },
+          "voice_enabled": {
+            "description": "`settings.voice_enabled`: live transcription runs",
+            "title": "Voice Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "available",
+          "voice_enabled",
+          "speak",
+          "teleop_input_enabled"
+        ],
+        "title": "RtcCapabilities",
+        "type": "object"
+      },
       "RtcClosed": {
         "properties": {
           "closed": {
@@ -4004,6 +4037,62 @@
           "score"
         ],
         "title": "SearchHit",
+        "type": "object"
+      },
+      "SessionContext": {
+        "description": "Context occupancy of a session's next request (the `ctx_viz` gauge).\n\n`pressure` is the token count of the assembled request (system prompt + history) as the\ncompaction meter counts it; `tools_tokens` is the tool-schema overhead sent alongside.",
+        "properties": {
+          "auto_compact_at": {
+            "description": "Pressure at which automatic compaction runs",
+            "title": "Auto Compact At",
+            "type": "integer"
+          },
+          "context_window": {
+            "title": "Context Window",
+            "type": "integer"
+          },
+          "messages_tokens": {
+            "title": "Messages Tokens",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "pressure": {
+            "title": "Pressure",
+            "type": "integer"
+          },
+          "ratio": {
+            "description": "`(pressure + tools_tokens) / context_window`, 0..1+",
+            "title": "Ratio",
+            "type": "number"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "system_tokens": {
+            "title": "System Tokens",
+            "type": "integer"
+          },
+          "tools_tokens": {
+            "title": "Tools Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "session_id",
+          "model",
+          "context_window",
+          "system_tokens",
+          "tools_tokens",
+          "messages_tokens",
+          "pressure",
+          "auto_compact_at",
+          "ratio"
+        ],
+        "title": "SessionContext",
         "type": "object"
       },
       "SessionCreate": {
@@ -9969,6 +10058,88 @@
         ]
       }
     },
+    "/api/rtc/capabilities": {
+      "get": {
+        "description": "What the browser call client may request (G5b): the \"allow remote control\" switch asks\nfor `input: true` only when `teleop_input_enabled` is reported here.",
+        "operationId": "capabilities_api_rtc_capabilities_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RtcCapabilities"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Capabilities",
+        "tags": [
+          "rtc"
+        ]
+      }
+    },
     "/api/rtc/ice": {
       "get": {
         "description": "ICE servers for a browser `RTCPeerConnection` (F5): `rtc_ice_servers` plus, when\n`turn_secret_ref` + `turn_urls` are set, TURN REST credentials valid `turn_ttl_s` seconds.\nThe shared secret is never returned; fetch this right before each offer.",
@@ -11207,6 +11378,97 @@
         "summary": "Compact",
         "tags": [
           "compaction"
+        ]
+      }
+    },
+    "/api/sessions/{session_id}/context": {
+      "get": {
+        "description": "System / tools / messages token breakdown against the model's context window.",
+        "operationId": "session_context_api_sessions__session_id__context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionContext"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Session Context",
+        "tags": [
+          "sessions"
         ]
       }
     },

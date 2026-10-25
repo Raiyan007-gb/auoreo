@@ -1,10 +1,11 @@
-import type { CronJobInfo, WebhookRouteInfo } from "@sdk/client";
-import { HistoryIcon, InboxIcon, PauseIcon, PlayIcon } from "lucide-react";
+import type { CronJobInfo } from "@sdk/client";
+import { HistoryIcon, PauseIcon, PlayIcon } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { ErrorNote, PageHeader } from "@/components/AppShell";
-import { AsyncBody, Loading, RefreshButton, SessionLink, StatusBadge } from "@/components/ops/AsyncBody";
+import { AsyncBody, RefreshButton, SessionLink, StatusBadge } from "@/components/ops/AsyncBody";
 import { DeliveriesPanel } from "@/components/ops/Deliveries";
+import { WebhookRoutes } from "@/components/ops/WebhookRoutes";
 import { fmtWhen, useAction, useServerEvents } from "@/components/ops/opsUtils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -200,99 +201,6 @@ function CronTab({ tick }: { tick: number }) {
   );
 }
 
-function WebhookRow({ w, onDeliveries }: { w: WebhookRouteInfo; onDeliveries: () => void }) {
-  return (
-    <TableRow data-testid="webhook-row" data-name={w.name}>
-      <TableCell className="max-w-xs">
-        <p className="font-mono text-xs font-medium">POST {w.path}</p>
-        <p className="line-clamp-2 text-xs text-muted-foreground">{w.description}</p>
-      </TableCell>
-      <TableCell>
-        <Badge variant="outline">{w.provider}</Badge>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-wrap gap-1">
-          {w.events.length ? w.events.map((e) => <Badge key={e}>{e}</Badge>) : <span className="text-xs text-muted-foreground">any</span>}
-        </div>
-        {w.filters.length > 0 && <p className="text-[11px] text-muted-foreground">{w.filters.length} filters</p>}
-      </TableCell>
-      <TableCell className="text-xs">
-        {w.workflow ? (
-          <>
-            workflow <code>{w.workflow}</code>
-          </>
-        ) : (
-          <code>{w.agent}</code>
-        )}
-      </TableCell>
-      <TableCell>
-        <Badge variant={w.enabled ? "success" : "outline"}>{w.enabled ? "enabled" : "disabled"}</Badge>
-      </TableCell>
-      <TableCell>
-        <Badge
-          variant={w.secret_configured ? "success" : "warning"}
-          title={w.secret_configured ? "The referenced secret resolves (value never shown)" : `Set it with: auoreo secrets set webhook/${w.name}`}
-        >
-          {w.secret_configured ? "configured" : "missing"}
-        </Badge>
-      </TableCell>
-      <TableCell>
-        <Button size="sm" variant="outline" onClick={onDeliveries} aria-label={`Deliveries of ${w.name}`}>
-          <InboxIcon aria-hidden /> Deliveries
-        </Button>
-      </TableCell>
-    </TableRow>
-  );
-}
-
-function WebhooksTab({ tick }: { tick: number }) {
-  const hooks = useAsync(() => api.webhooks(), []);
-  const [drawer, setDrawer] = useState<string | null>(null);
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <p className="flex-1 text-xs text-muted-foreground">
-          HMAC-verified ingress routes from <code>webhooks/&lt;route&gt;.yaml</code>. Secrets are never shown.
-        </p>
-        <RefreshButton onClick={hooks.reload} busy={hooks.loading} label="Refresh webhooks" />
-      </div>
-      <AsyncBody state={hooks} empty="No webhook routes" emptyHint="Add webhooks/<route>.yaml to a definition root.">
-        {(rows) => (
-          <Table aria-label="Webhook routes">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Route</TableHead>
-                <TableHead>Provider</TableHead>
-                <TableHead>Events</TableHead>
-                <TableHead>Agent</TableHead>
-                <TableHead>Enabled</TableHead>
-                <TableHead>Secret</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map((w) => (
-                <WebhookRow key={w.name} w={w} onDeliveries={() => setDrawer(w.name)} />
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </AsyncBody>
-      <Sheet open={drawer !== null} onOpenChange={(o) => !o && setDrawer(null)}>
-        <SheetContent data-testid="deliveries-drawer">
-          <SheetHeader>
-            <SheetTitle>Deliveries of {drawer}</SheetTitle>
-            <SheetDescription>Replay runs a dry run first and only queues a new delivery when you confirm.</SheetDescription>
-          </SheetHeader>
-          {drawer ? <DeliveriesPanel source={drawer} kind="webhook" tick={tick} /> : <Loading />}
-        </SheetContent>
-      </Sheet>
-    </div>
-  );
-}
-
 export function JobsPage() {
   const [params, setParams] = useSearchParams();
   const raw = params.get("tab");
@@ -315,7 +223,7 @@ export function JobsPage() {
             <CronTab tick={tick} />
           </TabsContent>
           <TabsContent value="webhooks">
-            <WebhooksTab tick={tick} />
+            <WebhookRoutes tick={tick} />
           </TabsContent>
           <TabsContent value="deliveries">
             <DeliveriesPanel tick={tick} />

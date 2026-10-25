@@ -8,6 +8,7 @@ import { type ControlOptions, connectControl } from "./control";
 import { opsMethods } from "./ops";
 // --- end W0-A
 import { statusMethods } from "./ops2"; // --- W0-B
+import { g5bMethods } from "./ops3"; // --- G5b
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -258,6 +259,7 @@ export function createClient(opts: ClientOptions = {}) {
     // --- W0-A: skills, plugins, cron, webhooks, deliveries, teams, kanban (./ops.ts)
     ...opsMethods(request),
     // --- end W0-A
+    ...g5bMethods(request), // --- G5b: rtc call client + context gauge (./ops3.ts)
   };
 }
 
@@ -350,6 +352,7 @@ export * from "./events";
 export * from "./ops";
 // --- end W0-A
 export type * from "./ops2"; // --- W0-B
+export type * from "./ops3"; // --- G5b
 
 // =================================================================== --- W0-C goals + suggestions
 export type GoalInfo = S["GoalInfo"];
