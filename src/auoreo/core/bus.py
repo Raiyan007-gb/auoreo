@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from auoreo.schema.events import COALESCABLE, ServerEvent
@@ -35,6 +36,15 @@ class Subscriber:
 class EventBus:
     def __init__(self) -> None:
         self._subs: set[Subscriber] = set()
+        self._taps: list[Callable[[ServerEvent], None]] = []
+
+    def add_tap(self, fn: Callable[[ServerEvent], None]) -> None:
+        """W1-E: observe locally originated events (the Redis bridge forwards them)."""
+        self._taps.append(fn)
+
+    def remove_tap(self, fn: Callable[[ServerEvent], None]) -> None:
+        if fn in self._taps:
+            self._taps.remove(fn)
 
     def subscribe(self, channels: frozenset[str] | None = None) -> Subscriber:
         sub = Subscriber(channels)
@@ -48,7 +58,14 @@ class EventBus:
     def subscriber_count(self) -> int:
         return len(self._subs)
 
-    def publish(self, event: ServerEvent) -> None:
+    def publish(self, event: ServerEvent, *, remote: bool = False) -> None:
+        """`remote=True`: delivered from another worker; taps are skipped (no echo)."""
+        if not remote:
+            for tap in list(self._taps):
+                try:
+                    tap(event)
+                except Exception:
+                    log.exception("event bus tap failed")
         for sub in list(self._subs):
             if sub.overflowed or not sub.wants(event):
                 continue

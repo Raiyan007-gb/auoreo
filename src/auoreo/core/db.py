@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import sqlite3
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     DDL,
@@ -23,6 +21,7 @@ from sqlalchemy import (
     func,
     select,
 )
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -32,10 +31,19 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
+from auoreo.core.db_migrate import (  # re-exported: older imports use auoreo.core.db
+    ALEMBIC_DIR,
+    BASELINE_REVISION,
+    SchemaTooNewError,
+    alembic_config,
+    migrate,
+)
+
+if TYPE_CHECKING:
+    from auoreo.core.crypto_columns import ColumnCipher
+
 SCHEMA_VERSION = 5  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
 # 4: goals, suggestions (M3–M5 gaps); 5: blackboard, bandit, usage latency, audit triggers (M6)
-ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
-BASELINE_REVISION = "0001"  # the M2 schema; pre-Alembic databases are stamped here
 
 
 def utcnow() -> datetime:
@@ -358,60 +366,36 @@ class BanditOutcomeRow(Base):
     __table_args__ = (Index("ix_bandit_outcomes_context", "context_key", "created_at"),)
 
 
-class SchemaTooNewError(RuntimeError):
-    pass
+def _default_cipher(path: Path | None, mode: str | None) -> ColumnCipher:
+    """Encryption mode + key ring from `Settings()` (env + settings.json); the key file lives
+    next to the database file."""
+    from auoreo.core.crypto_columns import ColumnCipher, DbKeyring
 
-
-def alembic_config(url: str) -> Any:
-    """Programmatic Alembic config (no .ini needed) pointing at the packaged scripts."""
-    from alembic.config import Config
-
-    cfg = Config(stdout=sys.stdout)  # resolved per call so CLI output can be captured
-    cfg.set_main_option("script_location", str(ALEMBIC_DIR))
-    cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
-    return cfg
-
-
-def _stored_version(path: Path) -> int | None:
-    if not path.is_file():
-        return None
-    con = sqlite3.connect(path)
     try:
-        row = con.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
-    except sqlite3.OperationalError:  # brand new / no schema_meta yet
-        return None
-    finally:
-        con.close()
-    return int(row[0]) if row else None
+        from auoreo.core.settings import Settings
 
-
-def migrate(path: Path | str, revision: str = "head") -> None:
-    """`alembic upgrade` on a file database (sync; run it in a thread from async code).
-
-    A pre-Alembic (M2) database has tables but no `alembic_version`: stamp the baseline
-    first so only the newer revisions run."""
-    from alembic import command
-    from sqlalchemy import create_engine, inspect
-
-    url = f"sqlite:///{path}"
-    engine = create_engine(url)
-    try:
-        with engine.begin() as conn:
-            cfg = alembic_config(url)
-            cfg.attributes["connection"] = conn
-            tables = set(inspect(conn).get_table_names())
-            if tables and "alembic_version" not in tables:
-                command.stamp(cfg, BASELINE_REVISION)
-            command.upgrade(cfg, revision)
-    finally:
-        engine.dispose()
+        st = Settings()
+        home, policy, mode = (path.parent if path else st.home), st.keyring, mode or st.db_encryption
+    except Exception:  # unreadable settings never block opening the database
+        home, policy, mode = (path.parent if path else Path.cwd()), "allow-file", mode or "off"
+    return ColumnCipher(mode, DbKeyring(home, policy))
 
 
 class Database:
-    def __init__(self, path: Path | str) -> None:
+    def __init__(
+        self, path: Path | str, *, encryption: str | None = None, cipher: ColumnCipher | None = None
+    ) -> None:
         self.path = None if str(path) == ":memory:" else Path(path)
+        self.cipher = cipher or _default_cipher(self.path, encryption)
+        """Column cipher (W1-E): every reader of `events.data` / `audit.detail` decrypts through it."""
         url = "sqlite+aiosqlite:///:memory:" if str(path) == ":memory:" else f"sqlite+aiosqlite:///{path}"
-        self.engine: AsyncEngine = create_async_engine(url)
+        if self.sqlcipher:
+            from auoreo.core import sqlcipher
+
+            assert self.path is not None
+            self.engine: AsyncEngine = sqlcipher.async_engine(self.path, self.cipher.keyring)
+        else:
+            self.engine = create_async_engine(url)
         self.sessionmaker = async_sessionmaker(self.engine, expire_on_commit=False)
 
         @event.listens_for(self.engine.sync_engine, "connect")
@@ -422,23 +406,43 @@ class Database:
             cur.execute("PRAGMA busy_timeout=5000")
             cur.close()
 
+    @property
+    def sqlcipher(self) -> bool:
+        return self.cipher.mode == "sqlcipher" and self.path is not None
+
+    async def _preflight(self) -> None:
+        """Refuse a sqlcipher mode that cannot work; make sure a `columns` key exists."""
+        from auoreo.core import sqlcipher
+
+        if self.sqlcipher:
+            assert self.path is not None
+            if not sqlcipher.available():
+                raise RuntimeError(
+                    "db_encryption=sqlcipher needs the `sqlcipher` extra (sqlcipher3); install it "
+                    "or use db_encryption=columns"
+                )
+            if self.path.is_file() and not sqlcipher.is_encrypted_file(self.path):
+                raise RuntimeError(
+                    f"{self.path} is plaintext; stop the server and run `auoreo db encrypt` "
+                    "(or use db_encryption=columns)"
+                )
+        if self.cipher.mode in {"columns", "sqlcipher"} and self.path is not None:
+            await asyncio.to_thread(self.cipher.ensure_key)
+
     async def init(self) -> None:
+        await self._preflight()
         if self.path is None:  # tests: no migration history needed
             async with self.engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
         else:
-            stored = await asyncio.to_thread(_stored_version, self.path)
-            if stored is not None and stored > SCHEMA_VERSION:  # refuse before touching it
-                raise SchemaTooNewError(
-                    f"state.db schema v{stored} is newer than this build (v{SCHEMA_VERSION})"
-                )
-            await asyncio.to_thread(migrate, self.path)
-        async with self.session() as s:
+            keyring = self.cipher.keyring if self.sqlcipher else None
+            await asyncio.to_thread(migrate, self.path, keyring=keyring, max_version=SCHEMA_VERSION)
+        async with self.session() as s:  # OR IGNORE: a concurrent initialiser may win the insert
+            stmt = sqlite_insert(Meta).values(key="schema_version", value=str(SCHEMA_VERSION))
+            await s.execute(stmt.on_conflict_do_nothing())
+            await s.commit()
             row = await s.get(Meta, "schema_version")
-            if row is None:
-                s.add(Meta(key="schema_version", value=str(SCHEMA_VERSION)))
-                await s.commit()
-            elif int(row.value) > SCHEMA_VERSION:
+            if row is not None and int(row.value) > SCHEMA_VERSION:
                 raise SchemaTooNewError(
                     f"state.db schema v{row.value} is newer than this build (v{SCHEMA_VERSION})"
                 )
@@ -455,6 +459,8 @@ class Database:
 
 
 __all__ = [
+    "ALEMBIC_DIR",
+    "BASELINE_REVISION",
     "AuditRow",
     "Database",
     "SchemaTooNewError",

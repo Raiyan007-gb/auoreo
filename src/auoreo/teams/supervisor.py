@@ -122,5 +122,6 @@ class Supervisor:
                 .order_by(EventRow.seq.desc())
                 .limit(5000)
             )
-            rows = [r for r in (await s.execute(q)).scalars() if r.data.get("team_id") == team_id]
-        return [{"seq": r.seq, "created_at": r.created_at, **r.data} for r in reversed(rows[:limit])]
+            found = [(r, self.t.s.events.plain(r.data)) for r in (await s.execute(q)).scalars()]
+        rows = [(r, d) for r, d in found if d.get("team_id") == team_id]  # plain(): encrypted columns
+        return [{"seq": r.seq, "created_at": r.created_at, **d} for r, d in reversed(rows[:limit])]

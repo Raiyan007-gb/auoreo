@@ -307,6 +307,16 @@ class Settings(BaseSettings):
     # --- W1-C
     bandit: BanditSettings = Field(default_factory=BanditSettings)
     """Model/effort policy (spec §12.5): contextual epsilon-greedy, default off."""
+    # --- W1-E
+    db_encryption: Literal["off", "columns", "sqlcipher"] = "off"
+    """Data at rest (spec L1069). `columns`: Fernet on `events.data` + `audit.detail` (key
+    `auoreo-db-key` in the keyring or a 0600 `.db.key`); `sqlcipher`: whole-file state.db
+    encryption (needs the `sqlcipher` extra and `auoreo db encrypt` for an existing file)."""
+    redis_url: str | None = None
+    """Redis for multi-worker event fan-out (`auoreo:events` pub/sub); needs the `redis` extra."""
+    workers: int = Field(default=1, ge=1, le=64)
+    """Uvicorn worker processes. >1 refuses to start without `redis_url`; sticky sessions
+    are required at the load balancer (approvals, WS connections and runs are per process)."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

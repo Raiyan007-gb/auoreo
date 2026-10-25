@@ -51,7 +51,8 @@ class AuditLog:
         reason: str = "",
         detail: dict[str, Any] | None = None,
     ) -> None:
-        detail = redact_obj(detail or {})
+        # W1-E: the chain covers the STORED value (ciphertext in `columns` mode) → verify() is keyless
+        stored = self.db.cipher.encrypt(redact_obj(detail or {}))
         async with self._lock, self.db.session() as s:
             last = (await s.execute(select(AuditRow).order_by(AuditRow.seq.desc()).limit(1))).scalar()
             prev = last.row_hash if last else GENESIS
@@ -65,15 +66,20 @@ class AuditLog:
                 action=action,
                 decision=decision,
                 reason=reason,
-                detail=detail,
+                detail=stored,
                 prev_hash=prev,
                 row_hash=_row_hash(
-                    prev, seq, ts.isoformat(), session_id, actor, action, decision, reason, detail
+                    prev, seq, ts.isoformat(), session_id, actor, action, decision, reason, stored
                 ),
             )
             s.add(row)
             await s.commit()
         obs.count("audit_writes_total")  # --- W0-D
+
+    def plain_detail(self, row: AuditRow) -> dict[str, Any]:
+        """The one read path for `audit.detail`: decrypt (if enveloped), then redact."""
+        out: dict[str, Any] = redact_obj(self.db.cipher.decrypt(row.detail or {}))
+        return out
 
     async def verify(self) -> int | None:
         """Recompute the chain. Returns the first broken seq, or None if intact."""

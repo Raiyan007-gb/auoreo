@@ -59,6 +59,12 @@ rerank-local = [  # W0-D: backends/rerank/cross_encoder (CPU torch on Linux/Wind
     "sentence-transformers>=5,<6",
     "torch>=2.4",  # direct so [tool.uv.sources] can pin the CPU wheel index
 ]
+sqlcipher = [  # W1-E: whole-file encryption of state.db (db_encryption = "sqlcipher")
+    "sqlcipher3>=0.6.4,<0.7",
+]
+redis = [  # W1-E: multi-worker event fan-out (serve --workers N with redis_url)
+    "redis>=6,<9",
+]
 code = [
     "tree-sitter>=0.26.0",
     "tree-sitter-go>=0.25.0",
@@ -83,6 +89,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "asgi-lifespan>=2.1.0",
+    "fakeredis>=2.30,<3",
     "mypy>=2.4.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
