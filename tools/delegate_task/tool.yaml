@@ -1,0 +1,26 @@
+name: delegate_task
+toolset: teams
+description: 'Run a self-contained task in a subagent; returns a <task-notification>.'
+parameters:
+  type: object
+  properties:
+    goal:
+      type: string
+      minLength: 1
+      maxLength: 20000
+      description: >-
+        What the subagent must achieve. Give the subagent everything it needs in goal/context (purpose, files as path:line, what done means). Foreground waits for the result; background=true returns at once and the result arrives later as an injected <task-notification> message. With output_schema the child's final answer must be JSON valid for that schema (one automatic retry).
+    context: {type: string, maxLength: 50000, description: Background, constraints, relevant files.}
+    agent: {type: string, default: default, description: Agent folder to run (e.g. implementer, reviewer).}
+    name: {type: string, pattern: "^[a-z0-9_]{1,64}$", description: Unique task name in the team.}
+    background: {type: boolean, default: false}
+    model: {type: string, description: Optional model alias/group override for the child.}
+    output_schema: {type: object, description: JSON Schema the child's final answer must satisfy.}
+  required: [goal]
+  additionalProperties: false
+permission: delegate
+pattern_arg: agent
+default_action: ask
+interactive_only: false
+timeout_ms: 3600000
+search_hint: subagent spawn delegate parallel task child agent

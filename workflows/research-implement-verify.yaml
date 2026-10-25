@@ -1,0 +1,30 @@
+name: research-implement-verify
+description: The planner researches and plans, the implementer makes the change, the reviewer verifies it.
+steps:
+  - id: plan
+    agent: planner
+    input: "{{input}}"
+  - id: implement
+    agent: implementer
+    input: |-
+      Implement this plan, then run the project's checks and report a hand-off
+      (purpose, files as path:line, done, summary ≤80 chars).
+
+      Original request:
+      {{input}}
+
+      Plan:
+      {{steps.plan.output}}
+  - id: verify
+    agent: reviewer
+    input: |-
+      Verify this change: review it and run the tests. Verdict first, then findings.
+
+      Original request:
+      {{input}}
+
+      Plan:
+      {{steps.plan.output}}
+
+      Implementer hand-off:
+      {{steps.implement.output}}

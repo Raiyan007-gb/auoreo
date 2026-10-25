@@ -279,6 +279,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/kanban": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Tasks */
+        get: operations["list_tasks_api_kanban_get"];
+        put?: never;
+        /** Create Task */
+        post: operations["create_task_api_kanban_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory/facts": {
         parameters: {
             query?: never;
@@ -612,6 +630,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Teams */
+        get: operations["list_teams_api_teams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teams/{team_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Team */
+        get: operations["get_team_api_teams__team_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teams/{team_id}/mailbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mailbox */
+        get: operations["mailbox_api_teams__team_id__mailbox_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/usage": {
         parameters: {
             query?: never;
@@ -619,7 +688,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Usage */
+        /**
+         * List Usage
+         * @description `children=true` (with `session_id`) rolls child sessions' usage into the parent.
+         */
         get: operations["list_usage_api_usage_get"];
         put?: never;
         post?: never;
@@ -991,10 +1063,86 @@ export interface components {
             /** Routes */
             routes: string[];
         };
+        /** KanbanCreate */
+        KanbanCreate: {
+            /**
+             * Board
+             * @default default
+             */
+            board: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /** Title */
+            title: string;
+        };
+        /** KanbanTask */
+        KanbanTask: {
+            /** Board */
+            board: string;
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Failures
+             * @default 0
+             */
+            failures: number;
+            /** Heartbeat At */
+            heartbeat_at?: string | null;
+            /** Id */
+            id: number;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "claimed" | "blocked" | "done";
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Worker */
+            worker?: string | null;
+        };
         /** LatestSeq */
         LatestSeq: {
             /** Seq */
             seq: number;
+        };
+        /** MailMessage */
+        MailMessage: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Read */
+            read: boolean;
+            /** Recipient */
+            recipient: string;
+            /** Sender */
+            sender: string;
+            /** Summary */
+            summary: string;
+            /** Team Id */
+            team_id: string;
+            /** Text */
+            text: string;
+            /** Type */
+            type: string;
         };
         /** MessageOut */
         MessageOut: {
@@ -1209,6 +1357,80 @@ export interface components {
             updated_at: string;
             /** Workflow */
             workflow: string;
+        };
+        /** TeamDetail */
+        TeamDetail: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /** Lead Session Id */
+            lead_session_id: string;
+            /**
+             * Members
+             * @default 0
+             */
+            members: number;
+            /** Name */
+            name: string;
+            /** Peers */
+            peers?: components["schemas"]["TeamMemberInfo"][];
+        };
+        /** TeamInfo */
+        TeamInfo: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Id */
+            id: string;
+            /** Lead Session Id */
+            lead_session_id: string;
+            /**
+             * Members
+             * @default 0
+             */
+            members: number;
+            /** Name */
+            name: string;
+        };
+        /** TeamMemberInfo */
+        TeamMemberInfo: {
+            /** Agent */
+            agent: string;
+            /** Depth */
+            depth: number;
+            /**
+             * Name
+             * @description Member name; "lead" is the team lead session
+             */
+            name: string;
+            /**
+             * Running
+             * @description Liveness: a run is in progress right now
+             */
+            running: boolean;
+            /** Session Id */
+            session_id: string;
+            /**
+             * Status
+             * @description lead | queued | running | done | failed | stopped
+             */
+            status: string;
         };
         /** UsageRecord */
         UsageRecord: {
@@ -1859,6 +2081,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    list_tasks_api_kanban_get: {
+        parameters: {
+            query?: {
+                board?: string | null;
+                status?: ("ready" | "claimed" | "blocked" | "done") | null;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanTask"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_task_api_kanban_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KanbanCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KanbanTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2686,11 +2984,122 @@ export interface operations {
             };
         };
     };
+    list_teams_api_teams_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_team_api_teams__team_id__get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                team_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mailbox_api_teams__team_id__mailbox_get: {
+        parameters: {
+            query?: {
+                member?: string | null;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                team_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_usage_api_usage_get: {
         parameters: {
             query?: {
                 session_id?: string | null;
                 limit?: number;
+                children?: boolean;
                 token?: string | null;
             };
             header?: {

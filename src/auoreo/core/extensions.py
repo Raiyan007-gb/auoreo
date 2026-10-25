@@ -21,7 +21,7 @@ STARTERS: list[str] = [
     "auoreo.automation.deliveries:start",
     "auoreo.automation.scheduler:start",
     "auoreo.automation.webhooks:start",
-    # "auoreo.teams.service:start",
+    "auoreo.teams:start",  # key = last dotted part → services.ext["teams"]
     # "auoreo.plugins.host:start",
 ]
 

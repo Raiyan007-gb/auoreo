@@ -1,0 +1,13 @@
+name: team_create
+toolset: teams
+description: 'Create a team led by this session.'
+parameters:
+  type: object
+  properties:
+    name: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$"}
+    description: {type: string, maxLength: 1000}
+  required: [name]
+  additionalProperties: false
+default_action: allow
+interactive_only: false
+timeout_ms: 30000

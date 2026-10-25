@@ -1,0 +1,15 @@
+name: kanban_heartbeat
+description: Refresh the heartbeat of a task you claimed so it is not reclaimed as stale.
+parameters:
+  type: object
+  properties:
+    task_id: {type: integer, minimum: 1}
+    worker: {type: string, minLength: 1, maxLength: 64, description: Worker name (defaults to this session id).}
+  required: [task_id]
+  additionalProperties: false
+toolset: kanban
+exposure: deferred
+search_hint: kanban board task queue claim worker
+default_action: allow
+interactive_only: false
+timeout_ms: 30000

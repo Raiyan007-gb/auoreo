@@ -1,0 +1,12 @@
+name: interrupt_agent
+toolset: teams
+description: 'Stop a teammate''s run.'
+parameters:
+  type: object
+  properties:
+    name: {type: string, minLength: 1, maxLength: 64}
+  required: [name]
+  additionalProperties: false
+default_action: allow
+interactive_only: false
+timeout_ms: 30000
