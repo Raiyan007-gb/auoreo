@@ -250,6 +250,13 @@ class Settings(BaseSettings):
     """Executable of the cua-driver MCP server (`<command> mcp` over stdio)."""
     cua_telemetry: bool = False
     """Leave cua-driver telemetry on (default forces `CUA_DRIVER_RS_TELEMETRY_ENABLED=0`)."""
+    # --- W0-E
+    lsp_timeout_ms: int = Field(default=5000, ge=100, le=600_000)
+    """Per-request timeout for the `lsp` tool's language-server calls."""
+    lsp_servers: dict[str, list[str]] = Field(default_factory=dict)
+    """Language-server argv overrides by language (`python`, `typescript`, `javascript`)."""
+    shell_max_processes: int = Field(default=8, ge=1, le=64)
+    """Live `exec_command` processes allowed per session."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

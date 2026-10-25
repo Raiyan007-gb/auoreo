@@ -1,0 +1,41 @@
+name: lsp
+toolset: files
+description: >-
+  Ask a language server (read-only) about code: definitions, references, hover, symbols,
+  implementations, type definitions, diagnostics, call hierarchy. Prefer grep/read first;
+  use this when a name is ambiguous or you need types or cross-file references.
+parameters:
+  type: object
+  properties:
+    op:
+      type: string
+      enum: [definition, references, hover, document_symbols, workspace_symbols, implementation,
+             type_definition, diagnostics, call_hierarchy]
+      description: >-
+        Operation. definition/references/hover/implementation/type_definition/call_hierarchy
+        need path+line+column on the symbol; document_symbols and diagnostics need path;
+        workspace_symbols needs query (path picks the language/project; default: the cwd's).
+    path: {type: string, description: Source file (absolute or relative to the working directory).}
+    line: {type: integer, minimum: 1, description: 1-based line of the symbol.}
+    column:
+      type: integer
+      minimum: 1
+      description: 1-based column (characters, not bytes) anywhere inside the symbol name.
+    query: {type: string, description: "workspace_symbols: symbol name or fragment to search."}
+    direction:
+      type: string
+      enum: [incoming, outgoing]
+      default: incoming
+      description: "call_hierarchy: callers (incoming) or callees (outgoing)."
+  required: [op]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+exposure: deferred
+timeout_ms: 90000
+search_hint: language server lsp go to definition find references hover type diagnostics call hierarchy implementation symbols
+sandbox_mode: read-only

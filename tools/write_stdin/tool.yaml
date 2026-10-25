@@ -1,0 +1,40 @@
+name: write_stdin
+toolset: shell
+description: >-
+  Send characters to a running exec_command process and return its new output; empty
+  chars just polls.
+parameters:
+  type: object
+  properties:
+    session_id: {type: string, description: The session_id returned by exec_command.}
+    chars:
+      type: string
+      default: ""
+      description: >-
+        Text to write to stdin (include "\n" to submit a line; "\u0003" is Ctrl-C under a
+        tty). Empty string only polls for new output.
+    yield_time_ms:
+      type: integer
+      minimum: 0
+      maximum: 30000
+      default: 2000
+      description: Wait at most this long for output or exit after writing.
+    max_output_tokens:
+      type: integer
+      minimum: 50
+      maximum: 16000
+      default: 4000
+      description: Clip the returned output to about this many tokens.
+  required: [session_id]
+  additionalProperties: false
+permission: write_stdin
+pattern_arg: session_id
+default_action: allow
+is_destructive: true
+exposure: deferred
+interrupt: cancel
+timeout_ms: 45000
+search_hint: send input stdin poll output running process exec_command
+max_result_size_chars: 64000
+net: none
+sandbox_mode: danger-full-access
