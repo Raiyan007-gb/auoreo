@@ -24,6 +24,7 @@ from auoreo.harness.manifests import (
     McpServerManifest,
     PermissionFile,
     PluginManifest,
+    PolicyManifest,
     PromptFamily,
     PromptSection,
     SkillManifest,
@@ -447,11 +448,27 @@ def load_plugin(c: Candidate) -> Loaded:
     return Loaded(manifest, c.root.source, c.path)
 
 
+def load_policy(c: Candidate) -> Loaded:
+    text = _read(c.path)
+    header: dict[str, Any] = {"name": c.name}
+    for line in text.splitlines():
+        if not line.startswith("#"):
+            break
+        key, sep, value = line.lstrip("# ").partition(":")
+        if sep and key.strip() in {"description", "priority", "enabled"}:
+            header[key.strip()] = value.strip()
+    manifest = _validate(PolicyManifest, header, c.path, text)
+    if not re.search(r"^def decide\(", text, re.MULTILINE):
+        raise LoadError(c.path, "policy must define `def decide(req):`")
+    return Loaded(manifest, c.root.source, c.path)
+
+
 LOADERS: dict[str, Callable[[Candidate], Any]] = {
     "hooks": load_hook,
     "jobs": load_job,
     "webhooks": load_webhook,
     "plugins": load_plugin,
+    "policies": load_policy,
     "backends": load_backend,
     "tools": load_tool,
     "agents": load_agent,

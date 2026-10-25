@@ -46,6 +46,7 @@ NAMED_KINDS = (
     "jobs",
     "webhooks",
     "plugins",
+    "policies",
 )
 
 
@@ -80,6 +81,7 @@ class Snapshot:
     jobs: dict[str, Loaded] = field(default_factory=dict)
     webhooks: dict[str, Loaded] = field(default_factory=dict)
     plugins: dict[str, Loaded] = field(default_factory=dict)
+    policies: dict[str, Loaded] = field(default_factory=dict)
     permission_layers: list[Loaded] = field(default_factory=list)  # low → high precedence
     variants: Loaded | None = None
     errors: list[LoadError] = field(default_factory=list)
@@ -195,6 +197,10 @@ class Harness:
     @property
     def plugins(self) -> dict[str, Loaded]:
         return self._snap.plugins
+
+    @property
+    def policies(self) -> dict[str, Loaded]:
+        return self._snap.policies
 
     @property
     def errors(self) -> list[LoadError]:
@@ -331,10 +337,10 @@ class Harness:
             )
             for n, b in sorted(self._snap.backends.items())
         ]
-        for kind in ("hooks", "jobs", "webhooks", "plugins"):
+        for kind in ("hooks", "jobs", "webhooks", "plugins", "policies"):
             out[kind] = [
                 row(
-                    kind[:-1],
+                    {"policies": "policy"}.get(kind, kind[:-1]),
                     n,
                     d.source,
                     d.path,

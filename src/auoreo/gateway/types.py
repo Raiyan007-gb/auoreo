@@ -72,6 +72,8 @@ class LLMRequest:
     max_tokens: int | None = None
     omit_fields: tuple[str, ...] = ()
     metadata: dict[str, Any] = field(default_factory=dict)
+    reasoning_effort: Literal["low", "medium", "high", "max"] | None = None
+    """Agent `effort` (or a policy choice); the gateway maps it to the provider's knob."""
 
 
 @dataclass(frozen=True)

@@ -28,6 +28,7 @@ LAYOUT: dict[str, tuple[str, str]] = {
     "jobs": ("file", "*.yaml"),  # scheduled jobs (M5)
     "webhooks": ("file", "*.yaml"),  # inbound webhook routes (M5)
     "plugins": ("dir", "plugin.yaml"),  # out-of-process plugins (M5)
+    "policies": ("file", "*.star"),  # Starlark exec policies (M6)
 }
 
 _SUBPATH: dict[str, str] = {"families": "prompts/families", "variants": "prompts"}

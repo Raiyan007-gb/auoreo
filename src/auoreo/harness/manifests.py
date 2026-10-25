@@ -217,6 +217,18 @@ class HookManifest(_Strict):
     enabled: bool = True
 
 
+class PolicyManifest(_Strict):
+    """`policies/<name>.star` (M6): a Starlark exec policy. The header is `# key: value`
+    comment lines before the first code line; the file must define `decide(req)`, which
+    returns "allow" | "deny" | "ask" | "review" | None (no opinion). Evaluated after floors
+    and before permission rules; higher `priority` runs first, first non-None answer wins."""
+
+    name: str = Field(pattern=NAME_RE)
+    description: str = Field(min_length=1)
+    priority: int = Field(default=100, ge=0, le=1000)
+    enabled: bool = True
+
+
 class JobManifest(_Strict):
     """`jobs/<name>.yaml`. APScheduler only fires the trigger; AUOREO runs the job in its own
     session and records `job_runs` + `deliveries`."""

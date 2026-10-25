@@ -114,6 +114,6 @@ def test_cli_stats_and_db_commands() -> None:
     r = runner.invoke(cli, ["db", "upgrade"])
     assert r.exit_code == 0, r.output
     r = runner.invoke(cli, ["db", "history"])
-    assert r.exit_code == 0 and "0004" in r.output and "0001" in r.output
+    assert r.exit_code == 0 and "0005" in r.output and "0001" in r.output
     r = runner.invoke(cli, ["db", "current"])
-    assert r.exit_code == 0 and "0004 (head)" in r.output
+    assert r.exit_code == 0 and "0005 (head)" in r.output

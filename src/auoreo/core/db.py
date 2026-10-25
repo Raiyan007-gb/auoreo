@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import (
+    DDL,
     JSON,
     Boolean,
     DateTime,
@@ -31,8 +32,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
-SCHEMA_VERSION = 4  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
-# 4: goals, suggestions (M3–M5 gaps)
+SCHEMA_VERSION = 5  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
+# 4: goals, suggestions (M3–M5 gaps); 5: blackboard, bandit, usage latency, audit triggers (M6)
 ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
 BASELINE_REVISION = "0001"  # the M2 schema; pre-Alembic databases are stamped here
 
@@ -130,6 +131,8 @@ class UsageRow(Base):
     cost_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     estimated: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)  # v5
+    outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)  # v5: ok|error code
 
 
 class AuditRow(Base):
@@ -144,6 +147,17 @@ class AuditRow(Base):
     detail: Mapped[dict[str, Any]]
     prev_hash: Mapped[str] = mapped_column(String(64))
     row_hash: Mapped[str] = mapped_column(String(64))
+
+
+# The audit table is append-only at the SQL level too (spec §19.13): hash ≠ immutability.
+AUDIT_TRIGGERS = (
+    "CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit "
+    "BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END",
+    "CREATE TRIGGER IF NOT EXISTS audit_no_delete BEFORE DELETE ON audit "
+    "BEGIN SELECT RAISE(ABORT, 'audit is append-only'); END",
+)
+for _sql in AUDIT_TRIGGERS:
+    event.listen(AuditRow.__table__, "after_create", DDL(_sql))  # type: ignore[no-untyped-call]
 
 
 class IdempotencyRow(Base):
@@ -297,6 +311,51 @@ class SuggestionRow(Base):
         Index("ix_suggestions_status", "status", "created_at"),
         Index("ix_suggestions_dedupe", "dedupe_key"),
     )
+
+
+class ArtifactRow(Base):
+    """Team blackboard (spec L1024): small keyed artifacts, ≤64 KiB each; the mailbox stays
+    control-plane only. Schema v5."""
+
+    __tablename__ = "artifacts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_id: Mapped[str] = mapped_column(String(64))
+    key: Mapped[str] = mapped_column(String(200))
+    value: Mapped[str] = mapped_column(String(65_536))
+    producer: Mapped[str] = mapped_column(String(64))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+    __table_args__ = (Index("ix_artifacts_key", "team_id", "key", unique=True),)
+
+
+class BanditArmRow(Base):
+    """Contextual epsilon-greedy arm statistics (spec §12.5). Schema v5."""
+
+    __tablename__ = "bandit_policy"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    context_key: Mapped[str] = mapped_column(String(128))
+    arm_key: Mapped[str] = mapped_column(String(255))
+    arm: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    pulls: Mapped[int] = mapped_column(Integer, default=0)
+    reward_sum: Mapped[float] = mapped_column(Float, default=0.0)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+    __table_args__ = (Index("ix_bandit_policy_arm", "context_key", "arm_key", unique=True),)
+
+
+class BanditOutcomeRow(Base):
+    """One rewarded turn (spec §12.5). Schema v5."""
+
+    __tablename__ = "bandit_outcomes"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String(64))
+    run_id: Mapped[str] = mapped_column(String(64))
+    context_key: Mapped[str] = mapped_column(String(128))
+    arm_key: Mapped[str] = mapped_column(String(255))
+    reward: Mapped[float] = mapped_column(Float, default=0.0)
+    signals: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    __table_args__ = (Index("ix_bandit_outcomes_context", "context_key", "created_at"),)
 
 
 class SchemaTooNewError(RuntimeError):
