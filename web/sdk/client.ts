@@ -4,6 +4,9 @@
  * Framework-agnostic: no React here.
  */
 import { type ControlOptions, connectControl } from "./control";
+// --- W0-A
+import { opsMethods } from "./ops";
+// --- end W0-A
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -244,6 +247,10 @@ export function createClient(opts: ClientOptions = {}) {
       subscribeEvents({ ...o, baseUrl: base, token: token() }, onEvent, h),
     connectControl: (o: Omit<ControlOptions, "baseUrl" | "token">) =>
       connectControl({ ...o, baseUrl: base, token: token() }),
+
+    // --- W0-A: skills, plugins, cron, webhooks, deliveries, teams, kanban (./ops.ts)
+    ...opsMethods(request),
+    // --- end W0-A
   };
 }
 
@@ -332,3 +339,6 @@ export function subscribeEvents(
 
 export * from "./control";
 export * from "./events";
+// --- W0-A
+export * from "./ops";
+// --- end W0-A
