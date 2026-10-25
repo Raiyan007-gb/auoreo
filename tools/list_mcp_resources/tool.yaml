@@ -1,0 +1,18 @@
+name: list_mcp_resources
+toolset: mcp
+description: >-
+  List the resources (files, records, documents with a URI) offered by connected MCP
+  servers. Pass `server` to list one server; read one with read_mcp_resource.
+parameters:
+  type: object
+  properties:
+    server: {type: string, minLength: 1, description: MCP server name; omit for all connected servers.}
+  additionalProperties: false
+permission: read
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+exposure: deferred
+timeout_ms: 30000
+search_hint: mcp resources list uri server documents

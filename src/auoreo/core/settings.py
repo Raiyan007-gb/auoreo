@@ -160,6 +160,9 @@ class Settings(BaseSettings):
     """Outbox poll interval (rows enqueued by another process, e.g. `auoreo webhook test`)."""
     automation_run_timeout_s: int = Field(default=900, ge=10)
     """Agent timeout for webhook deliveries (jobs use their own `timeout_s`)."""
+    # --- M5b
+    searxng_url: str | None = None
+    """Base URL of a SearXNG instance for `web_search` (JSON format enabled), e.g. `http://localhost:8888`."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

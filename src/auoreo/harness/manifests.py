@@ -312,8 +312,9 @@ class PromptSection(_Strict):
     name: str = Field(pattern=NAME_RE)
     order: int
     tier: Literal["stable", "context"] = "stable"
-    role: Literal["section", "compaction"] = "section"
-    """`section` joins the agent's system prompt; `compaction` is the summarizer instruction."""
+    role: Literal["section", "compaction", "guardian"] = "section"
+    """`section` joins the agent's system prompt; `compaction` is the summarizer instruction;
+    `guardian` is the smart-mode permission policy. Only `section` reaches the agent."""
 
 
 class PromptFamily(_Strict):

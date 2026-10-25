@@ -8,6 +8,8 @@ Behaviour per call:
 
 `vision` (default True) is what `supports_vision` reports; aux calls with
 `metadata.purpose == "vision"` answer with a deterministic description.
+Guardian calls (`purpose == "guardian"`) pop `guardian_script`; when it is empty they
+answer `$AUOREO_FAKE_GUARDIAN` (default `ESCALATE`).
 """
 
 from __future__ import annotations
@@ -15,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 from collections import deque
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -48,6 +51,7 @@ class FakeGateway:
     def __init__(self, script: list[Scripted] | None = None, context_window_tokens: int = 128_000) -> None:
         self.script: deque[Scripted] = deque(script or [])
         self.compaction_script: deque[Scripted] = deque()
+        self.guardian_script: deque[str] = deque()
         self.requests: list[LLMRequest] = []
         self.context_window_tokens = context_window_tokens
         self.vision = True
@@ -60,6 +64,9 @@ class FakeGateway:
         self.requests.append(request)
         if request.metadata.get("purpose") == "compaction":  # aux call never eats the main script
             item = self.compaction_script.popleft() if self.compaction_script else _summary(request)
+        elif request.metadata.get("purpose") == "guardian":  # nor does the smart-mode guardian
+            default = os.environ.get("AUOREO_FAKE_GUARDIAN", "ESCALATE")
+            item = Scripted(text=self.guardian_script.popleft() if self.guardian_script else default)
         elif request.metadata.get("purpose") == "vision":  # nor does a vision aux call
             item = self._auto(request)
         else:

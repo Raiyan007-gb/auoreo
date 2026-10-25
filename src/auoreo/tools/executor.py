@@ -1,8 +1,9 @@
 """Run one tool call through the full pipeline (spec §9.4–9.6).
 
-parse → validate (JSON Schema) → interactive gate → permission (floors, rules, mode,
-human approval) → scrubbed env → handler with timeout (per-path lock for writers)
-→ redact → prune/spill → audit.
+parse → validate (JSON Schema) → PreToolUse hooks (deny / modify → re-validate) →
+interactive gate → permission (floors, rules, mode, smart-mode guardian, human approval)
+→ scrubbed env → handler with timeout (per-path lock for writers)
+→ redact → prune/spill → audit → PostToolUse hooks.
 """
 
 from __future__ import annotations
@@ -16,11 +17,13 @@ from typing import TYPE_CHECKING, Any
 
 import jsonschema
 
+from auoreo.core.guardian import guardian_verdict
 from auoreo.core.redaction import redact
 from auoreo.core.secrets import child_env
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import LoadError, ToolDef
-from auoreo.tools.context import ToolContext, ToolError, ToolResult
+from auoreo.runtime.hooks import RESULT_PREVIEW_CHARS, hooks_of
+from auoreo.tools.context import CURRENT_SESSION, ToolContext, ToolError, ToolResult
 
 if TYPE_CHECKING:
     from auoreo.core.permissions import PermissionEngine
@@ -101,6 +104,23 @@ class ToolExecutor:
         except jsonschema.ValidationError as exc:
             return self._err(call, format_validation_error(exc))
 
+        hooks = hooks_of(self.s)
+        if hooks is not None:
+            pre = await hooks.run(
+                "PreToolUse",
+                session_id=ctx.session_id,
+                payload={"agent": _agent(ctx), "tool": tool.name, "arguments": args},
+                match_key=tool.name,
+            )
+            if pre.denied:
+                return self._err(call, f"blocked by a PreToolUse hook: {pre.message}")
+            if pre.input is not None:  # modified arguments must pass the schema again
+                args = pre.input
+                try:
+                    jsonschema.validate(args, tool.manifest.parameters)
+                except jsonschema.ValidationError as exc:
+                    return self._err(call, f"a PreToolUse hook produced {format_validation_error(exc)}")
+
         if tool.manifest.interactive_only and not ctx.interactive:
             return self._err(call, f"'{tool.name}' needs a human and this run is non-interactive")
 
@@ -114,6 +134,7 @@ class ToolExecutor:
             "pattern": pattern[:500],
             "call_id": call.id,
         }
+        reason = decision.detail
         if decision.action == "deny":
             await self.s.audit.record(
                 actor="agent",
@@ -125,41 +146,27 @@ class ToolExecutor:
             )
             return self._err(call, f"permission denied ({decision.detail}). Do not retry unchanged.")
         if decision.action == "ask":
-            if not ctx.interactive:
-                return self._err(
-                    call,
-                    f"'{tool.name}' needs approval for `{pattern[:200]}` but this "
-                    "run is non-interactive; allow it with a permission rule",
-                )
-            outcome = await self.s.approvals.request(
-                ctx.session_id, tool.name, permission, pattern, _detail(tool, args)
+            refused, reason = await self._ask(
+                call, tool, args, ctx, engine, permission, pattern, audit, reason
             )
-            await self.s.audit.record(
-                actor="human",
-                action="permission.reply",
-                session_id=ctx.session_id,
-                decision=outcome.reply or "timeout",
-                reason=decision.detail,
-                detail=audit,
-            )
-            if not outcome.granted:
-                if outcome.message:
-                    return self._err(call, f"user rejected this call with feedback: {outcome.message}")
-                return ToolOutcome(call, ToolResult("user rejected this tool call", is_error=True), halt=True)
-            if outcome.reply == "always":
-                engine.grant_always(permission, pattern)
+            if refused is not None:
+                return refused
 
         # Execute.
         ctx.env = child_env(tool.manifest.requires_env, self.s.secrets)
         lock = self._lock_for(tool, args, ctx)
         try:
             handler = tool.handler()
-            coro = handler(args, ctx)
-            if lock is not None:
-                async with lock:
+            session_token = CURRENT_SESSION.set(ctx.session_id)
+            try:
+                coro = handler(args, ctx)
+                if lock is not None:
+                    async with lock:
+                        raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
+                else:
                     raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
-            else:
-                raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
+            finally:
+                CURRENT_SESSION.reset(session_token)
             result = raw if isinstance(raw, ToolResult) else ToolResult(str(raw))
         except ToolError as exc:
             result = ToolResult(str(exc), is_error=True)
@@ -183,14 +190,88 @@ class ToolExecutor:
             action="tool.call",
             session_id=ctx.session_id,
             decision="allow",
-            reason=decision.detail,
+            reason=reason,
             detail={**audit, "is_error": result.is_error},
         )
+        if hooks is not None:
+            await hooks.run(
+                "PostToolUse",
+                session_id=ctx.session_id,
+                payload={
+                    "agent": _agent(ctx),
+                    "tool": tool.name,
+                    "arguments": args,
+                    "result": result.content[:RESULT_PREVIEW_CHARS],
+                    "is_error": result.is_error,
+                },
+                match_key=tool.name,
+            )
         return ToolOutcome(call, result)
+
+    async def _ask(
+        self,
+        call: ToolCall,
+        tool: ToolDef,
+        args: dict[str, Any],
+        ctx: ToolContext,
+        engine: PermissionEngine,
+        permission: str,
+        pattern: str,
+        audit: dict[str, Any],
+        reason: str,
+    ) -> tuple[ToolOutcome | None, str]:
+        """The `ask` path: smart-mode guardian first, then the human. Returns
+        `(error outcome or None to proceed, audit reason)`."""
+        if engine.mode == "smart":
+            spec = ctx.services.get("spec")
+            verdict = await guardian_verdict(
+                self.s,
+                tool=tool.name,
+                permission=permission,
+                pattern=pattern,
+                detail=_detail(tool, args),
+                session_id=ctx.session_id,
+                model=getattr(spec, "model", None),
+            )
+            if verdict == "APPROVE":
+                return None, "guardian"
+            if verdict == "DENY":
+                msg = f"denied by the smart-mode guardian for `{pattern[:200]}`. Do not retry unchanged."
+                return self._err(call, msg), "guardian"
+        if not ctx.interactive:
+            return self._err(
+                call,
+                f"'{tool.name}' needs approval for `{pattern[:200]}` but this "
+                "run is non-interactive; allow it with a permission rule",
+            ), reason
+        outcome = await self.s.approvals.request(
+            ctx.session_id, tool.name, permission, pattern, _detail(tool, args)
+        )
+        await self.s.audit.record(
+            actor="human",
+            action="permission.reply",
+            session_id=ctx.session_id,
+            decision=outcome.reply or "timeout",
+            reason=reason,
+            detail=audit,
+        )
+        if not outcome.granted:
+            if outcome.message:
+                return self._err(call, f"user rejected this call with feedback: {outcome.message}"), reason
+            rejected = ToolResult("user rejected this tool call", is_error=True)
+            return ToolOutcome(call, rejected, halt=True), reason
+        if outcome.reply == "always":
+            engine.grant_always(permission, pattern)
+        return None, reason
 
     @staticmethod
     def _err(call: ToolCall, message: str) -> ToolOutcome:
         return ToolOutcome(call, ToolResult(message, is_error=True))
+
+
+def _agent(ctx: ToolContext) -> str:
+    spec = ctx.services.get("spec")
+    return str(getattr(spec, "name", "") or "")
 
 
 def _detail(tool: ToolDef, args: dict[str, Any]) -> str:
