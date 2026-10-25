@@ -26,6 +26,8 @@ STARTERS: list[str] = [
     "auoreo.plugins:start",  # → services.ext["plugins"]
     "auoreo.memory.curator:start",  # → services.ext["curator"] (deterministic, no LLM)
     "auoreo.voice:start",  # M4c → services.ext["voice"]
+    "auoreo.goals:start",  # W0-C → services.ext["goals"]
+    "auoreo.suggestions:start",  # W0-C → services.ext["suggestions"] (60 s expiry/delivery sweep)
 ]
 
 

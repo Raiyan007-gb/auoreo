@@ -250,6 +250,15 @@ class Settings(BaseSettings):
     """Executable of the cua-driver MCP server (`<command> mcp` over stdio)."""
     cua_telemetry: bool = False
     """Leave cua-driver telemetry on (default forces `CUA_DRIVER_RS_TELEMETRY_ENABLED=0`)."""
+    # --- W0-C
+    suggestions_enabled: bool = True
+    """Proactive suggestions (consent-first; never executed without an explicit accept)."""
+    suggestions_home: str = "log"
+    """Delivery target (`<provider>[:<target>]`) for `deliver: home` and the failure fallback."""
+    suggestions_quiet_hours: str | None = Field(default=None, pattern=r"^\d{1,2}:\d{2}-\d{1,2}:\d{2}$")
+    """Local-time window like `22:00-07:00` during which suggestion delivery is deferred."""
+    suggestions_max_pending: int = Field(default=5, ge=1, le=100)
+    """At most this many pending suggestions; proposing more expires the oldest."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

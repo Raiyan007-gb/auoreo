@@ -14,6 +14,7 @@ import {
   ScrollTextIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  TargetIcon,
 } from "lucide-react";
 
 export interface NavItem {
@@ -37,4 +38,5 @@ export const NAV: readonly NavItem[] = [
   { to: "/audit", label: "Audit", icon: ScrollTextIcon },
   { to: "/doctor", label: "Doctor", icon: ActivityIcon },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
+  { to: "/goals", label: "Goals", icon: TargetIcon }, // --- W0-C
 ];

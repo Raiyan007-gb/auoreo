@@ -246,6 +246,7 @@ export function createClient(opts: ClientOptions = {}) {
 
     // --- W0-B: doctor, audit, memory facts/files/curator, voice (web/sdk/ops2.ts)
     ...statusMethods(request, base, token),
+    ...goalsApi(request), // --- W0-C (block at the end of this file)
 
     subscribeEvents: (o: SubscribeOptions, onEvent: (e: ServerEvent) => void, h?: StreamHandlers) =>
       subscribeEvents({ ...o, baseUrl: base, token: token() }, onEvent, h),
@@ -347,3 +348,37 @@ export * from "./events";
 export * from "./ops";
 // --- end W0-A
 export type * from "./ops2"; // --- W0-B
+
+// =================================================================== --- W0-C goals + suggestions
+export type GoalInfo = S["GoalInfo"];
+export type GoalCreate = S["GoalCreate"];
+export type GoalPatch = S["GoalPatch"];
+export type GoalStatus = GoalInfo["status"];
+export type SuggestionInfo = S["SuggestionInfo"];
+export type SuggestionCreate = S["SuggestionCreate"];
+export type SuggestionProposed = S["SuggestionProposed"];
+export type SuggestionAccepted = S["SuggestionAccepted"];
+export type SuggestionStatus = SuggestionInfo["status"];
+
+type RequestFn = <T>(method: string, path: string, init?: RequestInit2) => Promise<T>;
+
+/** `/api/goals` + `/api/suggestions` (consent-first: nothing runs until `acceptSuggestion`). */
+function goalsApi(request: RequestFn) {
+  return {
+    /** No `status` lists every goal. */
+    listGoals: (status?: GoalStatus | "all", limit = 100) =>
+      request<GoalInfo[]>("GET", "/api/goals", { query: { status, limit } }),
+    createGoal: (body: Partial<GoalCreate> & Pick<GoalCreate, "title">) =>
+      request<GoalInfo>("POST", "/api/goals", { body: { description: "", ...body } }),
+    updateGoal: (id: number, body: Partial<GoalPatch>) =>
+      request<GoalInfo>("PATCH", `/api/goals/${id}`, { body }),
+    absorbGoal: (id: number, into: number) =>
+      request<GoalInfo>("POST", `/api/goals/${id}/absorb`, { body: { into } }),
+    listSuggestions: (status?: SuggestionStatus | "all", limit = 100) =>
+      request<SuggestionInfo[]>("GET", "/api/suggestions", { query: { status, limit } }),
+    proposeSuggestion: (body: Partial<SuggestionCreate> & Pick<SuggestionCreate, "title">) =>
+      request<SuggestionProposed>("POST", "/api/suggestions", { body }),
+    acceptSuggestion: (id: number) => request<SuggestionAccepted>("POST", `/api/suggestions/${id}/accept`),
+    denySuggestion: (id: number) => request<SuggestionInfo>("POST", `/api/suggestions/${id}/deny`),
+  };
+}

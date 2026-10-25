@@ -8,6 +8,12 @@ prompt: |
   six bullets: anything above 85% CPU/memory/disk, unusual network errors or drops, and
   processes that dominate resources. Say "all normal" when nothing stands out. Do not
   change anything on the machine.
+
+  When a threshold is crossed (CPU > 90%, memory > 90%, or any disk mount > 90%), call
+  `suggest` once per anomaly (use `tool_search` with "suggest" if it is not loaded) with
+  kind "ops", deliver "home", a title quoting the number, a body with the evidence and a
+  safe next step, and a stable dedupe_key per anomaly: "ops:cpu", "ops:mem" or
+  "ops:disk:<mount>". Suggestions wait for the user's consent; never act on them yourself.
 deliver: [log]
 enabled: false
 catch_up: false

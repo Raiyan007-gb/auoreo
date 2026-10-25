@@ -76,6 +76,9 @@ def replay(
         prompt = str(row.payload.get("prompt") or "")
         if dry_run:
             return prompt, None
+        if row.kind == "suggestion":
+            typer.echo("suggestion deliveries are not replayable; propose it again", err=True)
+            raise typer.Exit(1)
         new = await outbox.enqueue(
             row.kind, row.source, f"replay-{row.id}-{uuid.uuid4().hex[:8]}", dict(row.payload), row.target
         )

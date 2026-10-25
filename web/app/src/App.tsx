@@ -3,6 +3,7 @@ import { AppShell, EmptyState } from "@/components/AppShell";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ControlProvider } from "@/lib/control";
 import { ApprovalsPage } from "@/pages/Approvals";
+import { GoalsPage } from "@/pages/Goals";
 import { HarnessPage } from "@/pages/Harness";
 import { MemoryPage } from "@/pages/Memory";
 import { SessionRoute } from "@/pages/Session";
@@ -45,6 +46,7 @@ export function App() {
               <Route path="teams" element={<TeamsPage />} />
               {/* --- end W0-A */}
               <Route path="welcome" element={<WelcomePage />} />
+              <Route path="goals" element={<GoalsPage />} /> {/* --- W0-C */}
               <Route path="*" element={<div className="p-4"><EmptyState title="Page not found" /></div>} />
             </Route>
           </Routes>

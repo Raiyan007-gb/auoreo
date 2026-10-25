@@ -1,0 +1,20 @@
+name: get_goal
+description: Read one long-running user goal by id, or list goals (active by default).
+parameters:
+  type: object
+  properties:
+    id: {type: integer, minimum: 1, description: "Goal id; omit to list goals."}
+    status:
+      type: string
+      enum: [active, paused, done, dropped, absorbed, all]
+      default: active
+      description: "Status filter when listing (ignored with id)."
+  additionalProperties: false
+permission: goals
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+toolset: goals
+exposure: deferred
+search_hint: goal goals objective progress track long-running
+timeout_ms: 30000

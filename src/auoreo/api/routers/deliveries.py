@@ -21,6 +21,10 @@ async def list_deliveries(
     return [delivery_info(r) for r in await outbox_of(svc).list(status, kind, limit)]
 
 
+NOT_REPLAYABLE = "suggestion"
+"""Plain-text suggestion rows carry no agent prompt; replaying would run an empty turn."""
+
+
 @router.post("/{delivery_id}/replay", response_model=DeliveryReplay)
 async def replay_delivery(delivery_id: int, svc: ServicesDep, dry_run: bool = True) -> DeliveryReplay:
     """`dry_run=true` (default) only shows the stored prompt; otherwise a new pending row
@@ -32,6 +36,10 @@ async def replay_delivery(delivery_id: int, svc: ServicesDep, dry_run: bool = Tr
     prompt = str(row.payload.get("prompt") or "")
     if dry_run:
         return DeliveryReplay(dry_run=True, prompt=prompt)
+    if row.kind == NOT_REPLAYABLE:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "suggestion deliveries are not replayable; propose it again"
+        )
     ext = f"replay-{row.id}-{uuid.uuid4().hex[:8]}"
     new = await outbox.enqueue(row.kind, row.source, ext, dict(row.payload), row.target)
     if new is None:  # pragma: no cover - random suffix

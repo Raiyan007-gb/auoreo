@@ -33,12 +33,16 @@ from auoreo.api.routers import (
 from auoreo.api.routers import commands as commands_router
 from auoreo.api.routers import cron as cron_router
 from auoreo.api.routers import deliveries as deliveries_router
+
+# --- W0-C
+from auoreo.api.routers import goals as goals_router
 from auoreo.api.routers import hooks as hooks_router
 from auoreo.api.routers import kanban as kanban_router
 from auoreo.api.routers import openai_compat as openai_compat_router
 from auoreo.api.routers import ops as ops_router  # --- W0-B
 from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import rtc as rtc_router
+from auoreo.api.routers import suggestions as suggestions_router
 from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import voice as voice_router
 from auoreo.api.routers import webhooks as webhooks_router
@@ -73,6 +77,9 @@ ROUTERS = (
     voice_router,  # M4c
     # --- W0-B
     ops_router,  # doctor + audit
+    # --- W0-C
+    goals_router,
+    suggestions_router,
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h
