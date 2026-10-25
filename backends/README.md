@@ -30,5 +30,5 @@ Kinds today: `capture`, `browser`, `sandbox` (none · docker · bwrap; `sandbox_
 warn|fail` decides what happens when the selected one is unavailable), `stt`, `tts`,
 `vad`, `wake`, `desktop`, `rerank` (none · fake · cross_encoder · cohere; fail-open), `environment` (local · docker ·
 ssh · e2b · modal · daytona), `detection` / `face` / `sensor` (fake defaults; faces off unless
-`faces_enabled`), `rtc_transport`. Real voice/desktop libraries are imported lazily; their
+`faces_enabled`), `rtc_transport`, `diarize` (fake · sherpa_onnx · pyannote). Real voice/desktop libraries are imported lazily; their
 `check()` reports what is missing, and the `fake` sibling keeps tests and demos keyless.
