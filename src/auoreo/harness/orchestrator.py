@@ -145,10 +145,21 @@ def build_spec(
     )
 
 
-def render_context(spec: AgentSpec, cwd: Path, permission_mode: str, memory: str = "") -> str:
-    """Tier-2 context block (sent as a user-role snapshot each turn)."""
+def render_context(
+    spec: AgentSpec, cwd: Path, permission_mode: str, memory: str = "", locale: str | None = None
+) -> str:
+    """Tier-2 context block (sent as a user-role snapshot each turn).
+
+    `locale` lives here, never in a stable-tier section, so changing it cannot break the
+    session's byte-stable system prompt. Unset → `spec.extras["locale"]` → `Settings.locale`."""
     if not spec.context_template:
         return ""
+    if locale is None:
+        locale = spec.extras.get("locale")
+    if locale is None:
+        from auoreo.core.settings import get_settings
+
+        locale = get_settings().locale
     return render(
         spec.context_template,
         {
@@ -159,6 +170,7 @@ def render_context(spec: AgentSpec, cwd: Path, permission_mode: str, memory: str
             "permission_mode": permission_mode,
             "memory": memory,
             "agent_name": spec.name,
+            "locale": locale or "",
         },
     ).strip()
 

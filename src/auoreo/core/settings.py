@@ -49,6 +49,12 @@ class MemorySettings(BaseModel):
     tool_max_tokens: int = 2000
     chunk_tokens: int = 512
     chunk_overlap: int = 50
+    # --- M5f
+    curator_enabled: bool = True
+    curator_interval_hours: float = Field(default=168, gt=0)
+    curator_min_idle_hours: float = Field(default=2, ge=0)
+    curator_stale_after_days: float = Field(default=30, gt=0)
+    curator_archive_after_days: float = Field(default=90, gt=0)
 
 
 class LoopSettings(BaseModel):
@@ -176,6 +182,9 @@ class Settings(BaseSettings):
     """Default plugin tool-call / delivery timeout (a tool entry's `timeout_ms` wins)."""
     plugins_backoff_scale: float = Field(default=1.0, ge=0)
     """Multiplier on the 1 s → 30 s crash-restart backoff (tests use 0)."""
+    # --- M5f
+    locale: str | None = None
+    """User locale (e.g. `de-DE`), rendered as `{{locale}}` in the per-turn context block."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

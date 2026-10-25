@@ -342,6 +342,7 @@ PROMPT_VARS = {
     "permission_mode",
     "memory",
     "os",
+    "locale",
 }
 
 

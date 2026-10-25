@@ -1,0 +1,23 @@
+name: distill-skill
+description: The default agent summarizes the procedure that worked; the skills_writer turns it into a reusable skill.
+steps:
+  - id: summarize
+    agent: default
+    input: |-
+      Summarize the repeatable procedure behind this request so it can become a skill.
+      Do not change any files. List: when it applies, prerequisites, the ordered steps with
+      exact commands, how to verify success, and pitfalls you hit. Use `session_search` and
+      `knowledge_search` to recover details from earlier sessions.
+
+      Request:
+      {{input}}
+  - id: write
+    agent: skills_writer
+    input: |-
+      Write (or update) a skill from this procedure summary, then lint it.
+
+      Original request:
+      {{input}}
+
+      Summary:
+      {{steps.summarize.output}}

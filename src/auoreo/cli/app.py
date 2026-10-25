@@ -47,3 +47,11 @@ app.add_typer(deliveries.app, name="deliveries", help="Automation outbox: list, 
 from auoreo.cli.commands import plugin  # noqa: E402
 
 app.add_typer(plugin.app, name="plugin", help="List, add, remove, reload and pair plugins.")
+
+# M5f: deterministic memory curator, skills lint
+from auoreo.cli.commands import curator, skill  # noqa: E402
+
+app.add_typer(
+    curator.app, name="curator", help="Deterministic memory curation: run (--dry-run/--force), report."
+)
+app.add_typer(skill.app, name="skill", help="Skills: lint frontmatter and bodies.")

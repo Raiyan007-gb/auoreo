@@ -243,6 +243,49 @@ async def test_memory_tool_batch_and_guards(services: Services, repo: Path) -> N
     assert big[:100] not in (services.settings.home / "memory" / "USER.md").read_text()  # atomic
 
 
+async def test_memory_tool_lifecycle_actions(services: Services, repo: Path) -> None:
+    mem = services.memory
+    assert mem is not None
+    ctx = ctx_for(services, repo)
+
+    async def ops(*items: dict) -> tuple[str, bool]:
+        return await call(services, ctx, "memory", {"operations": list(items)})
+
+    a, _ = await mem.add_fact("The on-call rota lives in the ops wiki")
+    b, _ = await mem.add_fact("The release train leaves every second Tuesday")
+    text, err = await ops({"action": "pin", "target": "fact", "old_text": "on-call rota"})
+    assert not err and f"fact {a} pinned" in text
+    assert (await mem.get_fact(a) or {})["pinned"] == 1
+    text, err = await ops(
+        {"action": "feedback", "target": "fact", "old_text": "release train", "helpful": False}
+    )
+    assert not err and "trust now 0.40" in text
+    text, err = await ops({"action": "forget", "target": "fact", "old_text": "release train"})
+    assert not err and f"fact {b} archived" in text
+    row = await mem.get_fact(b)
+    assert row is not None and row["archived_at"] is not None  # archived, not deleted
+    hits, _ = await call(services, ctx, "knowledge_search", {"query": "release train tuesday"})
+    assert "release train" not in hits
+    hits, _ = await call(
+        services, ctx, "knowledge_search", {"query": "release train tuesday", "include_archived": True}
+    )
+    assert f"[fact:{b}]" in hits
+    # `remove` archives too (tools never hard-delete)
+    text, err = await ops({"action": "remove", "target": "fact", "old_text": "on-call rota"})
+    assert not err and await mem.get_fact(a) is not None
+    # atomic: a bad op later in the batch prevents earlier fact writes
+    text, err = await ops(
+        {"action": "add", "target": "fact", "content": "Should never be stored zebra"},
+        {"action": "pin", "target": "fact", "old_text": "no such fact anywhere"},
+    )
+    assert err and "matched 0 facts" in text
+    assert await mem.find_facts("zebra") == []
+    text, err = await ops({"action": "pin", "target": "user", "old_text": "x"})
+    assert err and "only applies to target=fact" in text
+    text, err = await ops({"action": "feedback", "target": "fact", "old_text": "nothing"})
+    assert err and "helpful" in text
+
+
 async def test_session_search_finds_past_messages(services: Services, gateway: FakeGateway) -> None:
     sess = await services.create_session()
     await services.coordinator.submit(sess.id, "the launch codename is bluebird", interactive=False)

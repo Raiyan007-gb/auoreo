@@ -12,9 +12,11 @@ import logging
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+from auoreo.memory import ledger
 from auoreo.memory.chunking import chunk_text
+from auoreo.memory.contradiction import MIN_SHARED, contradicts, top_terms
 from auoreo.memory.files import read_capped
 from auoreo.memory.store import MemoryStore, Row, fts_query
 
@@ -85,27 +87,87 @@ class MemoryService:
             return None
 
     # -------------------------------------------------------------- writes
-    async def add_fact(self, content: str, category: str = "user") -> tuple[int, bool]:
+    async def add_fact(self, content: str, category: str = "user", source: str = "agent") -> tuple[int, bool]:
         content = scrub(content).strip()[:2000]
         emb = await self._embed([content])
-        return await self._run(
+        fid, created = await self._run(
             self.store.add_fact,
             content,
             category,
             self.cfg.default_trust,
             emb[0] if emb else None,
             self.cfg.embed_model,
+            source,
         )
+        if created:
+            try:
+                await self.flag_contradictions(fid, content)
+            except Exception:  # advisory only: never fail the write
+                log.exception("contradiction check failed for fact %s", fid)
+        return fid, created
 
-    async def replace_fact(self, fact_id: int, content: str) -> bool:
+    async def flag_contradictions(self, fact_id: int, content: str) -> list[int]:
+        """Flag (never overwrite) active facts the new one may contradict (§24.3)."""
+        terms = top_terms(content)
+        if len(terms) < MIN_SHARED:
+            return []
+        ids = [i for i in await self._run(self.store.fts, "fact", " ".join(terms), 20) if i != fact_id]
+        rows = await self._run(self.store.fetch, "fact", ids)
+        hits = [i for i in ids if i in rows and contradicts(content, rows[i].text)]
+        for existing in hits:
+            await self.s.emit("server", "memory.contradiction", {"new_id": fact_id, "existing_id": existing})
+        ledger.append(
+            self.s.settings.home,
+            [
+                {
+                    **ledger.entry("curator", "flag_contradiction", fact_id, "possible contradiction"),
+                    "existing_id": e,
+                }
+                for e in hits
+            ],
+        )
+        return hits
+
+    async def replace_fact(self, fact_id: int, content: str) -> int | None:
+        """Supersede `fact_id` with `content`; returns the new row's id (None if not active)."""
+        content = scrub(content).strip()[:2000]
         emb = await self._embed([content])
         return await self._run(self.store.replace_fact, fact_id, content, emb[0] if emb else None)
 
-    async def remove_fact(self, fact_id: int) -> bool:
-        return await self._run(self.store.remove_fact, fact_id)
+    async def forget(self, fact_id: int, actor: str = "user", reason: str = "forgotten on request") -> bool:
+        """Archive (never delete) a fact; ledger + audit."""
+        ok = await self._run(self.store.archive_fact, fact_id)
+        if ok:
+            ledger.append(self.s.settings.home, [ledger.entry(actor, "forget", fact_id, reason)])
+            await self.s.audit.record(
+                actor=actor, action="memory.forget", reason=reason, detail={"fact_id": fact_id}
+            )
+        return ok
 
-    async def find_facts(self, substring: str) -> list[tuple[int, str]]:
-        return await self._run(self.store.find_facts, substring)
+    async def purge(self, fact_id: int, actor: str = "user") -> bool:
+        """Hard delete — only the CLI (`memory purge --yes`) calls this."""
+        ok = await self._run(self.store.purge_fact, fact_id)
+        if ok:
+            ledger.append(self.s.settings.home, [ledger.entry(actor, "purge", fact_id, "purged via CLI")])
+            await self.s.audit.record(actor=actor, action="memory.purge", detail={"fact_id": fact_id})
+        return ok
+
+    async def pin(self, fact_id: int, pinned: bool = True, actor: str = "user") -> bool:
+        ok = await self._run(self.store.set_pinned, fact_id, pinned)
+        if ok:
+            action = "pin" if pinned else "unpin"
+            ledger.append(self.s.settings.home, [ledger.entry(actor, action, fact_id, f"{action}ned")])
+        return ok
+
+    async def feedback(self, fact_id: int, helpful: bool) -> float | None:
+        """Trust feedback: +0.05 when helpful, −0.10 when not (clamped to 0–1)."""
+        return await self._run(self.store.bump_trust, fact_id, 0.05 if helpful else -0.10)
+
+    async def get_fact(self, fact_id: int) -> dict[str, Any] | None:
+        return await self._run(self.store.get_fact, fact_id)
+
+    async def find_facts(self, substring: str, include_archived: bool = False) -> list[tuple[int, str]]:
+        return await self._run(self.store.find_facts, substring, include_archived=include_archived)
 
     async def ingest(self, text: str, source: str, doc_id: str | None = None) -> int:
         """Chunk + embed + store a document. Returns the number of new chunks."""
@@ -145,6 +207,7 @@ class MemoryService:
         query: str,
         limit: int = 8,
         kinds: tuple[str, ...] = ("fact", "chunk"),
+        include_archived: bool = False,
     ) -> list[Hit]:
         if is_trivial(query):
             return []
@@ -152,9 +215,11 @@ class MemoryService:
         emb = await self._embed([query])
         rankings: list[list[tuple[str, int]]] = []
         for kind in kinds:
-            rankings.append([(kind, i) for i in await self._run(self.store.fts, kind, query, wide)])
+            fts = await self._run(self.store.fts, kind, query, wide, include_archived)
+            rankings.append([(kind, i) for i in fts])
             if emb:
-                rankings.append([(kind, i) for i in await self._run(self.store.knn, kind, emb[0], wide)])
+                knn = await self._run(self.store.knn, kind, emb[0], wide, include_archived)
+                rankings.append([(kind, i) for i in knn])
         fused = rrf(rankings, self.cfg.rrf_k)
         by_kind: dict[str, list[int]] = {}
         for kind, rid in fused:
@@ -178,7 +243,14 @@ class MemoryService:
             )
             hits.append(Hit(row.kind, row.id, row.text, score * trust, row.source, cite))
         hits.sort(key=lambda h: h.score, reverse=True)
-        return hits[:30][:limit]  # top-30 window → rerank (no-op, fail-open) → top-N
+        top = hits[:30][:limit]  # top-30 window → rerank (no-op, fail-open) → top-N
+        used = [h.id for h in top if h.kind == "fact"]
+        if used:
+            try:  # usage feeds the curator; best effort
+                await self._run(self.store.bump_use, used)
+            except Exception:
+                log.exception("could not record fact usage")
+        return top
 
     async def search_sessions(self, query: str, limit: int = 8, session_id: str | None = None) -> list[Hit]:
         rows = await self._run(self.store.search_transcript, query, limit, session_id)
