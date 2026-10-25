@@ -183,6 +183,121 @@ class BackendManifest(_Strict):
         return f"{self.kind}/{self.name}"
 
 
+HookEvent = Literal[
+    "PreToolUse",
+    "PostToolUse",
+    "PermissionRequest",
+    "UserPromptSubmit",
+    "SessionStart",
+    "SessionEnd",
+    "PreCompact",
+    "PostCompact",
+    "Stop",
+]
+
+
+class HookManifest(_Strict):
+    """`hooks/<name>.yaml`. A command hook gets the event as JSON on stdin and answers with
+    `{"decision": "allow"|"deny"|"modify", "message"?: str, "input"?: dict}` (Stop hooks:
+    `{"block": bool, "reason"?: str}`). Non-zero exit = error → `on_error` policy."""
+
+    name: str = Field(pattern=NAME_RE)
+    description: str = Field(min_length=1)
+    event: HookEvent
+    matcher: str = "*"
+    """fnmatch over the tool name (tool events), command name, or agent name (session events)."""
+    command: list[str] = Field(min_length=1)
+    """argv, run with the scrubbed child env and cwd = session cwd; no shell."""
+    timeout_ms: int = Field(default=5_000, ge=100, le=300_000)
+    on_error: Literal["warn", "block"] = "warn"
+    enabled: bool = True
+
+
+class JobManifest(_Strict):
+    """`jobs/<name>.yaml`. APScheduler only fires the trigger; AUOREO runs the job in its own
+    session and records `job_runs` + `deliveries`."""
+
+    name: str = Field(pattern=NAME_RE)
+    description: str = Field(min_length=1)
+    schedule: str = Field(min_length=1)
+    """5-field cron (`0 9 * * 1-5`), `every 30m|2h|1d`, or an ISO-8601 one-shot datetime."""
+    tz: str | None = None
+    """IANA zone for cron schedules; default = process zone."""
+    agent: str = Field(default="default", pattern=NAME_RE)
+    workflow: str | None = None
+    prompt: str = Field(min_length=1)
+    """Template; `{{now}}` and `{{job}}` are available."""
+    skills: list[str] = Field(default_factory=list)
+    deliver: list[str] = Field(default_factory=lambda: ["log"])
+    """Delivery backend names (`backends/delivery/<name>`), tried in order; first success wins."""
+    enabled: bool = True
+    catch_up: bool = True
+    """Fire once if a run was missed while the server was down (within half a period, max 2h)."""
+    timeout_s: int = Field(default=900, ge=10, le=86_400)
+    max_steps: int | None = Field(default=None, ge=1, le=500)
+
+
+class WebhookFilter(_Strict):
+    field: str
+    """Dotted path into the normalized payload, e.g. `action` or `pull_request.draft`."""
+    equals: str | None = None
+    contains: str | None = None
+    regex: str | None = None
+    exists: bool | None = None
+
+
+class WebhookManifest(_Strict):
+    """`webhooks/<route>.yaml` → `POST /hooks/<route>`. Verified (HMAC) and enqueued before
+    202 is returned; the agent runs in its own session afterwards."""
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
+    description: str = Field(min_length=1)
+    provider: Literal["github", "generic"] = "generic"
+    secret: str = Field(min_length=1)
+    """`secret:<name>` reference resolved through the secret store (never the value)."""
+    events: list[str] = Field(default_factory=list)
+    """Provider event names to accept (GitHub `X-GitHub-Event`); empty = all."""
+    filters: list[WebhookFilter] = Field(default_factory=list)
+    agent: str = Field(default="default", pattern=NAME_RE)
+    workflow: str | None = None
+    prompt: str = Field(min_length=1)
+    """Template over `{{event.*}}` (dotted paths, missing → literal), `{{route}}`, `{{delivery_id}}`."""
+    deliver: list[str] = Field(default_factory=lambda: ["log"])
+    enabled: bool = True
+    rate_limit_per_minute: int = Field(default=30, ge=1, le=10_000)
+    max_body_bytes: int = Field(default=1_048_576, ge=1_024, le=50 * 1_048_576)
+    max_steps: int | None = Field(default=None, ge=1, le=500)
+
+
+class PluginManifest(_Strict):
+    """`plugins/<name>/plugin.yaml` (+ `pyproject.toml`). Plugins run out of process in their
+    own venv and talk JSON-RPC over stdio; what they provide is registered dynamically."""
+
+    name: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
+    version: str = Field(pattern=r"^\d+\.\d+\.\d+")
+    description: str = Field(min_length=1)
+    provides: list[Literal["tools", "delivery", "connector", "backend", "skills"]] = Field(min_length=1)
+    consumes: list[str] = Field(default_factory=list)
+    """Capabilities the plugin needs from the host (`sessions`, `memory`, `secrets:<name>`)."""
+    permissions: list[str] = Field(default_factory=list)
+    """Permission names the plugin's tools use (shown at install time)."""
+    config_schema: dict[str, Any] = Field(
+        default_factory=lambda: {"type": "object", "properties": {}, "additionalProperties": False}
+    )
+    entry: str = "plugin.py:Plugin"
+    requires_python: str = ">=3.12"
+    sha256: str | None = None
+    """Lock hash of the plugin folder; set by `auoreo plugin add`, verified by doctor."""
+    enabled: bool = True
+
+    @field_validator("config_schema")
+    @classmethod
+    def _object_schema(cls, v: dict[str, Any]) -> dict[str, Any]:
+        if v.get("type") != "object":
+            raise ValueError("config_schema must be a JSON Schema with type: object")
+        return v
+
+
 class PermissionFile(_Strict):
     """`permissions/<name>.yaml`."""
 

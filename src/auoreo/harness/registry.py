@@ -42,6 +42,10 @@ NAMED_KINDS = (
     "families",
     "commands",
     "backends",
+    "hooks",
+    "jobs",
+    "webhooks",
+    "plugins",
 )
 
 
@@ -72,6 +76,10 @@ class Snapshot:
     families: dict[str, FamilyDef] = field(default_factory=dict)
     commands: dict[str, CommandDef] = field(default_factory=dict)
     backends: dict[str, BackendDef] = field(default_factory=dict)  # keyed "kind/name"
+    hooks: dict[str, Loaded] = field(default_factory=dict)
+    jobs: dict[str, Loaded] = field(default_factory=dict)
+    webhooks: dict[str, Loaded] = field(default_factory=dict)
+    plugins: dict[str, Loaded] = field(default_factory=dict)
     permission_layers: list[Loaded] = field(default_factory=list)  # low → high precedence
     variants: Loaded | None = None
     errors: list[LoadError] = field(default_factory=list)
@@ -171,6 +179,22 @@ class Harness:
     @property
     def commands(self) -> dict[str, CommandDef]:
         return self._snap.commands
+
+    @property
+    def hooks(self) -> dict[str, Loaded]:
+        return self._snap.hooks
+
+    @property
+    def jobs(self) -> dict[str, Loaded]:
+        return self._snap.jobs
+
+    @property
+    def webhooks(self) -> dict[str, Loaded]:
+        return self._snap.webhooks
+
+    @property
+    def plugins(self) -> dict[str, Loaded]:
+        return self._snap.plugins
 
     @property
     def errors(self) -> list[LoadError]:
@@ -307,6 +331,17 @@ class Harness:
             )
             for n, b in sorted(self._snap.backends.items())
         ]
+        for kind in ("hooks", "jobs", "webhooks", "plugins"):
+            out[kind] = [
+                row(
+                    kind[:-1],
+                    n,
+                    d.source,
+                    d.path,
+                    f"{d.manifest.description}" + ("" if d.manifest.enabled else " (disabled)"),
+                )
+                for n, d in sorted(getattr(self._snap, kind).items())
+            ]
         out["permissions"] = [
             row("permissions", p.path.stem, p.source, p.path, f"{len(p.manifest.rules)} rules")
             for p in self._snap.permission_layers

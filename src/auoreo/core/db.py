@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
-SCHEMA_VERSION = 2  # 2: sessions.archived, usage, messages_archive (M3)
+SCHEMA_VERSION = 3  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
 ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
 BASELINE_REVISION = "0001"  # the M2 schema; pre-Alembic databases are stamped here
 
@@ -152,6 +152,111 @@ class IdempotencyRow(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
+class DeliveryRow(Base):
+    """Claim-at-most-once outbox for webhook/job/team results (spec §16.7). Schema v3."""
+
+    __tablename__ = "deliveries"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32))  # webhook | job | team
+    source: Mapped[str] = mapped_column(String(128))  # route / job name / team id
+    external_id: Mapped[str] = mapped_column(String(128))  # provider delivery id or run id
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    """pending → delivering → delivered | failed | unknown (crash after claim: never retried)."""
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    target: Mapped[str] = mapped_column(String(64), default="log")
+    payload: Mapped[dict[str, Any]]
+    result: Mapped[dict[str, Any]]
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+    __table_args__ = (
+        Index("ix_deliveries_dedupe", "kind", "source", "external_id", unique=True),
+        Index("ix_deliveries_status", "status", "created_at"),
+    )
+
+
+class JobRunRow(Base):
+    """One scheduled-job firing. Schema v3."""
+
+    __tablename__ = "job_runs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job: Mapped[str] = mapped_column(String(64), index=True)
+    scheduled_for: Mapped[datetime] = mapped_column()
+    started_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    status: Mapped[str] = mapped_column(String(32), default="pending")  # pending|running|ok|failed|skipped
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    catch_up: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    __table_args__ = (Index("ix_job_runs_dedupe", "job", "scheduled_for", unique=True),)
+
+
+class TeamRow(Base):
+    __tablename__ = "teams"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    description: Mapped[str] = mapped_column(String(1000), default="")
+    lead_session_id: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class TeamMemberRow(Base):
+    __tablename__ = "team_members"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_id: Mapped[str] = mapped_column(ForeignKey("teams.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64))
+    agent: Mapped[str] = mapped_column(String(64))
+    session_id: Mapped[str] = mapped_column(String(64))
+    depth: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(32), default="running")  # running|done|failed|stopped
+    joined_at: Mapped[datetime] = mapped_column(default=utcnow)
+    __table_args__ = (Index("ix_team_members_name", "team_id", "name", unique=True),)
+
+
+class MailboxRow(Base):
+    """Append-only agent-to-agent mail; only `read` may be updated (spec §16.4). Schema v3."""
+
+    __tablename__ = "mailbox"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    team_id: Mapped[str] = mapped_column(String(64), index=True)
+    recipient: Mapped[str] = mapped_column(String(64), index=True)  # member name or "*"
+    sender: Mapped[str] = mapped_column(String(64))
+    type: Mapped[str] = mapped_column(String(32), default="text")
+    summary: Mapped[str] = mapped_column(String(200), default="")
+    text: Mapped[str] = mapped_column(String(100_000))
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class KanbanTaskRow(Base):
+    """Kanban-lite board (spec §16.6): atomic claim via UPDATE … WHERE status='ready'."""
+
+    __tablename__ = "kanban_tasks"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    board: Mapped[str] = mapped_column(String(64), index=True, default="default")
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(String(20_000), default="")
+    status: Mapped[str] = mapped_column(String(32), default="ready")  # ready|claimed|blocked|done
+    worker: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    failures: Mapped[int] = mapped_column(Integer, default=0)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class KanbanCommentRow(Base):
+    __tablename__ = "kanban_comments"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("kanban_tasks.id", ondelete="CASCADE"), index=True)
+    author: Mapped[str] = mapped_column(String(64))
+    text: Mapped[str] = mapped_column(String(20_000))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 class SchemaTooNewError(RuntimeError):
     pass
 
@@ -253,10 +358,17 @@ __all__ = [
     "Database",
     "SchemaTooNewError",
     "EventRow",
+    "DeliveryRow",
     "IdempotencyRow",
+    "JobRunRow",
+    "KanbanCommentRow",
+    "KanbanTaskRow",
+    "MailboxRow",
     "MessageArchiveRow",
     "MessageRow",
     "SessionRow",
+    "TeamMemberRow",
+    "TeamRow",
     "UsageRow",
     "alembic_config",
     "migrate",

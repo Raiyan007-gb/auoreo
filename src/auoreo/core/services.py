@@ -54,6 +54,8 @@ class Services:
     memory: MemoryService | None = None
     mcp: McpBridge | None = None
     rtc: Any = None  # auoreo.rtc.peers.RtcManager, created on first /api/rtc use
+    ext: dict[str, Any] = field(default_factory=dict)
+    """Started extensions (hooks, scheduler, webhooks, teams, plugins) by name; see core/extensions.py."""
 
     def __post_init__(self) -> None:
         self._backends: dict[str, Any] = {}
@@ -74,6 +76,7 @@ class Services:
         db_path: Path | str | None = None,
         with_memory: bool = True,
         with_mcp: bool = True,
+        with_extensions: bool = True,
     ) -> Services:
         from auoreo.runtime.coordinator import SessionRunCoordinator
 
@@ -109,6 +112,10 @@ class Services:
 
             svc.mcp = McpBridge(svc)
             await svc.mcp.start()
+        if with_extensions:
+            from auoreo.core.extensions import start_all
+
+            svc.ext = await start_all(svc)
         return svc
 
     # ------------------------------------------------------------ backends
@@ -151,6 +158,9 @@ class Services:
                 log.exception("backend %s failed to close session %s", kind, session_id)
 
     async def close(self) -> None:
+        from auoreo.core.extensions import close_all
+
+        await close_all(self.ext)  # extensions first: they may still write events
         if self.rtc is not None:  # peers emit rtc.closed, so before the DB goes away
             await self.rtc.close_all()
         await self.connections.close_all(1001)  # before the DB goes away

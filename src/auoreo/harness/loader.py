@@ -19,13 +19,17 @@ from auoreo.harness.manifests import (
     AgentManifest,
     BackendManifest,
     CommandManifest,
+    HookManifest,
+    JobManifest,
     McpServerManifest,
     PermissionFile,
+    PluginManifest,
     PromptFamily,
     PromptSection,
     SkillManifest,
     ToolManifest,
     VariantsFile,
+    WebhookManifest,
     WorkflowManifest,
 )
 from auoreo.tools.context import ToolContext, ToolResult
@@ -390,7 +394,63 @@ def load_backend(c: Candidate) -> BackendDef:
     return BackendDef(manifest, c.root.source, folder)
 
 
+def load_hook(c: Candidate) -> Loaded:
+    data, text = _parse_yaml(c)
+    manifest = _validate(HookManifest, data, c.path, text)
+    _check_name(c, manifest.name, text)
+    return Loaded(manifest, c.root.source, c.path)
+
+
+def load_job(c: Candidate) -> Loaded:
+    data, text = _parse_yaml(c)
+    manifest = _validate(JobManifest, data, c.path, text)
+    _check_name(c, manifest.name, text)
+    check_template(manifest.prompt, c.path, allowed={"now", "job"})
+    return Loaded(manifest, c.root.source, c.path)
+
+
+def load_webhook(c: Candidate) -> Loaded:
+    data, text = _parse_yaml(c)
+    manifest = _validate(WebhookManifest, data, c.path, text)
+    _check_name(c, manifest.name, text)
+    if not manifest.secret.startswith("secret:"):
+        raise LoadError(
+            c.path,
+            "secret must be a 'secret:<name>' reference, never a value",
+            frontmatter.locate_key(text, "secret"),
+        )
+    check_template(manifest.prompt, c.path, allowed={"event", "route", "delivery_id"})
+    for f in manifest.filters:
+        if f.regex is not None:
+            try:
+                re.compile(f.regex)
+            except re.error as exc:
+                raise LoadError(c.path, f"bad filter regex '{f.regex}': {exc}") from exc
+    return Loaded(manifest, c.root.source, c.path)
+
+
+def load_plugin(c: Candidate) -> Loaded:
+    data, text = _parse_yaml(c)
+    manifest = _validate(PluginManifest, data, c.path, text)
+    _check_name(c, manifest.name, text)
+    folder = c.path.parent
+    entry_file = folder / manifest.entry.split(":")[0]
+    if ".." in manifest.entry or not entry_file.is_file():
+        raise LoadError(
+            c.path,
+            f"entry file '{manifest.entry.split(':')[0]}' not found in plugin folder",
+            frontmatter.locate_key(text, "entry"),
+        )
+    if not (folder / "pyproject.toml").is_file():
+        raise LoadError(c.path, "plugin folder needs a pyproject.toml (installed into its own venv)")
+    return Loaded(manifest, c.root.source, c.path)
+
+
 LOADERS: dict[str, Callable[[Candidate], Any]] = {
+    "hooks": load_hook,
+    "jobs": load_job,
+    "webhooks": load_webhook,
+    "plugins": load_plugin,
     "backends": load_backend,
     "tools": load_tool,
     "agents": load_agent,

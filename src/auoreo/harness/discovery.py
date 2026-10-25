@@ -24,6 +24,10 @@ LAYOUT: dict[str, tuple[str, str]] = {
     "variants": ("file", "variants.yaml"),  # lives at prompts/variants.yaml
     "commands": ("file", "*.md"),  # slash commands: `/name args` in a chat message
     "backends": ("dir2", "backend.yaml"),  # backends/<kind>/<name>/backend.yaml
+    "hooks": ("file", "*.yaml"),  # lifecycle hooks (M5)
+    "jobs": ("file", "*.yaml"),  # scheduled jobs (M5)
+    "webhooks": ("file", "*.yaml"),  # inbound webhook routes (M5)
+    "plugins": ("dir", "plugin.yaml"),  # out-of-process plugins (M5)
 }
 
 _SUBPATH: dict[str, str] = {"families": "prompts/families", "variants": "prompts"}

@@ -141,6 +141,15 @@ class Settings(BaseSettings):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (init_settings, env_settings, _JsonFileSource(settings_cls))
 
+    # --- M5 (shared contracts)
+    hooks_enabled: bool = True
+    scheduler_enabled: bool = True
+    webhooks_enabled: bool = True
+    teams_max_depth: int = Field(default=2, ge=1, le=4)
+    teams_max_children: int = Field(default=3, ge=1, le=16)
+    teams_child_timeout_s: int = Field(default=900, ge=10)
+    plugins_enabled: bool = True
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""
