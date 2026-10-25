@@ -1,0 +1,11 @@
+kind: delivery
+name: github_comment
+description: >-
+  Post the result as a GitHub issue / pull request comment. Target is `owner/repo#number`
+  (webhook routes fill it from the event). Token: `auoreo secrets set github/token`.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

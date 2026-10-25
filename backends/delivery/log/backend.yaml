@@ -1,0 +1,11 @@
+kind: delivery
+name: log
+description: >-
+  Append a redacted one-line JSON record of every delivered result to <home>/deliveries.log
+  and emit `delivery.sent` on the server stream. Needs nothing; the default delivery target.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok
