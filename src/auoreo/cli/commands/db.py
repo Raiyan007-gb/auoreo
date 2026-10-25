@@ -1,4 +1,5 @@
-"""`auoreo db upgrade|current|history|backup|restore|rotate-key|encrypt` against `<home>/state.db`."""
+"""`auoreo db upgrade|current|history|backup|restore|rotate-key|encrypt` against `<home>/state.db`
+(and, for backup/restore/rotate-key/encrypt, `<home>/memory.db`)."""
 
 from __future__ import annotations
 
@@ -93,7 +94,7 @@ def _open_like(src: Path, dst: Path, keys: list[bytes]) -> Any:
         except Exception:
             continue
         return sqlcipher.sync_connect(dst, [key])
-    raise typer.BadParameter("state.db cannot be opened with the database key")
+    raise typer.BadParameter(f"{src.name} cannot be opened with the database key")
 
 
 def run_backup(home: Path, dest: Path, keyring: DbKeyring, with_key: Path | None) -> dict[str, Any]:
@@ -109,8 +110,10 @@ def run_backup(home: Path, dest: Path, keyring: DbKeyring, with_key: Path | None
     if state.is_file():
         backup_file(state, dest / "state.db", keyring.load() if encrypted else None)
         files.append("state.db")
-    if (home / "memory.db").is_file():
-        backup_file(home / "memory.db", dest / "memory.db")
+    memory = home / "memory.db"
+    mem_encrypted = sqlcipher.is_encrypted_file(memory)
+    if memory.is_file():  # F6: an encrypted memory.db stays encrypted in the copy
+        backup_file(memory, dest / "memory.db", keyring.load() if mem_encrypted else None)
         files.append("memory.db")
     keys = keyring.load()
     manifest = {
@@ -118,6 +121,7 @@ def run_backup(home: Path, dest: Path, keyring: DbKeyring, with_key: Path | None
         "schema_version": SCHEMA_VERSION,
         "db_encryption": st.db_encryption,
         "state_db_sqlcipher": encrypted,
+        "memory_db_sqlcipher": mem_encrypted,
         "files": files,
         "key_in_backup": False,
         "key_ring_size": len(keys),
@@ -187,16 +191,17 @@ def restore(
 @app.command("rotate-key")
 def rotate_key() -> None:
     """Add a new primary database key (MultiFernet). Old keys stay in the ring: audit ciphertext
-    is immutable. A SQLCipher state.db is re-keyed (stop the server first)."""
+    is immutable. A SQLCipher state.db / memory.db is re-keyed (stop the server first)."""
     from auoreo.core import sqlcipher
 
     kr = _keyring()
     old = kr.load()
     keys = kr.rotate()
-    path = settings().db_path
-    if sqlcipher.is_encrypted_file(path):
-        sqlcipher.rekey(path, old, keys[0])
-        console.print("[green]state.db re-keyed[/green]")
+    st = settings()
+    for path in (st.db_path, st.home / "memory.db"):
+        if sqlcipher.is_encrypted_file(path):
+            sqlcipher.rekey(path, old, keys[0])
+            console.print(f"[green]{path.name} re-keyed[/green]")
     console.print(f"[green]new primary key[/green]; ring has {len(keys)} keys")
     console.print("back the ring up with `auoreo db backup <dir> --with-key <file>`")
 
@@ -205,8 +210,8 @@ def rotate_key() -> None:
 def encrypt(
     yes: Annotated[bool, typer.Option("--yes", help="Confirm the in-place conversion.")] = False,
 ) -> None:
-    """Convert a plaintext state.db to SQLCipher (`sqlcipher_export`); a plaintext backup is kept.
-    Stop the server first, then set db_encryption=sqlcipher."""
+    """Convert plaintext state.db and memory.db to SQLCipher (`sqlcipher_export`); a plaintext
+    backup of each is kept. Stop the server first, then set db_encryption=sqlcipher."""
     from auoreo.core import sqlcipher
 
     ok, info = sqlcipher.check()
@@ -214,8 +219,17 @@ def encrypt(
         err_console.print(f"[red]{info}; use db_encryption=columns instead[/red]")
         raise typer.Exit(2)
     if not yes:
-        err_console.print("[red]this rewrites state.db in place; re-run with --yes[/red]")
+        err_console.print("[red]this rewrites state.db and memory.db in place; re-run with --yes[/red]")
         raise typer.Exit(2)
-    bak = sqlcipher.encrypt_file(settings().db_path, _keyring())
-    console.print(f"[green]state.db encrypted ({info})[/green]")
-    console.print(f"plaintext backup: {bak} (delete it once verified)")
+    st = settings()
+    done = 0
+    for path in (st.db_path, st.home / "memory.db"):
+        if not path.is_file() or sqlcipher.is_encrypted_file(path):
+            console.print(f"{path.name}: {'already encrypted' if path.is_file() else 'absent'}, skipped")
+            continue
+        bak = sqlcipher.encrypt_file(path, _keyring())
+        done += 1
+        console.print(f"[green]{path.name} encrypted ({info})[/green]")
+        console.print(f"plaintext backup: {bak} (delete it once verified)")
+    if not done:
+        console.print("nothing to convert")

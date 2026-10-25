@@ -1,0 +1,12 @@
+kind: vad
+name: sidecar
+description: >-
+  Runs the pre-STT silence gate (speech_segments) in the out-of-process voice media sidecar,
+  which loads settings.voice_host_backends.vad (e.g. silero in a GPU venv). Per-frame is_speech
+  stays local (energy test), since RTC frames cannot wait for a process round trip.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

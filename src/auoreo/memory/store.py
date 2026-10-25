@@ -15,12 +15,12 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from auoreo.core.sqlcipher import open_memory
 from auoreo.memory.migrations import migrate
 
 log = logging.getLogger(__name__)
@@ -112,11 +112,14 @@ class Row:
 
 
 class MemoryStore:
-    def __init__(self, path: Path | str, dims: int, tenant: str = "local") -> None:
+    def __init__(
+        self, path: Path | str, dims: int, tenant: str = "local", *, encryption: str | None = None
+    ) -> None:
         self.path = str(path)
         self.dims = dims
         self.tenant = tenant
-        self.db = sqlite3.connect(self.path, check_same_thread=False)
+        # F6: sqlcipher3 + `PRAGMA key` when db_encryption=sqlcipher (else stdlib sqlite3)
+        self.db, self.encrypted = open_memory(self.path, encryption)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
         migrate(self.db)

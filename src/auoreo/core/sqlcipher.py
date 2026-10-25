@@ -8,7 +8,9 @@ classes to `sqlcipher3.dbapi2`'s so `IntegrityError` & co. are still translated 
 
 The raw 32-byte primary `auoreo-db-key` is used as the SQLCipher key (`x'<hex>'`, no KDF);
 opening tries every key in the ring so a rotation interrupted before `PRAGMA rekey` still opens.
-`memory.db` is not covered (it is a separate sync sqlite3 + sqlite-vec store).
+F6: `memory.db` (a separate sync sqlite3 + sqlite-vec store) is opened through `open_memory`,
+which keys it with the same ring in sqlcipher mode; sqlite-vec and FTS5 load on a sqlcipher3
+connection exactly as on stdlib sqlite3.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ import sqlite3
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from sqlalchemy.dialects import registry
 from sqlalchemy.dialects.sqlite.aiosqlite import AsyncAdapt_aiosqlite_dbapi, SQLiteDialect_aiosqlite
@@ -86,6 +88,7 @@ def _keyed(path: Path | str, key: bytes) -> Any:
 
 
 def sync_connect(path: Path | str, keys: list[bytes]) -> Any:
+    name = Path(path).name
     if not keys:
         raise DbKeyError("database key unavailable")
     last: Exception | None = None
@@ -94,7 +97,7 @@ def sync_connect(path: Path | str, keys: list[bytes]) -> Any:
             return _keyed(path, key)
         except Exception as exc:  # wrong key: "file is not a database"
             last = exc
-    raise DbKeyError(f"state.db cannot be opened with any key in the ring ({last})")
+    raise DbKeyError(f"{name} cannot be opened with any key in the ring ({last})")
 
 
 def is_encrypted_file(path: Path) -> bool:
@@ -160,7 +163,7 @@ def sync_engine(path: Path, keyring: DbKeyring) -> Engine:
 
 # ------------------------------------------------------------------ conversion
 def encrypt_file(path: Path, keyring: DbKeyring) -> Path:
-    """Convert a plaintext `state.db` in place via `sqlcipher_export` (stop the server first).
+    """Convert a plaintext `state.db` / `memory.db` in place via `sqlcipher_export` (stop the server first).
     A plaintext copy is kept as `state.db.plain-<ts>.bak`; returns that path."""
     if is_encrypted_file(path):
         raise DbKeyError(f"{path} is already encrypted")
@@ -179,6 +182,7 @@ def encrypt_file(path: Path, keyring: DbKeyring) -> Path:
     tmp.unlink(missing_ok=True)
     con = _dbapi().connect(str(path))
     try:
+        _try_load_vec(con)  # memory.db carries vec0 tables; harmless elsewhere
         con.execute('ATTACH DATABASE ? AS enc KEY "' + raw_key(key) + '"', (str(tmp),))
         con.execute("SELECT sqlcipher_export('enc')")
         version = con.execute("PRAGMA user_version").fetchone()[0]
@@ -197,5 +201,87 @@ def rekey(path: Path, old_keys: list[bytes], new_key: bytes) -> None:
     con = sync_connect(path, old_keys)
     try:
         con.execute(f'PRAGMA rekey = "{raw_key(new_key)}"')
+    finally:
+        con.close()
+
+
+# ------------------------------------------------------------------ F6: memory.db
+ENCRYPT_HINT = "stop the server and run `auoreo db encrypt --yes` (converts state.db and memory.db)"
+
+
+def _try_load_vec(con: Any) -> bool:
+    try:
+        import sqlite_vec
+
+        con.enable_load_extension(True)
+        sqlite_vec.load(con)
+        con.enable_load_extension(False)
+        return True
+    except Exception:
+        return False
+
+
+def resolve_mode(home: Path, mode: str | None = None) -> tuple[str, DbKeyring]:
+    """`db_encryption` + key ring from `Settings()` (env + settings.json), as `core.db` does."""
+    from auoreo.core.crypto_columns import DbKeyring
+
+    try:
+        from auoreo.core.settings import Settings
+
+        st = Settings()
+        return mode or st.db_encryption, DbKeyring(home, st.keyring)
+    except Exception:  # unreadable settings never block opening the store
+        return mode or "off", DbKeyring(home, "allow-file")
+
+
+def open_memory(path: Path | str, mode: str | None = None) -> tuple[sqlite3.Connection, bool]:
+    """Open `memory.db`: SQLCipher-keyed in sqlcipher mode (a plaintext file is refused),
+    stdlib sqlite3 otherwise (an encrypted file is refused with a pointer to the setting).
+    Returns `(connection, encrypted)`."""
+    p = Path(path)
+    if str(path) == ":memory:":
+        return sqlite3.connect(":memory:", check_same_thread=False), False
+    mode, keyring = resolve_mode(p.parent, mode)
+    if mode != "sqlcipher":
+        if is_encrypted_file(p):
+            raise DbKeyError(f"{p} is SQLCipher-encrypted; set db_encryption=sqlcipher to open it")
+        return sqlite3.connect(str(p), check_same_thread=False), False
+    if not available():
+        raise DbKeyError("db_encryption=sqlcipher needs the `sqlcipher` extra (sqlcipher3) for memory.db")
+    if p.is_file() and p.stat().st_size > 0 and not is_encrypted_file(p):
+        raise DbKeyError(f"{p} is plaintext but db_encryption=sqlcipher; {ENCRYPT_HINT}")
+    return cast(sqlite3.Connection, sync_connect(p, keyring.ensure())), True  # DB-API twin
+
+
+def memory_status(home: Path, mode: str) -> tuple[Literal["ok", "warn", "error"], str, str]:
+    """Doctor row for memory.db: (level, detail, remedy)."""
+    path = home / "memory.db"
+    enc = is_encrypted_file(path)
+    state = "not created yet" if not path.is_file() else ("SQLCipher-encrypted" if enc else "plaintext")
+    if mode == "sqlcipher":
+        if path.is_file() and not enc:
+            return "error", f"{state} under db_encryption=sqlcipher (memory refuses to open)", ENCRYPT_HINT
+        if not available():
+            return "error", f"{state}; sqlcipher3 missing", "install the `sqlcipher` extra"
+        vec = _vec_on_cipher()
+        detail = f"{state}; sqlite-vec on sqlcipher3: {'ok' if vec else 'UNAVAILABLE (FTS-only search)'}"
+        return (
+            ("ok" if vec else "warn"),
+            detail,
+            "" if vec else "use a sqlcipher3 build with loadable extensions",
+        )
+    if enc:
+        return "error", f"{state} but db_encryption={mode}", "set db_encryption=sqlcipher"
+    note = " (columns mode covers state.db only)" if mode == "columns" else ""
+    return "ok", f"{state}{note}", "set db_encryption=sqlcipher to encrypt memory.db" if note else ""
+
+
+def _vec_on_cipher() -> bool:
+    con = _dbapi().connect(":memory:")
+    try:
+        con.execute("PRAGMA key = 'probe'")
+        return _try_load_vec(con) and bool(con.execute("SELECT vec_version()").fetchone())
+    except Exception:
+        return False
     finally:
         con.close()

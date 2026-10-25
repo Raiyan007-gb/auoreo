@@ -403,6 +403,17 @@ async def run_checks(settings: Settings, *, services: Services | None = None) ->
         ),
     ]
     # --- end W3-A
+    # --- F6: memory.db cipher state (sqlcipher mode covers memory.db; columns mode does not)
+    from auoreo.core import sqlcipher
+
+    try:
+        lvl, detail, fix = sqlcipher.memory_status(settings.home, settings.db_encryption)
+        row = Check("memory_db_cipher", lvl, detail, fix)
+    except Exception as exc:
+        row = Check("memory_db_cipher", "warn", f"check failed: {exc}")
+    at = next((i + 1 for i, c in enumerate(out) if c.check == "db_encryption"), len(out))
+    out.insert(at, row)
+    # --- end F6
     return out
 
 

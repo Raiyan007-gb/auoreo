@@ -1,0 +1,12 @@
+kind: tts
+name: sidecar
+description: >-
+  Proxies text-to-speech to the out-of-process voice media sidecar (`python -m auoreo.voice.host`,
+  one process shared by stt/tts/vad) that loads settings.voice_host_backends.tts - e.g. piper
+  (GPL) runs only in the sidecar's venv. Lazy start, health check, restart with backoff.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

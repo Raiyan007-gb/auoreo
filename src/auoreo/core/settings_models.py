@@ -150,3 +150,17 @@ class LiveKitSettings(BaseModel):
 
 
 # --- end W2-D
+
+
+# --- F6
+class VoiceHostBackends(BaseModel):
+    """`settings.voice_host_backends`: the backends the `auoreo voice-host` sidecar loads
+    (in its own process / venv). GPL/NC backends (piper, openwakeword) belong here only."""
+
+    model_config = ConfigDict(extra="forbid")
+    stt: str = "fake"
+    tts: str = "fake"
+    vad: str = "fake"
+
+
+# --- end F6
