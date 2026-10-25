@@ -665,6 +665,102 @@
         "title": "Body_transcribe_api_voice_transcribe_post",
         "type": "object"
       },
+      "BridgeDelivered": {
+        "properties": {
+          "mail_id": {
+            "title": "Mail Id",
+            "type": "integer"
+          },
+          "recipient": {
+            "title": "Recipient",
+            "type": "string"
+          },
+          "sender": {
+            "description": "As stored in the receiver's mailbox: `bridge:<instance>/<member>`",
+            "title": "Sender",
+            "type": "string"
+          },
+          "team": {
+            "title": "Team",
+            "type": "string"
+          }
+        },
+        "required": [
+          "team",
+          "recipient",
+          "sender",
+          "mail_id"
+        ],
+        "title": "BridgeDelivered",
+        "type": "object"
+      },
+      "BridgeEnvelope": {
+        "additionalProperties": false,
+        "description": "`POST /api/bridge/inbox` body. Signed with HMAC-SHA256 over\n`\"<timestamp>.<nonce>.\" + raw body` (header `X-Auoreo-Signature: sha256=<hex>`).",
+        "properties": {
+          "from_member": {
+            "pattern": "^[A-Za-z0-9_.*-]{1,64}$",
+            "title": "From Member",
+            "type": "string"
+          },
+          "message": {
+            "maxLength": 100000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "nonce": {
+            "pattern": "^[A-Za-z0-9_-]{16,64}$",
+            "title": "Nonce",
+            "type": "string"
+          },
+          "sender": {
+            "description": "Sending instance, as the receiver's `bridges` key",
+            "pattern": "^[A-Za-z0-9_.-]{1,32}$",
+            "title": "Sender",
+            "type": "string"
+          },
+          "summary": {
+            "default": "",
+            "maxLength": 200,
+            "title": "Summary",
+            "type": "string"
+          },
+          "team": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Receiver team id or name",
+            "title": "Team"
+          },
+          "timestamp": {
+            "description": "Unix seconds; accepted within \u00b1300 s",
+            "title": "Timestamp",
+            "type": "integer"
+          },
+          "to_member": {
+            "pattern": "^[A-Za-z0-9_.*-]{1,64}$",
+            "title": "To Member",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sender",
+          "from_member",
+          "to_member",
+          "message",
+          "nonce",
+          "timestamp"
+        ],
+        "title": "BridgeEnvelope",
+        "type": "object"
+      },
       "ChatAccepted": {
         "properties": {
           "deduped": {
@@ -1428,6 +1524,81 @@
           }
         },
         "title": "DoctorSummary",
+        "type": "object"
+      },
+      "EnvironmentInfo": {
+        "description": "One place commands (or mail) can go. Never carries a secret.",
+        "properties": {
+          "backend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backend"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "backend",
+              "named",
+              "remote",
+              "bridge"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "check() result; null when not checked",
+            "title": "Ok"
+          },
+          "remote": {
+            "default": false,
+            "title": "Remote",
+            "type": "boolean"
+          },
+          "selected": {
+            "default": false,
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Endpoint without credentials, query or fragment",
+            "title": "Url"
+          }
+        },
+        "required": [
+          "name",
+          "kind"
+        ],
+        "title": "EnvironmentInfo",
         "type": "object"
       },
       "FactActionResult": {
@@ -4564,6 +4735,60 @@
         ]
       }
     },
+    "/api/bridge/inbox": {
+      "post": {
+        "description": "Verify `X-Auoreo-Signature` and deliver into the local team mailbox as\n`from: bridge:<sender>/<member>`. The signature covers the raw body bytes.",
+        "operationId": "inbox_api_bridge_inbox_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BridgeEnvelope"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BridgeDelivered"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Bad signature, stale timestamp or replayed nonce"
+          },
+          "403": {
+            "description": "Unknown bridge"
+          },
+          "404": {
+            "description": "No such team or member here"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Teams are not running"
+          }
+        },
+        "summary": "Inbox",
+        "tags": [
+          "bridge"
+        ]
+      }
+    },
     "/api/chat": {
       "post": {
         "description": "Queue a message. Returns immediately; follow progress on `GET /api/events`.",
@@ -5534,6 +5759,92 @@
         "summary": "Doctor",
         "tags": [
           "ops"
+        ]
+      }
+    },
+    "/api/environments": {
+      "get": {
+        "description": "Environment backends, named environments, the exec-server and bridge peers. No secrets.",
+        "operationId": "environments_api_environments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EnvironmentInfo"
+                  },
+                  "title": "Response Environments Api Environments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Environments",
+        "tags": [
+          "environments"
         ]
       }
     },

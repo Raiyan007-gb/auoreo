@@ -21,6 +21,7 @@ from pydantic_settings import (
 
 from auoreo.core.paths import home_dir
 from auoreo.policy.config import BanditSettings
+from auoreo.remote.config import BridgePeer, RemoteEnvironment  # --- W2-B
 
 log = logging.getLogger(__name__)
 
@@ -374,6 +375,13 @@ class Settings(BaseSettings):
     """Sample one frame every `perception_rtc_interval_s` from RTC video tracks into the
     in-memory `rtc` sensor source (frames are never written to disk)."""
     perception_rtc_interval_s: float = Field(default=5.0, ge=0.5, le=3600)
+    # --- W2-B: remote plane (daemon, exec-server client, instance bridges)
+    environment_remote: RemoteEnvironment | None = None
+    """`backends/environment/remote`: `{url: "ws://127.0.0.1:7071", token: "secret:<name>"}`."""
+    bridges: dict[str, BridgePeer] = Field(default_factory=dict)
+    """Peer instances for mailbox `bridge:<name>/<member>` addressing (HMAC-signed)."""
+    instance_name: str = Field(default="auoreo", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+    """How this instance names itself to bridge peers (overridable per peer: `as_name`)."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

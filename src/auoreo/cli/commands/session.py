@@ -34,7 +34,11 @@ def list_(
             for r in await svc.list_sessions(limit, include_archived=archived)
         ]
 
-    rows = with_services(go, memory=False)
+    from auoreo.cli.common import settings
+    from auoreo.remote import cli_client, uds  # --- W2-B: a live daemon socket wins
+
+    sock = uds.daemon_socket(settings().home)
+    rows = cli_client.list_sessions(sock, limit, archived) if sock else with_services(go, memory=False)
     if as_json:
         dump_json(rows)
         return

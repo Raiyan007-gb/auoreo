@@ -30,6 +30,8 @@ from .board_artifact import BoardArtifact
 from .board_entry import BoardEntry
 from .board_put import BoardPut
 from .body_transcribe_api_voice_transcribe_post import BodyTranscribeApiVoiceTranscribePost
+from .bridge_delivered import BridgeDelivered
+from .bridge_envelope import BridgeEnvelope
 from .cancel_api_sessions_session_id_cancel_post_response_cancel_api_sessions_session_id_cancel_post import (
     CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost,
 )
@@ -55,6 +57,8 @@ from .doctor_check import DoctorCheck
 from .doctor_check_level import DoctorCheckLevel
 from .doctor_report import DoctorReport
 from .doctor_summary import DoctorSummary
+from .environment_info import EnvironmentInfo
+from .environment_info_kind import EnvironmentInfoKind
 from .export_api_sessions_session_id_export_get_format import ExportApiSessionsSessionIdExportGetFormat
 from .fact_action_result import FactActionResult
 from .fact_feedback import FactFeedback
@@ -184,6 +188,8 @@ __all__ = (
     "BoardEntry",
     "BoardPut",
     "BodyTranscribeApiVoiceTranscribePost",
+    "BridgeDelivered",
+    "BridgeEnvelope",
     "CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost",
     "ChatAccepted",
     "ChatRequest",
@@ -207,6 +213,8 @@ __all__ = (
     "DoctorCheckLevel",
     "DoctorReport",
     "DoctorSummary",
+    "EnvironmentInfo",
+    "EnvironmentInfoKind",
     "ExportApiSessionsSessionIdExportGetFormat",
     "FactActionResult",
     "FactFeedback",
