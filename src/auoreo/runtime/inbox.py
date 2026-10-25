@@ -1,12 +1,16 @@
 """Session inbox (spec §8.1): followup → next turn + wake; steer → next step + wake;
-inject → next step, no wake."""
+inject → next step, no wake. `claim_turn` also drains next-step input; `cancel` keeps
+pending input for the next turn unless told otherwise."""
 
 from __future__ import annotations
 
 import asyncio
+import uuid
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Literal
+
+OUT_OF_BAND = "[OUT-OF-BAND]"  # == runtime.budget.OUT_OF_BAND (kept import-free here)
 
 InputKind = Literal["followup", "steer", "inject"]
 
@@ -46,7 +50,7 @@ class Inbox:
         self.wake.set()
 
     def inject(self, text: str) -> None:
-        self.next_step.append(text)
+        self.next_step.append(f"{OUT_OF_BAND} {text}")  # harness/peer input, not the user
 
     def claim_step(self) -> list[str]:
         """Drain all next-step input (steer/inject), newline-coalesced by the caller."""
@@ -55,4 +59,21 @@ class Inbox:
         return items
 
     def claim_turn(self) -> TurnRequest | None:
-        return self.next_turn.popleft() if self.next_turn else None
+        """One next-turn request; pending next-step input is drained into its batch (§8.1)."""
+        if not self.next_turn:
+            return None
+        req = self.next_turn.popleft()
+        steps = self.claim_step()
+        return replace(req, text="\n\n".join([req.text, *steps])) if steps else req
+
+    def cancel(self, cause: str, keep_inbox: bool = True) -> None:
+        """Turn cancelled (`cause`: user | liveness | shutdown …). With `keep_inbox` pending
+        next-step input becomes the first next-turn request (so it is not lost) and queued
+        followups stay; otherwise both lists are dropped."""
+        steps = self.claim_step()
+        if not keep_inbox:
+            self.next_turn.clear()
+            return
+        if steps:
+            run_id = f"run_{uuid.uuid4().hex[:12]}"
+            self.next_turn.appendleft(TurnRequest(run_id, "\n\n".join(steps)))

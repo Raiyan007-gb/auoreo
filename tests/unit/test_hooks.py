@@ -272,7 +272,8 @@ async def test_stop_hook_block_once_continues(services: Services, workdir: Path)
 async def test_no_hooks_on_api_error_turns(services: Services, gateway: FakeGateway, workdir: Path) -> None:
     hook(workdir, "stopper", "Stop", reply({"block": True, "reason": "x"}))
     services.harness.reload()
-    gateway.queue(Scripted(error=GatewayError("RATE_LIMIT", "slow down")))
+    # retryable errors are retried up to the outer-loop cap (8), then the turn fails
+    gateway.queue(*[Scripted(error=GatewayError("RATE_LIMIT", "slow down")) for _ in range(8)])
     sid, status = await run_turn(services, "hi")
     assert status == "failed"
     assert await events(services, sid, "hook.ran") == []
