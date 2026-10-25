@@ -20,3 +20,4 @@ is_concurrency_safe: true
 is_search_or_read: true
 timeout_ms: 120000
 search_hint: look at image picture photo describe vision understand
+net: direct

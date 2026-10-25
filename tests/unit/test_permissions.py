@@ -107,3 +107,42 @@ def test_always_grant_is_in_memory_and_last() -> None:
     e.grant_always("bash", "make test")
     assert e.evaluate("bash", "make test").action == "allow"
     assert e.evaluate("bash", "make deploy").action == "ask"
+
+
+# ------------------------------------------------------------------ sudo + docker (§25.10)
+SUDO_RULES = [R("bash", "*", "allow"), R("bash", "sudo -n systemctl restart nginx", "allow")]
+
+
+@pytest.mark.parametrize(
+    ("cmd", "interactive", "action"),
+    [
+        ("sudo apt update", False, "deny"),  # bare sudo, unattended
+        ("sudo apt update", True, "ask"),  # bare sudo always asks, even under `bash *` allow
+        ("cd /x && sudo make install", False, "deny"),
+        ("sudo -u root ls", False, "deny"),
+        ("sudo -n systemctl restart nginx", False, "allow"),  # explicit allow rule
+        ("sudo -n systemctl restart nginx", True, "allow"),
+        ("sudo -n systemctl stop nginx", True, "deny"),  # `bash *` is not explicit
+        ("sudo --non-interactive reboot-ish", True, "deny"),
+        ("sudo -S ls", True, "deny"),  # hardline
+        ("echo pw | sudo --stdin ls", True, "deny"),
+        ("docker run --privileged alpine", True, "deny"),
+        ("docker run --rm --privileged=true alpine sh", True, "deny"),
+        ("podman run --privileged alpine", True, "deny"),
+        ("docker run --rm alpine echo hi", False, "allow"),
+        ("pseudo-random ls", False, "allow"),
+    ],
+)
+def test_sudo_and_privileged_rules(cmd: str, interactive: bool, action: str) -> None:
+    e = PermissionEngine(SUDO_RULES)
+    assert e.evaluate("bash", cmd, interactive=interactive).action == action
+
+
+def test_sudo_rules_survive_yolo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(perm, "YOLO_FROZEN", True)
+    e = PermissionEngine([R("bash", "*", "ask")], mode="yolo")
+    assert e.evaluate("bash", "make").action == "allow"
+    assert e.evaluate("bash", "sudo make install").action == "ask"
+    assert e.evaluate("bash", "sudo -n make install").action == "deny"
+    assert e.evaluate("bash", "sudo make", interactive=False).action == "deny"
+    assert perm.sudo_kind("ls") is None and perm.sudo_kind("sudo -n ls") == "noninteractive"

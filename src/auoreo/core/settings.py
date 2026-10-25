@@ -189,6 +189,17 @@ class Settings(BaseSettings):
     # --- M5f
     locale: str | None = None
     """User locale (e.g. `de-DE`), rendered as `{{locale}}` in the per-turn context block."""
+    # --- M5i
+    sandbox_policy: Literal["warn", "fail"] = "warn"
+    """When the selected sandbox backend fails its startup probe: `warn` logs, audits
+    `sandbox.fallback` and uses `none`; `fail` refuses to start."""
+    sandbox_docker_image: str = "python:3.12-slim"
+    """Image for the docker sandbox backend (pulled on first use)."""
+    sandbox_docker_mem_limit: str = "1g"
+    """Memory limit for docker sandbox containers (Docker syntax: `512m`, `2g`)."""
+    db_query_dsns: dict[str, str] = Field(default_factory=dict)
+    """Allow-listed DSNs for `db_query`: name → `secret:<name>` or a SQLAlchemy URL
+    (e.g. `sqlite:///path/app.db`). Only names listed here can be queried."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

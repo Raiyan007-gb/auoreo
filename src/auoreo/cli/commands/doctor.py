@@ -67,14 +67,27 @@ def _backend_checks(st: Settings, h: Harness) -> list[dict[str, str]]:
             ok = bool(getattr(status, "ok", status))
             detail = getattr(status, "detail", "") or ("ready" if ok else "not ready")
             remedy = getattr(status, "remedy", "") or ""
-            out.append(
-                _check(f"backend:{kind}", "ok" if ok else "warn", f"{m.name}{posture}: {detail}", remedy)
-            )
+            level: Level = "ok" if ok else "warn"
+            if kind == "sandbox":
+                level, detail = _sandbox_detail(st, inst, ok, detail)
+            out.append(_check(f"backend:{kind}", level, f"{m.name}{posture}: {detail}", remedy))
         except Exception as exc:
             out.append(
                 _check(f"backend:{kind}", "warn", f"{m.name}{posture}: {exc}", "see backends/README.md")
             )
     return out
+
+
+def _sandbox_detail(st: Settings, inst: object, ok: bool, detail: str) -> tuple[Level, str]:
+    """The sandbox row says whether isolation is enforced and what the policy does on failure."""
+    caps: dict[str, bool] = getattr(inst, "capabilities", dict)()
+    enforced = ok and any(caps.values())
+    detail = f"{detail}; enforced={enforced}; policy={st.sandbox_policy}"
+    if ok:
+        return "ok", detail
+    if st.sandbox_policy == "fail":
+        return "error", detail + " → the server refuses to start"
+    return "warn", detail + " → falls back to 'none' (enforced=False)"
 
 
 def _plugin_checks(st: Settings, h: Harness) -> list[dict[str, str]]:

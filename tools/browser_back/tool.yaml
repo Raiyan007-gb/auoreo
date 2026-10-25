@@ -10,3 +10,4 @@ is_read_only: false
 is_concurrency_safe: false
 timeout_ms: 30000
 search_hint: browser back history
+net: direct

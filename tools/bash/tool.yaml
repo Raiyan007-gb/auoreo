@@ -3,13 +3,25 @@ toolset: shell
 description: >-
   Run a shell command with bash in the session working directory and return combined
   stdout/stderr and the exit code. Use for builds, tests, git, and file operations that
-  have no dedicated tool. Commands are checked against permission rules and floors.
+  have no dedicated tool. Commands are checked against permission rules and floors and run
+  through the selected sandbox backend.
 parameters:
   type: object
   properties:
     command: {type: string, description: The bash command to run.}
     timeout_s: {type: integer, minimum: 1, maximum: 600, default: 120,
                 description: Seconds before the command is killed.}
+    sandbox_mode:
+      type: string
+      enum: [read-only, workspace-write, danger-full-access]
+      description: >-
+        Only after a sandbox denial: request a wider mode for THIS call (needs approval and a
+        justification; never sticky). A narrower mode needs no justification.
+    justification:
+      type: string
+      maxLength: 500
+      description: >-
+        Why the wider sandbox_mode is needed (10-500 chars) naming the denied path or operation.
   required: [command]
   additionalProperties: false
 permission: bash
@@ -20,3 +32,5 @@ interrupt: cancel
 timeout_ms: 610000
 search_hint: run shell command terminal
 max_result_size_chars: 64000
+net: none
+sandbox_mode: workspace-write

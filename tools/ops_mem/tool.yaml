@@ -1,0 +1,17 @@
+name: ops_mem
+toolset: ops
+description: >-
+  Memory and swap usage of the machine running auoreo (total, used, available, percent),
+  as compact markdown.
+parameters:
+  type: object
+  properties: {}
+  additionalProperties: false
+permission: ops
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 15000
+search_hint: memory ram swap usage available monitor system health ops
+sandbox_mode: read-only

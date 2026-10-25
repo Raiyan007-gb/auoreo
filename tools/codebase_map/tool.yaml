@@ -18,3 +18,4 @@ is_concurrency_safe: true
 is_search_or_read: true
 timeout_ms: 60000
 search_hint: repository overview structure symbols map
+sandbox_mode: read-only

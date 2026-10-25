@@ -1,0 +1,21 @@
+name: ops_procs
+toolset: ops
+description: >-
+  Top processes by CPU or memory (pid, user, cpu %, mem %, RSS, name), optionally filtered by
+  a case-insensitive substring of the name or command line, as a compact markdown table.
+parameters:
+  type: object
+  properties:
+    limit: {type: integer, minimum: 1, maximum: 100, default: 15}
+    sort: {type: string, enum: [cpu, mem], default: cpu}
+    filter: {type: string, maxLength: 200,
+             description: Only processes whose name or command line contains this text.}
+  additionalProperties: false
+permission: ops
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 20000
+search_hint: processes top ps cpu memory hog pid running programs monitor ops
+sandbox_mode: read-only

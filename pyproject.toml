@@ -24,6 +24,7 @@ dependencies = [
     "pdfplumber>=0.11.10,<0.12",
     "pillow>=13.0.0,<14",
     "playwright==1.63.*",
+    "psutil>=6,<8",
     "pydantic>=2.14.1,<3",
     "pydantic-settings>=2.16.1,<3",
     "pypdf>=6.21.2,<7",
@@ -42,6 +43,9 @@ auoreo = "auoreo.cli.main:main"
 rtc = [
     "aiortc>=1.15,<2",
     "numpy>=2",
+]
+sandbox-docker = [
+    "docker>=7,<8",
 ]
 
 [build-system]

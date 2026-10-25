@@ -22,6 +22,19 @@ CURRENT_SESSION: ContextVar[str | None] = ContextVar("auoreo_current_session", d
 handler call so engine code without a `ToolContext` (e.g. MCP elicitation) can find it."""
 
 
+@dataclass(frozen=True)
+class ExecPolicy:
+    """Sandbox policy for the tool call running in this task (spec §19.8). Set by the
+    executor from the manifest (`sandbox_mode`, `net`) plus a one-call escalation grant."""
+
+    mode: str = "workspace-write"
+    net: str = "none"
+    grant_id: str | None = None
+
+
+CURRENT_EXEC: ContextVar[ExecPolicy | None] = ContextVar("auoreo_current_exec", default=None)
+
+
 @dataclass
 class ToolResult:
     content: str
@@ -46,6 +59,7 @@ class SessionState:
     plan_mode: bool = False
     loaded_tools: set[str] = field(default_factory=set)  # deferred tools surfaced by search
     pending_user_messages: list[str] = field(default_factory=list)
+    sandbox_note_shown: bool = False  # `[sandbox: not enforced …]` told once per session
 
 
 AskFn = Callable[[str, str, str], Awaitable[bool]]
@@ -81,6 +95,11 @@ class ToolContext:
     env: dict[str, str] = field(default_factory=dict)
     """Scrubbed environment for child processes (allowlist + tool `requires_env`)."""
 
+    @property
+    def exec_policy(self) -> ExecPolicy:
+        """The sandbox mode/net this call runs under (manifest + any one-call grant)."""
+        return CURRENT_EXEC.get() or ExecPolicy()
+
     def resolve_path(self, raw: str) -> Path:
         p = Path(raw).expanduser()
         return (p if p.is_absolute() else self.cwd / p).resolve()
@@ -104,7 +123,7 @@ class ToolContext:
         engine = self.services.get("engine")
         if engine is None:
             return
-        decision = engine.evaluate(permission, pattern, default)
+        decision = engine.evaluate(permission, pattern, default, interactive=self.interactive)
         if decision.action == "allow":
             return
         if decision.action == "deny":

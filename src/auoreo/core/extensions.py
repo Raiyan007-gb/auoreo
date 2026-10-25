@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 STARTERS: list[str] = [
+    "auoreo.core.sandbox_boot:start",  # first: policy=fail refuses before anything else starts
     "auoreo.runtime.hooks:start",
     "auoreo.automation.deliveries:start",
     "auoreo.automation.scheduler:start",

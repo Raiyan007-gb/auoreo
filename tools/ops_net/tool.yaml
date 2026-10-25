@@ -1,0 +1,17 @@
+name: ops_net
+toolset: ops
+description: >-
+  Network I/O counters (bytes and packets sent/received, errors, drops) per interface and
+  in total since boot, as a compact markdown table. Reads local counters only; no egress.
+parameters:
+  type: object
+  properties: {}
+  additionalProperties: false
+permission: ops
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 15000
+search_hint: network traffic bandwidth interface bytes packets errors monitor ops
+sandbox_mode: read-only
