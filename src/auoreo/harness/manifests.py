@@ -59,6 +59,9 @@ class ToolManifest(_Strict):
     """Egress class (spec §25.10): `none` default, `proxy` (MCP/web via proxy), `direct`."""
     sandbox_mode: Literal["read-only", "workspace-write", "danger-full-access"] = "workspace-write"
     """Sandbox mode this tool's processes run under; wider needs a one-call escalation."""
+    redaction: Literal["mask", "sentinel", "off"] = "mask"
+    """Result redaction (spec §19.10): `mask` = display `head6…tail4`; `sentinel` (file reads)
+    = `«redacted:<prefix>…»`; `off` only for tools whose output never carries file content."""
 
     @field_validator("parameters")
     @classmethod

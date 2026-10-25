@@ -1,6 +1,7 @@
 # Bundled permission rules (lowest precedence). Evaluation: last matching rule wins
 # across layers bundled → project → runtime → agent → session → approved.
 # Unmatched → the tool's `default_action`.
+# Patterns expand `~/`, `$HOME`, `$TMP` (system temp dir), `$AUOREO_HOME`, `$CWD`.
 rules:
   - {permission: read, pattern: "*", action: allow}
   - {permission: read, pattern: "*.env", action: deny}
@@ -8,6 +9,19 @@ rules:
   - {permission: read, pattern: "*.env.example", action: allow}
   - {permission: read, pattern: "*secrets.db", action: deny}
   - {permission: edit, pattern: "*", action: ask}
+  # Sensitive write targets (spec §19.7). The engine additionally forces `ask` for these
+  # even under yolo / acceptEdits / allow rules (core/permissions.SENSITIVE_WRITE_GLOBS).
+  - {permission: edit, pattern: "~/.ssh/*", action: ask}
+  - {permission: edit, pattern: "~/.aws/*", action: ask}
+  - {permission: edit, pattern: "~/.gnupg/*", action: ask}
+  - {permission: edit, pattern: "~/.config/gh/*", action: ask}
+  - {permission: edit, pattern: "~/.netrc", action: ask}
+  - {permission: edit, pattern: "~/.bashrc", action: ask}
+  - {permission: edit, pattern: "~/.zshrc", action: ask}
+  - {permission: edit, pattern: "~/.profile", action: ask}
+  - {permission: edit, pattern: "~/.bash_profile", action: ask}
+  - {permission: edit, pattern: "/etc/*", action: ask}
+  - {permission: edit, pattern: "*/.git/hooks/*", action: ask}
   - {permission: edit, pattern: "*.env", action: deny}
   - {permission: edit, pattern: "*secrets.db", action: deny}
   - {permission: bash, pattern: "*", action: ask}
@@ -18,6 +32,12 @@ rules:
   - {permission: bash, pattern: "git diff*", action: allow}
   - {permission: bash, pattern: "git log*", action: allow}
   - {permission: webfetch, pattern: "*", action: ask}
+  # File-tool paths outside the working directory (spec §19.6).
+  - {permission: external_directory, pattern: "*", action: ask}
+  - {permission: external_directory, pattern: "$TMP", action: allow}
+  - {permission: external_directory, pattern: "$TMP/*", action: allow}
+  - {permission: external_directory, pattern: "$AUOREO_HOME/skills/*", action: allow}
+  - {permission: external_directory, pattern: "$CWD/.auoreo/plans/*", action: allow}
   # Teams: delegate_task defaults to `ask`; allow it so delegation works headless (M5d).
   - {permission: delegate, pattern: "*", action: allow}
 # Extra shell deny-globs (unbypassable, checked before any mode, even yolo).

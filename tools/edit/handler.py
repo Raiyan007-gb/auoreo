@@ -1,4 +1,5 @@
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
+from auoreo.tools.writeguard import check_write
 
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
@@ -19,6 +20,7 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
         raise ToolError("old_string not found in file")
     if count > 1 and not args.get("replace_all"):
         raise ToolError(f"old_string matches {count} times; add context or set replace_all")
+    check_write(new, original=text)  # never write a redacted form back (spec §19.10)
     updated = text.replace(old, new) if args.get("replace_all") else text.replace(old, new, 1)
     path.write_text(updated, encoding="utf-8")
     ctx.state.read_files[str(path)] = path.stat().st_mtime

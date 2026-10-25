@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from auoreo.core.permissions import visible_tools
 from auoreo.harness.loader import VAR_RE, AgentDef, FamilyDef, SkillDef, ToolDef
 from auoreo.harness.manifests import Rule, Variant
 from auoreo.harness.registry import Harness
@@ -99,7 +100,12 @@ def build_spec(
     permission_mode: str,
 ) -> AgentSpec:
     agent = harness.agent(agent_name)
-    selected = harness.select_tools(agent.manifest)
+    rules: list[Rule] = []
+    for layer in harness.snapshot.permission_layers:
+        rules.extend(layer.manifest.rules)
+    rules.extend(agent.manifest.permissions)
+    # §19.1: a tool whose last matching rule is `deny "*"` is hidden from the model.
+    selected = visible_tools(harness.select_tools(agent.manifest), rules)
     direct = [t for t in selected if t.manifest.exposure == "direct"]
     deferred = [t for t in selected if t.manifest.exposure == "deferred"]
     skills = harness.select_skills(agent.manifest)
@@ -126,11 +132,6 @@ def build_spec(
     fam = pick_family(harness.snapshot.families, model)
     if fam and fam.text:
         stable.append(fam.text)
-
-    rules: list[Rule] = []
-    for layer in harness.snapshot.permission_layers:
-        rules.extend(layer.manifest.rules)
-    rules.extend(agent.manifest.permissions)
 
     return AgentSpec(
         agent=agent,

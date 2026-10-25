@@ -1,0 +1,13 @@
+kind: sandbox
+name: seatbelt
+description: >-
+  macOS Seatbelt via /usr/bin/sandbox-exec with a generated SBPL profile: deny by default,
+  read-only system paths, the working directory and temp dirs read-write (read-only under
+  read-only mode), network off for net=none, loopback only for net=proxy. macOS only; the
+  probe reports unavailable elsewhere.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apple system component (external binary, run as a subprocess)
+posture: ok

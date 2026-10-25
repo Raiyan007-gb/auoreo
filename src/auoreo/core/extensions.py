@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 
 STARTERS: list[str] = [
     "auoreo.core.sandbox_boot:start",  # first: policy=fail refuses before anything else starts
+    "auoreo.core.secrets:start",  # G1b: audit scoped secret reads (secret.read{name, by})
     "auoreo.runtime.hooks:start",
     "auoreo.automation.deliveries:start",
     "auoreo.automation.scheduler:start",

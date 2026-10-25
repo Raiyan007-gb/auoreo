@@ -10,6 +10,7 @@ from typing import Annotated
 import typer
 
 from auoreo.cli.common import err_console, settings
+from auoreo.core.logsetup import configure_logging, uvicorn_log_config
 from auoreo.core.settings import Settings
 
 
@@ -38,6 +39,7 @@ def serve(
     st = settings(host=host, port=port, gateway=gateway, workers=workers)
     if queue_bound is not None:  # --- G1a
         st.http.queue_bound = queue_bound
+    configure_logging(st)
     if not st.is_loopback and not st.server_password:
         err_console.print("[red]refusing to bind a non-loopback address without AUOREO_SERVER_PASSWORD[/red]")
         raise typer.Exit(2)
@@ -73,7 +75,7 @@ def serve(
             await super().shutdown(sockets=sockets)
 
     app = create_app(st)
-    config = uvicorn.Config(app, log_level="info", lifespan="on")
+    config = uvicorn.Config(app, log_level="info", lifespan="on", log_config=uvicorn_log_config(st))
     server = _Server(config)
     try:
         server.run(sockets=[sock])
@@ -112,7 +114,12 @@ def _run_workers(st: Settings, sock: socket.socket, bound: int, url: str, open_b
         }
     )
     config = uvicorn.Config(
-        "auoreo.api.app:create_app", factory=True, workers=st.workers, log_level="info", lifespan="on"
+        "auoreo.api.app:create_app",
+        factory=True,
+        workers=st.workers,
+        log_level="info",
+        lifespan="on",
+        log_config=uvicorn_log_config(st),
     )
     print(f"server listening on {url} ({st.workers} workers; sticky sessions required)", flush=True)
     if open_browser:
@@ -164,7 +171,7 @@ def _serve_uds(st: Settings, path: Path, *, tcp: bool) -> None:
             await super().shutdown(sockets=sockets)
 
     app = uds_mod.TrustUnixSocket(inner, st.server_password)
-    server = _Server(uvicorn.Config(app, log_level="info", lifespan="on"))
+    server = _Server(uvicorn.Config(app, log_level="info", lifespan="on", log_config=uvicorn_log_config(st)))
     try:
         server.run(sockets=sockets)
     except KeyboardInterrupt:
