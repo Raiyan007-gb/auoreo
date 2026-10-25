@@ -43,7 +43,14 @@ def serve(
                 if open_browser:
                     webbrowser.open(url)
 
-    config = uvicorn.Config(create_app(st), log_level="info", lifespan="on")
+        async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+            svc = getattr(app.state, "services", None)
+            if svc is not None:  # close WS clients with 1001 before uvicorn's own 1012
+                await svc.connections.close_all(1001)
+            await super().shutdown(sockets=sockets)
+
+    app = create_app(st)
+    config = uvicorn.Config(app, log_level="info", lifespan="on")
     server = _Server(config)
     try:
         server.run(sockets=[sock])

@@ -22,6 +22,7 @@ LAYOUT: dict[str, tuple[str, str]] = {
     "prompts": ("file", "*.md"),
     "families": ("file", "*.md"),  # lives at prompts/families/
     "variants": ("file", "variants.yaml"),  # lives at prompts/variants.yaml
+    "commands": ("file", "*.md"),  # slash commands: `/name args` in a chat message
 }
 
 _SUBPATH: dict[str, str] = {"families": "prompts/families", "variants": "prompts"}
@@ -56,7 +57,7 @@ def iter_candidates(roots: list[Root], kind: str) -> Iterator[Candidate]:
         else:
             for entry in sorted(base.glob(marker)):
                 if entry.is_file() and not entry.name.startswith((".", "_")):
-                    if kind == "prompts" and entry.name.upper() == "README.MD":
+                    if kind in {"prompts", "commands"} and entry.name.upper() == "README.MD":
                         continue
                     yield Candidate(kind, entry.stem, entry, root)
 

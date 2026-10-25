@@ -6,7 +6,10 @@ import asyncio
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from auoreo.core.permissions import PermissionEngine
 
 Reply = Literal["once", "always", "reject"]
 
@@ -108,3 +111,44 @@ class ApprovalBroker:
                         {"request_id": rid, "reply": "always", "auto": True},
                     )
         return True
+
+
+EngineLookup = Callable[[str], "PermissionEngine | None"]
+
+
+async def reply_with_grants(
+    broker: ApprovalBroker,
+    engine_for: EngineLookup,
+    request_id: str,
+    reply: Reply,
+    message: str | None = None,
+) -> bool:
+    """Shared by REST and WS: resolve a request; on `always`, persist the grant in the
+    session's permission engine and auto-resolve pendings it now allows."""
+
+    def grant_and_scan(granted: Pending) -> list[str]:
+        engine = engine_for(granted.session_id)
+        if engine is None:
+            return []
+        engine.grant_always(granted.permission, granted.pattern)
+        return [
+            p.request_id
+            for p in broker.pending(granted.session_id)
+            if engine.evaluate(p.permission, p.pattern).action == "allow"
+        ]
+
+    return await broker.reply(
+        request_id, reply, message, on_always=grant_and_scan if reply == "always" else None
+    )
+
+
+def pending_dict(p: Pending) -> dict[str, Any]:
+    """The REST `PendingPermission` shape, as a plain dict (WS `connected` frame)."""
+    return {
+        "request_id": p.request_id,
+        "session_id": p.session_id,
+        "tool": p.tool,
+        "permission": p.permission,
+        "pattern": p.pattern,
+        "detail": p.detail,
+    }

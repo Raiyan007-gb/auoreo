@@ -145,3 +145,26 @@ def test_workflow_validation(tmp_path: Path) -> None:
     )
     h = Harness(roots(("runtime", tmp_path), ("bundled", REPO)))
     assert "unique" in str(h.errors[0])
+
+
+def test_commands_kind_loads_overrides_and_validates(tmp_path: Path) -> None:
+    overlay, bundled = tmp_path / "overlay", tmp_path / "bundled"
+    write(bundled / "commands" / "review.md", "---\nname: review\ndescription: base\n---\nReview {{args}}\n")
+    write(bundled / "commands" / "README.md", "# not a command\n")
+    write(overlay / "commands" / "review.md", "---\nname: review\ndescription: mine\n---\nMine: {{args}}\n")
+    write(overlay / "commands" / "bad.md", "---\nname: bad\ndescription: x\n---\n{{nope}}\n")
+    write(overlay / "commands" / "odd.md", "---\nname: odd\ndescription: x\nhandler: launch\n---\n")
+    h = Harness(roots(("runtime", overlay), ("bundled", bundled)))
+    assert set(h.commands) == {"review"}
+    assert h.commands["review"].manifest.description == "mine"
+    assert h.commands["review"].template == "Mine: {{args}}"
+    assert h.commands["review"].manifest.handler == "prompt"
+    messages = " ".join(str(e) for e in h.errors)
+    assert "unknown template variable" in messages and "handler" in messages
+    assert [r["name"] for r in h.describe()["commands"]] == ["review"]
+
+
+def test_bundled_commands_are_valid(tmp_path: Path) -> None:
+    h = Harness(default_roots(tmp_path / "h", tmp_path, REPO))
+    handlers = {n: c.manifest.handler for n, c in h.commands.items()}
+    assert handlers == {"compact": "compact", "model": "model", "plan": "plan", "review": "prompt"}

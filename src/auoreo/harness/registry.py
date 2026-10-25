@@ -18,6 +18,7 @@ from auoreo.harness.discovery import Root, iter_candidates
 from auoreo.harness.loader import (
     LOADERS,
     AgentDef,
+    CommandDef,
     FamilyDef,
     Loaded,
     LoadError,
@@ -30,7 +31,7 @@ from auoreo.harness.manifests import AgentManifest
 log = logging.getLogger(__name__)
 
 # Kinds merged by name (first root wins). Permissions are layered, not merged.
-NAMED_KINDS = ("tools", "agents", "skills", "workflows", "mcp", "prompts", "families")
+NAMED_KINDS = ("tools", "agents", "skills", "workflows", "mcp", "prompts", "families", "commands")
 
 
 class HarnessError(Exception):
@@ -58,6 +59,7 @@ class Snapshot:
     mcp: dict[str, Loaded] = field(default_factory=dict)
     prompts: dict[str, PromptDef] = field(default_factory=dict)
     families: dict[str, FamilyDef] = field(default_factory=dict)
+    commands: dict[str, CommandDef] = field(default_factory=dict)
     permission_layers: list[Loaded] = field(default_factory=list)  # low → high precedence
     variants: Loaded | None = None
     errors: list[LoadError] = field(default_factory=list)
@@ -153,6 +155,10 @@ class Harness:
     @property
     def workflows(self) -> dict[str, Loaded]:
         return self._snap.workflows
+
+    @property
+    def commands(self) -> dict[str, CommandDef]:
+        return self._snap.commands
 
     @property
     def errors(self) -> list[LoadError]:
@@ -255,6 +261,10 @@ class Harness:
         out["prompts"] = [
             row("prompt", n, p.source, p.path, f"order {p.section.order}")
             for n, p in self._snap.prompts.items()
+        ]
+        out["commands"] = [
+            row("command", n, c.source, c.path, c.manifest.description)
+            for n, c in sorted(self._snap.commands.items())
         ]
         out["permissions"] = [
             row("permissions", p.path.stem, p.source, p.path, f"{len(p.manifest.rules)} rules")

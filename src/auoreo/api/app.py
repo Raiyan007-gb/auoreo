@@ -12,13 +12,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from auoreo import __version__
+from auoreo.api import ws
 from auoreo.api.routers import chat, events, harness, health, memory, permissions, questions, sessions
+from auoreo.api.routers import commands as commands_router
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings, get_settings
 from auoreo.gateway.types import Gateway
 
 log = logging.getLogger(__name__)
-ROUTERS = (health, sessions, chat, events, harness, permissions, questions, memory)
+ROUTERS = (health, sessions, chat, events, harness, permissions, questions, memory, commands_router, ws)
 
 
 def create_app(
@@ -41,6 +43,7 @@ def create_app(
         try:
             yield
         finally:
+            await svc.connections.close_all(1001)
             if owned:
                 await svc.close()
 
@@ -48,6 +51,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -12,6 +12,7 @@ from sqlalchemy import select
 from auoreo.core.approvals import ApprovalBroker
 from auoreo.core.audit import AuditLog
 from auoreo.core.bus import EventBus
+from auoreo.core.connections import ConnectionManager
 from auoreo.core.db import Database, SessionRow, utcnow
 from auoreo.core.event_store import EventStore
 from auoreo.core.idempotency import Idempotency
@@ -45,12 +46,14 @@ class Services:
     approvals: ApprovalBroker = field(init=False)
     questions: QuestionBroker = field(init=False)
     coordinator: SessionRunCoordinator = field(init=False)
+    connections: ConnectionManager = field(init=False)
     memory: MemoryService | None = None
     mcp: McpBridge | None = None
 
     def __post_init__(self) -> None:
         self.approvals = ApprovalBroker(self.emit, self.settings.approval_timeout_s)
         self.questions = QuestionBroker(self.emit, self.settings.approval_timeout_s)
+        self.connections = ConnectionManager()
 
     async def emit(self, aggregate_id: str, type_: str, data: dict[str, Any]) -> None:
         await self.events.append(aggregate_id, type_, data)
@@ -103,6 +106,7 @@ class Services:
         return svc
 
     async def close(self) -> None:
+        await self.connections.close_all(1001)  # before the DB goes away
         await self.coordinator.shutdown()
         if self.mcp is not None:
             await self.mcp.stop()
@@ -147,10 +151,24 @@ class Services:
         async with self.db.session() as s:
             return await s.get(SessionRow, session_id)
 
-    async def list_sessions(self, limit: int = 100) -> list[SessionRow]:
+    async def list_sessions(self, limit: int = 100, *, include_archived: bool = False) -> list[SessionRow]:
+        """Newest first. Archived sessions are hidden unless `include_archived`."""
         async with self.db.session() as s:
             q = select(SessionRow).order_by(SessionRow.updated_at.desc()).limit(limit)
+            if not include_archived:
+                q = q.where(SessionRow.archived.is_(False))
             return list((await s.execute(q)).scalars())
+
+    async def update_session(self, session_id: str, **fields: Any) -> SessionRow | None:
+        async with self.db.session() as s:
+            row = await s.get(SessionRow, session_id)
+            if row is None:
+                return None
+            for key, value in fields.items():
+                setattr(row, key, value)
+            row.updated_at = utcnow()
+            await s.commit()
+            return row
 
     async def set_session_status(self, session_id: str, status: str, title: str | None = None) -> None:
         async with self.db.session() as s:

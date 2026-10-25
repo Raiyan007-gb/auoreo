@@ -187,3 +187,16 @@ class Variant(_Strict):
 
 class VariantsFile(_Strict):
     variants: list[Variant] = Field(default_factory=list)
+
+
+class CommandManifest(_Strict):
+    """Frontmatter of `commands/<name>.md`; the body is a `{{args}}`/`{{input}}` template.
+
+    `prompt` commands expand into a chat message; `compact`, `model` and `plan` are
+    handled by the engine (spec §2.11).
+    """
+
+    name: str = Field(pattern=NAME_RE)
+    description: str = Field(min_length=1)
+    handler: Literal["prompt", "compact", "model", "plan"] = "prompt"
+    args_hint: str = ""

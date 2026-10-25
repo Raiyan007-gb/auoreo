@@ -27,3 +27,11 @@ app.add_typer(memory.app, name="memory", help="Search and add long-term memory."
 def version() -> None:
     """Print the version."""
     typer.echo(__version__)
+
+
+# M3 control plane: tunnels, web, logs
+from auoreo.cli.commands import logs, tunnel, web  # noqa: E402
+
+app.command("web")(web.web)
+app.command("logs")(logs.logs)
+app.add_typer(tunnel.app, name="tunnel", help="Expose the server via cloudflared / tailscale.")
