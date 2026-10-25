@@ -180,7 +180,7 @@ def test_sip_inbound_numbers_rule_and_srtp(home: Path, lk_env: None) -> None:
     req = be.inbound_trunk_request([], allowed_addresses=["203.0.113.0/24"])
     assert list(req.trunk.allowed_addresses) == ["203.0.113.0/24"]
     assert req.trunk.media_encryption == sip.SIPMediaEncryption.SIP_MEDIA_ENCRYPT_REQUIRE
-    assert req.trunk.krisp_enabled is True
+    assert req.trunk.krisp_enabled is False  # F5: off by default
     req = be.inbound_trunk_request(["+15550100"], auth_username="u", auth_password="p")
     assert list(req.trunk.numbers) == ["+15550100"] and req.trunk.auth_username == "u"
 

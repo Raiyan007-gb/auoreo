@@ -54,3 +54,22 @@ class RtcOffer(_ChatRtcOffer):
         default=False,
         description="Accept the `auoreo-input` teleop channel; 403 unless `settings.teleop_input_enabled`",
     )
+
+
+# --- F5: ICE servers for browser peers (static STUN/TURN + ephemeral TURN REST credentials)
+class RtcIceServer(BaseModel):
+    """One `RTCIceServer` entry, ready for `new RTCPeerConnection({iceServers})`."""
+
+    urls: list[str]
+    username: str | None = Field(default=None, description="TURN REST username `<expiry>:<user>`")
+    credential: str | None = Field(
+        default=None, description="base64(HMAC-SHA1(secret, username)); expires with the username"
+    )
+
+
+class RtcIceConfig(BaseModel):
+    iceServers: list[RtcIceServer] = Field(description="Pass as `RTCConfiguration.iceServers`")  # noqa: N815
+    expires_at: int | None = Field(
+        default=None, description="Unix time the TURN credentials stop working (None = no TURN REST)"
+    )
+    ttl_s: int | None = None

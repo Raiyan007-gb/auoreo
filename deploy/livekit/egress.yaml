@@ -1,0 +1,15 @@
+# livekit-egress config (spec §26.8, F5). AUOREO only starts audio-only template egress
+# (`StartEgress{TemplateSource{audio_only: true}}` → OGG). api_key / api_secret come from the
+# environment (LIVEKIT_API_KEY / LIVEKIT_API_SECRET) and are never written here.
+#
+# Sizing: each egress worker wants >= 4 CPU / 4 GB RAM and must run with --cap-add SYS_ADMIN
+# (Chrome sandbox for the template renderer).
+log_level: info
+ws_url: ws://127.0.0.1:7880
+insecure: true   # plain ws:// to the co-located server on loopback only
+redis:
+  address: 127.0.0.1:6379
+health_port: 8080
+template_port: 7980
+# Recordings land on the mounted volume; for S3/GCS/Azure add ONE upload block here and
+# keep its credentials in the environment (AWS_ACCESS_KEY_ID etc.), never in this file.

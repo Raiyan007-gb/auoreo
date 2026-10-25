@@ -6,7 +6,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ModelGroup(BaseModel):
@@ -93,6 +93,9 @@ class NamedEnvironment(BaseModel):
     description: str = ""
 
 
+IVR_ACTIONS = frozenset({"transfer", "say", "hangup", "followup"})
+
+
 # --- W2-D: LiveKit SFU transport (P2, opt-in; backends/rtc_transport/livekit)
 class LiveKitSipSettings(BaseModel):
     """`settings.livekit.sip`: SIP trunks are created on demand by the livekit backend helpers;
@@ -105,10 +108,28 @@ class LiveKitSipSettings(BaseModel):
     auth_username: str | None = None
     auth_password_secret: str | None = None
     """Secret-store name of the inbound digest password (never the value)."""
-    krisp_enabled: bool = True
+    krisp_enabled: bool = False
+    """F5: Krisp noise cancellation on SIP calls (`SIPInboundTrunkInfo` / `CreateSIPParticipant`).
+    Off by default: on a self-hosted server it needs a Krisp-enabled build."""
     room_prefix: str = Field(default="auoreo-call-", pattern=r"^[A-Za-z0-9_-]{1,64}$")
     outbound_address: str | None = None
     """Carrier SIP host for the outbound trunk (TLS transport)."""
+    # --- F5
+    ivr: dict[str, str] = Field(default_factory=dict)
+    """DTMF digit → action: `transfer:<number>`, `say:<text>`, `hangup`, `followup:<text>`."""
+    outbound_trunk_id: str | None = None
+    """Outbound trunk used to dial the warm-transfer target (`CreateSIPParticipant`)."""
+
+    @field_validator("ivr")
+    @classmethod
+    def _ivr(cls, v: dict[str, str]) -> dict[str, str]:
+        for digit, action in v.items():
+            if digit not in "0123456789*#ABCD" or len(digit) != 1:
+                raise ValueError(f"ivr key {digit!r} is not a DTMF digit (0-9 * # A-D)")
+            kind = action.split(":", 1)[0]
+            if kind not in IVR_ACTIONS or (kind != "hangup" and not action.partition(":")[2].strip()):
+                raise ValueError(f"ivr[{digit!r}] = {action!r}: use transfer:/say:/followup:<arg> or hangup")
+        return v
 
 
 class LiveKitSettings(BaseModel):
@@ -123,6 +144,9 @@ class LiveKitSettings(BaseModel):
     cloud_consent: bool = False
     token_ttl_s: int = Field(default=3600, ge=60, le=86_400)
     sip: LiveKitSipSettings = Field(default_factory=LiveKitSipSettings)
+    # --- F5
+    region: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
+    """Region pin: `Destination.region` on outbound SIP calls (where the server supports it)."""
 
 
 # --- end W2-D

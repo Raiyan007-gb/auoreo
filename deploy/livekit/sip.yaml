@@ -1,0 +1,20 @@
+# livekit-sip config (spec §26.8, F5). api_key / api_secret come from the environment
+# (LIVEKIT_API_KEY / LIVEKIT_API_SECRET, passed by compose) and are never written here.
+# No REGISTER (the carrier sends calls to us / authenticates our trunk), no video over SIP.
+#
+# Firewall: udp+tcp 5060 SIP signalling, tcp 5061 SIP/TLS, udp 10000-20000 RTP media.
+# Restrict 5060/5061 to your carrier's signalling IPs where possible (trunk allowed_addresses
+# are enforced by livekit too; media is SRTP REQUIRE on every trunk AUOREO creates).
+ws_url: ws://127.0.0.1:7880
+redis:
+  address: 127.0.0.1:6379
+sip_port: 5060
+rtp_port: 10000-20000
+use_external_ip: true
+tls:
+  port: 5061
+  certs:
+    - cert_file: /etc/livekit/certs/sip.crt
+      key_file: /etc/livekit/certs/sip.key
+logging:
+  level: info

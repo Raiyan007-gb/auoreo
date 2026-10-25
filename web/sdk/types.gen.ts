@@ -870,6 +870,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rtc/ice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ice
+         * @description ICE servers for a browser `RTCPeerConnection` (F5): `rtc_ice_servers` plus, when
+         *     `turn_secret_ref` + `turn_urls` are set, TURN REST credentials valid `turn_ttl_s` seconds.
+         *     The shared secret is never returned; fetch this right before each offer.
+         */
+        get: operations["ice_api_rtc_ice_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rtc/join": {
         parameters: {
             query?: never;
@@ -2787,6 +2809,39 @@ export interface components {
         RtcClosed: {
             /** Closed */
             closed: boolean;
+        };
+        /** RtcIceConfig */
+        RtcIceConfig: {
+            /**
+             * Expires At
+             * @description Unix time the TURN credentials stop working (None = no TURN REST)
+             */
+            expires_at?: number | null;
+            /**
+             * Iceservers
+             * @description Pass as `RTCConfiguration.iceServers`
+             */
+            iceServers: components["schemas"]["RtcIceServer"][];
+            /** Ttl S */
+            ttl_s?: number | null;
+        };
+        /**
+         * RtcIceServer
+         * @description One `RTCIceServer` entry, ready for `new RTCPeerConnection({iceServers})`.
+         */
+        RtcIceServer: {
+            /**
+             * Credential
+             * @description base64(HMAC-SHA1(secret, username)); expires with the username
+             */
+            credential?: string | null;
+            /** Urls */
+            urls: string[];
+            /**
+             * Username
+             * @description TURN REST username `<expiry>:<user>`
+             */
+            username?: string | null;
         };
         /** RtcJoinInfo */
         RtcJoinInfo: {
@@ -5309,6 +5364,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RtcPeerInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ice_api_rtc_ice_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RtcIceConfig"];
                 };
             };
             /** @description Validation Error */

@@ -144,8 +144,11 @@ async def test_floors_refuse_dangerous_ops(services: Services, workdir: Path, ar
     res = await call(services, ctx, args)
     assert res.is_error and "refused" in res.content, res.content
     assert services.backend("desktop").actions == []
-    rows = await audit_rows(services)
-    assert rows and rows[-1].decision == "refused"
+    # F5: the executor's pre_check refuses before the permission check (audited tool.denied);
+    # the handler floor (computer.act refused) remains as defence in depth.
+    async with services.db.session() as s:
+        denied = [r for r in (await s.execute(select(AuditRow))).scalars() if r.action == "tool.denied"]
+    assert denied and denied[-1].reason == "pre_check" and denied[-1].decision == "deny"
 
 
 async def test_floors_allow_safe_lookalikes(services: Services, workdir: Path) -> None:
@@ -217,7 +220,10 @@ async def test_every_action_is_audited(services: Services, workdir: Path) -> Non
     await call(services, ctx, {"op": "type", "text": "s3cret typed text"})
     await call(services, ctx, {"op": "key", "key": "super+l"})
     rows = await audit_rows(services)
-    assert [r.decision for r in rows] == ["ok", "ok", "refused"]
+    assert [r.decision for r in rows] == ["ok", "ok"]  # F5: the floor refusal is a pre_check now
+    async with services.db.session() as s:
+        denied = [r for r in (await s.execute(select(AuditRow))).scalars() if r.action == "tool.denied"]
+    assert [(r.reason, r.detail["tool"]) for r in denied] == [("pre_check", "computer")]
     assert rows[0].detail["op"] == "click" and rows[0].detail["verify"]["matched"] is True
     assert rows[1].detail["text_chars"] == 17 and "s3cret" not in json.dumps(rows[1].detail)
     assert all(r.session_id == "ses_cu" and r.actor == "agent" for r in rows)

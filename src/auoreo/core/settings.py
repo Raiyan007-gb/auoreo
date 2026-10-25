@@ -350,6 +350,14 @@ class Settings(BaseSettings):
     trace_file: Path | None = None
     """`AUOREO_TRACE_FILE`: write a Chrome/Perfetto Trace-Event JSON file (works with OTel off)."""
 
+    # --- F5: ephemeral TURN (TURN REST API) for the aiortc path
+    turn_secret_ref: str | None = Field(default=None, pattern=r"^secret:[A-Za-z0-9_.-]+$")
+    """`secret:<NAME>`: the coturn `static-auth-secret`; `GET /api/rtc/ice` and the server peer
+    derive time-limited credentials from it (the secret itself is never returned)."""
+    turn_urls: list[str] = Field(default_factory=list)
+    """`turn:`/`turns:` URLs the ephemeral credentials are valid for (e.g. `turns:turn.example.com:5349`)."""
+    turn_ttl_s: int = Field(default=3600, ge=60, le=86_400)
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""

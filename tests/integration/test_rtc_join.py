@@ -144,4 +144,4 @@ def test_settings_append_livekit_defaults(home: Path) -> None:
 
     lk = Settings(home=home).livekit
     assert lk.url is None and lk.cloud_consent is False and lk.token_ttl_s == 3600
-    assert lk.sip.krisp_enabled and lk.sip.room_prefix == "auoreo-call-"
+    assert not lk.sip.krisp_enabled and lk.sip.room_prefix == "auoreo-call-"

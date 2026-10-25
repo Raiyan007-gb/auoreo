@@ -3,7 +3,8 @@ name: livekit
 description: >-
   LiveKit SFU (P2, opt-in): join creates room auoreo-<session> through the server API and mints
   a room-scoped 1 h access token; helpers create SIP inbound/outbound trunks (SRTP REQUIRE,
-  no REGISTER, no video), dispatch rules and audio-only StartEgress. Self-hosted by default;
+  no REGISTER, no video), dispatch rules, audio-only StartEgress, SIP DTMF in/out + IVR, cold and
+  warm transfer (F5; DTMF and announcements need the realtime SDK). Self-hosted by default;
   a *.livekit.cloud URL needs settings.livekit.cloud_consent. Needs the `livekit` extra.
 impl: impl.py:Backend
 default: false

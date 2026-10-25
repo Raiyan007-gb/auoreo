@@ -73,6 +73,7 @@ redis = [  # W1-E: multi-worker event fan-out (serve --workers N with redis_url)
 ]
 livekit = [  # W2-D: backends/rtc_transport/livekit (SFU rooms, SIP, egress; P2 opt-in)
     "livekit-api>=1.2,<2",
+    "livekit>=1.0,<2",  # F5: realtime SDK (sip_dtmf_received, publish_dtmf, TTS into a room)
 ]
 code = [
     "tree-sitter>=0.26.0",

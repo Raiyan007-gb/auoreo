@@ -5,7 +5,9 @@
   scoped to that room (`room_join`, identity, TTL `settings.livekit.token_ttl_s` = 1 h).
 - SIP: `create_sip_inbound` refuses `numbers=[]` without digest auth or allowed addresses
   and always sets `media_encryption = SIP_MEDIA_ENCRYPT_REQUIRE` (SRTP); the outbound trunk
-  uses TLS transport. No REGISTER, no video. `transfer` is a cold SIP REFER.
+  uses TLS transport. No REGISTER, no video. `transfer` is a cold SIP REFER (`play_dialtone`).
+- F5 (telephony.py): SIP DTMF in (`sip_dtmf_received` → `rtc.dtmf` + IVR) and out
+  (`publish_dtmf`), warm transfer (consult room + MoveParticipant, or in-room when self-hosted).
 - Egress: only `StartEgress` with a `TemplateSource{audio_only: true}`.
 - `subscribable()` drops EGRESS / INGRESS / AGENT participants from any subscription logic.
 - Self-hosted by default: a `*.livekit.cloud` URL fails unless `cloud_consent` is true.
@@ -14,13 +16,16 @@ Tokens and API secrets never reach logs, events or `describe()`.
 
 from __future__ import annotations
 
+import asyncio
+import importlib.util
 import os
 import re
+import sys
 import uuid
 from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 
@@ -44,17 +49,30 @@ class ConsentError(PermissionError):
     """A LiveKit Cloud URL without `cloud_consent`."""
 
 
+def _sibling(name: str) -> Any:
+    """Import `<this folder>/<name>.py` (backend folders are not packages)."""
+    mod_name = f"auoreo_backend_rtc_transport_livekit_{name}"
+    if mod_name in sys.modules:
+        return sys.modules[mod_name]
+    spec = importlib.util.spec_from_file_location(mod_name, Path(__file__).with_name(f"{name}.py"))
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_tel = _sibling("telephony")
+is_cloud = _tel.is_cloud
+TelephonyMixin = _tel.TelephonyMixin
+
+
 def sdk() -> Any:
     try:
         from livekit import api
     except ImportError as exc:
         raise LiveKitUnavailable(f"livekit-api is not installed; {INSTALL_HINT}") from exc
     return api
-
-
-def is_cloud(url: str | None) -> bool:
-    host = (urlparse(url or "").hostname or "").lower()
-    return host == "livekit.cloud" or host.endswith(".livekit.cloud")
 
 
 def http_url(url: str) -> str:
@@ -84,14 +102,24 @@ def subscribable(participants: Iterable[Any]) -> list[Any]:
     return [p for p in participants if kind_name(p) not in SKIP_KINDS]
 
 
-class Backend(RtcTransport):
+class Backend(TelephonyMixin, RtcTransport):  # type: ignore[misc,valid-type]
     name = "livekit"
 
-    def __init__(self, settings: Any, *, api_factory: Callable[[], Any] | None = None) -> None:
+    def __init__(
+        self,
+        settings: Any,
+        *,
+        api_factory: Callable[[], Any] | None = None,
+        rtc_factory: Callable[[], Any] | None = None,
+    ) -> None:
         super().__init__(settings)
         self.api_factory = api_factory
         """Test seam: returns a `LiveKitAPI`-shaped object (room/sip/egress + aclose)."""
+        self.rtc_factory = rtc_factory
+        """Test seam: returns a `livekit.rtc.Room`-shaped object (on/connect/disconnect/local_participant)."""
         self.rooms: dict[str, dict[str, Any]] = {}
+        self.links: dict[str, Any] = {}
+        self._tasks: set[asyncio.Task[Any]] = set()
 
     # ------------------------------------------------------------- config
     @property
@@ -165,12 +193,16 @@ class Backend(RtcTransport):
             if closer is not None:
                 await closer()
 
-    def mint_token(self, identity: str, room: str, ttl_s: int | None = None) -> str:
+    def mint_token(
+        self, identity: str, room: str, ttl_s: int | None = None, *, kind: str | None = None
+    ) -> str:
         api = sdk()
         key, secret = self._keys()
         ttl = timedelta(seconds=ttl_s or int(self.cfg.token_ttl_s))
         grants = api.VideoGrants(room_join=True, room=room, can_publish=True, can_subscribe=True)
         token = api.AccessToken(key, secret).with_identity(identity).with_ttl(ttl).with_grants(grants)
+        if kind:  # F5: the agent joins as `agent` so subscribable() and other agents skip it
+            token = token.with_kind(kind)
         return str(token.to_jwt())
 
     # ------------------------------------------------------------ transport
@@ -189,12 +221,13 @@ class Backend(RtcTransport):
             "identity": identity,
             "created_at": datetime.now(UTC),
         }
-        extra = {"join_id": room, "ttl_s": ttl, "cloud": is_cloud(url)}
+        extra = {"join_id": room, "ttl_s": ttl, "cloud": is_cloud(url), "region": self.cfg.region}
         return JoinInfo("livekit", session_id, url=url, token=token, room=room, extra=extra)
 
     async def leave(self, join_id: str) -> None:
         if self.rooms.pop(join_id, None) is None:
             return
+        await self.disconnect_agent(join_id)
         api = sdk()
         await self._call(lambda lk: lk.room.delete_room(api.DeleteRoomRequest(room=join_id)))
 
@@ -227,7 +260,7 @@ class Backend(RtcTransport):
             allowed_addresses=list(allowed_addresses),
             auth_username=auth_username or "",
             auth_password=auth_password or "",
-            krisp_enabled=bool(self.cfg.sip.krisp_enabled),
+            krisp_enabled=bool(self.cfg.sip.krisp_enabled),  # F5: default off
             media_encryption=sip.SIPMediaEncryption.SIP_MEDIA_ENCRYPT_REQUIRE,
         )
         return api.CreateSIPInboundTrunkRequest(trunk=trunk)
@@ -288,16 +321,31 @@ class Backend(RtcTransport):
         info = await self._call(lambda lk: lk.sip.create_sip_dispatch_rule(req))
         return str(getattr(info, "sip_dispatch_rule_id", ""))
 
-    async def transfer(self, room: str, participant_identity: str, transfer_to: str) -> None:
-        """Cold transfer (SIP REFER) of a phone participant to `tel:` / `sip:` `transfer_to`."""
+    async def transfer(
+        self, room: str, participant_identity: str, transfer_to: str, *, play_dialtone: bool = False
+    ) -> None:
+        """Cold transfer (SIP REFER) of a phone participant to `tel:` / `sip:` `transfer_to`.
+        `play_dialtone` plays a dial tone to the caller instead of the room audio meanwhile."""
         if not transfer_to.startswith(("tel:", "sip:")):
             raise ValueError("transfer_to must be a tel: or sip: URI")
         from livekit.protocol import sip
 
         req = sip.TransferSIPParticipantRequest(
-            room_name=room, participant_identity=participant_identity, transfer_to=transfer_to
+            room_name=room,
+            participant_identity=participant_identity,
+            transfer_to=transfer_to,
+            play_dialtone=play_dialtone,
         )
         await self._call(lambda lk: lk.sip.transfer_sip_participant(req))
+        out = {
+            "kind": "cold",
+            "caller": participant_identity,
+            "target": transfer_to[-4:].rjust(8, "*"),
+            "play_dialtone": play_dialtone,
+        }
+        await self._emit(room, "rtc.transfer", out)
+        await self._audit(room, "rtc.transfer", out)
+        await self.disconnect_agent(room)
 
     # ------------------------------------------------------------- egress
     def audio_egress_request(self, room: str, filepath: str | None = None) -> Any:

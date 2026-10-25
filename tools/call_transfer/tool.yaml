@@ -1,0 +1,28 @@
+name: call_transfer
+toolset: telephony
+description: >-
+  Transfer the phone caller in a LiveKit call room. kind "cold" hands the call off with a SIP
+  REFER (the caller hears a dial tone); kind "warm" dials the target first, speaks the optional
+  `announce` text to them, then bridges caller and target and drops the agent. `target` is an
+  E.164 number (+15550100) or a tel:/sip: URI. Needs the livekit rtc transport.
+parameters:
+  type: object
+  properties:
+    kind: {type: string, enum: [cold, warm]}
+    target: {type: string, minLength: 3, maxLength: 256, description: "E.164 number or tel:/sip: URI."}
+    caller: {type: string, minLength: 1, maxLength: 128, description: "Identity of the SIP participant to transfer."}
+    room: {type: string, maxLength: 128, description: "LiveKit room (default: the room joined for this session)."}
+    announce: {type: string, maxLength: 500, description: "warm only: what to tell the target before bridging."}
+    play_dialtone: {type: boolean, default: true, description: "cold only: dial tone instead of room audio."}
+  required: [kind, target, caller]
+  additionalProperties: false
+permission: telephony
+pattern_arg: target
+default_action: ask
+exposure: deferred
+is_read_only: false
+is_destructive: true
+is_concurrency_safe: false
+net: direct
+timeout_ms: 90000
+search_hint: phone call transfer telephony sip forward hand off warm cold livekit dial

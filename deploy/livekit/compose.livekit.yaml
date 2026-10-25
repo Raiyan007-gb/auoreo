@@ -1,0 +1,78 @@
+# Self-hosted LiveKit for AUOREO telephony (spec §26.8, F5): server + SIP + egress + redis.
+#
+#   export LIVEKIT_API_KEY=... LIVEKIT_API_SECRET=...   # >= 32 random chars for the secret
+#   docker compose -f deploy/livekit/compose.livekit.yaml up -d
+#   auoreo secrets set LIVEKIT_API_KEY; auoreo secrets set LIVEKIT_API_SECRET
+#   settings.json: {"backends": {"rtc_transport": "livekit"}, "livekit": {"url": "wss://lk.example.com"}}
+#
+# Host networking: WebRTC needs udp 50000-60000 and SIP needs udp 10000-20000 + 5060; publishing
+# 20k ports through docker-proxy is slow and breaks ICE candidate addresses, so every service
+# uses `network_mode: host` (Linux only) and talks to redis on 127.0.0.1. Open these on the host
+# firewall: tcp 7880 (behind TLS), tcp 7881, udp 50000-60000, udp 3478, tcp 5349 (TURN/TLS, own
+# domain), udp+tcp 5060, tcp 5061, udp 10000-20000. Put certs for the API host, turn.<domain>
+# and the SIP TLS host under deploy/livekit/certs/ (a real CA certificate; not committed).
+# No secrets are inline: everything sensitive is interpolated from the environment.
+name: auoreo-livekit
+services:
+  redis:
+    image: redis:7-alpine
+    network_mode: host
+    command: ["redis-server", "--bind", "127.0.0.1", "--port", "6379", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-h", "127.0.0.1", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  livekit-server:
+    image: livekit/livekit-server:v1.9
+    network_mode: host
+    command: ["--config", "/etc/livekit/livekit.yaml"]
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}"
+    volumes:
+      - ./livekit.yaml:/etc/livekit/livekit.yaml:ro
+      - ./certs:/etc/livekit/certs:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  livekit-sip:
+    image: livekit/sip:v1.0
+    network_mode: host
+    command: ["--config", "/etc/livekit/sip.yaml"]
+    environment:
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+    volumes:
+      - ./sip.yaml:/etc/livekit/sip.yaml:ro
+      - ./certs:/etc/livekit/certs:ro
+    depends_on:
+      - livekit-server
+    restart: unless-stopped
+
+  livekit-egress:
+    image: livekit/egress:v1.10
+    network_mode: host
+    # Chrome sandbox for template egress; >= 4 CPU / 4 GB per worker (scale workers, not size)
+    cap_add: [SYS_ADMIN]
+    environment:
+      EGRESS_CONFIG_FILE: /etc/livekit/egress.yaml
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET}
+    volumes:
+      - ./egress.yaml:/etc/livekit/egress.yaml:ro
+      - egress-out:/out
+    deploy:
+      resources:
+        reservations:
+          cpus: "4"
+          memory: 4G
+    depends_on:
+      - livekit-server
+    restart: unless-stopped
+
+volumes:
+  egress-out:
