@@ -1,0 +1,11 @@
+name: verify_plan
+toolset: planning
+description: >-
+  Check the current plan (from update_plan) with deterministic rules and return a checklist
+  verdict; a pass unlocks exit_plan_mode when plan verification is required.
+parameters: {type: object, properties: {}, additionalProperties: false}
+default_action: allow
+is_read_only: true
+exposure: deferred
+timeout_ms: 10000
+search_hint: verify check plan acceptance criteria before exit plan mode

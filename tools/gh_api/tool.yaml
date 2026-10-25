@@ -1,0 +1,54 @@
+name: gh_api
+toolset: github
+description: GET a repository-scoped GitHub REST endpoint via `gh api`.
+parameters:
+  type: object
+  properties:
+    endpoint:
+      type: string
+      minLength: 1
+      maxLength: 500
+      description: Path under repos/, e.g. repos/{owner}/{repo}/pulls/12/reviews ({owner}/{repo} are filled
+        in).
+    params:
+      type: object
+      additionalProperties:
+        type:
+        - string
+        - integer
+        - number
+        - boolean
+      description: Query parameters.
+    jq:
+      type: string
+      maxLength: 1000
+      description: jq filter applied by gh (--jq).
+    paginate:
+      type: boolean
+      default: false
+    repo:
+      type: string
+      description: 'owner/name (or host/owner/name). Default: the working directory''s GitHub remote;
+        any other repo must match settings.github_allowed_repos.'
+  additionalProperties: false
+  required:
+  - endpoint
+permission: github_read
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+pattern_arg: repo
+exposure: deferred
+timeout_ms: 120000
+net: direct
+sandbox_mode: read-only
+requires_env:
+- GH_TOKEN
+- GITHUB_TOKEN
+- GH_HOST
+- GH_CONFIG_DIR
+- HTTPS_PROXY
+- NO_PROXY
+- SSL_CERT_FILE
+max_result_size_chars: 32000
+search_hint: github rest api get request

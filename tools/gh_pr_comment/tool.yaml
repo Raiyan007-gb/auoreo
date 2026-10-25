@@ -1,0 +1,40 @@
+name: gh_pr_comment
+toolset: github
+description: Comment on a GitHub pull request via gh.
+parameters:
+  type: object
+  properties:
+    number:
+      type: integer
+      minimum: 1
+    body:
+      type: string
+      minLength: 1
+      maxLength: 60000
+      description: Markdown body. Refused if it looks like it contains a secret.
+    repo:
+      type: string
+      description: 'owner/name (or host/owner/name). Default: the working directory''s GitHub remote;
+        any other repo must match settings.github_allowed_repos.'
+  additionalProperties: false
+  required:
+  - number
+  - body
+permission: github_write
+default_action: ask
+is_destructive: true
+pattern_arg: repo
+exposure: deferred
+timeout_ms: 120000
+net: direct
+sandbox_mode: read-only
+requires_env:
+- GH_TOKEN
+- GITHUB_TOKEN
+- GH_HOST
+- GH_CONFIG_DIR
+- HTTPS_PROXY
+- NO_PROXY
+- SSL_CERT_FILE
+max_result_size_chars: 32000
+search_hint: github pull request comment reply

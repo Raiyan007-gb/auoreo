@@ -1,0 +1,39 @@
+name: gh_pr_merge
+toolset: github
+description: Squash-merge a GitHub pull request (or enable auto-merge) via gh; always asks a human.
+parameters:
+  type: object
+  properties:
+    number:
+      type: integer
+      minimum: 1
+    auto:
+      type: boolean
+      default: true
+      description: Enable auto-merge (merge when checks pass) instead of merging now.
+    repo:
+      type: string
+      description: 'owner/name (or host/owner/name). Default: the working directory''s GitHub remote;
+        any other repo must match settings.github_allowed_repos.'
+  additionalProperties: false
+  required:
+  - number
+permission: github_write
+default_action: ask
+is_destructive: true
+pattern_arg: repo
+exposure: deferred
+interactive_only: true
+timeout_ms: 120000
+net: direct
+sandbox_mode: read-only
+requires_env:
+- GH_TOKEN
+- GITHUB_TOKEN
+- GH_HOST
+- GH_CONFIG_DIR
+- HTTPS_PROXY
+- NO_PROXY
+- SSL_CERT_FILE
+max_result_size_chars: 32000
+search_hint: github merge pull request squash auto

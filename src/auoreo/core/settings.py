@@ -431,6 +431,12 @@ class Settings(BaseSettings):
     update_pubkeys: list[str] = Field(default_factory=list)
     """Extra base64 raw ed25519 keys trusted for manifests, in addition to the pinned release key."""
 
+    # --- F2
+    github_allowed_repos: list[str] = Field(default_factory=list)
+    """`gh_*` tools: extra repos (globs like `acme/*`) besides the cwd checkout's own remote."""
+    plan_requires_verify: bool = False
+    """`exit_plan_mode` refuses until `verify_plan` passed for the current plan."""
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""

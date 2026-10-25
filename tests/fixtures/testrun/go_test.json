@@ -1,0 +1,18 @@
+{"Time":"2026-10-25T20:19:22.09571274Z","Action":"start","Package":"example.com/demo"}
+{"Time":"2026-10-25T20:19:22.098033751Z","Action":"run","Package":"example.com/demo","Test":"TestOK"}
+{"Time":"2026-10-25T20:19:22.098052786Z","Action":"output","Package":"example.com/demo","Test":"TestOK","Output":"=== RUN   TestOK\n"}
+{"Time":"2026-10-25T20:19:22.098099716Z","Action":"output","Package":"example.com/demo","Test":"TestOK","Output":"--- PASS: TestOK (0.00s)\n"}
+{"Time":"2026-10-25T20:19:22.098104752Z","Action":"pass","Package":"example.com/demo","Test":"TestOK","Elapsed":0}
+{"Time":"2026-10-25T20:19:22.098109089Z","Action":"run","Package":"example.com/demo","Test":"TestBad"}
+{"Time":"2026-10-25T20:19:22.098110199Z","Action":"output","Package":"example.com/demo","Test":"TestBad","Output":"=== RUN   TestBad\n"}
+{"Time":"2026-10-25T20:19:22.098111564Z","Action":"output","Package":"example.com/demo","Test":"TestBad","Output":"    demo_test.go:8: got 2 want 3\n"}
+{"Time":"2026-10-25T20:19:22.098123551Z","Action":"output","Package":"example.com/demo","Test":"TestBad","Output":"--- FAIL: TestBad (0.00s)\n"}
+{"Time":"2026-10-25T20:19:22.098133203Z","Action":"fail","Package":"example.com/demo","Test":"TestBad","Elapsed":0}
+{"Time":"2026-10-25T20:19:22.098134515Z","Action":"run","Package":"example.com/demo","Test":"TestSkip"}
+{"Time":"2026-10-25T20:19:22.098135734Z","Action":"output","Package":"example.com/demo","Test":"TestSkip","Output":"=== RUN   TestSkip\n"}
+{"Time":"2026-10-25T20:19:22.098138735Z","Action":"output","Package":"example.com/demo","Test":"TestSkip","Output":"    demo_test.go:11: later\n"}
+{"Time":"2026-10-25T20:19:22.098140442Z","Action":"output","Package":"example.com/demo","Test":"TestSkip","Output":"--- SKIP: TestSkip (0.00s)\n"}
+{"Time":"2026-10-25T20:19:22.098141817Z","Action":"skip","Package":"example.com/demo","Test":"TestSkip","Elapsed":0}
+{"Time":"2026-10-25T20:19:22.09814429Z","Action":"output","Package":"example.com/demo","Output":"FAIL\n"}
+{"Time":"2026-10-25T20:19:22.098358235Z","Action":"output","Package":"example.com/demo","Output":"FAIL\texample.com/demo\t0.002s\n"}
+{"Time":"2026-10-25T20:19:22.098401007Z","Action":"fail","Package":"example.com/demo","Elapsed":0.003}

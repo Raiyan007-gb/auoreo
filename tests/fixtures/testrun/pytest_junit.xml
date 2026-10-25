@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="1" tests="4" time="0.023" timestamp="2026-10-25T00:00:00" hostname="host"><testcase classname="tests.test_demo" name="test_ok" time="0.000" /><testcase classname="tests.test_demo" name="test_bad" time="0.000"><failure message="AssertionError: x should be 3&#10;assert 2 == 3">tests/test_demo.py:8: in test_bad
+    assert x == 3, "x should be 3"
+E   AssertionError: x should be 3
+E   assert 2 == 3</failure></testcase><testcase classname="tests.test_demo" name="test_skip" time="0.000"><skipped type="pytest.skip" message="later">tests/test_demo.py:10: later</skipped></testcase><testcase classname="tests.test_demo" name="test_err_value" time="0.000"><failure message="ValueError: nope">tests/test_demo.py:15: in test_err_value
+    raise ValueError("nope")
+E   ValueError: nope</failure></testcase></testsuite></testsuites>

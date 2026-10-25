@@ -1,0 +1,50 @@
+name: gh_run_view
+toolset: github
+description: Show one GitHub Actions run (jobs, failed steps) or the tail of its logs via gh.
+parameters:
+  type: object
+  properties:
+    run_id:
+      type: integer
+      minimum: 1
+      description: Run id (databaseId from gh_run_list).
+    log:
+      type: string
+      enum:
+      - none
+      - failed
+      - all
+      default: none
+      description: 'Include the log tail: failed steps only, or all.'
+    tail_lines:
+      type: integer
+      minimum: 10
+      maximum: 2000
+      default: 200
+      description: Log lines kept from the end.
+    repo:
+      type: string
+      description: 'owner/name (or host/owner/name). Default: the working directory''s GitHub remote;
+        any other repo must match settings.github_allowed_repos.'
+  additionalProperties: false
+  required:
+  - run_id
+permission: github_read
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+pattern_arg: repo
+exposure: deferred
+timeout_ms: 120000
+net: direct
+sandbox_mode: read-only
+requires_env:
+- GH_TOKEN
+- GITHUB_TOKEN
+- GH_HOST
+- GH_CONFIG_DIR
+- HTTPS_PROXY
+- NO_PROXY
+- SSL_CERT_FILE
+max_result_size_chars: 32000
+search_hint: github actions run logs failure

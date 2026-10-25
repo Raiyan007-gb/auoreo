@@ -1,0 +1,29 @@
+name: pwsh
+toolset: shell
+description: >-
+  Run a PowerShell script (pwsh, or Windows PowerShell) in the session working directory and
+  return combined output and the exit code. Checked like bash (rules, floors, policies).
+parameters:
+  type: object
+  properties:
+    script:
+      type: string
+      minLength: 1
+      description: >-
+        PowerShell to run via `pwsh -NoProfile -NonInteractive -Command`. It is the `bash`
+        permission pattern, so bash allow/deny rules and floors apply to the script text.
+    timeout_s: {type: integer, minimum: 1, maximum: 600, default: 120,
+                description: Seconds before the script is killed.}
+  required: [script]
+  additionalProperties: false
+permission: bash
+pattern_arg: script
+default_action: ask
+is_destructive: true
+exposure: deferred
+interrupt: cancel
+timeout_ms: 610000
+search_hint: powershell pwsh windows script cmdlet
+max_result_size_chars: 64000
+net: none
+sandbox_mode: workspace-write

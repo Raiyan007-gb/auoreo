@@ -1,0 +1,36 @@
+name: run_tests
+toolset: coding
+description: >-
+  Run the project's test suite (pytest, npm/pnpm/yarn test, go test, cargo test; auto-detected)
+  and return a compact pass/fail summary with the first failures.
+parameters:
+  type: object
+  properties:
+    runner:
+      type: string
+      enum: [auto, pytest, npm, go, cargo]
+      default: auto
+      description: Force a runner instead of detecting it from marker files.
+    path:
+      type: string
+      maxLength: 500
+      description: Test file or directory inside the working directory to limit the run to.
+    k:
+      type: string
+      maxLength: 300
+      description: Name filter (pytest -k, jest -t, go -run, cargo test filter).
+    coverage:
+      type: boolean
+      default: false
+      description: Collect coverage (pytest-cov --cov, go -cover, jest --coverage).
+    timeout_s: {type: integer, minimum: 10, maximum: 1800, default: 600}
+  additionalProperties: false
+permission: run_tests
+default_action: ask
+exposure: deferred
+interrupt: cancel
+timeout_ms: 1810000
+search_hint: run tests pytest jest go test cargo test suite failures
+max_result_size_chars: 16000
+net: none
+sandbox_mode: workspace-write

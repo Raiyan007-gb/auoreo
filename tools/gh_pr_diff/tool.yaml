@@ -1,0 +1,39 @@
+name: gh_pr_diff
+toolset: github
+description: Show a GitHub pull request's diff (or changed file names) via gh.
+parameters:
+  type: object
+  properties:
+    number:
+      type: integer
+      minimum: 1
+    name_only:
+      type: boolean
+      default: false
+      description: Only list changed file names.
+    repo:
+      type: string
+      description: 'owner/name (or host/owner/name). Default: the working directory''s GitHub remote;
+        any other repo must match settings.github_allowed_repos.'
+  additionalProperties: false
+  required:
+  - number
+permission: github_read
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+pattern_arg: repo
+exposure: deferred
+timeout_ms: 120000
+net: direct
+sandbox_mode: read-only
+requires_env:
+- GH_TOKEN
+- GITHUB_TOKEN
+- GH_HOST
+- GH_CONFIG_DIR
+- HTTPS_PROXY
+- NO_PROXY
+- SSL_CERT_FILE
+max_result_size_chars: 32000
+search_hint: github pull request diff patch changes

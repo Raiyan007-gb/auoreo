@@ -1,0 +1,38 @@
+name: gh_pr_view
+toolset: github
+description: Show one GitHub pull request (metadata, body, optionally comments) via gh.
+parameters:
+  type: object
+  properties:
+    number:
+      type: integer
+      minimum: 1
+      description: PR number. Omit for the PR of the current branch (cwd repo only).
+    comments:
+      type: boolean
+      default: false
+      description: Include comments.
+    repo:
+      type: string
+      description: 'owner/name (or host/owner/name). Default: the working directory''s GitHub remote;
+        any other repo must match settings.github_allowed_repos.'
+  additionalProperties: false
+permission: github_read
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+pattern_arg: repo
+exposure: deferred
+timeout_ms: 120000
+net: direct
+sandbox_mode: read-only
+requires_env:
+- GH_TOKEN
+- GITHUB_TOKEN
+- GH_HOST
+- GH_CONFIG_DIR
+- HTTPS_PROXY
+- NO_PROXY
+- SSL_CERT_FILE
+max_result_size_chars: 32000
+search_hint: github pull request show details
