@@ -1,0 +1,10 @@
+name: lint_python
+description: After edit/write/str_replace on a .py file, run `ruff check` on it and report problems.
+event: PostToolUse
+matcher: "edit|write|str_replace|apply_patch"
+# `./scripts/...` resolves against the definition root that ships the script (here: the
+# bundled root), else against the session cwd.
+command: ["python3", "./scripts/hooks/lint_python.py"]
+timeout_ms: 20000
+on_error: warn
+enabled: false

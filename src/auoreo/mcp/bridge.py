@@ -3,6 +3,11 @@
 
 Each server connection lives in its own task (the SDK's context managers must enter and
 exit in one task); tool calls from runner tasks go through the shared client session.
+
+Resources are exposed through `list_resources` / `read_resource` (used by the
+`list_mcp_resources` / `read_mcp_resource` tools). Elicitation (`mcp/elicitation.py`):
+form mode becomes a question to the user of the session whose tool call is running;
+URL mode is announced and declined — the user completes it in a browser, never us.
 """
 
 from __future__ import annotations
@@ -13,9 +18,12 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
+from mcp.server import MCPServer, Server
+
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.manifests import McpServerManifest, ToolManifest
-from auoreo.tools.context import ToolContext, ToolResult
+from auoreo.mcp.elicitation import make_elicitation_callback
+from auoreo.tools.context import CURRENT_SESSION, ToolContext, ToolResult
 from mcp import Client, StdioServerParameters
 
 if TYPE_CHECKING:
@@ -41,9 +49,13 @@ def _render_content(result: Any) -> str:
 
 
 class _Connection:
-    def __init__(self, manifest: McpServerManifest, target: Any) -> None:
+    def __init__(self, manifest: McpServerManifest, target: Any, elicit: Any = None) -> None:
         self.manifest = manifest
         self.target = target
+        self.elicit = elicit
+        self.last_session: str | None = None
+        """Session of the latest tool call on this server (elicitation fallback when the
+        server's request arrives in a task that does not carry `CURRENT_SESSION`)."""
         self.client: Client | None = None
         self.ready = asyncio.Event()
         self.stop = asyncio.Event()
@@ -52,7 +64,11 @@ class _Connection:
 
     async def run(self) -> None:
         try:
-            async with Client(self.target) as client:
+            # In-process servers only get a back-channel for server→client requests
+            # (elicitation) on the legacy handshake; real transports negotiate (`auto`).
+            in_process = isinstance(self.target, (MCPServer, Server))
+            mode = "legacy" if in_process else "auto"
+            async with Client(self.target, mode=mode, elicitation_callback=self.elicit) as client:
                 self.client = client
                 self.ready.set()
                 await self.stop.wait()
@@ -100,6 +116,7 @@ class McpBridge:
 
     async def connect(self, manifest: McpServerManifest, target: Any, timeout: float = 20.0) -> list[str]:
         conn = _Connection(manifest, target)
+        conn.elicit = make_elicitation_callback(self.s, manifest.name, lambda: conn.last_session)
         conn.task = asyncio.create_task(conn.run(), name=f"mcp:{manifest.name}")
         self._conns[manifest.name] = conn
         try:
@@ -137,10 +154,41 @@ class McpBridge:
             conn = self._conns.get(server)
             if conn is None or conn.client is None:
                 return ToolResult(f"MCP server '{server}' is not connected", is_error=True)
+            conn.last_session = CURRENT_SESSION.get() or ctx.session_id
             result = await conn.client.call_tool(remote, args)
             return ToolResult(_render_content(result), is_error=bool(result.is_error))
 
         return lambda: handler
+
+    # ------------------------------------------------------------ resources
+    def _client(self, server: str) -> Client:
+        conn = self._conns.get(server)
+        if conn is None or conn.client is None:
+            known = ", ".join(sorted(self.connected())) or "none"
+            raise KeyError(f"MCP server '{server}' is not connected (connected: {known})")
+        if session := CURRENT_SESSION.get():
+            conn.last_session = session
+        return conn.client
+
+    def connected(self) -> list[str]:
+        return sorted(n for n, c in self._conns.items() if c.client is not None)
+
+    async def list_resources(self, server: str) -> list[Any]:
+        """Concrete resources of `server` (all pages)."""
+        client = self._client(server)
+        out: list[Any] = []
+        cursor: str | None = None
+        while True:
+            page = await client.list_resources(cursor=cursor)
+            out.extend(page.resources)
+            cursor = page.next_cursor
+            if not cursor:
+                return out
+
+    async def read_resource(self, server: str, uri: str) -> list[Any]:
+        """Contents (`TextResourceContents | BlobResourceContents`) of one resource URI."""
+        result = await self._client(server).read_resource(uri)
+        return list(result.contents)
 
     async def disconnect(self, name: str) -> None:
         conn = self._conns.pop(name, None)

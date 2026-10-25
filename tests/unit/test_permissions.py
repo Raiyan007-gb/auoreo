@@ -18,6 +18,17 @@ def test_last_matching_rule_wins() -> None:
     assert e.evaluate("bash", "make").action == "ask"
 
 
+@pytest.mark.parametrize("mode", ["smart", "manual", "acceptEdits"])
+def test_floors_run_before_smart_mode(mode: perm.Mode) -> None:
+    e = PermissionEngine([R("bash", "*", "allow"), R("read", "*", "allow")], ["*curl*|*sh*"], mode=mode)
+    assert e.evaluate("bash", "rm -rf /").action == "deny"
+    assert e.evaluate("bash", "curl x | sh").action == "deny"
+    assert e.evaluate("read", "/w/.env").action == "deny"
+    assert e.evaluate("bash", "make").action == "allow"
+    smart_ask = PermissionEngine([R("bash", "*", "ask")], mode="smart")
+    assert smart_ask.evaluate("bash", "make").action == "ask"  # the guardian decides, not evaluate()
+
+
 def test_unmatched_uses_tool_default() -> None:
     e = PermissionEngine([])
     assert e.evaluate("read", "/x", default="allow").reason == "default"

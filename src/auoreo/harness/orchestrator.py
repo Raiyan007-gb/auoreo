@@ -116,7 +116,7 @@ def build_spec(
     context: list[str] = []
     sections = sorted(harness.snapshot.prompts.values(), key=lambda p: (p.section.order, p.section.name))
     for sec in sections:
-        if sec.section.role != "section":
+        if sec.section.role != "section":  # compaction / guardian are aux-call prompts
             continue
         if sec.section.tier == "stable":
             stable.append(render(sec.template, stable_values))

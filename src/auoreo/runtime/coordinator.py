@@ -17,6 +17,7 @@ from auoreo.core.permissions import PermissionEngine
 from auoreo.harness.manifests import WorkflowManifest
 from auoreo.harness.orchestrator import render
 from auoreo.runtime import commands
+from auoreo.runtime.hooks import hooks_of
 from auoreo.runtime.inbox import InputKind, TurnRequest
 from auoreo.runtime.runner import AgentRunner, SessionRuntime, TurnResult
 from auoreo.runtime.titles import generate_title
@@ -115,7 +116,25 @@ class SessionRunCoordinator:
             rt.running = False
             self._idle.setdefault(rt.session_id, asyncio.Event()).set()
 
+    async def _session_start(self, rt: SessionRuntime, agent: str) -> None:
+        """SessionStart hooks, once per runtime (its first turn); best effort."""
+        hooks = hooks_of(self.s)
+        if hooks is None or rt.session_started:
+            return
+        rt.session_started = True
+        hooks.remember_agent(rt.session_id, agent)
+        try:
+            await hooks.run(
+                "SessionStart",
+                session_id=rt.session_id,
+                payload={"agent": agent, "workflow": rt.workflow, "cwd": str(self.s.cwd)},
+                match_key=agent,
+            )
+        except Exception:
+            log.exception("SessionStart hooks failed")
+
     async def _run_request(self, rt: SessionRuntime, req: TurnRequest) -> TurnResult:
+        await self._session_start(rt, req.agent or rt.agent)
         wf_name = req.workflow or rt.workflow
         wf = self.s.harness.workflows.get(wf_name)
         if wf is None:

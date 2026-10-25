@@ -150,6 +150,10 @@ class Settings(BaseSettings):
     teams_child_timeout_s: int = Field(default=900, ge=10)
     plugins_enabled: bool = True
 
+    # --- M5b
+    searxng_url: str | None = None
+    """Base URL of a SearXNG instance for `web_search` (JSON format enabled), e.g. `http://localhost:8888`."""
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""

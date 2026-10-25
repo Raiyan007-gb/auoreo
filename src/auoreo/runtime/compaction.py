@@ -24,6 +24,8 @@ from sqlalchemy import select
 from auoreo.core.db import MessageArchiveRow, MessageRow
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import LLMRequest, TextDelta, Usage
+from auoreo.harness.manifests import HookEvent
+from auoreo.runtime.hooks import hooks_of
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -263,6 +265,7 @@ class CompactionService:
         retain = self.s.settings.loop.compaction_retain_ratio if retain_ratio is None else retain_ratio
         cid = f"cmp_{uuid.uuid4().hex[:12]}"
         await self.s.emit(session_id, "compaction.started", {"trigger": trigger, "compaction_id": cid})
+        await self._hook("PreCompact", rt, {"trigger": trigger, "compaction_id": cid})
         try:
             res = await self._compact(rt, cid, trigger, retain, model, stop_below)
         except NothingToCompact as exc:
@@ -297,7 +300,28 @@ class CompactionService:
                 "summary_chars": res.summary_chars,
             },
         )
+        await self._hook(
+            "PostCompact",
+            rt,
+            {
+                "trigger": trigger,
+                "compaction_id": cid,
+                "pre_tokens": res.pre_tokens,
+                "post_tokens": res.post_tokens,
+            },
+        )
         return res
+
+    async def _hook(self, event: HookEvent, rt: SessionRuntime, payload: dict[str, Any]) -> None:
+        """Pre/PostCompact hooks are informational; a broken hook never fails compaction."""
+        hooks = hooks_of(self.s)
+        if hooks is None:
+            return
+        try:
+            payload = {"agent": rt.agent, **payload}
+            await hooks.run(event, session_id=rt.session_id, payload=payload, match_key=rt.agent)
+        except Exception:
+            log.exception("%s hooks failed", event)
 
     def _model(self, rt: SessionRuntime) -> str:
         from auoreo.gateway.resolve import resolve_model

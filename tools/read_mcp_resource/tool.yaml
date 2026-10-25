@@ -1,0 +1,21 @@
+name: read_mcp_resource
+toolset: mcp
+description: >-
+  Read one resource from a connected MCP server by its URI (see list_mcp_resources).
+  Text content is returned; binary content is described by size and media type only.
+parameters:
+  type: object
+  properties:
+    server: {type: string, minLength: 1}
+    uri: {type: string, minLength: 1}
+  required: [server, uri]
+  additionalProperties: false
+permission: read
+pattern_arg: uri
+default_action: ask
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+exposure: deferred
+timeout_ms: 60000
+search_hint: mcp resource read uri fetch document

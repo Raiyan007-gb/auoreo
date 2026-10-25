@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 STARTERS: list[str] = [
-    # "auoreo.runtime.hooks:start",
+    "auoreo.runtime.hooks:start",
     # "auoreo.automation.scheduler:start",
     # "auoreo.automation.webhooks:start",
     # "auoreo.teams.service:start",

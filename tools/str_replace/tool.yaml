@@ -1,0 +1,21 @@
+name: str_replace
+toolset: files
+description: >-
+  Alias of `edit` (same arguments and permission) for models trained on str_replace.
+  Replace an exact string in a file. old_string must match exactly once unless
+  replace_all is true. The file must have been read in this session first.
+parameters:
+  type: object
+  properties:
+    path: {type: string}
+    old_string: {type: string, minLength: 1}
+    new_string: {type: string}
+    replace_all: {type: boolean, default: false}
+  required: [path, old_string, new_string]
+  additionalProperties: false
+permission: edit
+pattern_arg: path
+default_action: ask
+timeout_ms: 30000
+exposure: deferred
+search_hint: str_replace replace string in file edit alias

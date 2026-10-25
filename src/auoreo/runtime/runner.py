@@ -28,9 +28,11 @@ from auoreo.gateway.types import Finish, LLMRequest, TextDelta, ToolCall, Usage,
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
 from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
+from auoreo.runtime.hooks import hooks_of
 from auoreo.runtime.inbox import Inbox
-from auoreo.runtime.multimodal import image_message, prepare_messages, tool_messages
-from auoreo.tools.context import SessionState, ToolContext, ToolResult
+from auoreo.runtime.multimodal import prepare_messages
+from auoreo.runtime.tool_round import ABORTED_BEFORE_DISPATCH, tool_round
+from auoreo.tools.context import SessionState, ToolContext
 from auoreo.tools.executor import ToolExecutor, ToolOutcome
 
 if TYPE_CHECKING:
@@ -39,7 +41,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 TurnStatus = Literal["completed", "blocked", "aborted", "failed", "max_steps"]
-ABORTED_BEFORE_DISPATCH = "[aborted before dispatch]"
+MAX_STOP_BLOCKS = 3
 STEP_LIMIT_NOTE = (
     "You have reached the step limit for this turn. Do not call tools. "
     "Summarize what you did, what is left, and answer now."
@@ -61,6 +63,7 @@ class SessionRuntime:
     interactive: bool = True
     running: bool = False
     task: asyncio.Task[None] | None = None
+    session_started: bool = False  # SessionStart hooks ran for this runtime
 
 
 @dataclass
@@ -154,6 +157,10 @@ class AgentRunner:
                 "generation": self.s.harness.generation,
             },
         )
+        text, hook_error = await self._prompt_hook(sid, spec.name, text)
+        if hook_error is not None:
+            await self.s.emit(sid, "run.blocked", {"run_id": run_id, "text": "", "error": hook_error})
+            return TurnResult(run_id, "blocked", "", hook_error)
         await self.s.set_session_status(sid, "running", title=text)
 
         user_msg = {"role": "user", "content": text}
@@ -219,6 +226,7 @@ class AgentRunner:
         recent: deque[str] = deque(maxlen=max(2, loop_cfg.doom_loop_repeats))
         final_text = ""
         open_calls: list[ToolCall] = []
+        stop_blocks = 0
         try:
             for step in range(1, max_steps + 1):
                 for steer in rt.inbox.claim_step():
@@ -263,12 +271,18 @@ class AgentRunner:
                     msg = f"session cost reached max_cost_usd={self.s.settings.max_cost_usd}"
                     return TurnResult(run_id, "blocked", final_text, {"code": "BUDGET", "message": msg})
                 if not calls:
+                    blocked = not last_step and await self._stop_hook(
+                        rt, spec.name, run_id, final_text, stop_blocks
+                    )
+                    if blocked:
+                        stop_blocks += 1
+                        continue
                     status: TurnStatus = "max_steps" if last_step and max_steps > 1 else "completed"
                     return TurnResult(run_id, status, final_text)
 
                 open_calls = list(calls)
-                outcomes = await self._tool_round(
-                    rt, spec, engine, ctx, run_id, calls, {t.name: t for t in tools}
+                outcomes = await tool_round(
+                    self, rt, spec, engine, ctx, run_id, calls, {t.name: t for t in tools}
                 )
                 for o in outcomes:
                     open_calls.remove(o.call)
@@ -317,6 +331,40 @@ class AgentRunner:
                 final_text,
                 {"code": "INTERNAL", "message": f"{type(exc).__name__}: {exc}"},
             )
+
+    # ---------------------------------------------------------------- hooks
+    async def _prompt_hook(self, sid: str, agent: str, text: str) -> tuple[str, dict[str, Any] | None]:
+        """UserPromptSubmit: may rewrite the prompt or deny the turn (before it is persisted)."""
+        hooks = hooks_of(self.s)
+        if hooks is None:
+            return text, None
+        out = await hooks.run(
+            "UserPromptSubmit", session_id=sid, payload={"agent": agent, "text": text}, match_key=agent
+        )
+        if out.denied:
+            return text, {"code": "HOOK_DENIED", "message": out.message}
+        return (out.text if out.text is not None else text), None
+
+    async def _stop_hook(self, rt: SessionRuntime, agent: str, run_id: str, text: str, blocks: int) -> bool:
+        """Stop: a blocking hook appends its reason as a `<stop-hook>` user message and the
+        loop continues (at most MAX_STOP_BLOCKS times per turn). Only reached after a real
+        final answer, never on an API-error turn (those raise before this point)."""
+        hooks = hooks_of(self.s)
+        if hooks is None or blocks >= MAX_STOP_BLOCKS:
+            return False
+        out = await hooks.run(
+            "Stop",
+            session_id=rt.session_id,
+            payload={"agent": agent, "text": text, "stop_blocks": blocks},
+            match_key=agent,
+        )
+        if not out.blocked:
+            return False
+        msg = f"<stop-hook>\n{out.message}\n</stop-hook>"
+        await self._persist(rt, {"role": "user", "content": msg})
+        data = {"run_id": run_id, "role": "user", "content": msg, "stop_hook": True}
+        await self.s.emit(rt.session_id, "message.created", data)
+        return True
 
     # ------------------------------------------------------------- helpers
     def _available(self, spec: AgentSpec, state: SessionState) -> list[ToolDef]:
@@ -393,79 +441,6 @@ class AgentRunner:
                 case Finish():
                     pass
         return "".join(parts), calls
-
-    async def _tool_round(
-        self,
-        rt: SessionRuntime,
-        spec: AgentSpec,
-        engine: PermissionEngine,
-        ctx: ToolContext,
-        run_id: str,
-        calls: list[ToolCall],
-        tools: dict[str, ToolDef],
-    ) -> list[ToolOutcome]:
-        """Consecutive concurrency-safe calls run together; anything else is a barrier.
-        Results are committed strictly in model order."""
-        sem = asyncio.Semaphore(max(1, self.s.settings.loop.max_parallel_tool_calls))
-        outcomes: list[ToolOutcome] = []
-        batches: list[list[ToolCall]] = []
-        for call in calls:
-            t = tools.get(call.name)
-            safe = bool(t and t.manifest.is_concurrency_safe)
-            if safe and batches and batches[-1] and _all_safe(batches[-1], tools):
-                batches[-1].append(call)
-            else:
-                batches.append([call])
-
-        async def one(call: ToolCall) -> ToolOutcome:
-            async with sem:
-                await self.s.emit(
-                    rt.session_id,
-                    "tool.started",
-                    {
-                        "run_id": run_id,
-                        "call_id": call.id,
-                        "tool": call.name,
-                        "arguments": call.arguments[:4000],
-                    },
-                )
-                return await self.executor.run(call, tools=tools, ctx=ctx, engine=engine)
-
-        vision = self.s.gateway.supports_vision(spec.model)
-        image_parts: list[dict[str, Any]] = []  # sent after ALL tool messages of the round
-        for batch in batches:
-            results = await asyncio.gather(*(one(c) for c in batch))
-            for o in results:
-                tool_msg, parts = tool_messages(o.call.id, o.result, vision)
-                await self._persist(rt, tool_msg)
-                image_parts.extend(parts)
-                await self.s.emit(
-                    rt.session_id,
-                    "tool.completed",
-                    {
-                        "run_id": run_id,
-                        "call_id": o.call.id,
-                        "tool": o.call.name,
-                        "is_error": o.result.is_error,
-                        "content": o.result.content[:4000],
-                        "meta": o.result.meta,
-                    },
-                )
-                outcomes.append(o)
-            if any(o.halt for o in results):
-                break  # do not start later calls after a rejection
-        for call in calls[len(outcomes) :]:  # unstarted calls after a halt
-            await self._persist(
-                rt, {"role": "tool", "tool_call_id": call.id, "content": ABORTED_BEFORE_DISPATCH}
-            )
-            outcomes.append(ToolOutcome(call, ToolResult(ABORTED_BEFORE_DISPATCH, is_error=True)))
-        if image_parts:
-            await self._persist(rt, image_message(image_parts))
-        return outcomes
-
-
-def _all_safe(batch: list[ToolCall], tools: dict[str, ToolDef]) -> bool:
-    return all((t := tools.get(c.name)) is not None and t.manifest.is_concurrency_safe for c in batch)
 
 
 def _signature(o: ToolOutcome) -> str:

@@ -36,7 +36,9 @@ def test_hook_job_webhook_plugin_kinds_load(tmp_path: Path) -> None:
     assert h.webhooks["gh"].manifest.filters[0].field == "action"
     assert h.plugins["demo"].manifest.entry == "plugin.py:Plugin"
     listing = h.describe()
-    assert {r["name"] for r in listing["hooks"]} == {"lint"} and listing["plugins"][0]["name"] == "demo"
+    assert {r["name"] for r in listing["hooks"]} == {"lint", "lint_python"} and listing["plugins"][0][
+        "name"
+    ] == "demo"
 
 
 def test_m5_manifest_errors(tmp_path: Path) -> None:

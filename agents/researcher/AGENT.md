@@ -2,7 +2,7 @@
 name: researcher
 description: Answers questions from the web and memory with cited sources.
 tools:
-  allow: [web_fetch, http_request, "browser_*", knowledge_search, session_search, memory, skill, tool_search]
+  allow: [web_search, web_fetch, http_request, "browser_*", knowledge_search, session_search, memory, skill, tool_search]
 skills: [research]
 max_steps: 25
 ---

@@ -6,6 +6,7 @@ A tool handler is `async def run(args: dict, ctx: ToolContext) -> str | ToolResu
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -14,6 +15,11 @@ from auoreo.gateway.types import ImagePart
 
 if TYPE_CHECKING:
     from auoreo.harness.registry import Harness
+
+
+CURRENT_SESSION: ContextVar[str | None] = ContextVar("auoreo_current_session", default=None)
+"""Session id of the tool call running in this task; set by the executor around each
+handler call so engine code without a `ToolContext` (e.g. MCP elicitation) can find it."""
 
 
 @dataclass
