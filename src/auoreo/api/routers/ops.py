@@ -13,7 +13,8 @@ from sqlalchemy import func, select
 from auoreo.api.deps import AUTH, ServicesDep
 from auoreo.core import diagnostics
 from auoreo.core.db import AuditRow
-from auoreo.core.redaction import redact, redact_obj
+from auoreo.core.redaction import redact
+from auoreo.core.services import Services
 from auoreo.schema.ops import (
     AuditEntry,
     AuditPage,
@@ -37,7 +38,7 @@ async def doctor(svc: ServicesDep) -> DoctorReport:
     )
 
 
-def _entry(row: AuditRow) -> AuditEntry:
+def _entry(row: AuditRow, svc: Services) -> AuditEntry:
     return AuditEntry(
         seq=row.seq,
         ts=row.ts,
@@ -46,7 +47,7 @@ def _entry(row: AuditRow) -> AuditEntry:
         action=row.action,
         decision=row.decision,
         reason=redact(row.reason),
-        detail=redact_obj(row.detail or {}),
+        detail=svc.audit.plain_detail(row),  # W1-E: decrypt, then redact
         prev_hash=row.prev_hash,
         row_hash=row.row_hash,
     )
@@ -78,7 +79,7 @@ async def audit_list(
     more = len(rows) > limit
     rows = rows[:limit]
     nxt = rows[-1].seq if more and rows and not newest_first else None
-    return AuditPage(rows=[_entry(r) for r in rows], next_after_seq=nxt)
+    return AuditPage(rows=[_entry(r, svc) for r in rows], next_after_seq=nxt)
 
 
 @router.get("/audit/verify", response_model=AuditVerify)

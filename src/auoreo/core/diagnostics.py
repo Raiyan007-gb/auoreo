@@ -358,6 +358,22 @@ async def run_checks(settings: Settings, *, services: Services | None = None) ->
     except HarnessError:
         pass  # already reported by the harness row
     # --- end W1-A
+    # --- W1-E: data at rest (db_encryption, sqlcipher) + workers/redis (2 s ping)
+    from auoreo.core import bus_redis, crypto_columns
+
+    w1e: list[tuple[str, Awaitable[list[Check]]]] = [
+        ("db_encryption", crypto_columns.doctor_checks(settings, services)),
+        ("workers", bus_redis.doctor_checks(settings)),
+    ]
+    rows: list[Check] = []
+    for name, pending in w1e:
+        try:
+            rows.extend(await pending)
+        except Exception as exc:
+            rows.append(Check(name, "warn", f"check failed: {exc}"))
+    at = next((i for i, c in enumerate(out) if c.check == "yolo"), len(out))  # right after `audit`
+    out[at:at] = rows
+    # --- end W1-E
     return out
 
 

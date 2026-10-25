@@ -36,6 +36,9 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "AUOREO_SMALL_MODEL",
         "AUOREO_EMBED_MODEL",
         "AUOREO_EMBED_DIMS",
+        "AUOREO_DB_ENCRYPTION",
+        "AUOREO_REDIS_URL",
+        "AUOREO_WORKERS",
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.fail.Keyring")
