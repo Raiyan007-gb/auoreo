@@ -52,12 +52,12 @@ def _jpeg(frame: Any) -> bytes:
 
 async def sample_video(track: Any, session_id: str, interval_s: float) -> None:
     """Consume `track` (frames must be read or aiortc buffers them); keep one every interval."""
-    last = 0.0
+    last: float | None = None  # first frame always kept (monotonic may be < interval)
     try:
         while True:
             frame = await track.recv()
             now = time.monotonic()
-            if now - last < interval_s:
+            if last is not None and now - last < interval_s:
                 continue
             last = now
             try:
