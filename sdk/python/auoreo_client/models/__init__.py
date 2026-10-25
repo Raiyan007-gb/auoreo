@@ -140,6 +140,7 @@ from .reply_api_permissions_request_id_reply_post_response_reply_api_permissions
     ReplyApiPermissionsRequestIdReplyPostResponseReplyApiPermissionsRequestIdReplyPost,
 )
 from .rtc_answer import RtcAnswer
+from .rtc_capabilities import RtcCapabilities
 from .rtc_closed import RtcClosed
 from .rtc_ice_config import RtcIceConfig
 from .rtc_ice_server import RtcIceServer
@@ -152,6 +153,7 @@ from .rtc_peer_info import RtcPeerInfo
 from .search_hit import SearchHit
 from .server_event import ServerEvent
 from .server_event_data import ServerEventData
+from .session_context import SessionContext
 from .session_create import SessionCreate
 from .session_deleted import SessionDeleted
 from .session_detail import SessionDetail
@@ -317,6 +319,7 @@ __all__ = (
     "ReloadResultChangesAdditionalProperty",
     "ReplyApiPermissionsRequestIdReplyPostResponseReplyApiPermissionsRequestIdReplyPost",
     "RtcAnswer",
+    "RtcCapabilities",
     "RtcClosed",
     "RtcIceConfig",
     "RtcIceServer",
@@ -329,6 +332,7 @@ __all__ = (
     "SearchHit",
     "ServerEvent",
     "ServerEventData",
+    "SessionContext",
     "SessionCreate",
     "SessionDeleted",
     "SessionDetail",

@@ -34,6 +34,7 @@ from auoreo.api.routers import (
     usage,
 )
 from auoreo.api.routers import commands as commands_router
+from auoreo.api.routers import context as context_router  # --- G5b
 from auoreo.api.routers import cron as cron_router
 from auoreo.api.routers import deliveries as deliveries_router
 from auoreo.api.routers import environments as environments_router  # --- W2-B
@@ -97,6 +98,8 @@ ROUTERS = (
     environments_router,
     # --- F4
     meetings_router,
+    # --- G5b
+    context_router,
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

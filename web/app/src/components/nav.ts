@@ -16,6 +16,8 @@ import {
   SettingsIcon,
   ShieldCheckIcon,
   TargetIcon,
+  WebhookIcon, // --- G5b
+  RadioTowerIcon, // --- G5b
 } from "lucide-react";
 
 export interface NavItem {
@@ -41,4 +43,6 @@ export const NAV: readonly NavItem[] = [
   { to: "/settings", label: "Settings", icon: SettingsIcon },
   { to: "/goals", label: "Goals", icon: TargetIcon }, // --- W0-C
   { to: "/meetings", label: "Meetings", icon: MicIcon }, // --- F4
+  { to: "/webhooks", label: "Webhooks", icon: WebhookIcon }, // --- G5b
+  { to: "/platforms", label: "Messaging", icon: RadioTowerIcon }, // --- G5b
 ];

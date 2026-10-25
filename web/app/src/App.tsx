@@ -21,11 +21,17 @@ import { AuditPage } from "@/pages/Audit";
 import { DoctorPage } from "@/pages/Doctor";
 import { WelcomePage } from "@/pages/Welcome";
 import { MeetingsPage } from "@/pages/Meetings"; // --- F4
+// --- G5b
+import { EventsProvider } from "@/lib/eventsContext";
+import { lazy, Suspense } from "react";
+const WebhooksPage = lazy(() => import("@/pages/Webhooks").then((m) => ({ default: m.WebhooksPage })));
+const PlatformsPage = lazy(() => import("@/pages/Platforms").then((m) => ({ default: m.PlatformsPage })));
 
 export function App() {
   return (
     <TooltipProvider>
       <ControlProvider>
+        <EventsProvider>
         <BrowserRouter>
           <Routes>
             <Route element={<AppShell />}>
@@ -49,10 +55,13 @@ export function App() {
               <Route path="welcome" element={<WelcomePage />} />
               <Route path="goals" element={<GoalsPage />} /> {/* --- W0-C */}
               <Route path="meetings" element={<MeetingsPage />} /> {/* --- F4 */}
+              <Route path="webhooks" element={<Suspense><WebhooksPage /></Suspense>} /> {/* --- G5b */}
+              <Route path="platforms" element={<Suspense><PlatformsPage /></Suspense>} /> {/* --- G5b */}
               <Route path="*" element={<div className="p-4"><EmptyState title="Page not found" /></div>} />
             </Route>
           </Routes>
         </BrowserRouter>
+        </EventsProvider>
       </ControlProvider>
     </TooltipProvider>
   );
