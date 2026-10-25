@@ -1,0 +1,18 @@
+name: jobs_kill
+toolset: shell
+description: Kill a background job (from jobs_list) and its process group.
+parameters:
+  type: object
+  properties:
+    job_id: {type: string, description: Job id from jobs_list.}
+  required: [job_id]
+  additionalProperties: false
+permission: jobs
+pattern_arg: job_id
+default_action: allow
+is_destructive: true
+exposure: deferred
+timeout_ms: 20000
+search_hint: background job kill stop terminate process
+net: none
+sandbox_mode: danger-full-access

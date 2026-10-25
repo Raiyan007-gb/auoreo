@@ -1,0 +1,30 @@
+name: terminal_pty
+toolset: shell
+description: >-
+  Open a persistent pseudo-terminal on the local machine (unsandboxed) running `cmd`
+  (e.g. `bash -i`, `python3`, `top -b`, an ssh or REPL session) and return its first output
+  and a session_id. Continue it with terminal_pty_send / terminal_pty_read, stop it with
+  terminal_pty_signal or terminal_pty_close, and see open ones with terminal_pty_list.
+parameters:
+  type: object
+  properties:
+    cmd: {type: string, minLength: 1, description: "Command run with `bash -lc` under the PTY (use `bash -i` for a shell)."}
+    workdir: {type: string, description: Directory to start in (default the working directory; outside it needs approval).}
+    rows: {type: integer, minimum: 5, maximum: 500, default: 40}
+    cols: {type: integer, minimum: 20, maximum: 1000, default: 120}
+    term: {type: string, default: dumb, pattern: "^[A-Za-z0-9._+-]{1,64}$", description: TERM for the program (dumb keeps output plain).}
+    yield_time_ms: {type: integer, minimum: 0, maximum: 30000, default: 1000, description: Wait at most this long for first output.}
+    max_output_tokens: {type: integer, minimum: 50, maximum: 16000, default: 4000}
+  required: [cmd]
+  additionalProperties: false
+permission: bash
+pattern_arg: cmd
+default_action: ask
+is_destructive: true
+exposure: deferred
+interrupt: cancel
+timeout_ms: 45000
+search_hint: terminal pty interactive shell session repl ssh tty persistent
+max_result_size_chars: 64000
+net: none
+sandbox_mode: danger-full-access

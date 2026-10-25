@@ -75,6 +75,13 @@ livekit = [  # W2-D: backends/rtc_transport/livekit (SFU rooms, SIP, egress; P2 
     "livekit-api>=1.2,<2",
     "livekit>=1.0,<2",  # F5: realtime SDK (sip_dtmf_received, publish_dtmf, TTS into a room)
 ]
+ops = [  # G4b: tools/ops_gpu (NVML) + tools/ops_ping (ICMP; TCP-connect fallback without it)
+    "nvidia-ml-py>=13",
+    "ping3>=5",
+]
+tabular = [  # G4b: sheet_read pandas opt-in (`settings.tools.tabular_pandas`)
+    "pandas>=2.3",
+]
 code = [
     "tree-sitter>=0.26.0",
     "tree-sitter-go>=0.25.0",

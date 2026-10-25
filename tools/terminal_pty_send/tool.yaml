@@ -1,0 +1,32 @@
+name: terminal_pty_send
+toolset: shell
+description: >-
+  Type into a terminal_pty session and return the new output. `chars` is sent as-is
+  (end a line with "\n"); `keys` appends named keys (enter, tab, esc, up, down, left,
+  right, ctrl-c, ctrl-d, ctrl-z, ...).
+parameters:
+  type: object
+  properties:
+    session_id: {type: string, description: The session_id from terminal_pty.}
+    chars: {type: string, default: "", description: Text to type.}
+    keys:
+      type: array
+      maxItems: 32
+      items: {type: string, enum: [enter, tab, esc, backspace, ctrl-c, ctrl-d, ctrl-z, ctrl-l, ctrl-u, up, down, right, left, home, end, pageup, pagedown]}
+      description: Named keys sent after chars.
+    yield_time_ms: {type: integer, minimum: 0, maximum: 30000, default: 1000}
+    max_output_tokens: {type: integer, minimum: 50, maximum: 16000, default: 4000}
+    raw: {type: boolean, default: false, description: Keep ANSI escape sequences.}
+  required: [session_id]
+  additionalProperties: false
+permission: terminal_pty
+pattern_arg: session_id
+default_action: allow
+is_destructive: true
+exposure: deferred
+interrupt: cancel
+timeout_ms: 45000
+search_hint: terminal pty send keys type input interactive session
+max_result_size_chars: 64000
+net: none
+sandbox_mode: danger-full-access

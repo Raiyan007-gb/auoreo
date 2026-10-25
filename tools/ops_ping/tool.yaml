@@ -1,0 +1,26 @@
+name: ops_ping
+toolset: ops
+description: >-
+  Check whether a host is reachable and how fast: ICMP echo via ping3 when available and
+  permitted, otherwise (or with method tcp) a TCP connect to `port` or common ports
+  (443, 80, 22). Returns replies and min/avg/max latency as compact markdown.
+parameters:
+  type: object
+  properties:
+    host: {type: string, minLength: 1, maxLength: 253, pattern: "^[A-Za-z0-9.:_%-]+$", description: Hostname or IP address.}
+    count: {type: integer, minimum: 1, maximum: 10, default: 3}
+    timeout_s: {type: number, minimum: 0.2, maximum: 10, default: 2}
+    method: {type: string, enum: [auto, icmp, tcp], default: auto, description: "auto: ICMP, falling back to TCP connect."}
+    port: {type: integer, minimum: 1, maximum: 65535, description: TCP port to probe (implies tcp when method is auto).}
+  required: [host]
+  additionalProperties: false
+permission: netprobe
+pattern_arg: host
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 120000
+search_hint: ping host reachable latency icmp tcp network monitor ops
+net: direct
+sandbox_mode: read-only

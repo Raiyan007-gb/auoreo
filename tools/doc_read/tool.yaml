@@ -4,6 +4,7 @@ description: >-
   Read a PDF: text per page (pypdf), tables as markdown (pdfplumber), and - for scanned
   pages with no text layer - the rendered page attached as an image so a vision model can
   read it. `pages` selects pages like "1-5" or "1,3,7-9"; at most `max_pages` are read.
+  Files over 20 MiB are refused.
 parameters:
   type: object
   properties:

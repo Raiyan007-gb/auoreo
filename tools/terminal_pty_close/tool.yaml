@@ -1,0 +1,19 @@
+name: terminal_pty_close
+toolset: shell
+description: Close a terminal_pty session (kills its process group) and return its unread output.
+parameters:
+  type: object
+  properties:
+    session_id: {type: string}
+    max_output_tokens: {type: integer, minimum: 50, maximum: 16000, default: 2000}
+  required: [session_id]
+  additionalProperties: false
+permission: terminal_pty
+pattern_arg: session_id
+default_action: allow
+is_destructive: true
+exposure: deferred
+timeout_ms: 20000
+search_hint: terminal pty close end kill session
+net: none
+sandbox_mode: danger-full-access

@@ -1,0 +1,16 @@
+name: terminal_pty_list
+toolset: shell
+description: List this session's open terminal_pty sessions (id, pid, command, age, idle, state).
+parameters:
+  type: object
+  properties: {}
+  additionalProperties: false
+permission: terminal_pty
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 10000
+search_hint: terminal pty list sessions open shells
+net: none
+sandbox_mode: read-only

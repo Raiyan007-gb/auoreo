@@ -3,12 +3,13 @@ toolset: web
 description: >-
   Search the web and return the top results as title, URL and snippet. Follow up with
   web_fetch on a result URL to read the page. Uses the configured search backends
-  (Exa, then SearXNG); fails clearly when none is configured.
+  (Exa, then Parallel, then SearXNG); fails clearly when none is configured.
 parameters:
   type: object
   properties:
     query: {type: string, minLength: 1, maxLength: 500}
     max_results: {type: integer, minimum: 1, maximum: 20, default: 8}
+    timeout_s: {type: number, minimum: 1, maximum: 60, description: "Per-backend timeout for this call (default 20 s, max 60 s)."}
   required: [query]
   additionalProperties: false
 permission: websearch
@@ -18,6 +19,6 @@ is_read_only: true
 is_concurrency_safe: true
 is_search_or_read: true
 requires_env: []
-timeout_ms: 30000
+timeout_ms: 200000
 search_hint: web search internet query find pages
 net: direct

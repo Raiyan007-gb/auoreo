@@ -32,6 +32,7 @@ from auoreo.core.settings_models import (
     SshEnvironment,
     VoiceHostBackends,
 )
+from auoreo.core.settings_tools import ToolSettings  # --- G4b
 from auoreo.policy.config import BanditSettings
 from auoreo.remote.config import BridgePeer, RemoteEnvironment  # --- W2-B
 
@@ -389,6 +390,7 @@ class Settings(BaseSettings):
     """Per-request timeout for sidecar calls (a timed-out request fails; the process keeps running)."""
     http: HttpSecuritySettings = Field(default_factory=HttpSecuritySettings)  # --- G1a
     webhooks: WebhookSettings = Field(default_factory=WebhookSettings)  # --- G1a
+    tools: ToolSettings = Field(default_factory=ToolSettings)  # --- G4b
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

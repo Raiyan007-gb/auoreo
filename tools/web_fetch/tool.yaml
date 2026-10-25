@@ -2,7 +2,8 @@ name: web_fetch
 toolset: web
 description: >-
   Fetch a public http(s) URL and return its content (HTML converted to markdown).
-  Private, loopback and link-local addresses are blocked; redirects are re-validated.
+  Private, loopback and link-local addresses are blocked (DNS resolved once and pinned);
+  redirects are re-validated; bodies over 5 MiB are cut.
 parameters:
   type: object
   properties:

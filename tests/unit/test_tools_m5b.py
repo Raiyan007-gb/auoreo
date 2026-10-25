@@ -22,6 +22,7 @@ ALLOW = [Rule(permission="*", pattern="*", action="allow")]
 @pytest.fixture(autouse=True)
 def _no_host_search_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("EXA_API_KEY", raising=False)
+    monkeypatch.delenv("PARALLEL_API_KEY", raising=False)
 
 
 def ctx_for(svc: Services, workdir: Path) -> ToolContext:
