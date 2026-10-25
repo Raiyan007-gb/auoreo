@@ -89,8 +89,20 @@ url = "https://download.pytorch.org/whl/cpu"
 explicit = true
 
 [build-system]
-requires = ["uv_build>=0.11.32,<0.12.0"]
-build-backend = "uv_build"
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+# --- W3-A: the wheel ships the bundled definitions + web/dist as `auoreo/_bundled/`
+# (packaging/hatch_build.py; a wheel build fails without web/dist unless
+# AUOREO_ALLOW_NO_WEB_DIST=1).
+[tool.hatch.build.targets.wheel]
+packages = ["src/auoreo"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src", "packaging/hatch_build.py", "README.md", "uv.lock", "alembic.ini"]
+
+[tool.hatch.build.hooks.custom]
+path = "packaging/hatch_build.py"
 
 [dependency-groups]
 dev = [

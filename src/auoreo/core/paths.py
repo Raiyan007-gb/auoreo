@@ -23,6 +23,10 @@ KINDS: tuple[str, ...] = (
     "plugins",
 )
 
+# --- W3-A: top-level folders shipped as bundled definitions (wheel `auoreo/_bundled/`,
+# PyInstaller `sys._MEIPASS/`). `web/dist` travels with them as `<root>/web/dist`.
+BUNDLED_DIRS: tuple[str, ...] = (*KINDS, "policies", "memory")
+
 
 def home_dir() -> Path:
     """Runtime home. `AUOREO_HOME` wins; Windows uses %LOCALAPPDATA%\\auoreo."""
@@ -43,7 +47,20 @@ def bundled_root() -> Path:
     env = os.environ.get("AUOREO_BUNDLED_ROOT")
     if env:
         return Path(env).expanduser().resolve()
+    # --- W3-A: a PyInstaller onefile unpacks the folders to sys._MEIPASS; a wheel install
+    # ships them as the `auoreo/_bundled/` package data (see packaging/hatch_build.py).
+    frozen = getattr(sys, "_MEIPASS", None)
+    if frozen:
+        return Path(frozen)
+    packaged = Path(__file__).resolve().parents[1] / "_bundled"
+    if packaged.is_dir():
+        return packaged
     return Path(__file__).resolve().parents[3]
+
+
+def web_dist_dir() -> Path:
+    """The built SPA (`web/dist`) next to the bundled definitions (checkout, wheel or onefile)."""
+    return bundled_root() / "web" / "dist"
 
 
 def project_dir(cwd: Path | None = None) -> Path:

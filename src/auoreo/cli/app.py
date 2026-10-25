@@ -67,3 +67,8 @@ from auoreo.cli.commands import daemon, env, exec_server  # noqa: E402
 app.add_typer(daemon.app, name="daemon", help="Run the server detached on <home>/auoreo.sock (POSIX).")
 app.command("exec-server")(exec_server.exec_server)
 app.add_typer(env.app, name="env", help="Execution environments and bridge peers.")
+
+# --- W3-A: signed self-upgrade
+from auoreo.cli.commands import upgrade  # noqa: E402
+
+app.command("upgrade")(upgrade.upgrade)

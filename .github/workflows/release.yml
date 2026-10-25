@@ -1,0 +1,291 @@
+name: release
+# Tag v<version> → PyPI (trusted publishing), GHCR multi-arch image, PyInstaller onefile
+# binaries + SHA256SUMS, signed update manifests, GitHub Release. See docs/release.md.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      channel: ${{ steps.meta.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.1
+        with:
+          python-version: "3.12"
+      - name: version == tag guard
+        run: uv run --no-project python scripts/check_version_tag.py "$GITHUB_REF_NAME"
+      - id: meta
+        name: version + channel
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          channel=stable
+          if [[ "$v" =~ dev ]]; then channel=dev
+          elif [[ "$v" =~ (a|b|rc)[0-9]*$ ]]; then channel=beta; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
+  web:
+    needs: guard
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - run: npm ci
+      - run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: web-dist
+          path: web/dist
+          if-no-files-found: error
+
+  python-dist:
+    needs: [guard, web]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.1
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      # the hatch build hook fails without web/dist/index.html (never ship a bare wheel)
+      - run: uv build
+      - name: wheel carries the bundled definitions and the SPA
+        run: |
+          unzip -l dist/*.whl | grep -q 'auoreo/_bundled/web/dist/index.html'
+          unzip -l dist/*.whl | grep -q 'auoreo/_bundled/agents/default/AGENT.md'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: python-dist
+          path: dist/
+          if-no-files-found: error
+
+  pypi:
+    needs: python-dist
+    runs-on: ubuntu-24.04
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  image:
+    needs: guard
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # pep440: 1.2.3 → 1.2.3, 1.2, latest; 1.3.0rc1 → 1.3.0rc1 only (no latest)
+          tags: |
+            type=pep440,pattern={{version}}
+            type=pep440,pattern={{major}}.{{minor}}
+          flavor: latest=auto
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  binaries:
+    needs: [guard, web]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, platform: linux-x64, exe: "" }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64, exe: "" }
+          - { os: macos-14, platform: macos-arm64, exe: "" }
+          - { os: windows-latest, platform: windows-x64, exe: ".exe" }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write  # Azure artifact signing (OIDC)
+    env:
+      MACOS_CERT: ${{ secrets.MACOS_CERT }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ASSET: dist/auoreo-${{ matrix.platform }}${{ matrix.exe }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.1
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - run: uv sync --locked --no-dev --extra rtc
+      - run: uv run --no-sync --with "pyinstaller>=6.22,<7" python scripts/build_binary.py --platform-name
+        shell: bash
+      - name: smoke test (version == tag, doctor on the fake gateway)
+        shell: bash
+        env:
+          AUOREO_GATEWAY: fake
+        run: |
+          test "$("$ASSET" --version)" = "${{ needs.guard.outputs.version }}"
+          "$ASSET" doctor --json > doctor.json || true
+          head -c 2000 doctor.json
+
+      - name: macOS — import Developer ID certificate
+        if: runner.os == 'macOS' && env.MACOS_CERT != ''
+        run: |
+          echo "$MACOS_CERT" | base64 --decode > cert.p12
+          security create-keychain -p "$RUNNER_TEMP" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$RUNNER_TEMP" build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$RUNNER_TEMP" build.keychain
+          rm cert.p12
+      - name: macOS — codesign + notarize
+        if: runner.os == 'macOS' && env.MACOS_CERT != ''
+        run: |
+          codesign --force --options runtime --timestamp --sign "$MACOS_SIGN_IDENTITY" "$ASSET"
+          codesign --verify --strict --verbose=2 "$ASSET"
+          ditto -c -k --keepParent "$ASSET" notarize.zip
+          xcrun notarytool submit notarize.zip --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" --wait
+      - name: Windows — Azure login
+        if: runner.os == 'Windows' && env.AZURE_CLIENT_ID != ''
+        uses: azure/login@v3
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Windows — Authenticode sign (Azure Artifact Signing)
+        if: runner.os == 'Windows' && env.AZURE_CLIENT_ID != ''
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGNING_CERTIFICATE_PROFILE }}
+          files: ${{ github.workspace }}\dist\auoreo-windows-x64.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binary-${{ matrix.platform }}
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+
+  binary-musl:
+    # Alpine (musl) build inside a container: JavaScript actions cannot run in Alpine job
+    # containers, so the build is one `docker run`. Experimental until every dependency
+    # ships musllinux wheels; a failure does not block the release.
+    needs: [guard, web]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dist
+          path: web/dist
+      - name: build in python:3.12-alpine
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src python:3.12-alpine sh -euc '
+            apk add --no-cache build-base linux-headers libffi-dev zlib-dev git
+            pip install --no-cache-dir "uv==0.11.32"
+            uv sync --locked --no-dev --extra rtc
+            uv run --no-sync --with "pyinstaller>=6.22,<7" python scripts/build_binary.py --platform-name
+            test "$(dist/auoreo-linux-x64-musl --version)" = "${{ needs.guard.outputs.version }}"
+          '
+      - uses: actions/upload-artifact@v7
+        with:
+          name: binary-linux-x64-musl
+          path: dist/auoreo-linux-x64-musl
+          if-no-files-found: error
+
+  github-release:
+    needs: [guard, python-dist, binaries, binary-musl, image]
+    if: ${{ !cancelled() && needs.python-dist.result == 'success' && needs.binaries.result == 'success' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.1
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: binary-*
+          path: binaries
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: python-dist
+          path: python-dist
+      - name: SHA256SUMS
+        working-directory: binaries
+        run: sha256sum auoreo-* > SHA256SUMS && cat SHA256SUMS
+      - name: signed update manifests
+        if: env.UPDATE_SIGNING_KEY != ''
+        run: |
+          uv sync --locked --no-dev
+          uv run --no-sync python packaging/sign_manifest.py build \
+            --version "$VERSION" --assets-dir binaries --out-dir manifests \
+            --base-url "https://github.com/${{ github.repository }}/releases/download/$GITHUB_REF_NAME"
+      - name: create the GitHub Release
+        run: |
+          pre=""
+          if [ "${{ needs.guard.outputs.channel }}" != "stable" ]; then pre="--prerelease"; fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes $pre \
+            binaries/* python-dist/* $(ls manifests/*.json 2>/dev/null || true)
+      - name: publish manifests to the rolling `updates` release (what `auoreo upgrade` reads)
+        if: env.UPDATE_SIGNING_KEY != ''
+        run: |
+          gh release view updates >/dev/null 2>&1 || gh release create updates --prerelease \
+            --title "Update manifests" --notes "Signed manifest-<channel>.json files read by auoreo upgrade."
+          gh release upload updates manifests/*.json --clobber

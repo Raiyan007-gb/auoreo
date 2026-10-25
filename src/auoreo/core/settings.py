@@ -421,6 +421,16 @@ class Settings(BaseSettings):
     livekit: LiveKitSettings = Field(default_factory=LiveKitSettings)
     """LiveKit SFU transport (`backends.rtc_transport = "livekit"`, extra `livekit`); P2 opt-in."""
 
+    # --- W3-A
+    update_channel: Literal["stable", "beta", "dev"] = "stable"
+    """Default channel for `auoreo upgrade` (`--channel` wins)."""
+    update_url: str = (
+        "https://github.com/Raiyan007-gb/auoreo/releases/download/updates/manifest-{channel}.json"
+    )
+    """Signed update manifest; `{channel}` is substituted. Self-hosters point this at their own."""
+    update_pubkeys: list[str] = Field(default_factory=list)
+    """Extra base64 raw ed25519 keys trusted for manifests, in addition to the pinned release key."""
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""
