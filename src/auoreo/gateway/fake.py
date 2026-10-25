@@ -8,7 +8,8 @@ Behaviour per call:
 
 `vision` (default True) is what `supports_vision` reports; aux calls with
 `metadata.purpose == "vision"` answer with a deterministic description; `"hyde"` calls answer
-with a one-sentence hypothetical fact built from the query's words.
+with a one-sentence hypothetical fact built from the query's words; `"translate"` calls answer
+`[<metadata.target>] <text>`.
 Guardian calls (`purpose == "guardian"`) pop `guardian_script`; when it is empty they
 answer `$AUOREO_FAKE_GUARDIAN` (default `ESCALATE`).
 Every request is kept in `requests` (with its `reasoning_effort`); `efforts` lists the effort
@@ -73,7 +74,7 @@ class FakeGateway:
         elif request.metadata.get("purpose") == "guardian":  # nor does the smart-mode guardian
             default = os.environ.get("AUOREO_FAKE_GUARDIAN", "ESCALATE")
             item = Scripted(text=self.guardian_script.popleft() if self.guardian_script else default)
-        elif request.metadata.get("purpose") in ("vision", "hyde"):  # nor does a vision/HyDE aux call
+        elif request.metadata.get("purpose") in ("vision", "hyde", "translate"):  # nor do these aux calls
             item = self._auto(request)
         else:
             item = self.script.popleft() if self.script else self._auto(request)
@@ -91,6 +92,9 @@ class FakeGateway:
     def _auto(self, request: LLMRequest) -> Scripted:
         if request.metadata.get("purpose") == "hyde":
             return Scripted(text=_hyde(_last_user_text(request.messages)))
+        if request.metadata.get("purpose") == "translate":
+            target = request.metadata.get("target", "")
+            return Scripted(text=f"[{target}] {_last_user_text(request.messages)}")
         last = request.messages[-1] if request.messages else {}
         if last.get("role") == "tool":
             content = str(last.get("content") or "")

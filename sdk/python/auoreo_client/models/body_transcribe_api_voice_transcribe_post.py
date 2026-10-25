@@ -19,11 +19,13 @@ class BodyTranscribeApiVoiceTranscribePost:
         file (str): Audio (wav, webm, ogg, mp3, m4a, …)
         language (None | str | Unset):
         session_id (None | str | Unset):
+        translate_to (None | str | Unset): BCP-47 tag: also return `translation`
     """
 
     file: str
     language: None | str | Unset = UNSET
     session_id: None | str | Unset = UNSET
+    translate_to: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -41,6 +43,12 @@ class BodyTranscribeApiVoiceTranscribePost:
         else:
             session_id = self.session_id
 
+        translate_to: None | str | Unset
+        if isinstance(self.translate_to, Unset):
+            translate_to = UNSET
+        else:
+            translate_to = self.translate_to
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -52,6 +60,8 @@ class BodyTranscribeApiVoiceTranscribePost:
             field_dict["language"] = language
         if session_id is not UNSET:
             field_dict["session_id"] = session_id
+        if translate_to is not UNSET:
+            field_dict["translate_to"] = translate_to
 
         return field_dict
 
@@ -71,6 +81,12 @@ class BodyTranscribeApiVoiceTranscribePost:
                 files.append(("session_id", (None, str(self.session_id).encode(), "text/plain")))
             else:
                 files.append(("session_id", (None, str(self.session_id).encode(), "text/plain")))
+
+        if not isinstance(self.translate_to, Unset):
+            if isinstance(self.translate_to, str):
+                files.append(("translate_to", (None, str(self.translate_to).encode(), "text/plain")))
+            else:
+                files.append(("translate_to", (None, str(self.translate_to).encode(), "text/plain")))
 
         for prop_name, prop in self.additional_properties.items():
             files.append((prop_name, (None, str(prop).encode(), "text/plain")))
@@ -100,10 +116,20 @@ class BodyTranscribeApiVoiceTranscribePost:
 
         session_id = _parse_session_id(d.pop("session_id", UNSET))
 
+        def _parse_translate_to(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        translate_to = _parse_translate_to(d.pop("translate_to", UNSET))
+
         body_transcribe_api_voice_transcribe_post = cls(
             file=file,
             language=language,
             session_id=session_id,
+            translate_to=translate_to,
         )
 
         body_transcribe_api_voice_transcribe_post.additional_properties = d

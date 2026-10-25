@@ -1,0 +1,10 @@
+name: meeting-summary
+description: The meeting summarizer turns a speaker-labelled transcript into a summary, decisions, action items with owners by speaker label and open questions, optionally proposing goals or suggestions (run by POST /api/voice/meetings/{id}/summarize).
+steps:
+  - id: summarize
+    agent: meeting_summarizer
+    input: |-
+      {{input}}
+
+      Produce the Summary, Decisions, Action items (owner = speaker label) and Open questions
+      sections. Propose follow-up goals or suggestions only for clear, owned objectives.

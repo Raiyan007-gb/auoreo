@@ -15,6 +15,7 @@ def _get_kwargs(
     body: BodyTranscribeApiVoiceTranscribePost,
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
+    translate_to: None | str | Unset = UNSET,
     token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
@@ -42,6 +43,13 @@ def _get_kwargs(
     else:
         json_session_id = session_id
     params["session_id"] = json_session_id
+
+    json_translate_to: None | str | Unset
+    if isinstance(translate_to, Unset):
+        json_translate_to = UNSET
+    else:
+        json_translate_to = translate_to
+    params["translate_to"] = json_translate_to
 
     json_token: None | str | Unset
     if isinstance(token, Unset):
@@ -110,17 +118,20 @@ def sync_detailed(
     body: BodyTranscribeApiVoiceTranscribePost,
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
+    translate_to: None | str | Unset = UNSET,
     token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | VoiceTranscription]:
     """Transcribe
 
-     Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup.
+     Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup;
+    with `translate_to` the transcript is also translated (`translation`).
 
     Args:
         language (None | str | Unset):
         session_id (None | str | Unset):
+        translate_to (None | str | Unset):
         token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
@@ -138,6 +149,7 @@ def sync_detailed(
         body=body,
         language=language,
         session_id=session_id,
+        translate_to=translate_to,
         token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
@@ -156,17 +168,20 @@ def sync(
     body: BodyTranscribeApiVoiceTranscribePost,
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
+    translate_to: None | str | Unset = UNSET,
     token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | VoiceTranscription | None:
     """Transcribe
 
-     Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup.
+     Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup;
+    with `translate_to` the transcript is also translated (`translation`).
 
     Args:
         language (None | str | Unset):
         session_id (None | str | Unset):
+        translate_to (None | str | Unset):
         token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
@@ -185,6 +200,7 @@ def sync(
         body=body,
         language=language,
         session_id=session_id,
+        translate_to=translate_to,
         token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
@@ -197,17 +213,20 @@ async def asyncio_detailed(
     body: BodyTranscribeApiVoiceTranscribePost,
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
+    translate_to: None | str | Unset = UNSET,
     token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | VoiceTranscription]:
     """Transcribe
 
-     Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup.
+     Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup;
+    with `translate_to` the transcript is also translated (`translation`).
 
     Args:
         language (None | str | Unset):
         session_id (None | str | Unset):
+        translate_to (None | str | Unset):
         token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
@@ -225,6 +244,7 @@ async def asyncio_detailed(
         body=body,
         language=language,
         session_id=session_id,
+        translate_to=translate_to,
         token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
@@ -241,17 +261,20 @@ async def asyncio(
     body: BodyTranscribeApiVoiceTranscribePost,
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
+    translate_to: None | str | Unset = UNSET,
     token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | VoiceTranscription | None:
     """Transcribe
 
-     Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup.
+     Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup;
+    with `translate_to` the transcript is also translated (`translation`).
 
     Args:
         language (None | str | Unset):
         session_id (None | str | Unset):
+        translate_to (None | str | Unset):
         token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
@@ -271,6 +294,7 @@ async def asyncio(
             body=body,
             language=language,
             session_id=session_id,
+            translate_to=translate_to,
             token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,

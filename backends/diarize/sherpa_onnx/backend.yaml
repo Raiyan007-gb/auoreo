@@ -1,0 +1,14 @@
+kind: diarize
+name: sherpa_onnx
+description: >-
+  sherpa-onnx OfflineSpeakerDiarization (local, CPU) - pyannote segmentation-3.0 ONNX +
+  a speaker-embedding ONNX model + fast clustering. Model paths from
+  settings.voice_diarize_segmentation_model / voice_diarize_embedding_model; with
+  settings.voice_download_models they are fetched into <home>/models/diarize/ on first use.
+  Needs `pip install sherpa-onnx`.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0 (segmentation weights MIT; 3D-Speaker embedding Apache-2.0)
+posture: ok

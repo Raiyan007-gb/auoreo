@@ -146,12 +146,18 @@ def build_spec(
 
 
 def render_context(
-    spec: AgentSpec, cwd: Path, permission_mode: str, memory: str = "", locale: str | None = None
+    spec: AgentSpec,
+    cwd: Path,
+    permission_mode: str,
+    memory: str = "",
+    locale: str | None = None,
+    tone: str = "",
 ) -> str:
     """Tier-2 context block (sent as a user-role snapshot each turn).
 
-    `locale` lives here, never in a stable-tier section, so changing it cannot break the
-    session's byte-stable system prompt. Unset → `spec.extras["locale"]` → `Settings.locale`."""
+    `locale` and `tone` (the per-turn style lines from `auoreo.voice.tone.tone_of`) live
+    here, never in a stable-tier section, so changing them cannot break the session's
+    byte-stable system prompt. Unset locale → `spec.extras["locale"]` → `Settings.locale`."""
     if not spec.context_template:
         return ""
     if locale is None:
@@ -171,6 +177,7 @@ def render_context(
             "memory": memory,
             "agent_name": spec.name,
             "locale": locale or "",
+            "tone": tone,
         },
     ).strip()
 

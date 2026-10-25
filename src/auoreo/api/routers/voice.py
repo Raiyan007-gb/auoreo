@@ -13,7 +13,8 @@ from fastapi.responses import Response
 
 from auoreo.api.deps import AUTH, ServicesDep
 from auoreo.core.services import Services
-from auoreo.schema.chat import VoiceBackendStatus, VoiceSpeakRequest, VoiceStatus, VoiceTranscription
+from auoreo.schema.chat import VoiceBackendStatus, VoiceSpeakRequest, VoiceStatus
+from auoreo.schema.voice_meeting import VoiceTranscription
 from auoreo.tools.context import ToolError
 from auoreo.voice.audio import MAX_INPUT_BYTES, AudioTooLarge, NoSpeech, VoiceUnavailable, transcode
 from auoreo.voice.service import VoiceService
@@ -58,15 +59,24 @@ async def transcribe(
     session_id: Annotated[str | None, Form()] = None,
     language_q: Annotated[str | None, Query(alias="language")] = None,
     session_id_q: Annotated[str | None, Query(alias="session_id")] = None,
+    translate_to: Annotated[str | None, Form(description="BCP-47 tag: also return `translation`")] = None,
+    translate_to_q: Annotated[str | None, Query(alias="translate_to")] = None,
 ) -> VoiceTranscription:
-    """Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup."""
+    """Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup;
+    with `translate_to` the transcript is also translated (`translation`)."""
     voice = _voice(svc)
     sid = session_id or session_id_q
     if sid is not None and await svc.get_session(sid) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
     data = await file.read(MAX_INPUT_BYTES + 1)
     try:
-        res = await voice.transcribe(data, file.content_type, language=language or language_q, session_id=sid)
+        res = await voice.transcribe(
+            data,
+            file.content_type,
+            language=language or language_q,
+            session_id=sid,
+            translate_to=translate_to or translate_to_q,
+        )
     except ToolError as exc:
         raise _http(exc) from None
     run_id = None
@@ -79,6 +89,7 @@ async def transcribe(
         duration_s=res.duration_s,
         backend=res.backend,
         run_id=run_id,
+        translation=res.translation,
     )
 
 

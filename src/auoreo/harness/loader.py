@@ -344,6 +344,7 @@ PROMPT_VARS = {
     "memory",
     "os",
     "locale",
+    "tone",
 }
 
 

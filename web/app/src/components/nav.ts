@@ -10,6 +10,7 @@ import {
   // --- end W0-A
   type LucideIcon,
   MessagesSquareIcon,
+  MicIcon,
   PuzzleIcon,
   ScrollTextIcon,
   SettingsIcon,
@@ -39,4 +40,5 @@ export const NAV: readonly NavItem[] = [
   { to: "/doctor", label: "Doctor", icon: ActivityIcon },
   { to: "/settings", label: "Settings", icon: SettingsIcon },
   { to: "/goals", label: "Goals", icon: TargetIcon }, // --- W0-C
+  { to: "/meetings", label: "Meetings", icon: MicIcon }, // --- F4
 ];

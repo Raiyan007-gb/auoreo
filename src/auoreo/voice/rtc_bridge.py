@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from auoreo.voice.audio import rms, wav_from_pcm
+from auoreo.voice.meeting import live_meeting
 
 if TYPE_CHECKING:
     from auoreo.voice.service import VoiceService
@@ -238,6 +239,9 @@ class RtcVoiceBridge:
                 self.peers.pop(gone, None)
 
     async def _utterance(self, rtc_id: str, session_id: str | None, pcm: bytes, rate: int) -> None:
+        meeting = live_meeting(self.svc, rtc_id)  # --- F4: a meeting peer is listen-only (unless `speak`)
+        if meeting is not None and not await meeting.append_live(rtc_id, pcm, rate):
+            return
         try:
             t = await self.voice.transcribe_wav(wav_from_pcm(pcm, rate))
         except Exception as exc:

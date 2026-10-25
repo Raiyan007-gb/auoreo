@@ -1,0 +1,21 @@
+name: translate
+toolset: voice
+description: >-
+  Translate text into another language with one deterministic model call (temperature 0,
+  the `small` routing group when configured). Returns only the translation. Use it for
+  meeting transcripts, messages or documents the user wants in another language.
+parameters:
+  type: object
+  properties:
+    text: {type: string, minLength: 1, maxLength: 20000, description: Text to translate.}
+    target: {type: string, minLength: 2, maxLength: 35, description: "Target language as a BCP-47 tag (de, fr-CA, pt-BR, zh-Hans)."}
+    source: {type: string, minLength: 2, maxLength: 35, description: "Source language BCP-47 tag; omit to auto-detect."}
+  required: [text, target]
+  additionalProperties: false
+permission: read
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 120000
+search_hint: translate translation language multilingual locale convert text into german french spanish

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
@@ -33,6 +34,40 @@ log = logging.getLogger(__name__)
 
 KINDS = ("stt", "tts", "vad", "wake", "desktop")
 MAX_SPEAK_CHARS = 5000
+MAX_TRANSLATE_CHARS = 20_000
+_BCP47 = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")
+TRANSLATE_PROMPT = (
+    "You are a translation engine. Translate the user's text into the language with BCP-47 tag "
+    "{target}{source}. Preserve meaning, tone, names, numbers, code and formatting. Answer with "
+    "the translation only: no quotes, notes or explanations."
+)
+
+
+async def translate_text(services: Services, text: str, target: str, source: str | None = None) -> str:
+    """One aux call (`purpose=translate`, temperature 0, the `small` group when configured)."""
+    from auoreo.gateway.resolve import resolve_model
+    from auoreo.gateway.types import LLMRequest, TextDelta
+
+    for tag in (target, source):
+        if tag is not None and not _BCP47.match(tag):
+            raise ToolError(f"'{tag}' is not a BCP-47 language tag (e.g. de, pt-BR, zh-Hans)")
+    if not text.strip():
+        raise ToolError("nothing to translate")
+    if len(text) > MAX_TRANSLATE_CHARS:
+        raise ToolError(f"text is {len(text)} chars; the limit is {MAX_TRANSLATE_CHARS}")
+    st = services.settings
+    model = "small" if "small" in st.models else resolve_model(st)
+    system = TRANSLATE_PROMPT.format(target=target, source=f" from {source}" if source else "")
+    request = LLMRequest(
+        model=model,
+        messages=({"role": "system", "content": system}, {"role": "user", "content": text}),
+        tool_choice="none",
+        temperature=0.0,
+        max_tokens=min(8192, len(text) // 2 + 256),
+        metadata={"purpose": "translate", "target": target},
+    )
+    parts = [item.text async for item in services.gateway.stream(request) if isinstance(item, TextDelta)]
+    return "".join(parts).strip()
 
 
 @dataclass
@@ -43,6 +78,7 @@ class TranscribeResult:
     duration_s: float
     backend: str
     speech: list[tuple[float, float]] = field(default_factory=list)
+    translation: str | None = None
 
 
 class VoiceService:
@@ -96,6 +132,7 @@ class VoiceService:
         language: str | None = None,
         keyterms: Sequence[str] = (),
         session_id: str | None = None,
+        translate_to: str | None = None,
     ) -> TranscribeResult:
         wav = await normalize(data, mime)
         dur = duration_s(wav)
@@ -110,7 +147,11 @@ class VoiceService:
             {"session_id": session_id, "text": t.text, "duration_s": round(dur, 3), "backend": backend},
         )
         segs = [{"start": s.start, "end": s.end, "text": s.text} for s in t.segments]
-        return TranscribeResult(t.text, segs, t.language, round(dur, 3), backend, speech)
+        res = TranscribeResult(t.text, segs, t.language, round(dur, 3), backend, speech)
+        if translate_to and t.text.strip():
+            src = t.language if t.language and _BCP47.match(t.language) else None
+            res.translation = await translate_text(self.svc, t.text, translate_to, src)
+        return res
 
     # ----------------------------------------------------------------- speak
     async def speak(

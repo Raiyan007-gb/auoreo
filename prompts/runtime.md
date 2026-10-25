@@ -10,5 +10,6 @@ date: {{date}}
 os: {{os}}
 permission_mode: {{permission_mode}}
 locale: {{locale}}
+{{tone}}
 </runtime>
 {{memory}}
