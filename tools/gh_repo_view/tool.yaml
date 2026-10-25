@@ -1,0 +1,30 @@
+name: gh_repo_view
+toolset: github
+description: Show GitHub repository metadata via gh.
+parameters:
+  type: object
+  properties:
+    repo:
+      type: string
+      description: 'owner/name (or host/owner/name). Default: the working directory''s GitHub remote;
+        any other repo must match settings.github_allowed_repos.'
+  additionalProperties: false
+permission: github_read
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+pattern_arg: repo
+exposure: deferred
+timeout_ms: 120000
+net: direct
+sandbox_mode: read-only
+requires_env:
+- GH_TOKEN
+- GITHUB_TOKEN
+- GH_HOST
+- GH_CONFIG_DIR
+- HTTPS_PROXY
+- NO_PROXY
+- SSL_CERT_FILE
+max_result_size_chars: 32000
+search_hint: github repository info default branch

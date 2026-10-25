@@ -1,0 +1,30 @@
+name: run_lint
+toolset: coding
+description: >-
+  Run the project's linters/type checkers (ruff check + format --check, mypy, eslint,
+  tsc --noEmit; whichever the project configures) and return a compact per-tool summary.
+parameters:
+  type: object
+  properties:
+    tools:
+      type: array
+      items: {type: string, enum: [ruff, mypy, eslint, tsc]}
+      uniqueItems: true
+      description: "Only these linters (default: every one the project configures)."
+    paths:
+      type: array
+      items: {type: string, maxLength: 500}
+      maxItems: 20
+      description: "Files/directories inside the working directory (default: the project defaults)."
+    timeout_s: {type: integer, minimum: 10, maximum: 1800, default: 300,
+                description: Per-linter timeout.}
+  additionalProperties: false
+permission: run_lint
+default_action: ask
+exposure: deferred
+interrupt: cancel
+timeout_ms: 3600000
+search_hint: lint ruff mypy eslint tsc typecheck format check
+max_result_size_chars: 16000
+net: none
+sandbox_mode: workspace-write

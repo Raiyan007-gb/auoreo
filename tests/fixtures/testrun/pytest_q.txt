@@ -1,0 +1,15 @@
+.FsF                                                                     [100%]
+=================================== FAILURES ===================================
+___________________________________ test_bad ___________________________________
+tests/test_demo.py:8: in test_bad
+    assert x == 3, "x should be 3"
+E   AssertionError: x should be 3
+E   assert 2 == 3
+________________________________ test_err_value ________________________________
+tests/test_demo.py:15: in test_err_value
+    raise ValueError("nope")
+E   ValueError: nope
+=========================== short test summary info ============================
+FAILED tests/test_demo.py::test_bad - AssertionError: x should be 3
+FAILED tests/test_demo.py::test_err_value - ValueError: nope
+2 failed, 1 passed, 1 skipped in 0.02s

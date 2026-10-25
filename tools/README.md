@@ -26,3 +26,11 @@ sandbox_mode: workspace-write  # read-only | workspace-write | danger-full-acces
 Handlers import types from `auoreo.tools.context` (`ToolContext`, `ToolResult`,
 `ToolError`). Raise `ToolError("message")` for a model-visible error. A tool in an
 overlay root that shadows a bundled tool must set `override: true`.
+
+## Toolsets
+
+`toolset:` groups tools (`files`, `shell`, `planning`, `github`, `coding`, …) for listing and
+for agents that enable whole groups. New tools should be `exposure: deferred` unless they are
+core: deferred tools stay out of the system prompt until `tool_search` loads them. The
+`github` toolset (`gh_*`), `pwsh`, `run_tests`, `run_lint` and `verify_plan` are described in
+[`docs/coding-tools.md`](../docs/coding-tools.md).
