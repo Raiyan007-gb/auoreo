@@ -18,7 +18,7 @@ from auoreo.harness.manifests import WorkflowManifest
 from auoreo.harness.orchestrator import render
 from auoreo.runtime import commands
 from auoreo.runtime.hooks import hooks_of
-from auoreo.runtime.inbox import InputKind, TurnRequest
+from auoreo.runtime.inbox import InputKind, RunOptions, TurnRequest
 from auoreo.runtime.runner import AgentRunner, SessionRuntime, TurnResult
 from auoreo.runtime.titles import generate_title
 
@@ -71,12 +71,15 @@ class SessionRunCoordinator:
         agent: str | None = None,
         workflow: str | None = None,
         model: str | None = None,
-        interactive: bool = True,
+        interactive: bool | None = None,
+        options: RunOptions | None = None,
     ) -> str | None:
         """Queue input. Returns the run id for followups (None for steer/inject and for
-        engine-handled slash commands such as `/model`)."""
+        engine-handled slash commands such as `/model`). `interactive` is only changed
+        when given explicitly: injected mail or steering never flips a session's mode."""
         rt = await self.runtime(session_id)
-        rt.interactive = interactive
+        if interactive is not None:
+            rt.interactive = interactive
         if kind == "followup" or (kind == "steer" and not rt.running):
             expanded = await commands.expand(self, rt, text, agent)
             if expanded.handled:
@@ -89,7 +92,7 @@ class SessionRunCoordinator:
             rt.inbox.steer(text)
             return None
         run_id = f"run_{uuid.uuid4().hex[:12]}"
-        rt.inbox.followup(TurnRequest(run_id, text, agent, workflow, model))
+        rt.inbox.followup(TurnRequest(run_id, text, agent, workflow, model, options))
         self._idle.setdefault(session_id, asyncio.Event()).clear()
         if rt.task is None or rt.task.done():
             rt.task = asyncio.create_task(self._drain(rt), name=f"drain:{session_id}")
@@ -151,7 +154,9 @@ class SessionRunCoordinator:
             text = render(step.input, {"input": req.text, "steps": {}})
             # The session's own agent wins for its own workflow; otherwise the step's agent.
             agent = req.agent or (rt.agent if wf_name == rt.workflow else step.agent)
-            return await self.runner.run_turn(rt, text, agent=agent, model=req.model, run_id=req.run_id)
+            return await self.runner.run_turn(
+                rt, text, agent=agent, model=req.model, run_id=req.run_id, options=req.options
+            )
         return await self._run_workflow(rt, req, manifest)
 
     async def _run_workflow(self, rt: SessionRuntime, req: TurnRequest, wf: WorkflowManifest) -> TurnResult:

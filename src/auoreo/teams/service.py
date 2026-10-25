@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from auoreo.core.db import TeamMemberRow, TeamRow
+from auoreo.runtime.inbox import RunOptions
 from auoreo.teams.ceiling import CeilingEngine, clamp
 from auoreo.teams.format import (
     SCHEMA_MISMATCH,
@@ -332,7 +333,13 @@ class TeamsService:
     ) -> tuple[str, str, dict[str, Any] | None]:
         coord = self.s.coordinator
         run_id = await coord.submit(
-            m.session_id, text, "followup", agent=m.agent, model=model, interactive=interactive
+            m.session_id,
+            text,
+            "followup",
+            agent=m.agent,
+            model=model,
+            interactive=interactive,
+            options=RunOptions(skip_memory=True),  # subagents run without memory (spec §16.1)
         )
         if run_id is None:  # handled by a slash command (e.g. `/model`)
             return "completed", "", None

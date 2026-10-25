@@ -8,6 +8,7 @@ order, stop on doom loops, and force a tool-free final step when the budget runs
 from __future__ import annotations
 
 import asyncio
+import fnmatch
 import hashlib
 import json
 import logging
@@ -22,6 +23,7 @@ from sqlalchemy import func, select
 
 from auoreo.core.db import MessageRow
 from auoreo.core.permissions import PermissionEngine
+from auoreo.core.redaction import StreamRedactor
 from auoreo.core.usage import UsageLedger
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Finish, LLMRequest, TextDelta, ToolCall, Usage, tool_schema
@@ -29,7 +31,7 @@ from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
 from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
 from auoreo.runtime.hooks import hooks_of
-from auoreo.runtime.inbox import Inbox
+from auoreo.runtime.inbox import Inbox, RunOptions
 from auoreo.runtime.multimodal import prepare_messages
 from auoreo.runtime.tool_round import ABORTED_BEFORE_DISPATCH, tool_round
 from auoreo.tools.context import SessionState, ToolContext
@@ -137,10 +139,12 @@ class AgentRunner:
         agent: str | None = None,
         model: str | None = None,
         run_id: str | None = None,
+        options: RunOptions | None = None,
     ) -> TurnResult:
         run_id = run_id or f"run_{uuid.uuid4().hex[:12]}"
         sid = rt.session_id
         agent = agent or rt.agent
+        options = options or RunOptions()
         try:
             spec = self._spec(rt, agent, model)
         except (KeyError, ValueError) as exc:
@@ -171,7 +175,7 @@ class AgentRunner:
             await self.s.memory.record_message(sid, "user", text)
 
         memory_block = ""
-        if self.s.memory is not None and spec.agent.manifest.memory:
+        if self.s.memory is not None and spec.agent.manifest.memory and not options.skip_memory:
             try:
                 memory_block = await self.s.memory.context_block(text)
             except Exception:  # recall must never fail the turn
@@ -195,7 +199,7 @@ class AgentRunner:
             emit=emit,
             services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec},
         )
-        result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_msg)
+        result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_msg, options)
         if self.s.memory is not None and result.text:
             await self.s.memory.record_message(sid, "assistant", result.text)
         await self.s.set_session_status(sid, "idle")
@@ -219,10 +223,11 @@ class AgentRunner:
         run_id: str,
         context: str,
         turn_msg: dict[str, Any],
+        options: RunOptions,
     ) -> TurnResult:
         sid = rt.session_id
         loop_cfg = self.s.settings.loop
-        max_steps = max(1, min(spec.max_steps, loop_cfg.max_iterations))
+        max_steps = max(1, min(spec.max_steps, loop_cfg.max_iterations, options.max_steps or 10**9))
         recent: deque[str] = deque(maxlen=max(2, loop_cfg.doom_loop_repeats))
         final_text = ""
         open_calls: list[ToolCall] = []
@@ -237,7 +242,7 @@ class AgentRunner:
                         {"run_id": run_id, "role": "user", "content": steer, "steer": True},
                     )
                 last_step = step == max_steps
-                tools = self._available(spec, rt.state)
+                tools = self._available(spec, rt.state, options)
                 build = partial(self._request, spec, rt, tools, context, turn_msg, last_step, run_id)
                 await self.compaction.pre_step(rt, build())  # `build` re-renders after compaction
                 await self.s.emit(sid, "step.started", {"run_id": run_id, "step": step, "tools": len(tools)})
@@ -367,9 +372,20 @@ class AgentRunner:
         return True
 
     # ------------------------------------------------------------- helpers
-    def _available(self, spec: AgentSpec, state: SessionState) -> list[ToolDef]:
+    def _available(
+        self, spec: AgentSpec, state: SessionState, options: RunOptions | None = None
+    ) -> list[ToolDef]:
         loaded = [t for t in spec.deferred if t.name in state.loaded_tools]
-        return [*spec.tools, *loaded]
+        tools = [*spec.tools, *loaded]
+        if options is None or (options.tools_allow is None and not options.tools_deny):
+            return tools
+        allow = options.tools_allow
+        return [
+            t
+            for t in tools
+            if (allow is None or any(fnmatch.fnmatchcase(t.name, g) for g in allow))
+            and not any(fnmatch.fnmatchcase(t.name, g) for g in options.tools_deny)
+        ]
 
     def _request(
         self,
@@ -418,11 +434,13 @@ class AgentRunner:
     async def _stream(self, sid: str, run_id: str, request: LLMRequest) -> tuple[str, list[ToolCall]]:
         parts: list[str] = []
         calls: list[ToolCall] = []
+        scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
         async for item in self.s.gateway.stream(request):
             match item:
                 case TextDelta(text=t):
                     parts.append(t)
-                    await self.s.emit(sid, "message.delta", {"run_id": run_id, "text": t})
+                    if safe := scrub.feed(t):
+                        await self.s.emit(sid, "message.delta", {"run_id": run_id, "text": safe})
                 case ToolCall():
                     calls.append(item)
                 case Usage():
@@ -440,6 +458,8 @@ class AgentRunner:
                     )
                 case Finish():
                     pass
+        if tail := scrub.flush():
+            await self.s.emit(sid, "message.delta", {"run_id": run_id, "text": tail})
         return "".join(parts), calls
 
 

@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from auoreo.automation import lock
 from auoreo.backends import delivery as providers
 from auoreo.core.db import DeliveryRow, utcnow
+from auoreo.runtime.inbox import RunOptions
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -262,7 +263,9 @@ class DeliveryWorker:
             raise RunError(str(exc).strip("'\"")) from exc
         await self.outbox.set_session(row.id, ses.id)
         coord = self.s.coordinator
-        run_id = await coord.submit(ses.id, prompt, interactive=False)
+        run_id = await coord.submit(
+            ses.id, prompt, interactive=False, options=unattended_options(self.s, row.kind, row.source)
+        )
         try:
             await coord.wait(ses.id, timeout)
         except TimeoutError as exc:
@@ -324,3 +327,15 @@ async def start(services: Services) -> DeliveryWorker:
 def outbox_of(services: Services) -> Outbox:
     worker = services.ext.get("deliveries")
     return worker.outbox if isinstance(worker, DeliveryWorker) else Outbox(services)
+
+
+UNATTENDED_DENY: tuple[str, ...] = ("memory", "delegate_task", "plugin_*")
+
+
+def unattended_options(services: Any, kind: str, source: str) -> RunOptions:
+    """Webhook/job sessions run headless: no memory writes or recall, no delegation, no
+    creator tools, and the manifest's `max_steps` when set (spec §25.11 cron injection defense)."""
+    lookup: dict[str, dict[str, Any]] = {"webhook": services.harness.webhooks, "job": services.harness.jobs}
+    entry = lookup.get(kind, {}).get(source)
+    max_steps = getattr(entry.manifest, "max_steps", None) if entry is not None else None
+    return RunOptions(max_steps=max_steps, tools_deny=UNATTENDED_DENY, skip_memory=True)

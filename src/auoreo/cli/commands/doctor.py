@@ -77,6 +77,24 @@ def _backend_checks(st: Settings, h: Harness) -> list[dict[str, str]]:
     return out
 
 
+def _plugin_checks(st: Settings, h: Harness) -> list[dict[str, str]]:
+    """One row per enabled plugin: is its venv/lock still in sync with the folder?"""
+    from auoreo.plugins.install import verify
+
+    out: list[dict[str, str]] = []
+    for name, d in sorted(h.plugins.items()):
+        if not d.manifest.enabled:
+            continue
+        state = verify(st.home, name, d.path.parent)
+        level: Level = "ok" if state == "ok" else "warn"
+        out.append(
+            _check(
+                f"plugin:{name}", level, state, "" if state == "ok" else f"run `auoreo plugin reload {name}`"
+            )
+        )
+    return out
+
+
 def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
     """Check the environment, definitions, database and credentials."""
     st = settings()
@@ -128,6 +146,7 @@ def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
         level: Level = "warn" if h.errors else "ok"
         counts = {k: len(v) for k, v in h.describe().items()}
         out.extend(_backend_checks(st, h))
+        out.extend(_plugin_checks(st, h))
         out.append(
             _check(
                 "harness",

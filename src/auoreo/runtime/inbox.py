@@ -11,6 +11,16 @@ from typing import Literal
 InputKind = Literal["followup", "steer", "inject"]
 
 
+@dataclass(frozen=True)
+class RunOptions:
+    """Per-run overrides that automation, jobs and delegation apply to a turn."""
+
+    max_steps: int | None = None
+    tools_allow: tuple[str, ...] | None = None  # fnmatch globs; None = agent default
+    tools_deny: tuple[str, ...] = ()
+    skip_memory: bool = False
+
+
 @dataclass
 class TurnRequest:
     run_id: str
@@ -18,6 +28,7 @@ class TurnRequest:
     agent: str | None = None
     workflow: str | None = None
     model: str | None = None
+    options: RunOptions | None = None
 
 
 @dataclass

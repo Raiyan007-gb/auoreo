@@ -78,3 +78,46 @@ def redact_obj(obj: Any) -> Any:
 class RedactingFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         return redact(super().format(record))
+
+
+HOLD_BACK = 128
+_TOKEN_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-.=")
+
+
+class StreamRedactor:
+    """Redact a text stream without ever splitting a secret across chunk boundaries.
+
+    Chunk-wise `redact()` is wrong twice over: a prefix like `sk-` at the very start of a
+    chunk loses its left context (`</task-notification>` chunked at `sk-notification` was
+    masked), and a key spanning two chunks leaks its tail. This keeps the last `HOLD_BACK`
+    characters (extended backwards to the start of a token run) unemitted until more text
+    or `flush()` arrives, and redacts with one character of emitted context on the left.
+    """
+
+    def __init__(self, hold: int = HOLD_BACK) -> None:
+        self.hold = hold
+        self._pending = ""
+        self._last = " "  # left context for the prefix lookbehind
+
+    def feed(self, text: str) -> str:
+        if not ENABLED:
+            return text
+        self._pending += text
+        cut = len(self._pending) - self.hold
+        if cut <= 0:
+            return ""
+        while cut > 0 and self._pending[cut - 1] in _TOKEN_CHARS and self._pending[cut] in _TOKEN_CHARS:
+            cut -= 1  # never split a token run; the run is held until it ends or flush()
+        if cut <= 0:
+            return ""
+        out, self._pending = self._pending[:cut], self._pending[cut:]
+        return self._emit(out)
+
+    def flush(self) -> str:
+        out, self._pending = self._pending, ""
+        return self._emit(out) if out else ""
+
+    def _emit(self, out: str) -> str:
+        safe = redact(self._last + out)[1:] if ENABLED else out
+        self._last = out[-1] if out else self._last
+        return safe
