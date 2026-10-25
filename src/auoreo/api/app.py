@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator, Callable
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -12,10 +12,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import Response
-from starlette.types import Scope
+from starlette.routing import Route
+from starlette.types import ASGIApp, Scope
 
 from auoreo import __version__
-from auoreo.api import ws
+from auoreo.api import mcp_server, ws
+from auoreo.api.routers import acp as acp_router
 from auoreo.api.routers import (
     chat,
     compaction,
@@ -33,6 +35,7 @@ from auoreo.api.routers import cron as cron_router
 from auoreo.api.routers import deliveries as deliveries_router
 from auoreo.api.routers import hooks as hooks_router
 from auoreo.api.routers import kanban as kanban_router
+from auoreo.api.routers import openai_compat as openai_compat_router
 from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import rtc as rtc_router
 from auoreo.api.routers import teams as teams_router
@@ -63,7 +66,14 @@ ROUTERS = (
     teams_router,
     kanban_router,
     plugins_router,  # M5e
+    openai_compat_router,  # M5h
+    acp_router,  # M5h
 )
+MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
+    ("/mcp", mcp_server.make_mount),  # M5h
+]
+"""Raw ASGI endpoints added after the routers and before the SPA: `(path, factory)`.
+A factory returns None to skip; an app with `lifespan(services)` has it entered by the host."""
 
 
 class SpaStaticFiles(StaticFiles):
@@ -100,7 +110,11 @@ def create_app(
         if not settings.server_password:
             log.warning("server is unsecured: AUOREO_SERVER_PASSWORD is not set")
         try:
-            yield
+            async with AsyncExitStack() as stack:
+                for mounted in app.state.mounts:
+                    if (enter := getattr(mounted, "lifespan", None)) is not None:
+                        await stack.enter_async_context(enter(svc))
+                yield
         finally:
             await svc.connections.close_all(1001)
             if owned:
@@ -117,6 +131,11 @@ def create_app(
     )
     for module in ROUTERS:
         app.include_router(module.router)
+    app.state.mounts = []
+    for path, factory in MOUNTS:
+        if (asgi := factory(settings)) is not None:  # a Route (not Mount): exact path, no redirect
+            app.router.routes.append(Route(path, endpoint=asgi))
+            app.state.mounts.append(asgi)
     dist = web_dist or Path(__file__).resolve().parents[3] / "web" / "dist"
     if (dist / "index.html").is_file():  # mounted AFTER routers so /api/* wins
         app.mount("/", SpaStaticFiles(directory=dist, html=True), name="ui")
