@@ -93,7 +93,8 @@ def sync_detailed(
 ) -> Response[Any | HTTPValidationError]:
     """Acp
 
-     JSON-RPC 2.0 entry point for ACP clients (editors).
+     JSON-RPC 2.0 entry point for ACP clients (editors). `Accept: text/event-stream` on a
+    single `session/prompt` streams `session/update` notifications before the response.
 
     Args:
         token (None | str | Unset):
@@ -133,7 +134,8 @@ def sync(
 ) -> Any | HTTPValidationError | None:
     """Acp
 
-     JSON-RPC 2.0 entry point for ACP clients (editors).
+     JSON-RPC 2.0 entry point for ACP clients (editors). `Accept: text/event-stream` on a
+    single `session/prompt` streams `session/update` notifications before the response.
 
     Args:
         token (None | str | Unset):
@@ -168,7 +170,8 @@ async def asyncio_detailed(
 ) -> Response[Any | HTTPValidationError]:
     """Acp
 
-     JSON-RPC 2.0 entry point for ACP clients (editors).
+     JSON-RPC 2.0 entry point for ACP clients (editors). `Accept: text/event-stream` on a
+    single `session/prompt` streams `session/update` notifications before the response.
 
     Args:
         token (None | str | Unset):
@@ -206,7 +209,8 @@ async def asyncio(
 ) -> Any | HTTPValidationError | None:
     """Acp
 
-     JSON-RPC 2.0 entry point for ACP clients (editors).
+     JSON-RPC 2.0 entry point for ACP clients (editors). `Accept: text/event-stream` on a
+    single `session/prompt` streams `session/update` notifications before the response.
 
     Args:
         token (None | str | Unset):

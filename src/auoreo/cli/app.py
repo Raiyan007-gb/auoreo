@@ -72,3 +72,8 @@ app.add_typer(env.app, name="env", help="Execution environments and bridge peers
 from auoreo.cli.commands import upgrade  # noqa: E402
 
 app.command("upgrade")(upgrade.upgrade)
+
+# --- F3: Perfetto trace files
+from auoreo.cli.commands import trace  # noqa: E402
+
+app.add_typer(trace.app, name="trace", help="Perfetto trace files (AUOREO_TRACE_FILE): summarize.")

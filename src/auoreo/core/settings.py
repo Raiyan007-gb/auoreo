@@ -451,6 +451,15 @@ class Settings(BaseSettings):
     plan_requires_verify: bool = False
     """`exit_plan_mode` refuses until `verify_plan` passed for the current plan."""
 
+    # --- F3
+    sentry_dsn: str | None = None
+    """`AUOREO_SENTRY_DSN`: opt-in error reporting (extra `sentry`). Unset = no Sentry at all."""
+    sentry_share: Literal["full", "errors_only", "off"] = "errors_only"
+    """`errors_only`: redacted exceptions, no breadcrumbs or traces; `full`: also breadcrumbs
+    and (only when `otel_mode` is on) performance traces; `off`: every event is dropped."""
+    trace_file: Path | None = None
+    """`AUOREO_TRACE_FILE`: write a Chrome/Perfetto Trace-Event JSON file (works with OTel off)."""
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""

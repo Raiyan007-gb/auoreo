@@ -15,7 +15,8 @@ export interface paths {
         put?: never;
         /**
          * Acp
-         * @description JSON-RPC 2.0 entry point for ACP clients (editors).
+         * @description JSON-RPC 2.0 entry point for ACP clients (editors). `Accept: text/event-stream` on a
+         *     single `session/prompt` streams `session/update` notifications before the response.
          */
         post: operations["acp_acp_post"];
         delete?: never;
@@ -3435,13 +3436,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description JSON-RPC response or batch */
+            /** @description JSON-RPC response or batch; SSE of session/update + the response when streaming */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": unknown;
+                    "text/event-stream": unknown;
                 };
             };
             /** @description Only notifications */
