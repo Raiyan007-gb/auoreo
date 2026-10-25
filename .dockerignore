@@ -1,0 +1,26 @@
+# Keep the build context small and never ship host state or secrets into an image.
+.git
+.github
+.venv
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.claude
+.auoreo
+.artifacts
+.env
+.env.*
+*.pem
+secrets.db
+dist
+build
+*.egg-info
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+web/app/.vite
+tests
+sdk/python/.venv

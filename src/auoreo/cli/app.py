@@ -60,3 +60,8 @@ app.add_typer(skill.app, name="skill", help="Skills: lint frontmatter and bodies
 from auoreo.cli.commands import policy  # noqa: E402
 
 app.add_typer(policy.app, name="policy", help="Adaptive turn policies: bandit status, reset.")
+
+# --- W3-A: signed self-upgrade
+from auoreo.cli.commands import upgrade  # noqa: E402
+
+app.command("upgrade")(upgrade.upgrade)

@@ -386,6 +386,23 @@ async def run_checks(settings: Settings, *, services: Services | None = None) ->
         except HarnessError:
             pass  # already reported by the harness row
     # --- end W2-A
+    # --- W3-A: where the bundled definitions and the SPA were found, and how this is installed
+    from auoreo.core.paths import web_dist_dir
+    from auoreo.core.upgrade import install_method
+
+    dist = web_dist_dir()
+    has_ui = (dist / "index.html").is_file()
+    at = next((i + 1 for i, c in enumerate(out) if c.check == "home"), len(out))
+    out[at:at] = [
+        Check("install", "ok", f"{install_method()} · bundled root {bundled_root()}"),
+        Check(
+            "web_dist",
+            "ok" if has_ui else "warn",
+            str(dist) if has_ui else f"{dist} missing (API-only, no UI at /)",
+            "cd web && npm ci && npm run build",
+        ),
+    ]
+    # --- end W3-A
     return out
 
 

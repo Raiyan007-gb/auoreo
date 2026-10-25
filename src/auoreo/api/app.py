@@ -48,6 +48,7 @@ from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import voice as voice_router
 from auoreo.api.routers import webhooks as webhooks_router
 from auoreo.core import observability as obs
+from auoreo.core.paths import web_dist_dir
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings, get_settings
 from auoreo.gateway.types import Gateway
@@ -153,7 +154,7 @@ def create_app(
             app.router.routes.append(Route(path, endpoint=asgi))
             app.state.mounts.append(asgi)
     obs.instrument_app(app, settings)  # --- W0-D: no-op unless AUOREO_OTEL_MODE=local|otlp
-    dist = web_dist or Path(__file__).resolve().parents[3] / "web" / "dist"
+    dist = web_dist or web_dist_dir()
     if (dist / "index.html").is_file():  # mounted AFTER routers so /api/* wins
         app.mount("/", SpaStaticFiles(directory=dist, html=True), name="ui")
     return app

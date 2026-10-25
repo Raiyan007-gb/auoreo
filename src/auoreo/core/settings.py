@@ -374,6 +374,15 @@ class Settings(BaseSettings):
     """Sample one frame every `perception_rtc_interval_s` from RTC video tracks into the
     in-memory `rtc` sensor source (frames are never written to disk)."""
     perception_rtc_interval_s: float = Field(default=5.0, ge=0.5, le=3600)
+    # --- W3-A
+    update_channel: Literal["stable", "beta", "dev"] = "stable"
+    """Default channel for `auoreo upgrade` (`--channel` wins)."""
+    update_url: str = (
+        "https://github.com/Raiyan007-gb/auoreo/releases/download/updates/manifest-{channel}.json"
+    )
+    """Signed update manifest; `{channel}` is substituted. Self-hosters point this at their own."""
+    update_pubkeys: list[str] = Field(default_factory=list)
+    """Extra base64 raw ed25519 keys trusted for manifests, in addition to the pinned release key."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

@@ -1,0 +1,41 @@
+# Local single-host deployment (W3-A).
+#   AUOREO_SERVER_PASSWORD=change-me docker compose up --build
+#   ... plus Redis for `--workers N`:
+#   AUOREO_SERVER_PASSWORD=change-me AUOREO_WORKERS=2 AUOREO_REDIS_URL=redis://redis:6379/0 \
+#     docker compose --profile redis up --build
+# (multi-worker needs the image built with EXTRAS="--extra rtc --extra redis")
+services:
+  auoreo:
+    build:
+      context: .
+      args:
+        EXTRAS: ${AUOREO_EXTRAS:---extra rtc}
+    image: ${AUOREO_IMAGE:-auoreo:local}
+    ports:
+      - "${AUOREO_PUBLISH_PORT:-4096}:4096"
+    environment:
+      # required: the container binds 0.0.0.0 and serve refuses without a password
+      AUOREO_SERVER_PASSWORD: ${AUOREO_SERVER_PASSWORD:?set AUOREO_SERVER_PASSWORD}
+      AUOREO_GATEWAY: ${AUOREO_GATEWAY:-litellm}
+      AUOREO_WORKERS: ${AUOREO_WORKERS:-1}
+      AUOREO_REDIS_URL: ${AUOREO_REDIS_URL:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - auoreo-data:/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    profiles: ["redis"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  auoreo-data: {}
