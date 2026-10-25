@@ -213,7 +213,12 @@ async def test_manual_compaction_shrinks_archives_and_keeps_system_prompt(
 async def test_pressure_trigger_compacts_and_context_follows_turn(
     services: Services, gateway: FakeGateway
 ) -> None:
-    gateway.context_window_tokens = 6_000
+    # Size the window from the real system prompt so the test does not depend on how many
+    # bundled tools (and tool descriptions) ship: ~4.6k tokens of headroom above it.
+    from auoreo.harness.orchestrator import build_spec
+
+    system = build_spec(services.harness, "default", "default", "manual").system_prompt
+    gateway.context_window_tokens = gateway.count_tokens("default", system) + 4_600
     sess = await services.create_session()
     mark = await services.events.last_seq()
     await turns(services, sess.id, 20)
@@ -360,3 +365,21 @@ async def test_nothing_to_compact_is_benign(services: Services, gateway: FakeGat
     while not sub.queue.empty():
         kinds.append(sub.queue.get_nowait().type)
     assert "compaction.skipped" in kinds and "run.failed" not in kinds
+
+
+def test_render_transcript_never_serializes_image_bytes() -> None:
+    from auoreo.runtime.compaction import render_transcript
+
+    big = "A" * 50_000
+    msgs = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "look"},
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{big}"}},
+            ],
+        },
+        {"role": "assistant", "content": "ok"},
+    ]
+    out = render_transcript(msgs)
+    assert "look" in out and "[image]" in out and big[:100] not in out and len(out) < 1000

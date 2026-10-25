@@ -144,12 +144,31 @@ def prune_plan(history: list[dict[str, Any]]) -> tuple[dict[int, dict[str, Any]]
     return changes, reclaimed
 
 
+def _parts_text(content: Any) -> str:
+    """Flatten list content for the summarizer; images become short placeholders, never base64."""
+    if not content:
+        return ""
+    if not isinstance(content, list):
+        return json.dumps(content)
+    out: list[str] = []
+    for part in content:
+        if not isinstance(part, dict):
+            out.append(str(part))
+        elif part.get("type") == "text":
+            out.append(str(part.get("text", "")))
+        elif part.get("type") == "image_url":
+            out.append("[image]")
+        else:
+            out.append(json.dumps(part)[:200])
+    return "\n".join(out)
+
+
 def render_transcript(messages: list[dict[str, Any]], cap: int = SUMMARY_INPUT_CHARS) -> str:
     """Plain-text transcript for the summarizer; oldest entries are dropped past `cap`."""
     entries: list[str] = []
     for m in messages:
         content = m.get("content")
-        text = content if isinstance(content, str) else (json.dumps(content) if content else "")
+        text = content if isinstance(content, str) else _parts_text(content)
         if m.get("role") == "tool":
             entries.append(f"[tool result {m.get('tool_call_id', '')}]\n{text}")
             continue

@@ -1,0 +1,16 @@
+name: browser_select
+toolset: browser
+description: "Choose a select option by value or label."
+parameters:
+  type: object
+  properties:
+    ref: {type: string, description: "Element ref from the latest snapshot, e.g. e3"}
+    selector: {type: string, description: "CSS selector (when no ref fits)"}
+    value: {type: string}
+  required: [value]
+  additionalProperties: false
+default_action: allow
+is_read_only: false
+is_concurrency_safe: false
+timeout_ms: 30000
+search_hint: browser select dropdown option

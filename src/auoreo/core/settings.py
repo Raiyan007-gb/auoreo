@@ -107,6 +107,12 @@ class Settings(BaseSettings):
     """Backend selection per kind, e.g. {"capture": "mss", "browser": "playwright"}; unset kinds
     fall back to the manifest marked `default: true`, then to the only candidate."""
 
+    # --- M4b
+    allow_private_urls: bool = False
+    """Let browser tools navigate to private/loopback hosts (SSRF guard off; tests, intranets)."""
+    browser_executable_path: Path | None = None
+    """Chromium binary for the playwright browser backend; overrides PLAYWRIGHT_BROWSERS_PATH."""
+
     @property
     def db_path(self) -> Path:
         return self.home / "state.db"

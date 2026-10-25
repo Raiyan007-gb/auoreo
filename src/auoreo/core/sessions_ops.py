@@ -86,6 +86,7 @@ async def delete_session(svc: Services, session_id: str) -> None:
             await s.delete(row)
         await s.commit()
     svc.coordinator.forget(session_id)
+    await svc.close_backend_session(session_id)
     await svc.emit("server", "session.deleted", {"session_id": session_id})
 
 
