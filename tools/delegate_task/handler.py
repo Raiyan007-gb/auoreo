@@ -26,6 +26,7 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
             background=background,
             model=args.get("model"),
             output_schema=args.get("output_schema"),
+            role=args.get("role"),
         )
     )
     meta = {"task_id": member.task_id, "name": name, "agent": member.agent, "team": member.team_id}

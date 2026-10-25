@@ -1,0 +1,36 @@
+name: swarm
+description: The coordinator splits the goal into kanban tasks and board keys, implementer workers claim the tasks and put results on the team board, and the reviewer writes summary/final.
+steps:
+  - id: plan
+    agent: coordinator
+    input: |-
+      You are the swarm coordinator for this goal:
+      {{input}}
+
+      0. Create the swarm's team with `team_create` (a short unique kebab-case name); the
+         board, the workers and the reviewer step all share it.
+      1. Split the goal into small independent tasks. Create one kanban task per unit on
+         board `swarm` (`kanban_create`, load the kanban/board tools with `tool_search`).
+      2. Put the plan on the team board with `board_put` under `plan`: each task's id, what
+         done means, and its result key `results/task-<id>`.
+      3. Spawn implementer workers with `delegate_task` (agent `implementer`, names
+         `worker_1`, `worker_2`, …; at most 3). Tell each worker: claim tasks from kanban
+         board `swarm` with `kanban_claim` (worker = your name) until none are ready; for each,
+         do the work, `board_put` the result under `results/task-<id>`, then `kanban_complete`
+         it with the summary `board:results/task-<id>`.
+      4. When every worker has finished (`wait_agent` for background ones), answer with the
+         list of result keys and one line per task. Do not paste the results themselves.
+  - id: review
+    agent: reviewer
+    input: |-
+      Review the swarm results for this goal:
+      {{input}}
+
+      Coordinator report:
+      {{steps.plan.output}}
+
+      Read every key under `results/` on the team board (`board_list` with prefix
+      `results/`, then `board_get`; load them with `tool_search`). Check each against the
+      plan (`board_get plan`). Put the final summary on the board under `summary/final`
+      (verdict first, then one line per task with its key). Answer with the verdict and the
+      pointer `board:summary/final`.

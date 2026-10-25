@@ -14,6 +14,9 @@ from .audit_entry import AuditEntry
 from .audit_entry_detail import AuditEntryDetail
 from .audit_page import AuditPage
 from .audit_verify import AuditVerify
+from .board_artifact import BoardArtifact
+from .board_entry import BoardEntry
+from .board_put import BoardPut
 from .body_transcribe_api_voice_transcribe_post import BodyTranscribeApiVoiceTranscribePost
 from .cancel_api_sessions_session_id_cancel_post_response_cancel_api_sessions_session_id_cancel_post import (
     CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost,
@@ -119,6 +122,8 @@ from .suggestion_info import SuggestionInfo
 from .suggestion_info_action import SuggestionInfoAction
 from .suggestion_info_status import SuggestionInfoStatus
 from .suggestion_proposed import SuggestionProposed
+from .team_decision import TeamDecision
+from .team_decision_decision import TeamDecisionDecision
 from .team_detail import TeamDetail
 from .team_info import TeamInfo
 from .team_member_info import TeamMemberInfo
@@ -151,6 +156,9 @@ __all__ = (
     "AuditEntryDetail",
     "AuditPage",
     "AuditVerify",
+    "BoardArtifact",
+    "BoardEntry",
+    "BoardPut",
     "BodyTranscribeApiVoiceTranscribePost",
     "CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost",
     "ChatAccepted",
@@ -252,6 +260,8 @@ __all__ = (
     "SuggestionInfoAction",
     "SuggestionInfoStatus",
     "SuggestionProposed",
+    "TeamDecision",
+    "TeamDecisionDecision",
     "TeamDetail",
     "TeamInfo",
     "TeamMemberInfo",

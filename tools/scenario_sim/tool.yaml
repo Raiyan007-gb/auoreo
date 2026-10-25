@@ -1,0 +1,37 @@
+name: scenario_sim
+toolset: analyst
+description: Seeded Monte Carlo over declared variables and an arithmetic expression → mean, p5/p50/p95.
+parameters:
+  type: object
+  properties:
+    variables:
+      type: object
+      minProperties: 1
+      maxProperties: 30
+      description: 'name → {dist: uniform(low,high) | normal(mean,sd) | triangular(low,high,mode) | choice(values,weights?)}'
+      additionalProperties:
+        type: object
+        properties:
+          dist: {type: string, enum: [uniform, normal, triangular, choice]}
+          low: {type: number}
+          high: {type: number}
+          mode: {type: number}
+          mean: {type: number}
+          sd: {type: number, minimum: 0}
+          values: {type: array, minItems: 1, maxItems: 100, items: {type: number}}
+          weights: {type: array, minItems: 1, maxItems: 100, items: {type: number, minimum: 0}}
+        required: [dist]
+        additionalProperties: false
+    expression: {type: string, minLength: 1, maxLength: 1000, description: 'Arithmetic over the variables: + - * / ** and min max abs round.'}
+    threshold: {type: number, description: Report P(expression > threshold).}
+    iterations: {type: integer, minimum: 1, maximum: 100000, default: 10000}
+    seed: {type: integer, default: 0}
+  required: [variables, expression]
+  additionalProperties: false
+exposure: deferred
+search_hint: monte carlo simulation scenario risk probability forecast analyst
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+interactive_only: false
+timeout_ms: 60000

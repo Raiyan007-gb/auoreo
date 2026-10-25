@@ -23,7 +23,7 @@ def teams_for(ctx: ToolContext) -> TeamsService:
 async def my_team(ctx: ToolContext) -> tuple[TeamsService, TeamRow, str]:
     """(service, the caller's team, the caller's name in it). Errors if not in a team."""
     teams = teams_for(ctx)
-    team = await teams.team_of(ctx.session_id)
+    team = await teams.team_for(ctx.session_id)
     if team is None:
         raise ToolError("this session is not in a team yet; delegate a task or call team_create first")
     return teams, team, await attempt(teams.name_in_team(team, ctx.session_id))
