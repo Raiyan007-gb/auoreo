@@ -20,6 +20,7 @@ from pydantic_settings import (
 )
 
 from auoreo.core.paths import home_dir
+from auoreo.policy.config import BanditSettings
 
 log = logging.getLogger(__name__)
 
@@ -303,6 +304,9 @@ class Settings(BaseSettings):
     `role=supervisor`) must pass `output_schema` on every spawn and its continue/spawn/finish
     decisions are logged as `team.decision` events. Off: `role=supervisor` is refused.
     Depth 3 (supervisor → worker → helper) stays opt-in via `teams_max_depth=3`."""
+    # --- W1-C
+    bandit: BanditSettings = Field(default_factory=BanditSettings)
+    """Model/effort policy (spec §12.5): contextual epsilon-greedy, default off."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

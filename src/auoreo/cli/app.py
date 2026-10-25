@@ -55,3 +55,8 @@ app.add_typer(
     curator.app, name="curator", help="Deterministic memory curation: run (--dry-run/--force), report."
 )
 app.add_typer(skill.app, name="skill", help="Skills: lint frontmatter and bodies.")
+
+# --- W1-C: model/effort bandit
+from auoreo.cli.commands import policy  # noqa: E402
+
+app.add_typer(policy.app, name="policy", help="Adaptive turn policies: bandit status, reset.")

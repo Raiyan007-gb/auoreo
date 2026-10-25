@@ -8,6 +8,7 @@ import { INSERT_COMMAND_EVENT } from "@/components/CommandPalette";
 import { ErrorNote } from "@/components/AppShell";
 import { QuestionForm } from "@/components/QuestionForm";
 import { MarkdownText } from "@/components/MarkdownLazy";
+import { PolicyChip } from "@/components/PolicyChip";
 import { SessionActions } from "@/components/SessionActions";
 import { ToolCard } from "@/components/ToolCard";
 import { VoiceButton } from "@/components/VoiceButton";
@@ -225,6 +226,7 @@ function SessionPage({ id }: { id: string }) {
               {t.state.model ?? t.session?.model}
             </Badge>
           )}
+          <PolicyChip choice={t.state.policy} />
           <Badge variant={running ? "info" : (STATUS_VARIANT[t.session?.status ?? ""] ?? "secondary")} data-testid="session-status">
             {running ? "running" : (t.session?.status ?? "…")}
           </Badge>

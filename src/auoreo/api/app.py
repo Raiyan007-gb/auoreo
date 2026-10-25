@@ -41,6 +41,7 @@ from auoreo.api.routers import kanban as kanban_router
 from auoreo.api.routers import openai_compat as openai_compat_router
 from auoreo.api.routers import ops as ops_router  # --- W0-B
 from auoreo.api.routers import plugins as plugins_router
+from auoreo.api.routers import policy as policy_router  # --- W1-C
 from auoreo.api.routers import rtc as rtc_router
 from auoreo.api.routers import suggestions as suggestions_router
 from auoreo.api.routers import teams as teams_router
@@ -81,6 +82,8 @@ ROUTERS = (
     # --- W0-C
     goals_router,
     suggestions_router,
+    # --- W1-C
+    policy_router,
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

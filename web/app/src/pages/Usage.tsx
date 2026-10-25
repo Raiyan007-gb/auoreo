@@ -3,8 +3,9 @@ import { RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAsync } from "@/hooks/useAsync";
@@ -61,6 +62,80 @@ function TotalsTable({
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/** `GET /api/policy/bandit` — the model/effort bandit (off unless `bandit.enabled`). */
+function PolicyCard() {
+  const status = useAsync(() => api.banditStatus(), []);
+  const [busy, setBusy] = useState(false);
+  const p = status.data;
+  const reset = async () => {
+    setBusy(true);
+    try {
+      await api.resetBandit();
+      status.reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card className="gap-2" data-testid="policy-card" aria-label="Model policy">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          Model policy
+          {p && (
+            <Badge variant={p.enabled ? "success" : "secondary"} data-testid="policy-state">
+              {p.enabled ? "learning" : "off"}
+            </Badge>
+          )}
+        </CardTitle>
+        <CardDescription>
+          Epsilon-greedy choice of model and effort per agent, applied at turn boundaries.{" "}
+          {p && !p.enabled && <>Turn it on with <code>bandit.enabled: true</code> in settings.json.</>}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        <ErrorNote error={status.error} />
+        {p && (
+          <>
+            <p className="text-xs text-muted-foreground">
+              ε {p.epsilon} − {p.epsilon_decay} per 100 turns (floor {p.min_epsilon}) · arms:{" "}
+              <span className="font-mono">{p.arms.map((a) => a.key).join(", ")}</span>
+            </p>
+            {p.stats.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No outcomes recorded yet.</p>
+            ) : (
+              <Table aria-label="Model policy arms">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Context</TableHead>
+                    <TableHead>Arm</TableHead>
+                    <TableHead className="text-right">Turns</TableHead>
+                    <TableHead className="text-right">Mean reward</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {p.stats.map((r) => (
+                    <TableRow key={`${r.context_key}/${r.key}`}>
+                      <TableCell className="font-mono text-xs">{r.context_key}</TableCell>
+                      <TableCell className="font-mono text-xs">{r.key}</TableCell>
+                      <TableCell className="text-right tabular-nums">{r.pulls}</TableCell>
+                      <TableCell className="text-right tabular-nums">{r.mean_reward.toFixed(3)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+            {p.stats.length > 0 && (
+              <Button variant="outline" size="sm" disabled={busy} onClick={() => void reset()}>
+                Reset learned stats
+              </Button>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -134,6 +209,7 @@ export function UsagePage() {
             )}
           </>
         )}
+        <PolicyCard />
       </div>
     </div>
   );

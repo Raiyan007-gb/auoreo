@@ -31,6 +31,7 @@ from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Finish, LLMRequest, TextDelta, ToolCall, Usage, tool_schema
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
+from auoreo.policy.bandit import BanditPolicy, Choice
 from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
 from auoreo.runtime.hooks import hooks_of
 from auoreo.runtime.inbox import Inbox, RunOptions
@@ -84,6 +85,7 @@ class AgentRunner:
         self.executor = ToolExecutor(services)
         self.usage = UsageLedger(services.db, services.gateway.price)
         self.compaction = CompactionService(services, self.usage)
+        self.policy = BanditPolicy(services, self.usage)  # --- W1-C (off unless bandit.enabled)
 
     # ------------------------------------------------------------ persistence
     async def load_history(self, session_id: str) -> list[dict[str, Any]]:
@@ -109,12 +111,15 @@ class AgentRunner:
         rt.history.append(message)
 
     # ------------------------------------------------------------------ turn
-    def _spec(self, rt: SessionRuntime, agent: str, model_override: str | None) -> AgentSpec:
+    def _spec(
+        self, rt: SessionRuntime, agent: str, model_override: str | None, choice: Choice | None = None
+    ) -> AgentSpec:
         from auoreo.gateway.resolve import resolve_model
 
         manifest = self.s.harness.agent(agent).manifest
+        agent_model = choice.arm.model if choice else manifest.model  # bandit arm, turn boundary only
         model = resolve_model(
-            self.s.settings, session_override=model_override or rt.model, agent_model=manifest.model
+            self.s.settings, session_override=model_override or rt.model, agent_model=agent_model
         )
         mode = manifest.permission_mode or self.s.settings.permission_mode
         return build_spec(self.s.harness, agent, model, mode)
@@ -150,7 +155,8 @@ class AgentRunner:
         agent = agent or rt.agent
         options = options or RunOptions()
         try:
-            spec = self._spec(rt, agent, model)
+            choice = await self.policy.begin(sid, agent, model or rt.model, run_id, text)
+            spec = self._spec(rt, agent, model, choice)
         except (KeyError, ValueError) as exc:
             await self.s.emit(sid, "run.failed", {"run_id": run_id, "code": "CONFIG", "message": str(exc)})
             return TurnResult(run_id, "failed", "", {"code": "CONFIG", "message": str(exc)})
@@ -209,6 +215,7 @@ class AgentRunner:
             result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_msg, options)
             span.set("status", result.status)
             obs.count("run_completed_total", status=result.status)
+        await self.policy.finish(sid, run_id, result.status)
         if self.s.memory is not None and result.text:
             await self.s.memory.record_message(sid, "assistant", result.text)
         await self.s.set_session_status(sid, "idle")
@@ -426,6 +433,7 @@ class AgentRunner:
             tool_choice="none" if last_step else "auto",
             temperature=temperature,
             omit_fields=tuple(variant.omit_fields) if variant else (),
+            reasoning_effort=self.policy.effort(run_id, spec.agent.manifest.effort),
             metadata={"session_id": rt.session_id, "run_id": run_id},
         )
 
@@ -445,8 +453,9 @@ class AgentRunner:
         calls: list[ToolCall] = []
         scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
         purpose = str(request.metadata.get("purpose", "turn"))
-        async for item in obs.traced_stream(
-            self.s.gateway.stream(request), model=request.model, purpose=purpose
+        meter = self.usage.meter(sid, run_id, request.model)  # latency + outcome per call
+        async for item in meter.wrap(
+            obs.traced_stream(self.s.gateway.stream(request), model=request.model, purpose=purpose)
         ):
             match item:
                 case TextDelta(text=t):
@@ -456,7 +465,7 @@ class AgentRunner:
                 case ToolCall():
                     calls.append(item)
                 case Usage():
-                    await self.usage.record(sid, run_id, request.model, item)
+                    await meter.record(item)
                     await self.s.emit(
                         sid,
                         "usage",
