@@ -30,7 +30,13 @@ async function main() {
   const home = mkdtempSync(join(tmpdir(), "auoreo-e2e-"));
   const server = spawn("uv", ["run", "auoreo", "serve", "--port", "0"], {
     cwd: repoRoot,
-    env: { ...process.env, AUOREO_HOME: home, AUOREO_GATEWAY: "fake" },
+    // fake stt/tts keep voice flows (meetings e2e) keyless and model-free
+    env: {
+      ...process.env,
+      AUOREO_HOME: home,
+      AUOREO_GATEWAY: "fake",
+      AUOREO_BACKENDS: '{"stt":"fake","tts":"fake"}',
+    },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const stop = () => {

@@ -17,14 +17,17 @@ T = TypeVar("T", bound="VoiceTranscription")
 
 @_attrs_define
 class VoiceTranscription:
-    """
-    Attributes:
-        backend (str): Selected stt backend
-        duration_s (float): Duration of the normalized audio
-        segments (list[VoiceSegment]):
-        text (str):
-        language (None | str | Unset):
-        run_id (None | str | Unset): Followup run when `session_id` was given
+    """`POST /api/voice/transcribe` response. Same OpenAPI name as the M4c model it extends
+    (only this one is referenced), so existing clients keep their `VoiceTranscription` type.
+
+        Attributes:
+            backend (str): Selected stt backend
+            duration_s (float): Duration of the normalized audio
+            segments (list[VoiceSegment]):
+            text (str):
+            language (None | str | Unset):
+            run_id (None | str | Unset): Followup run when `session_id` was given
+            translation (None | str | Unset): Present when `translate_to` was given
     """
 
     backend: str
@@ -33,6 +36,7 @@ class VoiceTranscription:
     text: str
     language: None | str | Unset = UNSET
     run_id: None | str | Unset = UNSET
+    translation: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -59,6 +63,12 @@ class VoiceTranscription:
         else:
             run_id = self.run_id
 
+        translation: None | str | Unset
+        if isinstance(self.translation, Unset):
+            translation = UNSET
+        else:
+            translation = self.translation
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -73,6 +83,8 @@ class VoiceTranscription:
             field_dict["language"] = language
         if run_id is not UNSET:
             field_dict["run_id"] = run_id
+        if translation is not UNSET:
+            field_dict["translation"] = translation
 
         return field_dict
 
@@ -112,6 +124,15 @@ class VoiceTranscription:
 
         run_id = _parse_run_id(d.pop("run_id", UNSET))
 
+        def _parse_translation(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        translation = _parse_translation(d.pop("translation", UNSET))
+
         voice_transcription = cls(
             backend=backend,
             duration_s=duration_s,
@@ -119,6 +140,7 @@ class VoiceTranscription:
             text=text,
             language=language,
             run_id=run_id,
+            translation=translation,
         )
 
         voice_transcription.additional_properties = d

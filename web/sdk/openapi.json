@@ -657,12 +657,39 @@
               }
             ],
             "title": "Session Id"
+          },
+          "translate_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "BCP-47 tag: also return `translation`",
+            "title": "Translate To"
           }
         },
         "required": [
           "file"
         ],
         "title": "Body_transcribe_api_voice_transcribe_post",
+        "type": "object"
+      },
+      "Body_upload_audio_api_voice_meetings__meeting_id__audio_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "Audio chunk or a full recording (wav, webm, ogg, mp3, \u2026)",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_audio_api_voice_meetings__meeting_id__audio_post",
         "type": "object"
       },
       "BridgeDelivered": {
@@ -2233,6 +2260,486 @@
           "created_at"
         ],
         "title": "MailMessage",
+        "type": "object"
+      },
+      "MeetingAttachRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "rtc_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Rtc Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rtc_id"
+        ],
+        "title": "MeetingAttachRequest",
+        "type": "object"
+      },
+      "MeetingChunkInfo": {
+        "properties": {
+          "duration_s": {
+            "title": "Duration S",
+            "type": "number"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "meeting_id": {
+            "title": "Meeting Id",
+            "type": "string"
+          },
+          "total_s": {
+            "title": "Total S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "meeting_id",
+          "index",
+          "duration_s",
+          "total_s"
+        ],
+        "title": "MeetingChunkInfo",
+        "type": "object"
+      },
+      "MeetingDetail": {
+        "properties": {
+          "chunks": {
+            "default": 0,
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_s": {
+            "default": 0.0,
+            "title": "Duration S",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finalised_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finalised At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ingested": {
+            "default": false,
+            "title": "Ingested",
+            "type": "boolean"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "live": {
+            "default": false,
+            "description": "An RTC peer is attached (live utterances)",
+            "title": "Live",
+            "type": "boolean"
+          },
+          "markdown": {
+            "default": "",
+            "title": "Markdown",
+            "type": "string"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "speak": {
+            "default": false,
+            "title": "Speak",
+            "type": "boolean"
+          },
+          "speakers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Speakers",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "recording",
+              "finalising",
+              "finalised",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Session Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "transcript": {
+            "items": {
+              "$ref": "#/components/schemas/MeetingSegment"
+            },
+            "title": "Transcript",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "created_at"
+        ],
+        "title": "MeetingDetail",
+        "type": "object"
+      },
+      "MeetingInfo": {
+        "properties": {
+          "chunks": {
+            "default": 0,
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_s": {
+            "default": 0.0,
+            "title": "Duration S",
+            "type": "number"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finalised_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finalised At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ingested": {
+            "default": false,
+            "title": "Ingested",
+            "type": "boolean"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "live": {
+            "default": false,
+            "description": "An RTC peer is attached (live utterances)",
+            "title": "Live",
+            "type": "boolean"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "speak": {
+            "default": false,
+            "title": "Speak",
+            "type": "boolean"
+          },
+          "speakers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Speakers",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "recording",
+              "finalising",
+              "finalised",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Session Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "created_at"
+        ],
+        "title": "MeetingInfo",
+        "type": "object"
+      },
+      "MeetingSegment": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "end": {
+            "title": "End",
+            "type": "number"
+          },
+          "speaker": {
+            "description": "Diarization label, e.g. SPEAKER_00",
+            "title": "Speaker",
+            "type": "string"
+          },
+          "start": {
+            "title": "Start",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Tone classifier label for the utterance",
+            "title": "Tone"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "speaker",
+          "text"
+        ],
+        "title": "MeetingSegment",
+        "type": "object"
+      },
+      "MeetingStartRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 35,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "STT language hint (ISO-639-1)",
+            "title": "Language"
+          },
+          "num_speakers": {
+            "anyOf": [
+              {
+                "maximum": 32.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Known speaker count",
+            "title": "Num Speakers"
+          },
+          "rtc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Live mode: append this RTC peer's utterances",
+            "title": "Rtc Id"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Session for the meeting events",
+            "title": "Session Id"
+          },
+          "speak": {
+            "default": false,
+            "description": "P2: the agent may speak (only with an attached RTC peer)",
+            "title": "Speak",
+            "type": "boolean"
+          },
+          "title": {
+            "default": "Meeting",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "MeetingStartRequest",
+        "type": "object"
+      },
+      "MeetingStarted": {
+        "properties": {
+          "meeting_id": {
+            "title": "Meeting Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "meeting_id"
+        ],
+        "title": "MeetingStarted",
+        "type": "object"
+      },
+      "MeetingSummarizeStarted": {
+        "properties": {
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "session_id"
+        ],
+        "title": "MeetingSummarizeStarted",
         "type": "object"
       },
       "MemoryFact": {
@@ -4356,6 +4863,7 @@
         "type": "object"
       },
       "VoiceTranscription": {
+        "description": "`POST /api/voice/transcribe` response. Same OpenAPI name as the M4c model it extends\n(only this one is referenced), so existing clients keep their `VoiceTranscription` type.",
         "properties": {
           "backend": {
             "description": "Selected stt backend",
@@ -4400,6 +4908,18 @@
           "text": {
             "title": "Text",
             "type": "string"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present when `translate_to` was given",
+            "title": "Translation"
           }
         },
         "required": [
@@ -12207,6 +12727,706 @@
         ]
       }
     },
+    "/api/voice/meetings": {
+      "get": {
+        "description": "All meetings, newest first (transcripts omitted; `GET /{id}` has them).",
+        "operationId": "list_meetings_api_voice_meetings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MeetingInfo"
+                  },
+                  "title": "Response List Meetings Api Voice Meetings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Meetings",
+        "tags": [
+          "voice"
+        ]
+      },
+      "post": {
+        "description": "Start a listen-only meeting (`speak: true` lets the agent answer over an attached RTC peer).",
+        "operationId": "start_meeting_api_voice_meetings_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeetingStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown meeting"
+          },
+          "409": {
+            "description": "The meeting is not in a state that allows this"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Voice disabled or a backend is not ready"
+          }
+        },
+        "summary": "Start Meeting",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/voice/meetings/{meeting_id}": {
+      "get": {
+        "operationId": "get_meeting_api_voice_meetings__meeting_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "title": "Meeting Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown meeting"
+          },
+          "409": {
+            "description": "The meeting is not in a state that allows this"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Voice disabled or a backend is not ready"
+          }
+        },
+        "summary": "Get Meeting",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/voice/meetings/{meeting_id}/attach": {
+      "post": {
+        "description": "Live mode: utterances from this RTC peer are appended instead of submitted as turns.",
+        "operationId": "attach_peer_api_voice_meetings__meeting_id__attach_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "title": "Meeting Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeetingAttachRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown meeting"
+          },
+          "409": {
+            "description": "The meeting is not in a state that allows this"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Voice disabled or a backend is not ready"
+          }
+        },
+        "summary": "Attach Peer",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/voice/meetings/{meeting_id}/audio": {
+      "post": {
+        "description": "Append audio to a recording meeting (normalized to 16 kHz mono WAV).",
+        "operationId": "upload_audio_api_voice_meetings__meeting_id__audio_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "title": "Meeting Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_audio_api_voice_meetings__meeting_id__audio_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingChunkInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown meeting"
+          },
+          "409": {
+            "description": "The meeting is not in a state that allows this"
+          },
+          "413": {
+            "description": "Chunk over 25 MB"
+          },
+          "422": {
+            "description": "Undecodable"
+          },
+          "503": {
+            "description": "Voice disabled or a backend is not ready"
+          }
+        },
+        "summary": "Upload Audio",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/voice/meetings/{meeting_id}/stop": {
+      "post": {
+        "description": "Finalise: VAD \u2192 diarize \u2192 STT per speaker turn \u2192 redacted, speaker-labelled transcript.",
+        "operationId": "stop_meeting_api_voice_meetings__meeting_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "title": "Meeting Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown meeting"
+          },
+          "409": {
+            "description": "The meeting is not in a state that allows this"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Voice disabled or a backend is not ready"
+          }
+        },
+        "summary": "Stop Meeting",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/api/voice/meetings/{meeting_id}/summarize": {
+      "post": {
+        "description": "Run the `meeting-summary` workflow in a new session (watch `run_id` on `/api/events`).",
+        "operationId": "summarize_meeting_api_voice_meetings__meeting_id__summarize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "title": "Meeting Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeetingSummarizeStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown meeting"
+          },
+          "409": {
+            "description": "The meeting is not in a state that allows this"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Voice disabled or a backend is not ready"
+          }
+        },
+        "summary": "Summarize Meeting",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
     "/api/voice/speak": {
       "post": {
         "description": "Text (\u2264 5000 chars) \u2192 audio in the backend's format, or `format` via ffmpeg.",
@@ -12377,7 +13597,7 @@
     },
     "/api/voice/transcribe": {
       "post": {
-        "description": "Normalize \u2192 VAD gate \u2192 STT. With `session_id` the text is also submitted as a followup.",
+        "description": "Normalize \u2192 VAD gate \u2192 STT. With `session_id` the text is also submitted as a followup;\nwith `translate_to` the transcript is also translated (`translation`).",
         "operationId": "transcribe_api_voice_transcribe_post",
         "parameters": [
           {
@@ -12410,6 +13630,22 @@
                 }
               ],
               "title": "Session Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "translate_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Translate To"
             }
           },
           {

@@ -350,6 +350,24 @@ class Settings(BaseSettings):
     trace_file: Path | None = None
     """`AUOREO_TRACE_FILE`: write a Chrome/Perfetto Trace-Event JSON file (works with OTel off)."""
 
+    # --- F4
+    voice_meeting_keep_audio: bool = False
+    """Keep a meeting's uploaded audio chunks after finalise (default: deleted)."""
+    voice_meeting_ingest: bool = True
+    """Ingest each finalised (redacted) meeting transcript into memory as a document."""
+    voice_diarize_segmentation_model: Path | None = None
+    """`diarize/sherpa_onnx`: pyannote segmentation-3.0 `model.onnx` path."""
+    voice_diarize_embedding_model: Path | None = None
+    """`diarize/sherpa_onnx`: speaker-embedding `.onnx` path."""
+    voice_diarize_num_speakers: int | None = Field(default=None, ge=1, le=32)
+    """Known speaker count for diarization (unset = estimate by clustering threshold)."""
+    voice_diarize_threshold: float = Field(default=0.5, gt=0.0, le=2.0)
+    """`diarize/sherpa_onnx` clustering threshold when the speaker count is unknown."""
+    tone_enabled: bool = True
+    """Classify the user's tone each turn and render it as `{{tone}}` in the context block."""
+    tone_adaptive: bool = False
+    """Affect-adaptive guidance line when the tone is frustrated/confused (confidence ≥ 0.7)."""
+
 
 class _JsonFileSource(PydanticBaseSettingsSource):
     """Reads `<home>/settings.json`; malformed file warns and is ignored."""

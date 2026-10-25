@@ -1,0 +1,12 @@
+kind: diarize
+name: fake
+description: >-
+  Deterministic heuristic diarizer - energy-gap segmentation (30 ms RMS frames, a gap of
+  >= 0.3 s ends a segment) and nearest-profile speaker labels from loudness + zero-crossing
+  rate. No model; fine for two-tone test recordings, not for real voices (use sherpa_onnx).
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

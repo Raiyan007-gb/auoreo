@@ -1,0 +1,14 @@
+kind: diarize
+name: pyannote
+description: >-
+  pyannote.audio Pipeline "pyannote/speaker-diarization-community-1" (the GPU meeting path;
+  pair it with stt/faster_whisper for a WhisperX-style result). The model is gated
+  (CC-BY-4.0): accept its conditions on Hugging Face and store the token with
+  `auoreo secrets set HF_TOKEN`. A CUDA GPU is recommended (CPU works, slowly).
+  Needs `pip install pyannote.audio`.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT (code), CC-BY-4.0 gated (community-1 weights)
+posture: ok

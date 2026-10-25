@@ -1326,6 +1326,127 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voice/meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Meetings
+         * @description All meetings, newest first (transcripts omitted; `GET /{id}` has them).
+         */
+        get: operations["list_meetings_api_voice_meetings_get"];
+        put?: never;
+        /**
+         * Start Meeting
+         * @description Start a listen-only meeting (`speak: true` lets the agent answer over an attached RTC peer).
+         */
+        post: operations["start_meeting_api_voice_meetings_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/meetings/{meeting_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Meeting */
+        get: operations["get_meeting_api_voice_meetings__meeting_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/meetings/{meeting_id}/attach": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach Peer
+         * @description Live mode: utterances from this RTC peer are appended instead of submitted as turns.
+         */
+        post: operations["attach_peer_api_voice_meetings__meeting_id__attach_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/meetings/{meeting_id}/audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Audio
+         * @description Append audio to a recording meeting (normalized to 16 kHz mono WAV).
+         */
+        post: operations["upload_audio_api_voice_meetings__meeting_id__audio_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/meetings/{meeting_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop Meeting
+         * @description Finalise: VAD → diarize → STT per speaker turn → redacted, speaker-labelled transcript.
+         */
+        post: operations["stop_meeting_api_voice_meetings__meeting_id__stop_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/meetings/{meeting_id}/summarize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Summarize Meeting
+         * @description Run the `meeting-summary` workflow in a new session (watch `run_id` on `/api/events`).
+         */
+        post: operations["summarize_meeting_api_voice_meetings__meeting_id__summarize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voice/speak": {
         parameters: {
             query?: never;
@@ -1377,7 +1498,8 @@ export interface paths {
         put?: never;
         /**
          * Transcribe
-         * @description Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup.
+         * @description Normalize → VAD gate → STT. With `session_id` the text is also submitted as a followup;
+         *     with `translate_to` the transcript is also translated (`translation`).
          */
         post: operations["transcribe_api_voice_transcribe_post"];
         delete?: never;
@@ -1793,6 +1915,19 @@ export interface components {
             language?: string | null;
             /** Session Id */
             session_id?: string | null;
+            /**
+             * Translate To
+             * @description BCP-47 tag: also return `translation`
+             */
+            translate_to?: string | null;
+        };
+        /** Body_upload_audio_api_voice_meetings__meeting_id__audio_post */
+        Body_upload_audio_api_voice_meetings__meeting_id__audio_post: {
+            /**
+             * File
+             * @description Audio chunk or a full recording (wav, webm, ogg, mp3, …)
+             */
+            file: string;
         };
         /** BridgeDelivered */
         BridgeDelivered: {
@@ -2427,6 +2562,210 @@ export interface components {
             text: string;
             /** Type */
             type: string;
+        };
+        /** MeetingAttachRequest */
+        MeetingAttachRequest: {
+            /** Rtc Id */
+            rtc_id: string;
+        };
+        /** MeetingChunkInfo */
+        MeetingChunkInfo: {
+            /** Duration S */
+            duration_s: number;
+            /** Index */
+            index: number;
+            /** Meeting Id */
+            meeting_id: string;
+            /** Total S */
+            total_s: number;
+        };
+        /** MeetingDetail */
+        MeetingDetail: {
+            /**
+             * Chunks
+             * @default 0
+             */
+            chunks: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Duration S
+             * @default 0
+             */
+            duration_s: number;
+            /** Error */
+            error?: string | null;
+            /** Finalised At */
+            finalised_at?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Ingested
+             * @default false
+             */
+            ingested: boolean;
+            /** Language */
+            language?: string | null;
+            /**
+             * Live
+             * @description An RTC peer is attached (live utterances)
+             * @default false
+             */
+            live: boolean;
+            /**
+             * Markdown
+             * @default
+             */
+            markdown: string;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Speak
+             * @default false
+             */
+            speak: boolean;
+            /** Speakers */
+            speakers?: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "recording" | "finalising" | "finalised" | "failed";
+            /** Summary */
+            summary?: string | null;
+            /** Summary Session Id */
+            summary_session_id?: string | null;
+            /** Title */
+            title: string;
+            /** Transcript */
+            transcript?: components["schemas"]["MeetingSegment"][];
+        };
+        /** MeetingInfo */
+        MeetingInfo: {
+            /**
+             * Chunks
+             * @default 0
+             */
+            chunks: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Duration S
+             * @default 0
+             */
+            duration_s: number;
+            /** Error */
+            error?: string | null;
+            /** Finalised At */
+            finalised_at?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Ingested
+             * @default false
+             */
+            ingested: boolean;
+            /** Language */
+            language?: string | null;
+            /**
+             * Live
+             * @description An RTC peer is attached (live utterances)
+             * @default false
+             */
+            live: boolean;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Speak
+             * @default false
+             */
+            speak: boolean;
+            /** Speakers */
+            speakers?: string[];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "recording" | "finalising" | "finalised" | "failed";
+            /** Summary */
+            summary?: string | null;
+            /** Summary Session Id */
+            summary_session_id?: string | null;
+            /** Title */
+            title: string;
+        };
+        /** MeetingSegment */
+        MeetingSegment: {
+            /** Confidence */
+            confidence?: number | null;
+            /** End */
+            end: number;
+            /**
+             * Speaker
+             * @description Diarization label, e.g. SPEAKER_00
+             */
+            speaker: string;
+            /** Start */
+            start: number;
+            /** Text */
+            text: string;
+            /**
+             * Tone
+             * @description Tone classifier label for the utterance
+             */
+            tone?: string | null;
+        };
+        /** MeetingStartRequest */
+        MeetingStartRequest: {
+            /**
+             * Language
+             * @description STT language hint (ISO-639-1)
+             */
+            language?: string | null;
+            /**
+             * Num Speakers
+             * @description Known speaker count
+             */
+            num_speakers?: number | null;
+            /**
+             * Rtc Id
+             * @description Live mode: append this RTC peer's utterances
+             */
+            rtc_id?: string | null;
+            /**
+             * Session Id
+             * @description Session for the meeting events
+             */
+            session_id?: string | null;
+            /**
+             * Speak
+             * @description P2: the agent may speak (only with an attached RTC peer)
+             * @default false
+             */
+            speak: boolean;
+            /**
+             * Title
+             * @default Meeting
+             */
+            title: string;
+        };
+        /** MeetingStarted */
+        MeetingStarted: {
+            /** Meeting Id */
+            meeting_id: string;
+        };
+        /** MeetingSummarizeStarted */
+        MeetingSummarizeStarted: {
+            /** Run Id */
+            run_id: string;
+            /** Session Id */
+            session_id: string;
         };
         /** MemoryFact */
         MemoryFact: {
@@ -3331,7 +3670,11 @@ export interface components {
             /** Enabled */
             enabled: boolean;
         };
-        /** VoiceTranscription */
+        /**
+         * VoiceTranscription
+         * @description `POST /api/voice/transcribe` response. Same OpenAPI name as the M4c model it extends
+         *     (only this one is referenced), so existing clients keep their `VoiceTranscription` type.
+         */
         VoiceTranscription: {
             /**
              * Backend
@@ -3354,6 +3697,11 @@ export interface components {
             segments: components["schemas"]["VoiceSegment"][];
             /** Text */
             text: string;
+            /**
+             * Translation
+             * @description Present when `translate_to` was given
+             */
+            translation?: string | null;
         };
         /** WebhookRouteInfo */
         WebhookRouteInfo: {
@@ -6475,6 +6823,404 @@ export interface operations {
             };
         };
     };
+    list_meetings_api_voice_meetings_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_meeting_api_voice_meetings_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeetingStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingStarted"];
+                };
+            };
+            /** @description Unknown meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The meeting is not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Voice disabled or a backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_meeting_api_voice_meetings__meeting_id__get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                meeting_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingDetail"];
+                };
+            };
+            /** @description Unknown meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The meeting is not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Voice disabled or a backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    attach_peer_api_voice_meetings__meeting_id__attach_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                meeting_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeetingAttachRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingInfo"];
+                };
+            };
+            /** @description Unknown meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The meeting is not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Voice disabled or a backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    upload_audio_api_voice_meetings__meeting_id__audio_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                meeting_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_audio_api_voice_meetings__meeting_id__audio_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingChunkInfo"];
+                };
+            };
+            /** @description Unknown meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The meeting is not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Chunk over 25 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Undecodable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voice disabled or a backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stop_meeting_api_voice_meetings__meeting_id__stop_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                meeting_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingDetail"];
+                };
+            };
+            /** @description Unknown meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The meeting is not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Voice disabled or a backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    summarize_meeting_api_voice_meetings__meeting_id__summarize_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                meeting_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeetingSummarizeStarted"];
+                };
+            };
+            /** @description Unknown meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The meeting is not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Voice disabled or a backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     speak_api_voice_speak_post: {
         parameters: {
             query?: {
@@ -6561,6 +7307,7 @@ export interface operations {
             query?: {
                 language?: string | null;
                 session_id?: string | null;
+                translate_to?: string | null;
                 token?: string | null;
             };
             header?: {

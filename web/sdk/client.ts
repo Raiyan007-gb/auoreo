@@ -248,6 +248,7 @@ export function createClient(opts: ClientOptions = {}) {
     ...statusMethods(request, base, token),
     ...goalsApi(request), // --- W0-C (block at the end of this file)
     ...policyApi(request), // --- W1-C (block at the end of this file)
+    ...meetingsApi(request, base, token), // --- F4 (block at the end of this file)
 
     subscribeEvents: (o: SubscribeOptions, onEvent: (e: ServerEvent) => void, h?: StreamHandlers) =>
       subscribeEvents({ ...o, baseUrl: base, token: token() }, onEvent, h),
@@ -408,5 +409,52 @@ function policyApi(request: RequestFn) {
     /** No `context` resets every context. Settings are unchanged. */
     resetBandit: (context?: string) =>
       request<BanditResetResult>("POST", "/api/policy/bandit/reset", { body: { context: context ?? null } }),
+  };
+}
+
+// =================================================================== --- F4 meetings
+export type MeetingInfo = S["MeetingInfo"];
+export type MeetingDetail = S["MeetingDetail"];
+export type MeetingSegment = S["MeetingSegment"];
+export type MeetingStatus = MeetingInfo["status"];
+export type MeetingStartRequest = S["MeetingStartRequest"];
+export type MeetingChunkInfo = S["MeetingChunkInfo"];
+export type MeetingSummarizeStarted = S["MeetingSummarizeStarted"];
+
+/** `/api/voice/meetings`: start → upload chunks (or one recording) → stop (finalise) → summarize. */
+function meetingsApi(request: RequestFn, base: string, token: () => string | null) {
+  return {
+    listMeetings: () => request<MeetingInfo[]>("GET", "/api/voice/meetings"),
+    getMeeting: (id: string) => request<MeetingDetail>("GET", `/api/voice/meetings/${enc(id)}`),
+    startMeeting: (body: Partial<MeetingStartRequest> = {}) =>
+      request<{ meeting_id: string }>("POST", "/api/voice/meetings", { body }),
+    /** Multipart upload; chunks are appended in order (a full recording works too). */
+    uploadMeetingAudio: async (id: string, audio: Blob, filename = "chunk.wav") => {
+      const form = new FormData();
+      form.append("file", audio, filename);
+      const headers: Record<string, string> = { Accept: "application/json" };
+      const t = token();
+      if (t) headers.Authorization = `Bearer ${t}`;
+      const res = await fetch(`${base}/api/voice/meetings/${enc(id)}/audio`, {
+        method: "POST",
+        body: form,
+        headers,
+      });
+      if (!res.ok) {
+        let detail: unknown = res.statusText;
+        try {
+          detail = ((await res.json()) as { detail?: unknown }).detail ?? detail;
+        } catch {
+          /* non-JSON error body */
+        }
+        throw new ApiError(res.status, detail);
+      }
+      return (await res.json()) as MeetingChunkInfo;
+    },
+    attachMeetingPeer: (id: string, rtcId: string) =>
+      request<MeetingInfo>("POST", `/api/voice/meetings/${enc(id)}/attach`, { body: { rtc_id: rtcId } }),
+    stopMeeting: (id: string) => request<MeetingDetail>("POST", `/api/voice/meetings/${enc(id)}/stop`),
+    summarizeMeeting: (id: string) =>
+      request<MeetingSummarizeStarted>("POST", `/api/voice/meetings/${enc(id)}/summarize`),
   };
 }

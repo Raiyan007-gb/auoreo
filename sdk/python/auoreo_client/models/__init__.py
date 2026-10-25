@@ -30,6 +30,9 @@ from .board_artifact import BoardArtifact
 from .board_entry import BoardEntry
 from .board_put import BoardPut
 from .body_transcribe_api_voice_transcribe_post import BodyTranscribeApiVoiceTranscribePost
+from .body_upload_audio_api_voice_meetings_meeting_id_audio_post import (
+    BodyUploadAudioApiVoiceMeetingsMeetingIdAudioPost,
+)
 from .bridge_delivered import BridgeDelivered
 from .bridge_envelope import BridgeEnvelope
 from .cancel_api_sessions_session_id_cancel_post_response_cancel_api_sessions_session_id_cancel_post import (
@@ -86,6 +89,16 @@ from .list_goals_api_goals_get_status_type_0 import ListGoalsApiGoalsGetStatusTy
 from .list_suggestions_api_suggestions_get_status_type_0 import ListSuggestionsApiSuggestionsGetStatusType0
 from .list_tasks_api_kanban_get_status_type_0 import ListTasksApiKanbanGetStatusType0
 from .mail_message import MailMessage
+from .meeting_attach_request import MeetingAttachRequest
+from .meeting_chunk_info import MeetingChunkInfo
+from .meeting_detail import MeetingDetail
+from .meeting_detail_status import MeetingDetailStatus
+from .meeting_info import MeetingInfo
+from .meeting_info_status import MeetingInfoStatus
+from .meeting_segment import MeetingSegment
+from .meeting_start_request import MeetingStartRequest
+from .meeting_started import MeetingStarted
+from .meeting_summarize_started import MeetingSummarizeStarted
 from .memory_fact import MemoryFact
 from .memory_fact_page import MemoryFactPage
 from .memory_file import MemoryFile
@@ -192,6 +205,7 @@ __all__ = (
     "BoardEntry",
     "BoardPut",
     "BodyTranscribeApiVoiceTranscribePost",
+    "BodyUploadAudioApiVoiceMeetingsMeetingIdAudioPost",
     "BridgeDelivered",
     "BridgeEnvelope",
     "CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost",
@@ -246,6 +260,16 @@ __all__ = (
     "ListSuggestionsApiSuggestionsGetStatusType0",
     "ListTasksApiKanbanGetStatusType0",
     "MailMessage",
+    "MeetingAttachRequest",
+    "MeetingChunkInfo",
+    "MeetingDetail",
+    "MeetingDetailStatus",
+    "MeetingInfo",
+    "MeetingInfoStatus",
+    "MeetingSegment",
+    "MeetingStarted",
+    "MeetingStartRequest",
+    "MeetingSummarizeStarted",
     "MemoryFact",
     "MemoryFactPage",
     "MemoryFile",

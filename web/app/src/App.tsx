@@ -20,6 +20,7 @@ import { TeamsPage } from "@/pages/Teams";
 import { AuditPage } from "@/pages/Audit";
 import { DoctorPage } from "@/pages/Doctor";
 import { WelcomePage } from "@/pages/Welcome";
+import { MeetingsPage } from "@/pages/Meetings"; // --- F4
 
 export function App() {
   return (
@@ -47,6 +48,7 @@ export function App() {
               {/* --- end W0-A */}
               <Route path="welcome" element={<WelcomePage />} />
               <Route path="goals" element={<GoalsPage />} /> {/* --- W0-C */}
+              <Route path="meetings" element={<MeetingsPage />} /> {/* --- F4 */}
               <Route path="*" element={<div className="p-4"><EmptyState title="Page not found" /></div>} />
             </Route>
           </Routes>

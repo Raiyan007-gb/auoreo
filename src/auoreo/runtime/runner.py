@@ -39,6 +39,7 @@ from auoreo.runtime.multimodal import prepare_messages
 from auoreo.runtime.tool_round import ABORTED_BEFORE_DISPATCH, tool_round
 from auoreo.tools.context import SessionState, ToolContext
 from auoreo.tools.executor import ToolExecutor, ToolOutcome
+from auoreo.voice.tone import tone_of
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -191,8 +192,9 @@ class AgentRunner:
                 memory_block = await self.s.memory.context_block(text, limit=top_k)
             except Exception:  # recall must never fail the turn
                 log.exception("memory recall failed")
+        st = self.s.settings
         context = render_context(
-            spec, self.s.cwd, engine.mode, memory_block, locale=self.s.settings.locale or ""
+            spec, self.s.cwd, engine.mode, memory_block, st.locale or "", tone_of(text, st)
         )
 
         async def question(qs: list[dict[str, Any]]) -> dict[str, Any]:
