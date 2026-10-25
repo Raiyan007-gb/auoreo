@@ -151,6 +151,38 @@ class McpServerManifest(_Strict):
     exposure: Literal["direct", "deferred"] = "deferred"
 
 
+class BackendManifest(_Strict):
+    """`backends/<kind>/<name>/backend.yaml`. A backend implements one capability kind
+    (capture, browser, stt, tts, …) behind the ABC in `src/auoreo/backends/<kind>.py`."""
+
+    kind: str = Field(pattern=NAME_RE)
+    name: str = Field(pattern=NAME_RE)
+    description: str = Field(min_length=1)
+    impl: str = "impl.py:Backend"
+    """`<file>.py:<ClassName>` inside the backend folder; constructed as `Class(settings)`."""
+    default: bool = False
+    """Selected for its kind when settings.backends has no entry (at most one per kind)."""
+    requires_env: list[str] = Field(default_factory=list)
+    requires_binaries: list[str] = Field(default_factory=list)
+    """Executables that must be on PATH; reported by `auoreo doctor`."""
+    license: str = ""
+    posture: Literal["ok", "gpl-isolated", "nc-opt-in"] = "ok"
+    """License posture surfaced by doctor (spec §13): GPL code runs in a subprocess only;
+    non-commercial weights need an explicit opt-in."""
+    override: bool = False
+
+    @field_validator("impl")
+    @classmethod
+    def _impl_ref(cls, v: str) -> str:
+        if not re.fullmatch(r"[A-Za-z0-9_./-]+\.py:[A-Za-z_][A-Za-z0-9_]*", v) or ".." in v:
+            raise ValueError("impl must look like 'impl.py:Backend' inside the backend folder")
+        return v
+
+    @property
+    def key(self) -> str:
+        return f"{self.kind}/{self.name}"
+
+
 class PermissionFile(_Strict):
     """`permissions/<name>.yaml`."""
 

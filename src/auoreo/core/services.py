@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -31,6 +32,9 @@ if TYPE_CHECKING:
     from auoreo.runtime.coordinator import SessionRunCoordinator
 
 
+log = logging.getLogger(__name__)
+
+
 @dataclass
 class Services:
     settings: Settings
@@ -51,6 +55,7 @@ class Services:
     mcp: McpBridge | None = None
 
     def __post_init__(self) -> None:
+        self._backends: dict[str, Any] = {}
         self.approvals = ApprovalBroker(self.emit, self.settings.approval_timeout_s)
         self.questions = QuestionBroker(self.emit, self.settings.approval_timeout_s)
         self.connections = ConnectionManager()
@@ -105,8 +110,37 @@ class Services:
             await svc.mcp.start()
         return svc
 
+    # ------------------------------------------------------------ backends
+    def backend(self, kind: str) -> Any:
+        """Selected backend instance for `kind`, constructed once per process."""
+        if kind in self._backends:
+            return self._backends[kind]
+        chosen = self.settings.backends.get(kind)
+        bdef = self.harness.select_backend(kind, chosen)
+        if bdef is None:
+            raise KeyError(
+                f"no '{kind}' backend selected; add backends/{kind}/<name>/ or set settings.backends.{kind}"
+            )
+        inst = bdef.load()(self.settings)
+        self._backends[kind] = inst
+        return inst
+
+    async def close_backends(self) -> None:
+        for kind, inst in list(self._backends.items()):
+            close = getattr(inst, "close", None)
+            if close is None:
+                continue
+            try:
+                res = close()
+                if hasattr(res, "__await__"):
+                    await res
+            except Exception:  # shutdown must not fail on a backend
+                log.exception("backend %s failed to close", kind)
+        self._backends.clear()
+
     async def close(self) -> None:
         await self.connections.close_all(1001)  # before the DB goes away
+        await self.close_backends()
         await self.coordinator.shutdown()
         if self.mcp is not None:
             await self.mcp.stop()

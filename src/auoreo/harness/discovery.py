@@ -23,6 +23,7 @@ LAYOUT: dict[str, tuple[str, str]] = {
     "families": ("file", "*.md"),  # lives at prompts/families/
     "variants": ("file", "variants.yaml"),  # lives at prompts/variants.yaml
     "commands": ("file", "*.md"),  # slash commands: `/name args` in a chat message
+    "backends": ("dir2", "backend.yaml"),  # backends/<kind>/<name>/backend.yaml
 }
 
 _SUBPATH: dict[str, str] = {"families": "prompts/families", "variants": "prompts"}
@@ -54,6 +55,14 @@ def iter_candidates(roots: list[Root], kind: str) -> Iterator[Candidate]:
                 manifest = entry / marker
                 if entry.is_dir() and not entry.name.startswith((".", "_")) and manifest.is_file():
                     yield Candidate(kind, entry.name, manifest, root)
+        elif layout == "dir2":  # <base>/<group>/<name>/<marker>; candidate name = group/name
+            for group in sorted(base.iterdir()):
+                if not group.is_dir() or group.name.startswith((".", "_")):
+                    continue
+                for entry in sorted(group.iterdir()):
+                    manifest = entry / marker
+                    if entry.is_dir() and not entry.name.startswith((".", "_")) and manifest.is_file():
+                        yield Candidate(kind, f"{group.name}/{entry.name}", manifest, root)
         else:
             for entry in sorted(base.glob(marker)):
                 if entry.is_file() and not entry.name.startswith((".", "_")):

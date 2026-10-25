@@ -15,6 +15,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `prompts/*.md`, `prompts/families/*.md`, `prompts/variants.yaml` | System prompt sections, model-family overlays, request shaping |
 | `permissions/*.yaml` | Permission rules + unbypassable floors |
 | `mcp/<name>.yaml` | MCP servers (tools become `mcp__<server>__<tool>`) |
+| `backends/<kind>/<name>/backend.yaml` + `impl.py` | Device/library backends (capture, browser, stt, …) behind ABCs in `src/auoreo/backends/`; selected via `settings.backends` |
 | `commands/<name>.md` | Slash commands (`/compact`, `/model`, `/plan`, `/review`); `handler: prompt` renders the body |
 | `memory/*.md` | Templates copied into `~/.auoreo/memory/` |
 | `src/auoreo/harness/` | discovery → loader → registry → orchestrator |

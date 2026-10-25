@@ -18,6 +18,7 @@ from auoreo.harness.discovery import Root, iter_candidates
 from auoreo.harness.loader import (
     LOADERS,
     AgentDef,
+    BackendDef,
     CommandDef,
     FamilyDef,
     Loaded,
@@ -31,7 +32,17 @@ from auoreo.harness.manifests import AgentManifest
 log = logging.getLogger(__name__)
 
 # Kinds merged by name (first root wins). Permissions are layered, not merged.
-NAMED_KINDS = ("tools", "agents", "skills", "workflows", "mcp", "prompts", "families", "commands")
+NAMED_KINDS = (
+    "tools",
+    "agents",
+    "skills",
+    "workflows",
+    "mcp",
+    "prompts",
+    "families",
+    "commands",
+    "backends",
+)
 
 
 class HarnessError(Exception):
@@ -60,6 +71,7 @@ class Snapshot:
     prompts: dict[str, PromptDef] = field(default_factory=dict)
     families: dict[str, FamilyDef] = field(default_factory=dict)
     commands: dict[str, CommandDef] = field(default_factory=dict)
+    backends: dict[str, BackendDef] = field(default_factory=dict)  # keyed "kind/name"
     permission_layers: list[Loaded] = field(default_factory=list)  # low → high precedence
     variants: Loaded | None = None
     errors: list[LoadError] = field(default_factory=list)
@@ -229,6 +241,25 @@ class Harness:
             if any(fnmatch.fnmatchcase(n, g) for g in agent.skills)
         ]
 
+    # -------------------------------------------------------------- backends
+    def backends_for(self, kind: str) -> dict[str, BackendDef]:
+        return {d.manifest.name: d for k, d in self._snap.backends.items() if d.manifest.kind == kind}
+
+    def select_backend(self, kind: str, chosen: str | None) -> BackendDef | None:
+        """settings.backends[kind] → manifest `default: true` → the only candidate → None."""
+        cands = self.backends_for(kind)
+        if chosen is not None:
+            if chosen not in cands:
+                raise KeyError(f"backend '{kind}/{chosen}' not found (known: {sorted(cands)})")
+            return cands[chosen]
+        defaults = [d for d in cands.values() if d.manifest.default]
+        if len(defaults) > 1:
+            names = sorted(d.manifest.name for d in defaults)
+            raise KeyError(f"several '{kind}' backends claim default: {names}")
+        if defaults:
+            return defaults[0]
+        return next(iter(cands.values())) if len(cands) == 1 else None
+
     def describe(self) -> dict[str, list[dict[str, Any]]]:
         """Plain listing for CLI/API."""
 
@@ -265,6 +296,16 @@ class Harness:
         out["commands"] = [
             row("command", n, c.source, c.path, c.manifest.description)
             for n, c in sorted(self._snap.commands.items())
+        ]
+        out["backends"] = [
+            row(
+                "backend",
+                n,
+                b.source,
+                b.path,
+                f"{b.manifest.description}" + (" (default)" if b.manifest.default else ""),
+            )
+            for n, b in sorted(self._snap.backends.items())
         ]
         out["permissions"] = [
             row("permissions", p.path.stem, p.source, p.path, f"{len(p.manifest.rules)} rules")

@@ -73,3 +73,15 @@ class ToolContext:
     def resolve_path(self, raw: str) -> Path:
         p = Path(raw).expanduser()
         return (p if p.is_absolute() else self.cwd / p).resolve()
+
+    def backend(self, kind: str) -> Any:
+        """The selected backend instance for `kind` (see `backends/README.md`).
+
+        Raises `ToolError` when no backend is selected or it cannot be loaded."""
+        svc = self.services.get("services")
+        if svc is None:
+            raise ToolError(f"no services attached; backend '{kind}' unavailable")
+        try:
+            return svc.backend(kind)
+        except (KeyError, LookupError) as exc:
+            raise ToolError(str(exc)) from exc

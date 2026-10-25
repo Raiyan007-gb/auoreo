@@ -14,6 +14,7 @@ import typer
 
 from auoreo.cli.common import console, dump_json, settings
 from auoreo.core.paths import bundled_root
+from auoreo.core.settings import Settings
 from auoreo.harness.discovery import default_roots
 from auoreo.harness.registry import Harness, HarnessError
 
@@ -22,6 +23,58 @@ Level = Literal["ok", "warn", "error"]
 
 def _check(name: str, level: Level, detail: str, remedy: str = "") -> dict[str, str]:
     return {"check": name, "level": level, "detail": detail, "remedy": remedy}
+
+
+def _backend_checks(st: Settings, h: Harness) -> list[dict[str, str]]:
+    """One row per backend kind: which one is selected and whether its `check()` passes."""
+    import shutil
+
+    out: list[dict[str, str]] = []
+    kinds = sorted({d.manifest.kind for d in h.snapshot.backends.values()})
+    for kind in kinds:
+        try:
+            bdef = h.select_backend(kind, st.backends.get(kind))
+        except KeyError as exc:
+            out.append(_check(f"backend:{kind}", "error", str(exc), "fix settings.backends"))
+            continue
+        if bdef is None:
+            names = sorted(h.backends_for(kind))
+            out.append(
+                _check(
+                    f"backend:{kind}",
+                    "warn",
+                    f"none selected (available: {names})",
+                    f"set settings.backends.{kind}",
+                )
+            )
+            continue
+        m = bdef.manifest
+        missing = [b for b in m.requires_binaries if shutil.which(b) is None]
+        posture = "" if m.posture == "ok" else f" [{m.posture}]"
+        if missing:
+            out.append(
+                _check(
+                    f"backend:{kind}",
+                    "warn",
+                    f"{m.name}{posture}: missing {missing}",
+                    f"install {', '.join(missing)} or pick another backend",
+                )
+            )
+            continue
+        try:
+            inst = bdef.load()(st)
+            status = asyncio.run(asyncio.wait_for(inst.check(), 10))
+            ok = bool(getattr(status, "ok", status))
+            detail = getattr(status, "detail", "") or ("ready" if ok else "not ready")
+            remedy = getattr(status, "remedy", "") or ""
+            out.append(
+                _check(f"backend:{kind}", "ok" if ok else "warn", f"{m.name}{posture}: {detail}", remedy)
+            )
+        except Exception as exc:
+            out.append(
+                _check(f"backend:{kind}", "warn", f"{m.name}{posture}: {exc}", "see backends/README.md")
+            )
+    return out
 
 
 def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
@@ -74,6 +127,7 @@ def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
         h = Harness(default_roots(st.home, Path.cwd(), bundled_root(), st.extra_roots))
         level: Level = "warn" if h.errors else "ok"
         counts = {k: len(v) for k, v in h.describe().items()}
+        out.extend(_backend_checks(st, h))
         out.append(
             _check(
                 "harness",

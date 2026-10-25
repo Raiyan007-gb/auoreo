@@ -17,6 +17,7 @@ from auoreo.harness import frontmatter
 from auoreo.harness.discovery import Candidate, Root
 from auoreo.harness.manifests import (
     AgentManifest,
+    BackendManifest,
     CommandManifest,
     McpServerManifest,
     PermissionFile,
@@ -64,6 +65,43 @@ class ToolDef:
                 raise LoadError(self.path or Path("?"), "tool has no handler loader")
             self._handler = self._loader()
         return self._handler
+
+
+@dataclass
+class BackendDef:
+    """A discovered backend; its class is imported on first `load()`."""
+
+    manifest: BackendManifest
+    source: str
+    path: Path  # backend folder
+    _cls: type[Any] | None = field(default=None, repr=False)
+
+    @property
+    def name(self) -> str:
+        return self.manifest.key
+
+    def load(self) -> type[Any]:
+        if self._cls is None:
+            file_part, cls_name = self.manifest.impl.split(":")
+            file_path = (self.path / file_part).resolve()
+            if self.path.resolve() not in file_path.parents or not file_path.is_file():
+                raise LoadError(file_path, "backend impl must be a file inside its folder")
+            mod_name = f"auoreo_backend_{self.manifest.kind}_{self.manifest.name}"
+            spec = importlib.util.spec_from_file_location(mod_name, file_path)
+            if spec is None or spec.loader is None:
+                raise LoadError(file_path, "cannot import backend")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[mod_name] = module
+            try:
+                spec.loader.exec_module(module)
+            except Exception as exc:
+                sys.modules.pop(mod_name, None)
+                raise LoadError(file_path, f"backend import failed: {exc!r}") from exc
+            cls = getattr(module, cls_name, None)
+            if not isinstance(cls, type):
+                raise LoadError(file_path, f"'{cls_name}' must be a class")
+            self._cls = cls
+        return self._cls
 
 
 @dataclass(frozen=True)
@@ -334,7 +372,26 @@ def load_command(c: Candidate) -> CommandDef:
     return CommandDef(manifest, body.strip(), c.root.source, c.path)
 
 
+def load_backend(c: Candidate) -> BackendDef:
+    data, text = _parse_yaml(c)
+    manifest = _validate(BackendManifest, data, c.path, text)
+    folder = c.path.parent
+    if manifest.kind != folder.parent.name or manifest.name != folder.name:
+        raise LoadError(
+            c.path,
+            f"kind/name '{manifest.key}' must match the folders '{folder.parent.name}/{folder.name}'",
+            frontmatter.locate_key(text, "name"),
+        )
+    impl_file = folder / manifest.impl.split(":")[0]
+    if not impl_file.is_file():
+        raise LoadError(
+            c.path, f"impl file '{impl_file.name}' not found", frontmatter.locate_key(text, "impl")
+        )
+    return BackendDef(manifest, c.root.source, folder)
+
+
 LOADERS: dict[str, Callable[[Candidate], Any]] = {
+    "backends": load_backend,
     "tools": load_tool,
     "agents": load_agent,
     "skills": load_skill,
@@ -349,6 +406,7 @@ LOADERS: dict[str, Callable[[Candidate], Any]] = {
 
 __all__ = [
     "LOADERS",
+    "BackendDef",
     "AgentDef",
     "CommandDef",
     "FamilyDef",

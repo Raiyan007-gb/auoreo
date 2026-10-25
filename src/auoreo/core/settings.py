@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     """Extra browser origins allowed for CORS and the `/ws` Origin check (loopback always is)."""
     ws_ping_interval_s: float = 20.0
     """App-level WebSocket ping cadence; no pong for two intervals closes with 1011."""
+    backends: dict[str, str] = Field(default_factory=dict)
+    """Backend selection per kind, e.g. {"capture": "mss", "browser": "playwright"}; unset kinds
+    fall back to the manifest marked `default: true`, then to the only candidate."""
 
     @property
     def db_path(self) -> Path:
