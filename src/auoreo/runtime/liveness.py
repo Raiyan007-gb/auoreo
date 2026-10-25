@@ -31,10 +31,17 @@ class LivenessWatchdog:
         self.poll = max(0.005, min(float(cfg.turn_liveness_poll_s), self.timeout / 4))
         self.last = time.monotonic()
         self.fired = False
+        self.busy_until = 0.0
         self._task: asyncio.Task[None] | None = None
 
     def touch(self, *_: Any) -> None:
         self.last = time.monotonic()
+
+    def busy(self, seconds: float) -> None:
+        """A tool round is running: count it as alive until its own timeout (a long test run
+        or build is not a stalled turn); `busy(0)` clears it when the round returns."""
+        self.busy_until = time.monotonic() + seconds if seconds > 0 else 0.0
+        self.touch()
 
     def start(self, turn: asyncio.Task[Any]) -> None:
         self._task = asyncio.create_task(self._watch(turn), name=f"liveness:{self.rt.session_id}")
@@ -54,7 +61,7 @@ class LivenessWatchdog:
             await asyncio.sleep(self.poll)
             if self.rt.generation != self.generation:
                 return  # stale: a newer turn owns the runtime
-            if self._waiting_on_human():
+            if self._waiting_on_human() or time.monotonic() < self.busy_until:
                 self.touch()
             idle = time.monotonic() - self.last
             if idle < self.timeout or turn.done():

@@ -338,11 +338,13 @@ class AgentRunner:
                     return TurnResult(run_id, status, turn.text)
 
                 open_calls = list(calls)
-                turn.watchdog.touch()
-                outcomes = await tool_round(
-                    self, rt, spec, engine, ctx, run_id, calls, {t.name: t for t in tools}
+                by_name = {t.name: t for t in tools}
+                turn.watchdog.busy(
+                    max((by_name[c.name].manifest.timeout_ms for c in calls if c.name in by_name), default=0)
+                    / 1000
                 )
-                turn.watchdog.touch()
+                outcomes = await tool_round(self, rt, spec, engine, ctx, run_id, calls, by_name)
+                turn.watchdog.busy(0)
                 budget.tools += len(outcomes)
                 for o in outcomes:
                     open_calls.remove(o.call)
@@ -469,4 +471,6 @@ class AgentRunner:
             omit_fields=tuple(variant.omit_fields) if variant else (),
             reasoning_effort=self.policy.effort(run_id, spec.agent.manifest.effort),
             metadata={"session_id": rt.session_id, "run_id": run_id},
+            variant=variant,
+            turn_state=run_id,
         )

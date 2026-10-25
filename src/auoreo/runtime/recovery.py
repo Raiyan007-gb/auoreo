@@ -84,13 +84,7 @@ async def stream(
                 await s.emit(
                     sid,
                     "usage",
-                    {
-                        "run_id": run_id,
-                        "model": request.model,
-                        "prompt_tokens": item.prompt_tokens,
-                        "completion_tokens": item.completion_tokens,
-                        "cost_usd": item.cost_usd,
-                    },
+                    {"run_id": run_id, "model": request.model, **item.event_data()},
                 )
             case Finish(reason=reason):
                 out.finish = reason
