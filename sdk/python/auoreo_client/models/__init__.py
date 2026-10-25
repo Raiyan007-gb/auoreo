@@ -24,11 +24,18 @@ from .cron_job_info import CronJobInfo
 from .cron_paused import CronPaused
 from .cron_run_accepted import CronRunAccepted
 from .cron_run_info import CronRunInfo
+from .curator_contradiction import CuratorContradiction
+from .curator_merge import CuratorMerge
+from .curator_report import CuratorReport
+from .curator_report_text import CuratorReportText
 from .delivery_info import DeliveryInfo
 from .delivery_info_result import DeliveryInfoResult
 from .delivery_replay import DeliveryReplay
 from .export_api_sessions_session_id_export_get_format import ExportApiSessionsSessionIdExportGetFormat
+from .fact_action_result import FactActionResult
+from .fact_feedback import FactFeedback
 from .fact_in import FactIn
+from .fact_pin import FactPin
 from .harness_entry import HarnessEntry
 from .harness_listing import HarnessListing
 from .harness_listing_entries import HarnessListingEntries
@@ -115,11 +122,18 @@ __all__ = (
     "CronPaused",
     "CronRunAccepted",
     "CronRunInfo",
+    "CuratorContradiction",
+    "CuratorMerge",
+    "CuratorReport",
+    "CuratorReportText",
     "DeliveryInfo",
     "DeliveryInfoResult",
     "DeliveryReplay",
     "ExportApiSessionsSessionIdExportGetFormat",
+    "FactActionResult",
+    "FactFeedback",
     "FactIn",
+    "FactPin",
     "HarnessEntry",
     "HarnessListing",
     "HarnessListingEntries",

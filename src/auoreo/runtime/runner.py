@@ -180,7 +180,9 @@ class AgentRunner:
                 memory_block = await self.s.memory.context_block(text)
             except Exception:  # recall must never fail the turn
                 log.exception("memory recall failed")
-        context = render_context(spec, self.s.cwd, engine.mode, memory_block)
+        context = render_context(
+            spec, self.s.cwd, engine.mode, memory_block, locale=self.s.settings.locale or ""
+        )
 
         async def question(qs: list[dict[str, Any]]) -> dict[str, Any]:
             return await self.s.questions.ask(sid, qs)

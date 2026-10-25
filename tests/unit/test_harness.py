@@ -167,4 +167,10 @@ def test_commands_kind_loads_overrides_and_validates(tmp_path: Path) -> None:
 def test_bundled_commands_are_valid(tmp_path: Path) -> None:
     h = Harness(default_roots(tmp_path / "h", tmp_path, REPO))
     handlers = {n: c.manifest.handler for n, c in h.commands.items()}
-    assert handlers == {"compact": "compact", "model": "model", "plan": "plan", "review": "prompt"}
+    assert handlers == {
+        "compact": "compact",
+        "curator": "prompt",
+        "model": "model",
+        "plan": "plan",
+        "review": "prompt",
+    }

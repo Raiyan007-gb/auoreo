@@ -510,6 +510,143 @@
         "title": "CronRunInfo",
         "type": "object"
       },
+      "CuratorContradiction": {
+        "properties": {
+          "existing_id": {
+            "title": "Existing Id",
+            "type": "integer"
+          },
+          "new_id": {
+            "title": "New Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "new_id",
+          "existing_id"
+        ],
+        "title": "CuratorContradiction",
+        "type": "object"
+      },
+      "CuratorMerge": {
+        "properties": {
+          "fact_id": {
+            "title": "Fact Id",
+            "type": "integer"
+          },
+          "into": {
+            "title": "Into",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "fact_id",
+          "into"
+        ],
+        "title": "CuratorMerge",
+        "type": "object"
+      },
+      "CuratorReport": {
+        "description": "One deterministic curator pass (no LLM). Lists hold fact ids.",
+        "properties": {
+          "archived": {
+            "description": "Archived as unused past archive_after_days",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Archived",
+            "type": "array"
+          },
+          "contradictions": {
+            "description": "Pending contradiction flags (both facts still active)",
+            "items": {
+              "$ref": "#/components/schemas/CuratorContradiction"
+            },
+            "title": "Contradictions",
+            "type": "array"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "duplicates_merged": {
+            "items": {
+              "$ref": "#/components/schemas/CuratorMerge"
+            },
+            "title": "Duplicates Merged",
+            "type": "array"
+          },
+          "ledger_path": {
+            "title": "Ledger Path",
+            "type": "string"
+          },
+          "report_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Path"
+          },
+          "scanned": {
+            "default": 0,
+            "title": "Scanned",
+            "type": "integer"
+          },
+          "skipped": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the pass did not run (a guard fired)",
+            "title": "Skipped"
+          },
+          "skipped_pinned": {
+            "default": 0,
+            "title": "Skipped Pinned",
+            "type": "integer"
+          },
+          "stale": {
+            "description": "Unused past stale_after_days (reported only)",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Stale",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "ledger_path"
+        ],
+        "title": "CuratorReport",
+        "type": "object"
+      },
+      "CuratorReportText": {
+        "properties": {
+          "markdown": {
+            "title": "Markdown",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "markdown"
+        ],
+        "title": "CuratorReportText",
+        "type": "object"
+      },
       "DeliveryInfo": {
         "properties": {
           "attempts": {
@@ -638,6 +775,49 @@
         "title": "DeliveryReplay",
         "type": "object"
       },
+      "FactActionResult": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "trust": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust"
+          }
+        },
+        "required": [
+          "id",
+          "ok"
+        ],
+        "title": "FactActionResult",
+        "type": "object"
+      },
+      "FactFeedback": {
+        "additionalProperties": false,
+        "properties": {
+          "helpful": {
+            "title": "Helpful",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "helpful"
+        ],
+        "title": "FactFeedback",
+        "type": "object"
+      },
       "FactIn": {
         "properties": {
           "category": {
@@ -656,6 +836,18 @@
           "content"
         ],
         "title": "FactIn",
+        "type": "object"
+      },
+      "FactPin": {
+        "additionalProperties": false,
+        "properties": {
+          "pinned": {
+            "default": true,
+            "title": "Pinned",
+            "type": "boolean"
+          }
+        },
+        "title": "FactPin",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -4167,6 +4359,190 @@
         ]
       }
     },
+    "/api/memory/curator/report": {
+      "get": {
+        "description": "The most recent REPORT.md.",
+        "operationId": "curator_report_api_memory_curator_report_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuratorReportText"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Curator Report",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/memory/curator/run": {
+      "post": {
+        "description": "Run the deterministic curator now (`force` ignores the idle/interval guards).",
+        "operationId": "curator_run_api_memory_curator_run_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Force",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CuratorReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Curator Run",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
     "/api/memory/facts": {
       "post": {
         "operationId": "add_fact_api_memory_facts_post",
@@ -4264,6 +4640,299 @@
           }
         },
         "summary": "Add Fact",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/memory/facts/{fact_id}/feedback": {
+      "post": {
+        "description": "Trust feedback: +0.05 when helpful, -0.10 when not (clamped to 0-1).",
+        "operationId": "feedback_fact_api_memory_facts__fact_id__feedback_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactFeedback"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactActionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Feedback Fact",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/memory/facts/{fact_id}/forget": {
+      "post": {
+        "description": "Archive a fact (never deleted). `ok` is false when it was already archived.",
+        "operationId": "forget_fact_api_memory_facts__fact_id__forget_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactActionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Forget Fact",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/memory/facts/{fact_id}/pin": {
+      "post": {
+        "description": "Pin (or unpin with `pinned: false`): the curator never archives or merges pinned facts.",
+        "operationId": "pin_fact_api_memory_facts__fact_id__pin_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FactPin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FactActionResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pin Fact",
         "tags": [
           "memory"
         ]

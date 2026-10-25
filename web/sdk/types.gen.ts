@@ -317,6 +317,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/curator/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Curator Report
+         * @description The most recent REPORT.md.
+         */
+        get: operations["curator_report_api_memory_curator_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/curator/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Curator Run
+         * @description Run the deterministic curator now (`force` ignores the idle/interval guards).
+         */
+        post: operations["curator_run_api_memory_curator_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory/facts": {
         parameters: {
             query?: never;
@@ -328,6 +368,66 @@ export interface paths {
         put?: never;
         /** Add Fact */
         post: operations["add_fact_api_memory_facts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/facts/{fact_id}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Feedback Fact
+         * @description Trust feedback: +0.05 when helpful, -0.10 when not (clamped to 0-1).
+         */
+        post: operations["feedback_fact_api_memory_facts__fact_id__feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/facts/{fact_id}/forget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forget Fact
+         * @description Archive a fact (never deleted). `ok` is false when it was already archived.
+         */
+        post: operations["forget_fact_api_memory_facts__fact_id__forget_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/facts/{fact_id}/pin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pin Fact
+         * @description Pin (or unpin with `pinned: false`): the curator never archives or merges pinned facts.
+         */
+        post: operations["pin_fact_api_memory_facts__fact_id__pin_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1111,6 +1211,71 @@ export interface components {
              */
             status: string;
         };
+        /** CuratorContradiction */
+        CuratorContradiction: {
+            /** Existing Id */
+            existing_id: number;
+            /** New Id */
+            new_id: number;
+        };
+        /** CuratorMerge */
+        CuratorMerge: {
+            /** Fact Id */
+            fact_id: number;
+            /** Into */
+            into: number;
+        };
+        /**
+         * CuratorReport
+         * @description One deterministic curator pass (no LLM). Lists hold fact ids.
+         */
+        CuratorReport: {
+            /**
+             * Archived
+             * @description Archived as unused past archive_after_days
+             */
+            archived?: number[];
+            /**
+             * Contradictions
+             * @description Pending contradiction flags (both facts still active)
+             */
+            contradictions?: components["schemas"]["CuratorContradiction"][];
+            /** Dry Run */
+            dry_run: boolean;
+            /** Duplicates Merged */
+            duplicates_merged?: components["schemas"]["CuratorMerge"][];
+            /** Ledger Path */
+            ledger_path: string;
+            /** Report Path */
+            report_path?: string | null;
+            /**
+             * Scanned
+             * @default 0
+             */
+            scanned: number;
+            /**
+             * Skipped
+             * @description Why the pass did not run (a guard fired)
+             */
+            skipped?: string | null;
+            /**
+             * Skipped Pinned
+             * @default 0
+             */
+            skipped_pinned: number;
+            /**
+             * Stale
+             * @description Unused past stale_after_days (reported only)
+             */
+            stale?: number[];
+        };
+        /** CuratorReportText */
+        CuratorReportText: {
+            /** Markdown */
+            markdown: string;
+            /** Path */
+            path: string;
+        };
         /** DeliveryInfo */
         DeliveryInfo: {
             /** Attempts */
@@ -1160,6 +1325,20 @@ export interface components {
             /** Prompt */
             prompt: string;
         };
+        /** FactActionResult */
+        FactActionResult: {
+            /** Id */
+            id: number;
+            /** Ok */
+            ok: boolean;
+            /** Trust */
+            trust?: number | null;
+        };
+        /** FactFeedback */
+        FactFeedback: {
+            /** Helpful */
+            helpful: boolean;
+        };
         /** FactIn */
         FactIn: {
             /**
@@ -1169,6 +1348,14 @@ export interface components {
             category: string;
             /** Content */
             content: string;
+        };
+        /** FactPin */
+        FactPin: {
+            /**
+             * Pinned
+             * @default true
+             */
+            pinned: boolean;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2575,6 +2762,78 @@ export interface operations {
             };
         };
     };
+    curator_report_api_memory_curator_report_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuratorReportText"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    curator_run_api_memory_curator_run_post: {
+        parameters: {
+            query?: {
+                dry_run?: boolean;
+                force?: boolean;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CuratorReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     add_fact_api_memory_facts_post: {
         parameters: {
             query?: {
@@ -2603,6 +2862,125 @@ export interface operations {
                     "application/json": {
                         [key: string]: number | boolean;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    feedback_fact_api_memory_facts__fact_id__feedback_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                fact_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactFeedback"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forget_fact_api_memory_facts__fact_id__forget_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                fact_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pin_fact_api_memory_facts__fact_id__pin_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                fact_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FactPin"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FactActionResult"];
                 };
             };
             /** @description Validation Error */

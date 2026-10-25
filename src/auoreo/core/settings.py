@@ -49,6 +49,12 @@ class MemorySettings(BaseModel):
     tool_max_tokens: int = 2000
     chunk_tokens: int = 512
     chunk_overlap: int = 50
+    # --- M5f
+    curator_enabled: bool = True
+    curator_interval_hours: float = Field(default=168, gt=0)
+    curator_min_idle_hours: float = Field(default=2, ge=0)
+    curator_stale_after_days: float = Field(default=30, gt=0)
+    curator_archive_after_days: float = Field(default=90, gt=0)
 
 
 class LoopSettings(BaseModel):
@@ -179,6 +185,10 @@ class Settings(BaseSettings):
     # --- M5h
     mcp_server_enabled: bool = True
     """Serve the default agent's tools to external MCP clients at `POST /mcp` (streamable HTTP)."""
+
+    # --- M5f
+    locale: str | None = None
+    """User locale (e.g. `de-DE`), rendered as `{{locale}}` in the per-turn context block."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

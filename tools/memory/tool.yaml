@@ -15,10 +15,17 @@ parameters:
       items:
         type: object
         properties:
-          action: {type: string, enum: [add, replace, remove]}
+          action:
+            type: string
+            enum: [add, replace, remove, forget, pin, unpin, feedback]
+            description: >-
+              Facts are never deleted: remove/forget archive them; replace supersedes the old
+              fact. pin keeps a fact from curation; feedback rates a recalled fact (helpful).
+              forget, pin, unpin and feedback are fact-only.
           target: {type: string, enum: [fact, user, memory]}
           content: {type: string, maxLength: 2000}
           old_text: {type: string, description: Unique substring identifying the entry to change.}
+          helpful: {type: boolean, description: "feedback only: was the recalled fact useful?"}
         required: [action, target]
         additionalProperties: false
   required: [operations]

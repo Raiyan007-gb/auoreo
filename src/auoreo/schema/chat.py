@@ -438,3 +438,52 @@ class OpenAIChatCompletion(BaseModel):
     model: str
     choices: list[OpenAIChoice]
     usage: OpenAIUsage
+
+
+# --- M5f memory lifecycle + curator
+class CuratorMerge(BaseModel):
+    fact_id: int
+    into: int
+
+
+class CuratorContradiction(BaseModel):
+    new_id: int
+    existing_id: int
+
+
+class CuratorReport(BaseModel):
+    """One deterministic curator pass (no LLM). Lists hold fact ids."""
+
+    dry_run: bool
+    skipped: str | None = Field(default=None, description="Why the pass did not run (a guard fired)")
+    scanned: int = 0
+    archived: list[int] = Field(
+        default_factory=list, description="Archived as unused past archive_after_days"
+    )
+    stale: list[int] = Field(default_factory=list, description="Unused past stale_after_days (reported only)")
+    skipped_pinned: int = 0
+    duplicates_merged: list[CuratorMerge] = Field(default_factory=list)
+    contradictions: list[CuratorContradiction] = Field(
+        default_factory=list, description="Pending contradiction flags (both facts still active)"
+    )
+    ledger_path: str
+    report_path: str | None = None
+
+
+class CuratorReportText(BaseModel):
+    path: str
+    markdown: str
+
+
+class FactPin(_In):
+    pinned: bool = True
+
+
+class FactFeedback(_In):
+    helpful: bool
+
+
+class FactActionResult(BaseModel):
+    id: int
+    ok: bool
+    trust: float | None = None

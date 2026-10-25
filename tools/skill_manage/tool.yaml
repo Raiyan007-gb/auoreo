@@ -1,0 +1,40 @@
+name: skill_manage
+toolset: skills
+description: >-
+  Create, update, delete or lint a skill in the user's skills folder (~/.auoreo/skills).
+  Written skills are available from the next turn.
+parameters:
+  type: object
+  properties:
+    action:
+      type: string
+      enum: [create, update, delete, lint]
+      description: >-
+        lint checks a discovered skill (or the given description/body) without writing.
+        update/delete only touch skills in ~/.auoreo/skills.
+    name:
+      type: string
+      minLength: 1
+      maxLength: 64
+      description: Kebab-case skill name; also the folder name.
+    description:
+      type: string
+      maxLength: 600
+      description: >-
+        20-500 chars. The only text the model sees before loading the skill: say what it
+        does and when to use it, with trigger words.
+    body:
+      type: string
+      maxLength: 50000
+      description: SKILL.md body (markdown, at least 50 chars), without frontmatter.
+    files:
+      type: object
+      additionalProperties: {type: string, maxLength: 100000}
+      description: 'Supporting files as relative path → content, e.g. scripts/check.sh.'
+  required: [action, name]
+  additionalProperties: false
+permission: skills
+pattern_arg: name
+default_action: ask
+timeout_ms: 30000
+search_hint: write save create skill procedure lint skill

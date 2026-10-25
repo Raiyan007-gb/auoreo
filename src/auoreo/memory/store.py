@@ -2,7 +2,12 @@
 
 Lives in `<home>/memory.db`. All methods are blocking; `MemoryService` calls them through
 `asyncio.to_thread` under a single-writer lock. If the `vec0` extension cannot load, the
-store runs FTS-only (a tested path, never an error).
+store runs FTS-only (a tested path, never an error). Schema upgrades run through
+`migrations.migrate` (`PRAGMA user_version`).
+
+Fact lifecycle (v1): retrieval only sees *active* facts — not archived and not expired
+(`valid_to` in the past, which is how superseded rows end). Nothing is deleted except by
+`purge_fact`, which only the CLI calls.
 """
 
 from __future__ import annotations
@@ -14,55 +19,17 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
+
+from auoreo.memory.migrations import migrate
 
 log = logging.getLogger(__name__)
 
 STOPWORDS = frozenset(
-    [
-        "a",
-        "an",
-        "and",
-        "are",
-        "as",
-        "at",
-        "be",
-        "by",
-        "for",
-        "from",
-        "has",
-        "have",
-        "i",
-        "in",
-        "is",
-        "it",
-        "its",
-        "me",
-        "my",
-        "of",
-        "on",
-        "or",
-        "our",
-        "that",
-        "the",
-        "this",
-        "to",
-        "was",
-        "we",
-        "what",
-        "when",
-        "where",
-        "which",
-        "who",
-        "why",
-        "will",
-        "with",
-        "you",
-        "your",
-        "how",
-        "do",
-        "does",
-        "did",
-    ]
+    """
+    a an and are as at be by for from has have i in is it its me my of on or our that the
+    this to was we what when where which who why will with you your how do does did
+    """.split()  # noqa: SIM905 — compact word list
 )
 
 SCHEMA = """
@@ -102,6 +69,18 @@ CREATE TRIGGER IF NOT EXISTS transcript_ai AFTER INSERT ON transcript BEGIN
   INSERT INTO transcript_fts(rowid, text) VALUES (new.id, new.text); END;
 """
 
+FACT_COLUMNS = (
+    "id, content, category, trust, created_at, updated_at, archived_at, last_used_at, use_count, "
+    "valid_from, valid_to, supersedes_id, pinned, source"
+)
+SOURCES = frozenset({"user", "agent", "curator", "ingest"})
+
+
+def active(alias: str = "") -> str:
+    """SQL predicate for retrievable facts; binds one parameter (`now`)."""
+    p = f"{alias}." if alias else ""
+    return f"{p}archived_at IS NULL AND ({p}valid_to IS NULL OR {p}valid_to > ?)"
+
 
 def fts_query(raw: str) -> str | None:
     """Sanitize free text into a safe FTS5 query: quoted terms OR-joined.
@@ -140,6 +119,7 @@ class MemoryStore:
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
+        migrate(self.db)
         self.vec_enabled = self._load_vec()
         self.db.commit()
 
@@ -172,18 +152,36 @@ class MemoryStore:
         trust: float,
         embedding: list[float] | None,
         embed_model: str | None,
+        source: str = "agent",
     ) -> tuple[int, bool]:
+        """Insert a fact; re-adding a known text revives it when archived or expired."""
         now = time.time()
         cur = self.db.execute(
-            "INSERT INTO facts(tenant_id, content, category, trust, embed_model, created_at, updated_at) "
-            "VALUES (?,?,?,?,?,?,?) ON CONFLICT(tenant_id, content) DO NOTHING RETURNING id",
-            (self.tenant, content, category, trust, embed_model if embedding else None, now, now),
+            "INSERT INTO facts(tenant_id, content, category, trust, embed_model, created_at, "
+            "updated_at, valid_from, source) VALUES (?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(tenant_id, content) DO NOTHING RETURNING id",
+            (
+                self.tenant,
+                content,
+                category,
+                trust,
+                embed_model if embedding else None,
+                now,
+                now,
+                now,
+                source if source in SOURCES else "agent",
+            ),
         )
         row = cur.fetchone()
         if row is None:
             existing = self.db.execute(
                 "SELECT id FROM facts WHERE tenant_id=? AND content=?", (self.tenant, content)
             ).fetchone()
+            self.db.execute(
+                "UPDATE facts SET archived_at=NULL, valid_to=NULL, updated_at=? "
+                f"WHERE id=? AND NOT ({active()})",
+                (now, existing[0], now),
+            )
             self.db.commit()
             return int(existing[0]), False
         fid = int(row[0])
@@ -192,29 +190,77 @@ class MemoryStore:
         self.db.commit()
         return fid, True
 
-    def replace_fact(self, fact_id: int, content: str, embedding: list[float] | None) -> bool:
+    def replace_fact(self, fact_id: int, content: str, embedding: list[float] | None) -> int | None:
+        """Supersede an active fact: the new text becomes a new row (`supersedes_id` = old id)
+        and the old row gets `valid_to = now`, so it stays readable through the archive only.
+        Returns the id carrying `content`, or None when `fact_id` is not active."""
+        now = time.time()
+        old = self.db.execute(
+            f"SELECT content, category, trust, source FROM facts WHERE id=? AND tenant_id=? AND {active()}",
+            (fact_id, self.tenant, now),
+        ).fetchone()
+        if old is None:
+            return None
+        if old[0] == content:
+            return fact_id
         cur = self.db.execute(
-            "UPDATE facts SET content=?, updated_at=? WHERE id=? AND tenant_id=?",
-            (content, time.time(), fact_id, self.tenant),
+            "INSERT INTO facts(tenant_id, content, category, trust, created_at, updated_at, valid_from, "
+            "supersedes_id, source) VALUES (?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(tenant_id, content) DO UPDATE SET archived_at=NULL, valid_to=NULL, "
+            "supersedes_id=excluded.supersedes_id, updated_at=excluded.updated_at RETURNING id",
+            (self.tenant, content, old[1], old[2], now, now, now, fact_id, old[3]),
         )
-        if cur.rowcount and embedding is not None:
-            self._put_vec("facts_vec", fact_id, embedding)
+        new_id = int(cur.fetchone()[0])
+        self.db.execute("UPDATE facts SET valid_to=?, updated_at=? WHERE id=?", (now, now, fact_id))
+        if embedding is not None:
+            self._put_vec("facts_vec", new_id, embedding)
         self.db.commit()
-        return cur.rowcount > 0
+        return new_id
 
-    def remove_fact(self, fact_id: int) -> bool:
+    def purge_fact(self, fact_id: int) -> bool:
+        """Hard delete. Only `auoreo memory purge --yes` reaches this; tools archive."""
         cur = self.db.execute("DELETE FROM facts WHERE id=? AND tenant_id=?", (fact_id, self.tenant))
         if cur.rowcount and self.vec_enabled:
             self.db.execute(f"DELETE FROM facts_vec_{self.dims} WHERE rowid=?", (fact_id,))
         self.db.commit()
         return cur.rowcount > 0
 
-    def find_facts(self, substring: str) -> list[tuple[int, str]]:
-        rows = self.db.execute(
-            "SELECT id, content FROM facts WHERE tenant_id=? AND instr(content, ?) > 0",
-            (self.tenant, substring),
-        ).fetchall()
-        return [(int(r[0]), str(r[1])) for r in rows]
+    def archive_fact(self, fact_id: int) -> bool:
+        cur = self.db.execute(
+            "UPDATE facts SET archived_at=? WHERE id=? AND tenant_id=? AND archived_at IS NULL",
+            (time.time(), fact_id, self.tenant),
+        )
+        self.db.commit()
+        return cur.rowcount > 0
+
+    def set_pinned(self, fact_id: int, pinned: bool) -> bool:
+        cur = self.db.execute(
+            "UPDATE facts SET pinned=? WHERE id=? AND tenant_id=?", (int(pinned), fact_id, self.tenant)
+        )
+        self.db.commit()
+        return cur.rowcount > 0
+
+    def bump_use(self, ids: list[int]) -> None:
+        """Record a successful recall (one batched UPDATE)."""
+        if not ids:
+            return
+        marks = ",".join("?" * len(ids))
+        self.db.execute(
+            f"UPDATE facts SET use_count = use_count + 1, last_used_at = ? WHERE id IN ({marks})",
+            (time.time(), *ids),
+        )
+        self.db.commit()
+
+    def absorb(self, keep: int, gone: int) -> None:
+        """Duplicate merge: fold `gone`'s usage into `keep` (unless pinned), archive `gone`."""
+        self.db.execute(
+            "UPDATE facts SET use_count = use_count + (SELECT use_count FROM facts WHERE id=?), "
+            "last_used_at = nullif(max(coalesce(last_used_at, 0), "
+            "coalesce((SELECT last_used_at FROM facts WHERE id=?), 0)), 0) WHERE id=? AND pinned=0",
+            (gone, gone, keep),
+        )
+        self.db.execute("UPDATE facts SET archived_at=? WHERE id=?", (time.time(), gone))
+        self.db.commit()
 
     def add_chunk(
         self,
@@ -270,29 +316,69 @@ class MemoryStore:
         )
 
     # -------------------------------------------------------------- reads
-    def fts(self, kind: str, query: str, limit: int) -> list[int]:
+    def find_facts(self, substring: str, *, include_archived: bool = False) -> list[tuple[int, str]]:
+        where = "" if include_archived else f" AND {active()}"
+        args: tuple[Any, ...] = (self.tenant, substring) + (() if include_archived else (time.time(),))
+        rows = self.db.execute(
+            f"SELECT id, content FROM facts WHERE tenant_id=? AND instr(content, ?) > 0{where}", args
+        ).fetchall()
+        return [(int(r[0]), str(r[1])) for r in rows]
+
+    def get_fact(self, fact_id: int) -> dict[str, Any] | None:
+        cur = self.db.execute(
+            f"SELECT {FACT_COLUMNS} FROM facts WHERE id=? AND tenant_id=?", (fact_id, self.tenant)
+        )
+        row = cur.fetchone()
+        return dict(zip([d[0] for d in cur.description], row, strict=True)) if row else None
+
+    def fact_rows(self, *, active_only: bool = True) -> list[dict[str, Any]]:
+        where = f" AND {active()}" if active_only else ""
+        args: tuple[Any, ...] = (self.tenant, time.time()) if active_only else (self.tenant,)
+        cur = self.db.execute(f"SELECT {FACT_COLUMNS} FROM facts WHERE tenant_id=?{where} ORDER BY id", args)
+        names = [d[0] for d in cur.description]
+        return [dict(zip(names, r, strict=True)) for r in cur.fetchall()]
+
+    def active_ids(self, ids: list[int]) -> set[int]:
+        if not ids:
+            return set()
+        marks = ",".join("?" * len(ids))
+        rows = self.db.execute(
+            f"SELECT id FROM facts WHERE tenant_id=? AND id IN ({marks}) AND {active()}",
+            (self.tenant, *ids, time.time()),
+        ).fetchall()
+        return {int(r[0]) for r in rows}
+
+    def fts(self, kind: str, query: str, limit: int, include_archived: bool = False) -> list[int]:
         q = fts_query(query)
         if q is None:
             return []
         table, base = {"fact": ("facts_fts", "facts"), "chunk": ("chunks_fts", "chunks")}[kind]
+        only_active = kind == "fact" and not include_archived
+        where = f" AND {active('b')}" if only_active else ""
+        args: tuple[Any, ...] = (q, self.tenant, *((time.time(),) if only_active else ()), limit)
         rows = self.db.execute(
             f"SELECT f.rowid FROM {table} f JOIN {base} b ON b.id = f.rowid "
-            f"WHERE {table} MATCH ? AND b.tenant_id = ? ORDER BY rank LIMIT ?",
-            (q, self.tenant, limit),
+            f"WHERE {table} MATCH ? AND b.tenant_id = ?{where} ORDER BY rank LIMIT ?",
+            args,
         ).fetchall()
         return [int(r[0]) for r in rows]
 
-    def knn(self, kind: str, embedding: list[float], limit: int) -> list[int]:
+    def knn(self, kind: str, embedding: list[float], limit: int, include_archived: bool = False) -> list[int]:
         if not self.vec_enabled or len(embedding) != self.dims:
             return []
         import sqlite_vec
 
         table = {"fact": "facts_vec", "chunk": "chunks_vec"}[kind]
+        only_active = kind == "fact" and not include_archived
         rows = self.db.execute(
             f"SELECT rowid FROM {table}_{self.dims} WHERE embedding MATCH ? AND k = ? ORDER BY distance",
-            (sqlite_vec.serialize_float32(embedding), limit),
+            (sqlite_vec.serialize_float32(embedding), limit * 2 if only_active else limit),
         ).fetchall()
-        return [int(r[0]) for r in rows]
+        ids = [int(r[0]) for r in rows]
+        if only_active:  # over-fetch, then drop archived / expired facts
+            keep = self.active_ids(ids)
+            ids = [i for i in ids if i in keep]
+        return ids[:limit]
 
     def fetch(self, kind: str, ids: list[int]) -> dict[int, Row]:
         if not ids:
@@ -332,12 +418,23 @@ class MemoryStore:
             for r in self.db.execute(sql, args).fetchall()
         ]
 
-    def bump_trust(self, fact_id: int, delta: float) -> None:
-        self.db.execute("UPDATE facts SET trust = MIN(1.0, MAX(0.0, trust + ?)) WHERE id=?", (delta, fact_id))
+    def bump_trust(self, fact_id: int, delta: float) -> float | None:
+        self.db.execute(
+            "UPDATE facts SET trust = MIN(1.0, MAX(0.0, trust + ?)) WHERE id=? AND tenant_id=?",
+            (delta, fact_id, self.tenant),
+        )
         self.db.commit()
+        row = self.db.execute(
+            "SELECT trust FROM facts WHERE id=? AND tenant_id=?", (fact_id, self.tenant)
+        ).fetchone()
+        return float(row[0]) if row else None
 
     def counts(self) -> dict[str, int]:
-        return {
+        out = {
             t: int(self.db.execute(f"SELECT count(*) FROM {t}").fetchone()[0])
             for t in ("facts", "chunks", "transcript")
         }
+        out["archived"] = int(
+            self.db.execute("SELECT count(*) FROM facts WHERE archived_at IS NOT NULL").fetchone()[0]
+        )
+        return out
