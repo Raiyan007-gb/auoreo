@@ -13,8 +13,8 @@ from fastapi import APIRouter, HTTPException, status
 from auoreo.api.deps import AUTH, ServicesDep
 from auoreo.core.services import Services
 from auoreo.rtc.peers import RtcLimitError, RtcManager, RtcUnavailable, SdpTooLarge, manager_for
-from auoreo.schema.chat import RtcAnswer, RtcClosed, RtcOffer, RtcPeerInfo
-from auoreo.schema.rtc_transport import RtcJoinInfo, RtcJoinRequest, RtcLeft
+from auoreo.schema.chat import RtcAnswer, RtcClosed, RtcPeerInfo
+from auoreo.schema.rtc_transport import RtcJoinInfo, RtcJoinRequest, RtcLeft, RtcOffer
 
 router = APIRouter(prefix="/api/rtc", tags=["rtc"], dependencies=AUTH)
 
@@ -24,6 +24,7 @@ _ERRORS: dict[type[Exception], int] = {
     RtcUnavailable: status.HTTP_501_NOT_IMPLEMENTED,
     RtcLimitError: status.HTTP_429_TOO_MANY_REQUESTS,
     ValueError: status.HTTP_400_BAD_REQUEST,
+    PermissionError: status.HTTP_403_FORBIDDEN,  # F1: `input: true` without teleop_input_enabled
 }
 
 
@@ -36,6 +37,7 @@ def manager(svc: Services) -> RtcManager:
     response_model=RtcAnswer,
     status_code=status.HTTP_201_CREATED,
     responses={
+        403: {"description": "`input: true` while `settings.teleop_input_enabled` is false"},
         413: {"description": "SDP over 64 KiB"},
         429: {"description": "Too many peers (`rtc_max_peers`)"},
         501: {"description": "aiortc not installed: `install auoreo[rtc]`"},
@@ -43,10 +45,14 @@ def manager(svc: Services) -> RtcManager:
 )
 async def offer(body: RtcOffer, svc: ServicesDep) -> RtcAnswer:
     """Answer an SDP offer (non-trickle: send the offer after ICE gathering completes)."""
+    if body.input and not svc.settings.teleop_input_enabled:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "teleop input is disabled")
     if body.session_id is not None and await svc.get_session(body.session_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
     try:
-        rtc_id, sdp = await manager(svc).offer(body.sdp, body.type, body.session_id)
+        rtc_id, sdp = await manager(svc).offer(
+            body.sdp, body.type, body.session_id, speak=body.speak, input_=body.input
+        )
     except tuple(_ERRORS) as exc:
         code = next(c for t, c in _ERRORS.items() if isinstance(exc, t))
         raise HTTPException(code, str(exc)) from None

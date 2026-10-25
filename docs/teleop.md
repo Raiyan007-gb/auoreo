@@ -100,6 +100,40 @@ Sensors and devices are never core: they are out-of-process plugins with their o
 Both ship `enabled: false`; enable them in `plugin.yaml` (or an overlay) and configure
 `settings.plugins.mqtt` / `settings.plugins.miio`.
 
+## Remote input: the `auoreo-input` channel (F1, "teleop beyond view")
+
+Off by default. With `settings.teleop_input_enabled: true`, an authenticated client opens the
+peer with `{"sdp": …, "session_id": "ses_…", "input": true}` and creates a data channel
+labelled `auoreo-input` (next to `auoreo-events`). Without the setting the offer is refused
+with **403**, and on peers opened without `input: true` the channel is ignored.
+
+Frames are JSON, coordinates relative 0–1000 like the `computer` tool:
+
+```json
+{"id": "e1", "op": "click", "x": 500, "y": 500}
+{"id": "e2", "op": "type", "text": "hello"}
+{"id": "e3", "op": "key", "key": "ctrl+s"}
+{"id": "e4", "op": "scroll", "x": 500, "y": 500, "direction": "down", "amount": 3}
+```
+
+`move` is accepted by the protocol but acked `ok: false`: the `computer` tool has no hover op.
+
+**Approvals path.** Every event becomes one `computer` tool call through the normal executor
+in the peer's session, `interactive=True`: floors (lock/logout/kill combos, download-to-shell
+text), Starlark policies, permission rules, hooks and audit all apply exactly as for the
+agent. An `ask` decision is an ordinary `permission.requested` on SSE `/api/events` and `/ws`,
+answered with `POST /api/permissions/{id}/reply` (an `always` grant then covers that op for
+the session). Nothing about the approval travels over the data channel (§19.12); the
+channel only gets the ack once the call finished:
+
+```json
+{"id": "e1", "ok": true, "detail": "click at 500,500 [background]: ok - click done"}
+```
+
+Events run one at a time in arrival order. At most 30 events per rolling second per peer;
+the rest are dropped silently and counted. Each accepted event is audited as
+`teleop.input{rtc_id, op}` — typed text only as `text_chars`, never the text.
+
 ## What was not tested here
 
 There was no MQTT broker hardware, Xiaomi device, LiveKit server, SIP carrier or TURN server in
@@ -112,4 +146,5 @@ this environment.
   API calls (room, SIP, egress) ran against a fake client. No call was placed, no egress file
   was written, and Cloud was never contacted.
 - aiortc join: real loopback offer/answer through the API; no NAT traversal.
+- Teleop input: aiortc loopback against the `fake` desktop backend; no real display was driven.
 - STUN: the doctor probe was tested against a local UDP responder; public STUN only in live runs.

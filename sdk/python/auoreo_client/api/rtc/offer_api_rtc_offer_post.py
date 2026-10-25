@@ -60,6 +60,10 @@ def _parse_response(
 
         return response_201
 
+    if response.status_code == 403:
+        response_403 = cast(Any, None)
+        return response_403
+
     if response.status_code == 413:
         response_413 = cast(Any, None)
         return response_413
@@ -113,6 +117,9 @@ def sync_detailed(
         body (RtcOffer): Client SDP offer. The client must create the `auoreo-events` data channel
             first.
 
+            F1: offer an audio m-line (`sendrecv`, or `recvonly` to only listen) to hear the agent;
+            `input: true` additionally accepts an `auoreo-input` data channel (teleop).
+
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
@@ -154,6 +161,9 @@ def sync(
         body (RtcOffer): Client SDP offer. The client must create the `auoreo-events` data channel
             first.
 
+            F1: offer an audio m-line (`sendrecv`, or `recvonly` to only listen) to hear the agent;
+            `input: true` additionally accepts an `auoreo-input` data channel (teleop).
+
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
         httpx.TimeoutException: If the request takes longer than Client.timeout.
@@ -189,6 +199,9 @@ async def asyncio_detailed(
         auoreo_token (None | str | Unset):
         body (RtcOffer): Client SDP offer. The client must create the `auoreo-events` data channel
             first.
+
+            F1: offer an audio m-line (`sendrecv`, or `recvonly` to only listen) to hear the agent;
+            `input: true` additionally accepts an `auoreo-input` data channel (teleop).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.
@@ -228,6 +241,9 @@ async def asyncio(
         auoreo_token (None | str | Unset):
         body (RtcOffer): Client SDP offer. The client must create the `auoreo-events` data channel
             first.
+
+            F1: offer an audio m-line (`sendrecv`, or `recvonly` to only listen) to hear the agent;
+            `input: true` additionally accepts an `auoreo-input` data channel (teleop).
 
     Raises:
         errors.UnexpectedStatus: If the server returns an undocumented status code and Client.raise_on_unexpected_status is True.

@@ -3292,8 +3292,14 @@
       },
       "RtcOffer": {
         "additionalProperties": false,
-        "description": "Client SDP offer. The client must create the `auoreo-events` data channel first.",
+        "description": "Client SDP offer. The client must create the `auoreo-events` data channel first.\n\nF1: offer an audio m-line (`sendrecv`, or `recvonly` to only listen) to hear the agent;\n`input: true` additionally accepts an `auoreo-input` data channel (teleop).",
         "properties": {
+          "input": {
+            "default": false,
+            "description": "Accept the `auoreo-input` teleop channel; 403 unless `settings.teleop_input_enabled`",
+            "title": "Input",
+            "type": "boolean"
+          },
           "sdp": {
             "description": "Offer SDP (\u2264 64 KiB, else 413); never logged",
             "title": "Sdp",
@@ -3310,6 +3316,18 @@
             ],
             "description": "Auto-subscribe the events channel to it",
             "title": "Session Id"
+          },
+          "speak": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`false` opts this peer out of spoken replies (default: `settings.voice_speak_over_rtc`)",
+            "title": "Speak"
           },
           "type": {
             "const": "offer",
@@ -9618,6 +9636,9 @@
               }
             },
             "description": "Successful Response"
+          },
+          "403": {
+            "description": "`input: true` while `settings.teleop_input_enabled` is false"
           },
           "413": {
             "description": "SDP over 64 KiB"
