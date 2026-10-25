@@ -138,7 +138,8 @@ async def test_resource_round_trip_through_tools(services: Services, workdir: Pa
     text, err = await _exec(services, workdir, "s", read, {"server": "nope", "uri": "x://y"})
     assert err and "not connected" in text
     tool = services.harness.tools[read].manifest
-    assert (tool.permission, tool.pattern_arg, tool.default_action) == ("read", "uri", "ask")
+    # Its own permission name: the bundled `read * allow` rule must not auto-approve it.
+    assert (tool.permission, tool.pattern_arg, tool.default_action) == ("mcp_resource", "uri", "ask")
     await bridge.stop()
 
 

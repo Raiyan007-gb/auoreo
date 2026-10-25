@@ -116,7 +116,11 @@ async def test_install_start_register_and_round_trip(svc: Services, workdir: Pat
     receipt = await host.deliveries["echo_log"].send("t1", "hello", meta={})
     assert receipt.ok and receipt.external_id == "line-t1"
     assert read(log_path) == "t1\thello\n"
-    assert host.delivery_registry is False  # no auoreo.backends.delivery in this checkout
+    # The shared delivery registry (backends/delivery.py) is present: plugin deliveries land there.
+    assert host.delivery_registry is True
+    from auoreo.backends.delivery import DYNAMIC
+
+    assert any(name.startswith("echo") for name in DYNAMIC)
     assert [s.name for s in host.skills("echo")] == ["echo-usage"]
     # bundled telegram/discord are discovered but disabled by default
     statuses = {r["name"]: r["status"] for r in host.rows()}
