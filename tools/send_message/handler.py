@@ -15,7 +15,26 @@ async def run(args: dict, ctx: ToolContext) -> str:
         raise ToolError(
             "messages over 500 characters need a summary (put big results on the board: board_put)"
         )
+    if args["to"].startswith(("bridge:", "uds:")):  # --- W2-B: another instance (remote/bridge.py)
+        return await _remote(args, ctx, teams, me, summary)
     rows = await attempt(teams.mail.send(team.id, me, args["to"], args["message"], summary))
     if args["to"] != BROADCAST:
         await teams.supervisor.on_mail(team.id, ctx.session_id, args["to"])
     return f"delivered to {', '.join(r.recipient for r in rows) or 'nobody'}"
+
+
+async def _remote(args: dict, ctx: ToolContext, teams, me: str, summary: str) -> str:
+    from auoreo.remote import bridge
+
+    try:
+        out = await bridge.send(
+            teams.s,
+            sender_member=me,
+            to=args["to"],
+            message=args["message"],
+            summary=summary,
+            session_id=ctx.session_id,
+        )
+    except bridge.BridgeError as exc:
+        raise ToolError(str(exc)) from exc
+    return f"delivered to {args['to']} (their team {out.team}, mail #{out.mail_id})"

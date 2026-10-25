@@ -60,3 +60,10 @@ app.add_typer(skill.app, name="skill", help="Skills: lint frontmatter and bodies
 from auoreo.cli.commands import policy  # noqa: E402
 
 app.add_typer(policy.app, name="policy", help="Adaptive turn policies: bandit status, reset.")
+
+# --- W2-B: remote plane
+from auoreo.cli.commands import daemon, env, exec_server  # noqa: E402
+
+app.add_typer(daemon.app, name="daemon", help="Run the server detached on <home>/auoreo.sock (POSIX).")
+app.command("exec-server")(exec_server.exec_server)
+app.add_typer(env.app, name="env", help="Execution environments and bridge peers.")

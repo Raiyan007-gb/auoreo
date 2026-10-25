@@ -40,6 +40,21 @@ def run(
         err_console.print(f"[red]--format must be one of {', '.join(FORMATS)}[/red]")
         raise typer.Exit(2)
     st = settings(gateway=gateway)
+    from auoreo.remote import cli_client, uds  # --- W2-B: a live daemon socket wins
+
+    if (sock := uds.daemon_socket(st.home)) is not None:
+        code = cli_client.run_over_socket(
+            sock,
+            prompt,
+            agent=agent,
+            workflow=workflow,
+            model=model,
+            session=session,
+            fmt=fmt,
+            pretty=_pretty,
+            note=lambda msg: err_console.print(f"[dim]{msg}[/dim]"),
+        )
+        raise typer.Exit(code)
     code = asyncio.run(_run(st, prompt, agent, workflow, model, session, fmt))
     raise typer.Exit(code)
 

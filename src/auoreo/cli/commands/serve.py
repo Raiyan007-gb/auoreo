@@ -4,6 +4,7 @@ import os
 import socket
 import sys
 import webbrowser
+from pathlib import Path
 from typing import Annotated
 
 import typer
@@ -21,8 +22,12 @@ def serve(
         int | None,
         typer.Option(help="Worker processes (opt-in; >1 needs redis_url and sticky sessions)."),
     ] = None,
+    uds: Annotated[
+        Path | None,
+        typer.Option(help="Also/instead serve on this Unix socket (0600; no token needed on it)."),
+    ] = None,
 ) -> None:
-    """Run the API server (one app, one port)."""
+    """Run the API server (one app, one port; optionally a Unix socket too)."""
     import uvicorn
 
     from auoreo.api.app import create_app
@@ -32,6 +37,9 @@ def serve(
         err_console.print("[red]refusing to bind a non-loopback address without AUOREO_SERVER_PASSWORD[/red]")
         raise typer.Exit(2)
     _check_workers(st)
+    if uds is not None:  # --- W2-B: the daemon's socket (TCP only when --port is given)
+        _serve_uds(st, uds, tcp=port is not None)
+        return
     sock = socket.socket(socket.AF_INET6 if ":" in st.host else socket.AF_INET)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
@@ -108,3 +116,53 @@ def _run_workers(st: Settings, sock: socket.socket, bound: int, url: str, open_b
         Multiprocess(config, sockets=[sock]).run()
     except KeyboardInterrupt:
         sys.exit(0)
+
+
+def _serve_uds(st: Settings, path: Path, *, tcp: bool) -> None:
+    """Serve `create_app` on a Unix socket (+ TCP with --port). Requests over the socket are
+    trusted by file permissions (`remote.uds.TrustUnixSocket`); TCP keeps bearer auth."""
+    import uvicorn
+
+    from auoreo.api.app import create_app
+    from auoreo.remote import uds as uds_mod
+
+    if not uds_mod.supported():
+        err_console.print("[red]--uds needs a POSIX system with AF_UNIX[/red]")
+        raise typer.Exit(2)
+    if st.workers > 1:
+        err_console.print("[red]--uds runs a single worker[/red]")
+        raise typer.Exit(2)
+    try:
+        sockets = [uds_mod.bind_unix(path)]
+        urls = [f"unix:{path}"]
+        if tcp:
+            tsock = socket.socket(socket.AF_INET6 if ":" in st.host else socket.AF_INET)
+            tsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            tsock.bind((st.host, st.port))
+            sockets.append(tsock)
+            urls.append(f"http://{st.host}:{tsock.getsockname()[1]}")
+    except OSError as exc:
+        err_console.print(f"[red]cannot bind: {exc}[/red]")
+        raise typer.Exit(2) from exc
+    inner = create_app(st)
+
+    class _Server(uvicorn.Server):
+        async def startup(self, sockets: list[socket.socket] | None = None) -> None:
+            await super().startup(sockets=sockets)
+            if self.started:
+                print(f"server listening on {' and '.join(urls)}", flush=True)
+
+        async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+            svc = getattr(inner.state, "services", None)
+            if svc is not None:
+                await svc.connections.close_all(1001)
+            await super().shutdown(sockets=sockets)
+
+    app = uds_mod.TrustUnixSocket(inner, st.server_password)
+    server = _Server(uvicorn.Config(app, log_level="info", lifespan="on"))
+    try:
+        server.run(sockets=sockets)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        path.unlink(missing_ok=True)

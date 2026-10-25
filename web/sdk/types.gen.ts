@@ -64,6 +64,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/bridge/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Inbox
+         * @description Verify `X-Auoreo-Signature` and deliver into the local team mailbox as
+         *     `from: bridge:<sender>/<member>`. The signature covers the raw body bytes.
+         */
+        post: operations["inbox_api_bridge_inbox_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat": {
         parameters: {
             query?: never;
@@ -239,6 +260,26 @@ export interface paths {
          * @description The `auoreo doctor` checks against the live server (no repairs, no secret values).
          */
         get: operations["doctor_api_doctor_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/environments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Environments
+         * @description Environment backends, named environments, the exec-server and bridge peers. No secrets.
+         */
+        get: operations["environments_api_environments_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1711,6 +1752,55 @@ export interface components {
             /** Session Id */
             session_id?: string | null;
         };
+        /** BridgeDelivered */
+        BridgeDelivered: {
+            /** Mail Id */
+            mail_id: number;
+            /** Recipient */
+            recipient: string;
+            /**
+             * Sender
+             * @description As stored in the receiver's mailbox: `bridge:<instance>/<member>`
+             */
+            sender: string;
+            /** Team */
+            team: string;
+        };
+        /**
+         * BridgeEnvelope
+         * @description `POST /api/bridge/inbox` body. Signed with HMAC-SHA256 over
+         *     `"<timestamp>.<nonce>." + raw body` (header `X-Auoreo-Signature: sha256=<hex>`).
+         */
+        BridgeEnvelope: {
+            /** From Member */
+            from_member: string;
+            /** Message */
+            message: string;
+            /** Nonce */
+            nonce: string;
+            /**
+             * Sender
+             * @description Sending instance, as the receiver's `bridges` key
+             */
+            sender: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
+             * Team
+             * @description Receiver team id or name
+             */
+            team?: string | null;
+            /**
+             * Timestamp
+             * @description Unix seconds; accepted within ±300 s
+             */
+            timestamp: number;
+            /** To Member */
+            to_member: string;
+        };
         /** ChatAccepted */
         ChatAccepted: {
             /**
@@ -2011,6 +2101,46 @@ export interface components {
              * @default 0
              */
             warn: number;
+        };
+        /**
+         * EnvironmentInfo
+         * @description One place commands (or mail) can go. Never carries a secret.
+         */
+        EnvironmentInfo: {
+            /** Backend */
+            backend?: string | null;
+            /**
+             * Detail
+             * @default
+             */
+            detail: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "backend" | "named" | "remote" | "bridge";
+            /** Name */
+            name: string;
+            /**
+             * Ok
+             * @description check() result; null when not checked
+             */
+            ok?: boolean | null;
+            /**
+             * Remote
+             * @default false
+             */
+            remote: boolean;
+            /**
+             * Selected
+             * @default false
+             */
+            selected: boolean;
+            /**
+             * Url
+             * @description Endpoint without credentials, query or fragment
+             */
+            url?: string | null;
         };
         /** FactActionResult */
         FactActionResult: {
@@ -3291,6 +3421,67 @@ export interface operations {
             };
         };
     };
+    inbox_api_bridge_inbox_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BridgeEnvelope"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BridgeDelivered"];
+                };
+            };
+            /** @description Bad signature, stale timestamp or replayed nonce */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown bridge */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such team or member here */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Teams are not running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     chat_api_chat_post: {
         parameters: {
             query?: {
@@ -3657,6 +3848,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DoctorReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    environments_api_environments_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvironmentInfo"][];
                 };
             };
             /** @description Validation Error */

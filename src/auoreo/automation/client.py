@@ -46,6 +46,12 @@ def remote(
     if auth and password:
         hdrs["Authorization"] = f"Bearer {password}"
     try:
+        if url.startswith("unix:"):  # --- W2-B: `--url unix:<home>/auoreo.sock` (the daemon)
+            sock = url.removeprefix("unix:").removeprefix("//")
+            with httpx.Client(transport=httpx.HTTPTransport(uds=sock), timeout=30) as c:
+                return c.request(
+                    method, "http://auoreo" + path, json=json, params=params, content=content, headers=hdrs
+                )
         return httpx.request(
             method,
             url.rstrip("/") + path,

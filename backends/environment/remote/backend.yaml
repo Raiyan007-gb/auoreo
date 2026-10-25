@@ -1,0 +1,12 @@
+kind: environment
+name: remote
+description: >-
+  Commands run on another machine through an `auoreo exec-server` (WebSocket JSON-RPC,
+  bearer token). Configure settings.environment_remote {url, token: "secret:<name>"}.
+  The server re-checks the hardline floors and scrubs the environment.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

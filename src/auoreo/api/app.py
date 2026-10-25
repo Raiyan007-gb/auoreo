@@ -18,6 +18,7 @@ from starlette.types import ASGIApp, Scope
 from auoreo import __version__
 from auoreo.api import mcp_server, ws
 from auoreo.api.routers import acp as acp_router
+from auoreo.api.routers import bridge as bridge_router  # --- W2-B
 from auoreo.api.routers import (
     chat,
     compaction,
@@ -33,6 +34,7 @@ from auoreo.api.routers import (
 from auoreo.api.routers import commands as commands_router
 from auoreo.api.routers import cron as cron_router
 from auoreo.api.routers import deliveries as deliveries_router
+from auoreo.api.routers import environments as environments_router  # --- W2-B
 
 # --- W0-C
 from auoreo.api.routers import goals as goals_router
@@ -84,6 +86,9 @@ ROUTERS = (
     suggestions_router,
     # --- W1-C
     policy_router,
+    # --- W2-B
+    bridge_router,
+    environments_router,
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

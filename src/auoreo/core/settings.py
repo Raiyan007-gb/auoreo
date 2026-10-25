@@ -21,6 +21,7 @@ from pydantic_settings import (
 
 from auoreo.core.paths import home_dir
 from auoreo.policy.config import BanditSettings
+from auoreo.remote.config import BridgePeer, RemoteEnvironment  # --- W2-B
 
 log = logging.getLogger(__name__)
 
@@ -317,6 +318,13 @@ class Settings(BaseSettings):
     workers: int = Field(default=1, ge=1, le=64)
     """Uvicorn worker processes. >1 refuses to start without `redis_url`; sticky sessions
     are required at the load balancer (approvals, WS connections and runs are per process)."""
+    # --- W2-B: remote plane (daemon, exec-server client, instance bridges)
+    environment_remote: RemoteEnvironment | None = None
+    """`backends/environment/remote`: `{url: "ws://127.0.0.1:7071", token: "secret:<name>"}`."""
+    bridges: dict[str, BridgePeer] = Field(default_factory=dict)
+    """Peer instances for mailbox `bridge:<name>/<member>` addressing (HMAC-signed)."""
+    instance_name: str = Field(default="auoreo", pattern=r"^[A-Za-z0-9_.-]{1,32}$")
+    """How this instance names itself to bridge peers (overridable per peer: `as_name`)."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):
