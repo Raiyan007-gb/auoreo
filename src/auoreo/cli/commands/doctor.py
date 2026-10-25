@@ -1,234 +1,32 @@
-"""`auoreo doctor`: report problems with a cause and remedy. Never repairs anything."""
+"""`auoreo doctor`: report problems with a cause and remedy. Never repairs anything.
+
+The checks live in `auoreo.core.diagnostics` (shared with `GET /api/doctor`); this module prints."""
 
 from __future__ import annotations
 
 import asyncio
-import os
-import socket
-import sqlite3
-import sys
-from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated
 
 import typer
 
 from auoreo.cli.common import console, dump_json, settings
-from auoreo.core.paths import bundled_root
-from auoreo.core.settings import ModelGroup, Settings
-from auoreo.harness.discovery import default_roots
-from auoreo.harness.registry import Harness, HarnessError
-
-Level = Literal["ok", "warn", "error"]
-
-
-def _check(name: str, level: Level, detail: str, remedy: str = "") -> dict[str, str]:
-    return {"check": name, "level": level, "detail": detail, "remedy": remedy}
+from auoreo.core import diagnostics
+from auoreo.core.settings import Settings
+from auoreo.harness.registry import Harness
 
 
 def _backend_checks(st: Settings, h: Harness) -> list[dict[str, str]]:
-    """One row per backend kind: which one is selected and whether its `check()` passes."""
-    import shutil
-
-    out: list[dict[str, str]] = []
-    kinds = sorted({d.manifest.kind for d in h.snapshot.backends.values()})
-    for kind in kinds:
-        try:
-            bdef = h.select_backend(kind, st.backends.get(kind))
-        except KeyError as exc:
-            out.append(_check(f"backend:{kind}", "error", str(exc), "fix settings.backends"))
-            continue
-        if bdef is None:
-            names = sorted(h.backends_for(kind))
-            out.append(
-                _check(
-                    f"backend:{kind}",
-                    "warn",
-                    f"none selected (available: {names})",
-                    f"set settings.backends.{kind}",
-                )
-            )
-            continue
-        m = bdef.manifest
-        missing = [b for b in m.requires_binaries if shutil.which(b) is None]
-        posture = "" if m.posture == "ok" else f" [{m.posture}]"
-        if missing:
-            out.append(
-                _check(
-                    f"backend:{kind}",
-                    "warn",
-                    f"{m.name}{posture}: missing {missing}",
-                    f"install {', '.join(missing)} or pick another backend",
-                )
-            )
-            continue
-        try:
-            inst = bdef.load()(st)
-            status = asyncio.run(asyncio.wait_for(inst.check(), 10))
-            ok = bool(getattr(status, "ok", status))
-            detail = getattr(status, "detail", "") or ("ready" if ok else "not ready")
-            remedy = getattr(status, "remedy", "") or ""
-            level: Level = "ok" if ok else "warn"
-            if kind == "sandbox":
-                level, detail = _sandbox_detail(st, inst, ok, detail)
-            out.append(_check(f"backend:{kind}", level, f"{m.name}{posture}: {detail}", remedy))
-        except Exception as exc:
-            out.append(
-                _check(f"backend:{kind}", "warn", f"{m.name}{posture}: {exc}", "see backends/README.md")
-            )
-    return out
+    """Backend rows as dicts (kept for callers of the pre-diagnostics helper)."""
+    return [c.as_dict() for c in asyncio.run(diagnostics.backend_checks(st, h))]
 
 
-def _sandbox_detail(st: Settings, inst: object, ok: bool, detail: str) -> tuple[Level, str]:
-    """The sandbox row says whether isolation is enforced and what the policy does on failure."""
-    caps: dict[str, bool] = getattr(inst, "capabilities", dict)()
-    enforced = ok and any(caps.values())
-    detail = f"{detail}; enforced={enforced}; policy={st.sandbox_policy}"
-    if ok:
-        return "ok", detail
-    if st.sandbox_policy == "fail":
-        return "error", detail + " → the server refuses to start"
-    return "warn", detail + " → falls back to 'none' (enforced=False)"
-
-
-def _plugin_checks(st: Settings, h: Harness) -> list[dict[str, str]]:
-    """One row per enabled plugin: is its venv/lock still in sync with the folder?"""
-    from auoreo.plugins.install import verify
-
-    out: list[dict[str, str]] = []
-    for name, d in sorted(h.plugins.items()):
-        if not d.manifest.enabled:
-            continue
-        state = verify(st.home, name, d.path.parent)
-        level: Level = "ok" if state == "ok" else "warn"
-        out.append(
-            _check(
-                f"plugin:{name}", level, state, "" if state == "ok" else f"run `auoreo plugin reload {name}`"
-            )
-        )
-    return out
+def _credential_checks(st: Settings) -> list[dict[str, str]]:
+    return [c.as_dict() for c in diagnostics.credential_checks(st)]
 
 
 def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
     """Check the environment, definitions, database and credentials."""
-    st = settings()
-    out: list[dict[str, str]] = []
-    py = sys.version_info
-    out.append(
-        _check(
-            "python",
-            "ok" if py >= (3, 12) else "error",
-            sys.version.split()[0],
-            "install Python 3.12+",
-        )
-    )
-    sv = tuple(int(x) for x in sqlite3.sqlite_version.split("."))
-    out.append(
-        _check(
-            "sqlite",
-            "ok" if sv >= (3, 41) else "warn",
-            sqlite3.sqlite_version,
-            "SQLite ≥3.41 is needed for LIMIT-style vector KNN",
-        )
-    )
-    try:
-        import sqlite_vec
-
-        db = sqlite3.connect(":memory:")
-        db.enable_load_extension(True)
-        sqlite_vec.load(db)
-        out.append(_check("sqlite-vec", "ok", db.execute("select vec_version()").fetchone()[0]))
-    except Exception as exc:
-        out.append(
-            _check(
-                "sqlite-vec",
-                "warn",
-                f"unavailable ({exc})",
-                "memory runs FTS-only; use a Python build with loadable extensions",
-            )
-        )
-    try:
-        st.home.mkdir(parents=True, exist_ok=True)
-        probe = st.home / ".doctor"
-        probe.write_text("ok")
-        probe.unlink()
-        out.append(_check("home", "ok", str(st.home)))
-    except OSError as exc:
-        out.append(_check("home", "error", f"{st.home}: {exc}", "set AUOREO_HOME to a writable dir"))
-    try:
-        h = Harness(default_roots(st.home, Path.cwd(), bundled_root(), st.extra_roots))
-        level: Level = "warn" if h.errors else "ok"
-        counts = {k: len(v) for k, v in h.describe().items()}
-        out.extend(_backend_checks(st, h))
-        out.extend(_plugin_checks(st, h))
-        out.append(
-            _check(
-                "harness",
-                level,
-                f"{counts}; {len(h.errors)} overlay error(s)",
-                "run `auoreo harness validate`",
-            )
-        )
-    except HarnessError as exc:
-        out.append(
-            _check(
-                "harness",
-                "error",
-                f"{len(exc.errors)} bundled error(s): {exc.errors[0]}",
-                "fix the bundled definition",
-            )
-        )
-    if st.gateway == "litellm":
-        out.extend(_credential_checks(st))
-    else:
-        out.append(_check("credentials", "ok", "fake gateway (no key needed)"))
-    with socket.socket() as s:
-        free = s.connect_ex((st.host, st.port)) != 0
-    out.append(
-        _check(
-            "port",
-            "ok" if free else "warn",
-            f"{st.host}:{st.port} {'free' if free else 'in use'}",
-            "another process is listening; pick --port or stop it",
-        )
-    )
-    out.append(
-        _check(
-            "auth",
-            "ok" if st.server_password or st.is_loopback else "error",
-            "password set" if st.server_password else "no password (loopback only)",
-            "set AUOREO_SERVER_PASSWORD before binding beyond loopback",
-        )
-    )
-    if st.db_path.is_file():
-        from auoreo.core.audit import AuditLog
-        from auoreo.core.db import Database
-
-        async def chain() -> int | None:
-            db = Database(st.db_path)
-            await db.init()
-            try:
-                return await AuditLog(db).verify()
-            finally:
-                await db.close()
-
-        broken = asyncio.run(chain())
-        out.append(
-            _check(
-                "audit",
-                "ok" if broken is None else "error",
-                "hash chain intact" if broken is None else f"chain broken at seq {broken}",
-                "the audit log was modified outside auoreo",
-            )
-        )
-    out.append(
-        _check(
-            "yolo",
-            "warn" if os.environ.get("AUOREO_YOLO") else "ok",
-            "AUOREO_YOLO set (prompts skipped; floors still apply)"
-            if os.environ.get("AUOREO_YOLO")
-            else "off",
-        )
-    )
+    out = [c.as_dict() for c in asyncio.run(diagnostics.run_checks(settings()))]
     if as_json:
         dump_json(out)
     else:
@@ -240,24 +38,3 @@ def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
             console.print(line)
     if any(c["level"] == "error" for c in out):
         raise typer.Exit(1)
-
-
-def _credential_checks(st: Settings) -> list[dict[str, str]]:
-    """One row per configured model: the provider prefix decides which key it needs."""
-    from auoreo.core.secrets import SecretStore
-    from auoreo.gateway.gateway import credential_status
-
-    store = SecretStore(st.home, st.keyring)
-    models = [m for g in ("default", "small") for m in st.models.get(g, ModelGroup()).models]
-    if st.model and "/" in st.model:
-        models.insert(0, st.model)
-    rows = []
-    for model in dict.fromkeys(models):
-        ready, detail = credential_status(model, store.get)
-        if ready:
-            rows.append(_check("credentials", "ok", detail))
-            continue
-        key = detail.split("missing ", 1)[-1].split(" or ")[0].split(",")[0]
-        hint = f"set {key} in .env, the environment, or `auoreo secrets set {key}`"
-        rows.append(_check("credentials", "warn", detail, hint))
-    return rows

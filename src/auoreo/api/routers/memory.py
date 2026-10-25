@@ -1,10 +1,16 @@
-from fastapi import APIRouter, HTTPException, status
+import time
+from typing import Annotated, Any
+
+from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.core.redaction import redact
 from auoreo.memory import curator as curator_mod
+from auoreo.memory.files import FILES
 from auoreo.memory.service import MemoryService
 from auoreo.schema.chat import CuratorReport, CuratorReportText, FactActionResult, FactFeedback, FactPin
+from auoreo.schema.ops import MemoryFact, MemoryFactPage, MemoryFile, MemoryFiles
 
 router = APIRouter(prefix="/api/memory", tags=["memory"], dependencies=AUTH)
 
@@ -87,3 +93,50 @@ async def curator_report(svc: ServicesDep) -> CuratorReportText:
     if path is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no curator report yet")
     return CuratorReportText(path=str(path), markdown=path.read_text(encoding="utf-8"))
+
+
+# --- W0-B: fact listing and the memory markdown files (read-only)
+def _fact(row: dict[str, Any], now: float) -> MemoryFact:
+    expired = row.get("valid_to") is not None and float(row["valid_to"]) <= now
+    return MemoryFact(
+        **{k: v for k, v in row.items() if k in MemoryFact.model_fields},
+        archived=row.get("archived_at") is not None or expired,
+    )
+
+
+@router.get("/facts", response_model=MemoryFactPage)
+async def list_facts(
+    svc: ServicesDep,
+    query: str | None = None,
+    include_archived: bool = False,
+    pinned: bool | None = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> MemoryFactPage:
+    """Facts newest first. `query` is a case-insensitive substring; archived/expired facts
+    appear only with `include_archived`."""
+    mem = _memory(svc)
+    rows = await mem._run(mem.store.fact_rows, active_only=not include_archived)
+    needle = (query or "").strip().lower()
+    if needle:
+        rows = [r for r in rows if needle in str(r["content"]).lower()]
+    if pinned is not None:
+        rows = [r for r in rows if bool(r.get("pinned")) == pinned]
+    rows.reverse()
+    now = time.time()
+    return MemoryFactPage(facts=[_fact(r, now) for r in rows[offset : offset + limit]], total=len(rows))
+
+
+@router.get("/files", response_model=MemoryFiles)
+async def memory_files(svc: ServicesDep) -> MemoryFiles:
+    """MEMORY.md / USER.md / PREFS.md / PROJECT.md under `<home>/memory/`, secrets redacted."""
+    d = svc.settings.home / "memory"
+    files: list[MemoryFile] = []
+    for name in FILES:
+        path = d / name
+        if not path.is_file():
+            files.append(MemoryFile(name=name, exists=False))
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        files.append(MemoryFile(name=name, exists=True, content=redact(text), size=len(text.encode())))
+    return MemoryFiles(dir=str(d), files=files)

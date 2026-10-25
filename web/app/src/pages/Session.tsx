@@ -10,6 +10,7 @@ import { QuestionForm } from "@/components/QuestionForm";
 import { MarkdownText } from "@/components/MarkdownLazy";
 import { SessionActions } from "@/components/SessionActions";
 import { ToolCard } from "@/components/ToolCard";
+import { VoiceButton } from "@/components/VoiceButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
@@ -338,6 +339,7 @@ function SessionPage({ id }: { id: string }) {
               <Button type="submit" disabled={busy || !text.trim()} aria-label="Send message">
                 <SendIcon aria-hidden /> Send
               </Button>
+              <VoiceButton sessionId={id} items={items} />
               {running && (
                 <div className="flex gap-1">
                   <Tip label="Steer the running turn with this text">

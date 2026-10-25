@@ -10,6 +10,10 @@ from .answer_api_questions_request_id_answer_post_response_answer_api_questions_
 from .answer_responses_item import AnswerResponsesItem
 from .archived_message import ArchivedMessage
 from .archived_message_tool_calls_type_0_item import ArchivedMessageToolCallsType0Item
+from .audit_entry import AuditEntry
+from .audit_entry_detail import AuditEntryDetail
+from .audit_page import AuditPage
+from .audit_verify import AuditVerify
 from .body_transcribe_api_voice_transcribe_post import BodyTranscribeApiVoiceTranscribePost
 from .cancel_api_sessions_session_id_cancel_post_response_cancel_api_sessions_session_id_cancel_post import (
     CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost,
@@ -32,6 +36,10 @@ from .curator_report_text import CuratorReportText
 from .delivery_info import DeliveryInfo
 from .delivery_info_result import DeliveryInfoResult
 from .delivery_replay import DeliveryReplay
+from .doctor_check import DoctorCheck
+from .doctor_check_level import DoctorCheckLevel
+from .doctor_report import DoctorReport
+from .doctor_summary import DoctorSummary
 from .export_api_sessions_session_id_export_get_format import ExportApiSessionsSessionIdExportGetFormat
 from .fact_action_result import FactActionResult
 from .fact_feedback import FactFeedback
@@ -51,6 +59,10 @@ from .kanban_task_status import KanbanTaskStatus
 from .latest_seq import LatestSeq
 from .list_tasks_api_kanban_get_status_type_0 import ListTasksApiKanbanGetStatusType0
 from .mail_message import MailMessage
+from .memory_fact import MemoryFact
+from .memory_fact_page import MemoryFactPage
+from .memory_file import MemoryFile
+from .memory_files import MemoryFiles
 from .message_out import MessageOut
 from .message_out_tool_calls_type_0_item import MessageOutToolCallsType0Item
 from .open_ai_chat_completion import OpenAIChatCompletion
@@ -109,6 +121,9 @@ from .voice_transcription import VoiceTranscription
 from .webhook_route_info import WebhookRouteInfo
 from .webhook_route_info_filters_item import WebhookRouteInfoFiltersItem
 from .webhook_route_info_provider import WebhookRouteInfoProvider
+from .welcome_event import WelcomeEvent
+from .welcome_event_action import WelcomeEventAction
+from .welcome_event_step import WelcomeEventStep
 
 __all__ = (
     "AddFactApiMemoryFactsPostResponseAddFactApiMemoryFactsPost",
@@ -117,6 +132,10 @@ __all__ = (
     "AnswerResponsesItem",
     "ArchivedMessage",
     "ArchivedMessageToolCallsType0Item",
+    "AuditEntry",
+    "AuditEntryDetail",
+    "AuditPage",
+    "AuditVerify",
     "BodyTranscribeApiVoiceTranscribePost",
     "CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost",
     "ChatAccepted",
@@ -137,6 +156,10 @@ __all__ = (
     "DeliveryInfo",
     "DeliveryInfoResult",
     "DeliveryReplay",
+    "DoctorCheck",
+    "DoctorCheckLevel",
+    "DoctorReport",
+    "DoctorSummary",
     "ExportApiSessionsSessionIdExportGetFormat",
     "FactActionResult",
     "FactFeedback",
@@ -156,6 +179,10 @@ __all__ = (
     "LatestSeq",
     "ListTasksApiKanbanGetStatusType0",
     "MailMessage",
+    "MemoryFact",
+    "MemoryFactPage",
+    "MemoryFile",
+    "MemoryFiles",
     "MessageOut",
     "MessageOutToolCallsType0Item",
     "OpenAIChatCompletion",
@@ -212,4 +239,7 @@ __all__ = (
     "WebhookRouteInfo",
     "WebhookRouteInfoFiltersItem",
     "WebhookRouteInfoProvider",
+    "WelcomeEvent",
+    "WelcomeEventAction",
+    "WelcomeEventStep",
 )

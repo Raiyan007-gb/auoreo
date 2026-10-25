@@ -24,6 +24,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit List
+         * @description Audit rows in seq order (`newest_first` reverses it). Filters combine with AND.
+         */
+        get: operations["audit_list_api_audit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/audit/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Audit Verify
+         * @description Recompute the SHA-256 hash chain; `first_break_seq` is the first row that fails.
+         */
+        get: operations["audit_verify_api_audit_verify_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat": {
         parameters: {
             query?: never;
@@ -181,6 +221,26 @@ export interface paths {
          *     with the same payload is queued (the original is untouched).
          */
         post: operations["replay_delivery_api_deliveries__delivery_id__replay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/doctor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Doctor
+         * @description The `auoreo doctor` checks against the live server (no repairs, no secret values).
+         */
+        get: operations["doctor_api_doctor_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -364,7 +424,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Facts
+         * @description Facts newest first. `query` is a case-insensitive substring; archived/expired facts
+         *     appear only with `include_archived`.
+         */
+        get: operations["list_facts_api_memory_facts_get"];
         put?: never;
         /** Add Fact */
         post: operations["add_fact_api_memory_facts_post"];
@@ -428,6 +493,26 @@ export interface paths {
          * @description Pin (or unpin with `pinned: false`): the curator never archives or merges pinned facts.
          */
         post: operations["pin_fact_api_memory_facts__fact_id__pin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Memory Files
+         * @description MEMORY.md / USER.md / PREFS.md / PROJECT.md under `<home>/memory/`, secrets redacted.
+         */
+        get: operations["memory_files_api_memory_files_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1023,6 +1108,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/welcome/event": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Welcome Event
+         * @description Record an onboarding step (completed / skipped / dismissed) in the audit log.
+         */
+        post: operations["welcome_event_api_welcome_event_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hooks/health": {
         parameters: {
             query?: never;
@@ -1130,6 +1235,65 @@ export interface components {
             tool_calls?: {
                 [key: string]: unknown;
             }[] | null;
+        };
+        /** AuditEntry */
+        AuditEntry: {
+            /** Action */
+            action: string;
+            /** Actor */
+            actor: string;
+            /**
+             * Decision
+             * @default
+             */
+            decision: string;
+            /**
+             * Detail
+             * @description Redacted detail payload
+             */
+            detail?: {
+                [key: string]: unknown;
+            };
+            /** Prev Hash */
+            prev_hash: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Row Hash */
+            row_hash: string;
+            /** Seq */
+            seq: number;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Ts
+             * Format: date-time
+             */
+            ts: string;
+        };
+        /** AuditPage */
+        AuditPage: {
+            /**
+             * Next After Seq
+             * @description Pass as `after_seq` for the next page; null at the end
+             */
+            next_after_seq?: number | null;
+            /** Rows */
+            rows: components["schemas"]["AuditEntry"][];
+        };
+        /** AuditVerify */
+        AuditVerify: {
+            /** First Break Seq */
+            first_break_seq?: number | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Rows
+             * @description Total audit rows checked
+             */
+            rows: number;
         };
         /** Body_transcribe_api_voice_transcribe_post */
         Body_transcribe_api_voice_transcribe_post: {
@@ -1397,6 +1561,53 @@ export interface components {
             /** Prompt */
             prompt: string;
         };
+        /** DoctorCheck */
+        DoctorCheck: {
+            /**
+             * Check
+             * @description Check name, e.g. `python`, `backend:stt`, `credentials`
+             */
+            check: string;
+            /** Detail */
+            detail: string;
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "ok" | "warn" | "error";
+            /**
+             * Remedy
+             * @default
+             */
+            remedy: string;
+        };
+        /**
+         * DoctorReport
+         * @description Read-only environment report: never repairs, never includes secret values.
+         */
+        DoctorReport: {
+            /** Checks */
+            checks: components["schemas"]["DoctorCheck"][];
+            summary: components["schemas"]["DoctorSummary"];
+        };
+        /** DoctorSummary */
+        DoctorSummary: {
+            /**
+             * Error
+             * @default 0
+             */
+            error: number;
+            /**
+             * Ok
+             * @default 0
+             */
+            ok: number;
+            /**
+             * Warn
+             * @default 0
+             */
+            warn: number;
+        };
         /** FactActionResult */
         FactActionResult: {
             /** Id */
@@ -1571,6 +1782,83 @@ export interface components {
             text: string;
             /** Type */
             type: string;
+        };
+        /** MemoryFact */
+        MemoryFact: {
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /** Archived At */
+            archived_at?: number | null;
+            /** Category */
+            category: string;
+            /** Content */
+            content: string;
+            /** Created At */
+            created_at: number;
+            /** Id */
+            id: number;
+            /** Last Used At */
+            last_used_at?: number | null;
+            /**
+             * Pinned
+             * @default false
+             */
+            pinned: boolean;
+            /** Source */
+            source?: string | null;
+            /** Supersedes Id */
+            supersedes_id?: number | null;
+            /** Trust */
+            trust: number;
+            /** Updated At */
+            updated_at: number;
+            /**
+             * Use Count
+             * @default 0
+             */
+            use_count: number;
+            /** Valid From */
+            valid_from?: number | null;
+            /** Valid To */
+            valid_to?: number | null;
+        };
+        /** MemoryFactPage */
+        MemoryFactPage: {
+            /** Facts */
+            facts: components["schemas"]["MemoryFact"][];
+            /**
+             * Total
+             * @description Matches before limit/offset
+             */
+            total: number;
+        };
+        /** MemoryFile */
+        MemoryFile: {
+            /**
+             * Content
+             * @description Markdown with secrets redacted
+             * @default
+             */
+            content: string;
+            /** Exists */
+            exists: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Size
+             * @default 0
+             */
+            size: number;
+        };
+        /** MemoryFiles */
+        MemoryFiles: {
+            /** Dir */
+            dir: string;
+            /** Files */
+            files: components["schemas"]["MemoryFile"][];
         };
         /** MessageOut */
         MessageOut: {
@@ -2246,6 +2534,22 @@ export interface components {
             /** Workflow */
             workflow: string | null;
         };
+        /**
+         * WelcomeEvent
+         * @description One onboarding step outcome; recorded in the audit log as `welcome.<action>`.
+         */
+        WelcomeEvent: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "completed" | "skipped" | "dismissed" | "finished";
+            /**
+             * Step
+             * @enum {string}
+             */
+            step: "doctor" | "credentials" | "model" | "tunnel" | "theme" | "demo" | "wizard";
+        };
     };
     responses: never;
     parameters: never;
@@ -2289,6 +2593,82 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_list_api_audit_get: {
+        parameters: {
+            query?: {
+                after_seq?: number | null;
+                before_seq?: number | null;
+                limit?: number;
+                session_id?: string | null;
+                action?: string | null;
+                newest_first?: boolean;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    audit_verify_api_audit_verify_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditVerify"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -2632,6 +3012,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeliveryReplay"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    doctor_api_doctor_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoctorReport"];
                 };
             };
             /** @description Validation Error */
@@ -2994,6 +3409,46 @@ export interface operations {
             };
         };
     };
+    list_facts_api_memory_facts_get: {
+        parameters: {
+            query?: {
+                query?: string | null;
+                include_archived?: boolean;
+                pinned?: boolean | null;
+                limit?: number;
+                offset?: number;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFactPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     add_fact_api_memory_facts_post: {
         parameters: {
             query?: {
@@ -3141,6 +3596,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactActionResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    memory_files_api_memory_files_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFiles"];
                 };
             };
             /** @description Validation Error */
@@ -4501,6 +4991,43 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WebhookRouteInfo"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    welcome_event_api_welcome_event_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WelcomeEvent"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

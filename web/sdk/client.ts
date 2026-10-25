@@ -4,6 +4,7 @@
  * Framework-agnostic: no React here.
  */
 import { type ControlOptions, connectControl } from "./control";
+import { opsMethods } from "./ops2"; // --- W0-B
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -240,6 +241,9 @@ export function createClient(opts: ClientOptions = {}) {
     addFact: (body: FactIn) =>
       request<{ id: number; created: boolean }>("POST", "/api/memory/facts", { body }),
 
+    // --- W0-B: doctor, audit, memory facts/files/curator, voice (web/sdk/ops2.ts)
+    ...opsMethods(request, base, token),
+
     subscribeEvents: (o: SubscribeOptions, onEvent: (e: ServerEvent) => void, h?: StreamHandlers) =>
       subscribeEvents({ ...o, baseUrl: base, token: token() }, onEvent, h),
     connectControl: (o: Omit<ControlOptions, "baseUrl" | "token">) =>
@@ -332,3 +336,4 @@ export function subscribeEvents(
 
 export * from "./control";
 export * from "./events";
+export type * from "./ops2"; // --- W0-B
