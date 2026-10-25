@@ -55,6 +55,10 @@ class CompactionError(Exception):
         self.tripped = tripped
 
 
+class NothingToCompact(CompactionError):
+    """Benign: every message is protected (head/tail). Not a failure, never trips the breaker."""
+
+
 @dataclass(frozen=True)
 class Thresholds:
     window: int
@@ -242,6 +246,13 @@ class CompactionService:
         await self.s.emit(session_id, "compaction.started", {"trigger": trigger, "compaction_id": cid})
         try:
             res = await self._compact(rt, cid, trigger, retain, model, stop_below)
+        except NothingToCompact as exc:
+            await self.s.emit(
+                session_id,
+                "compaction.skipped",
+                {"trigger": trigger, "compaction_id": cid, "reason": exc.reason},
+            )
+            raise
         except Exception as exc:
             n = self.failures[session_id] = self.failures.get(session_id, 0) + 1
             reason = exc.reason if isinstance(exc, CompactionError) else f"{type(exc).__name__}: {exc}"
@@ -294,7 +305,7 @@ class CompactionService:
         sizes = [self.tokens(model, [m]) for m in history]
         head_end, tail_start = split_points(history, sizes, retain)
         if tail_start <= head_end:
-            raise CompactionError(f"nothing to compact ({len(history)} messages, all protected)")
+            raise NothingToCompact(f"nothing to compact ({len(history)} messages, all protected)")
         middle = history[head_end:tail_start]
         summary = await self._summarize(rt.session_id, cid, model, middle)
         msg = {

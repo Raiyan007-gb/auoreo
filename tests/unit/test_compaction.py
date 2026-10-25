@@ -334,3 +334,29 @@ async def test_compact_endpoint_conflicts_while_running(
     sess = await services.create_session()
     monkeypatch.setattr(services.coordinator, "is_running", lambda sid: True)
     assert (await client.post(f"/api/sessions/{sess.id}/compact")).status_code == 409
+
+
+async def test_nothing_to_compact_is_benign(services: Services, gateway: FakeGateway) -> None:
+    """A short session: /compact is a no-op that never counts toward the circuit breaker."""
+    from auoreo.runtime.compaction import NothingToCompact
+
+    sess = await services.create_session()
+    await services.coordinator.submit(sess.id, "hello", interactive=False)
+    await services.coordinator.wait(sess.id, 10)
+    comp = services.coordinator.runner.compaction
+    sub = services.bus.subscribe(frozenset({f"session:{sess.id}"}))
+    for _ in range(4):
+        with pytest.raises(NothingToCompact):
+            await comp.compact(sess.id, trigger="manual")
+    assert comp.failures.get(sess.id, 0) == 0
+    kinds = []
+    while not sub.queue.empty():
+        kinds.append(sub.queue.get_nowait().type)
+    assert kinds.count("compaction.skipped") == 4 and "compaction.failed" not in kinds
+    # the slash command swallows it: no exception, no run.failed
+    await services.coordinator.submit(sess.id, "/compact", interactive=False)
+    await services.coordinator.wait(sess.id, 10)
+    kinds = []
+    while not sub.queue.empty():
+        kinds.append(sub.queue.get_nowait().type)
+    assert "compaction.skipped" in kinds and "run.failed" not in kinds

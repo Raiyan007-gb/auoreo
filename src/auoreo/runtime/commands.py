@@ -7,6 +7,7 @@ An unknown `/word` is left alone: it may be a real message.
 
 from __future__ import annotations
 
+import contextlib
 import re
 import uuid
 from collections.abc import Awaitable, Callable
@@ -15,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from auoreo.harness.loader import CommandDef
 from auoreo.harness.orchestrator import render
+from auoreo.runtime.compaction import CompactionError
 
 if TYPE_CHECKING:
     from auoreo.runtime.coordinator import SessionRunCoordinator
@@ -89,7 +91,9 @@ async def _compact(inv: Invocation) -> Expanded:
             },
         )
     else:
-        await comp.compact(sid, trigger="manual")
+        # the service already emitted compaction.skipped / compaction.failed
+        with contextlib.suppress(CompactionError):
+            await comp.compact(sid, trigger="manual")
     return Expanded(inv.text, handled=True)
 
 
