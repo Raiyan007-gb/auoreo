@@ -1,0 +1,13 @@
+kind: rtc_transport
+name: livekit
+description: >-
+  LiveKit SFU (P2, opt-in): join creates room auoreo-<session> through the server API and mints
+  a room-scoped 1 h access token; helpers create SIP inbound/outbound trunks (SRTP REQUIRE,
+  no REGISTER, no video), dispatch rules and audio-only StartEgress. Self-hosted by default;
+  a *.livekit.cloud URL needs settings.livekit.cloud_consent. Needs the `livekit` extra.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok

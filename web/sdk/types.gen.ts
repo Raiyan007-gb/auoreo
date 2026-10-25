@@ -828,6 +828,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/rtc/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join
+         * @description Join the media session for `session_id` through the selected `rtc_transport` backend.
+         *     The token in the answer is never logged or audited.
+         */
+        post: operations["join_api_rtc_join_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rtc/join/{join_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Leave
+         * @description Idempotent leave through the selected transport.
+         */
+        delete: operations["leave_api_rtc_join__join_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rtc/offer": {
         parameters: {
             query?: never;
@@ -2615,6 +2656,68 @@ export interface components {
         RtcClosed: {
             /** Closed */
             closed: boolean;
+        };
+        /** RtcJoinInfo */
+        RtcJoinInfo: {
+            /** Extra */
+            extra?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Join Id
+             * @description Pass to `DELETE /api/rtc/join/{join_id}` to leave
+             */
+            join_id: string;
+            /** Room */
+            room?: string | null;
+            /**
+             * Sdp
+             * @description SDP answer (P2P transports)
+             */
+            sdp?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Token
+             * @description Room-scoped access token (LiveKit)
+             */
+            token?: string | null;
+            /**
+             * Transport
+             * @description Backend name, e.g. `aiortc` or `livekit`
+             */
+            transport: string;
+            /**
+             * Url
+             * @description SFU URL to connect to (LiveKit)
+             */
+            url?: string | null;
+        };
+        /** RtcJoinRequest */
+        RtcJoinRequest: {
+            /**
+             * Identity
+             * @description Participant identity (LiveKit token subject)
+             * @default user
+             */
+            identity: string;
+            /**
+             * Sdp
+             * @description SDP offer; required by the aiortc transport
+             */
+            sdp?: string | null;
+            /**
+             * Session Id
+             * @description Session the media belongs to
+             */
+            session_id?: string | null;
+        };
+        /** RtcLeft */
+        RtcLeft: {
+            /** Join Id */
+            join_id: string;
+            /** Transport */
+            transport: string;
         };
         /**
          * RtcOffer
@@ -4964,6 +5067,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RtcPeerInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    join_api_rtc_join_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RtcJoinRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RtcJoinInfo"];
+                };
+            };
+            /** @description LiveKit Cloud URL without `settings.livekit.cloud_consent` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Too many peers (`rtc_max_peers`) */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transport not installed or not configured */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The SFU's server API failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    leave_api_rtc_join__join_id__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                join_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RtcLeft"];
                 };
             };
             /** @description Validation Error */

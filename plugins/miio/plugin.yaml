@@ -1,0 +1,31 @@
+name: miio
+version: 0.1.0
+description: >-
+  Xiaomi miIO devices on the LAN (python-miio, imported lazily): miio_info and miio_call
+  (method + params; approval by default). Device tokens come only from the secret store.
+provides: [tools]
+# The host matches `secrets:<name>` exactly today; add `secrets:MIIO_TOKEN_<DEVICE>` for each
+# device here (or in an overlay copy) until it supports the glob.
+consumes: ["secrets:MIIO_TOKEN_*"]
+permissions: [plugin__miio__miio_info, plugin__miio__miio_call]
+config_schema:
+  type: object
+  properties:
+    devices:
+      type: array
+      items:
+        type: object
+        properties:
+          name: {type: string, pattern: "^[a-z][a-z0-9_-]{0,31}$"}
+          ip: {type: string, minLength: 1}
+          token_secret:
+            type: string
+            pattern: "^MIIO_TOKEN_[A-Z0-9_]+$"
+            description: Secret-store name of the 32-hex device token (never the token itself).
+          model: {type: string, description: "Optional miIO model id, e.g. zhimi.airpurifier.mb4."}
+        required: [name, ip, token_secret]
+        additionalProperties: false
+    timeout_s: {type: number, minimum: 1, maximum: 30, default: 5}
+  additionalProperties: false
+entry: plugin.py:Plugin
+enabled: false

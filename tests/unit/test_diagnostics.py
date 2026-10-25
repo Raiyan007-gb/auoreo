@@ -17,7 +17,9 @@ async def test_run_checks_without_services(home: Path) -> None:
     rows = await diagnostics.run_checks(Settings(home=home, gateway="fake"))
     names = [c.check for c in rows]
     assert names[:4] == ["python", "sqlite", "sqlite-vec", "home"]
-    assert "harness" in names and names[-2:] == ["yolo", "otel"]
+    builtin = [n for n in names if not n.startswith("rtc:")]  # W2-D rows come via EXTRA_CHECKS
+    assert "harness" in names and builtin[-2:] == ["yolo", "otel"]
+    assert names[-4:] == ["rtc:ice", "rtc:stun", "rtc:turn", "rtc:transport"]
     assert "audit" not in names  # no state.db yet
     assert all(isinstance(c, Check) and c.level in {"ok", "warn", "error"} for c in rows)
     cred = next(c for c in rows if c.check == "credentials")

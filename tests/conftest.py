@@ -42,6 +42,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.fail.Keyring")
+    monkeypatch.setenv("AUOREO_OFFLINE", "1")  # doctor rtc rows: no STUN / LiveKit probes
     yield
 
 
