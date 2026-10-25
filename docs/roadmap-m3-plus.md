@@ -260,10 +260,13 @@ Audit / Doctor / Goals / Welcome pages, `/api/doctor` + `/api/audit[/verify]` + 
 goals + consent-first suggestions (schema v4), rerank backends (none · fake · cross_encoder ·
 cohere; fail-open) + `scripts/eval_memory.py`, opt-in OpenTelemetry, `lsp` (9 read-only ops),
 tree-sitter `symbols`, persistent shell (`exec_command`/`write_stdin`), deferred tools kept
-across reopened sessions. **Wave 1** (exec policy + guardian, blackboard/swarm/analyst, bandit,
-HyDE/graph/late chunking, DB encryption + multi-worker) is in progress on schema v5; wave 2
-(environments, remote plane, perception, IoT/LiveKit) has its backend ABCs merged; wave 3 is
-packaging.
+across reopened sessions. **Wave 1** (`6d9a849`, schema v5): Starlark exec policies
+(`policies/*.star`, after floors / before rules; `review` → guardian; PermissionRequest hooks),
+team blackboard + swarm/decide workflows + opt-in supervisor + analyst tools, effort wiring +
+usage latency/outcome + opt-in epsilon-greedy model/effort/top_k bandit, opt-in HyDE /
+GraphRAG-lite / contextual chunking, column encryption + SQLCipher + backups + multi-worker via
+Redis (and the fresh-DB init race fixed). **Wave 2** (environments, remote plane, perception,
+IoT/LiveKit) is in progress; wave 3 is packaging.
 
 
 Object/face detection (RF-DETR + MediaPipe, Apache only; faces default-off), MQTT/miio
