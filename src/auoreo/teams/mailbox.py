@@ -81,7 +81,7 @@ class Mailbox:
             self._rate_limit(team_id)
             await self.t.s.audit.record(
                 actor="agent",
-                action="mailbox.broadcast",
+                action="mail.broadcast",
                 session_id=await self.t.session_for(team, sender),
                 decision="allow",
                 detail={"team": team_id, "from": sender, "recipients": recipients, "summary": summary},

@@ -1094,6 +1094,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/teams/{team_id}/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Board List */
+        get: operations["board_list_api_teams__team_id__board_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teams/{team_id}/board/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Board Get */
+        get: operations["board_get_api_teams__team_id__board__key__get"];
+        /**
+         * Board Put
+         * @description Write a key as the operator (`producer="api"`); audited as `board.put`.
+         */
+        put: operations["board_put_api_teams__team_id__board__key__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/teams/{team_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Decisions */
+        get: operations["decisions_api_teams__team_id__decisions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/teams/{team_id}/mailbox": {
         parameters: {
             query?: never;
@@ -1411,6 +1466,83 @@ export interface components {
              * @description Total audit rows checked
              */
             rows: number;
+        };
+        /** BoardArtifact */
+        BoardArtifact: {
+            /**
+             * Bytes
+             * @description UTF-8 size of the value (≤ 65536)
+             */
+            bytes: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Key */
+            key: string;
+            /**
+             * Producer
+             * @description Member name (or `api:<actor>`) that wrote the current version
+             */
+            producer: string;
+            /** Team Id */
+            team_id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Value */
+            value: string;
+            /**
+             * Version
+             * @description Starts at 1; every put bumps it
+             */
+            version: number;
+        };
+        /**
+         * BoardEntry
+         * @description One blackboard key without its value (list view).
+         */
+        BoardEntry: {
+            /**
+             * Bytes
+             * @description UTF-8 size of the value (≤ 65536)
+             */
+            bytes: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Key */
+            key: string;
+            /**
+             * Producer
+             * @description Member name (or `api:<actor>`) that wrote the current version
+             */
+            producer: string;
+            /** Team Id */
+            team_id: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Version
+             * @description Starts at 1; every put bumps it
+             */
+            version: number;
+        };
+        /** BoardPut */
+        BoardPut: {
+            /**
+             * Value
+             * @description ≤ 64 KiB UTF-8; values that look like secrets are refused
+             */
+            value: string;
         };
         /** Body_transcribe_api_voice_transcribe_post */
         Body_transcribe_api_voice_transcribe_post: {
@@ -2563,6 +2695,38 @@ export interface components {
              */
             created: boolean;
             suggestion: components["schemas"]["SuggestionInfo"];
+        };
+        /**
+         * TeamDecision
+         * @description A supervisor's continue/spawn/finish decision (`team.decision` event).
+         */
+        TeamDecision: {
+            /** Child */
+            child: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "continue" | "spawn" | "finish";
+            /**
+             * Outcome
+             * @description `new` for a spawn, else the child's status or error code
+             */
+            outcome: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Seq */
+            seq: number;
+            /** Team Id */
+            team_id: string;
         };
         /** TeamDetail */
         TeamDetail: {
@@ -5345,6 +5509,162 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TeamDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_list_api_teams__team_id__board_get: {
+        parameters: {
+            query?: {
+                prefix?: string;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                team_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_get_api_teams__team_id__board__key__get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                team_id: string;
+                key: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardArtifact"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    board_put_api_teams__team_id__board__key__put: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                team_id: string;
+                key: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BoardPut"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BoardArtifact"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decisions_api_teams__team_id__decisions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                team_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamDecision"][];
                 };
             };
             /** @description Validation Error */

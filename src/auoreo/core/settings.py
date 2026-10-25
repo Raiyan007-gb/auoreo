@@ -297,6 +297,12 @@ class Settings(BaseSettings):
     """Language-server argv overrides by language (`python`, `typescript`, `javascript`)."""
     shell_max_processes: int = Field(default=8, ge=1, le=64)
     """Live `exec_command` processes allowed per session."""
+    # --- W1-B
+    teams_orchestrator_enabled: bool = False
+    """Supervisor opt-in (spec §16.3): a coordinator (or a child spawned with
+    `role=supervisor`) must pass `output_schema` on every spawn and its continue/spawn/finish
+    decisions are logged as `team.decision` events. Off: `role=supervisor` is refused.
+    Depth 3 (supervisor → worker → helper) stays opt-in via `teams_max_depth=3`."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

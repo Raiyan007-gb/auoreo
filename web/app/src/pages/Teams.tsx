@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { EmptyState, PageHeader } from "@/components/AppShell";
 import { AsyncBody, RefreshButton, SessionLink, StatusBadge } from "@/components/ops/AsyncBody";
+import { TeamBoard } from "@/components/ops/Board";
 import { KanbanBoard } from "@/components/ops/Kanban";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -173,23 +174,32 @@ function TeamsTab() {
   );
 }
 
+const TABS = ["teams", "kanban", "board"] as const;
+
 export function TeamsPage() {
   const [params, setParams] = useSearchParams();
-  const tab = params.get("tab") === "kanban" ? "kanban" : "teams";
+  const tab = TABS.find((t) => t === params.get("tab")) ?? "teams";
   return (
     <div className="flex flex-col">
-      <PageHeader title="Teams" description="Agent teams (members, liveness, mailbox) and the kanban board." />
+      <PageHeader
+        title="Teams"
+        description="Agent teams (members, liveness, mailbox), the kanban board, and each team's blackboard."
+      />
       <div className="p-4">
         <Tabs value={tab} onValueChange={(v) => setParams(v === "teams" ? {} : { tab: v }, { replace: true })}>
           <TabsList aria-label="Teams sections">
             <TabsTrigger value="teams">Teams</TabsTrigger>
             <TabsTrigger value="kanban">Kanban</TabsTrigger>
+            <TabsTrigger value="board">Board</TabsTrigger>
           </TabsList>
           <TabsContent value="teams">
             <TeamsTab />
           </TabsContent>
           <TabsContent value="kanban">
             <KanbanBoard />
+          </TabsContent>
+          <TabsContent value="board">
+            <TeamBoard initialTeam={params.get("team")} />
           </TabsContent>
         </Tabs>
       </div>

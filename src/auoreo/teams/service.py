@@ -20,6 +20,7 @@ from sqlalchemy.exc import IntegrityError
 
 from auoreo.core.db import TeamMemberRow, TeamRow
 from auoreo.runtime.inbox import RunOptions
+from auoreo.teams.board import Board
 from auoreo.teams.ceiling import CeilingEngine, clamp
 from auoreo.teams.format import (
     SCHEMA_MISMATCH,
@@ -31,6 +32,8 @@ from auoreo.teams.format import (
 )
 from auoreo.teams.kanban import KanbanStore
 from auoreo.teams.mailbox import LEAD, Mailbox, TeamsError
+from auoreo.teams.scope import workflow_team
+from auoreo.teams.supervisor import Supervisor
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -75,6 +78,9 @@ class TeamsService:
         self.s = services
         self.kanban = KanbanStore(services)
         self.mail = Mailbox(self)
+        self.board = Board(services)  # --- W1-B
+        self.supervisor = Supervisor(self)
+        self.join_lock = asyncio.Lock()  # workflow steps joining a team (teams.scope)
         self.members_live: dict[str, Member] = {}  # by child session id
         self._tasks: dict[str, asyncio.Task[Member]] = {}
         self._running: dict[str, int] = {}
@@ -204,8 +210,12 @@ class TeamsService:
         await self.s.emit(lead_session_id, "team.created", {"team": row.id, "name": name})
         return row
 
+    async def team_for(self, session_id: str) -> TeamRow | None:
+        """`team_of`, else the team a workflow step joins (see `teams.scope`)."""
+        return await self.team_of(session_id) or await workflow_team(self, session_id)
+
     async def ensure_team(self, session_id: str) -> TeamRow:
-        team = await self.team_of(session_id)
+        team = await self.team_for(session_id)
         if team is not None:
             return team
         auto = f"t_{uuid.uuid4().hex[:12]}"
@@ -223,10 +233,12 @@ class TeamsService:
         model: str | None = None,
         timeout_s: float | None = None,
         output_schema: dict[str, Any] | None = None,
+        role: str | None = None,
     ) -> Member:
         parent = await self.s.get_session(parent_session_id)
         if parent is None:
             raise TeamsError(f"unknown parent session '{parent_session_id}'")
+        self.supervisor.check_spawn(parent_session_id, parent.agent, role, output_schema)
         if not TASK_NAME_RE.fullmatch(name):
             raise TeamsError(f"invalid task name '{name}': use [a-z0-9_]+ (≤64 chars)")
         depth = await self.depth(parent_session_id) + 1
@@ -272,6 +284,7 @@ class TeamsService:
         prt = await self.s.coordinator.runtime(parent_session_id)
         member = Member(team.id, name, agent, child.id, parent_session_id, depth, background)
         self.members_live[child.id] = member
+        await self.supervisor.on_spawn(member, parent.agent, role, prompt)
         timeout = float(timeout_s or self.s.settings.teams_child_timeout_s)
         task = asyncio.create_task(
             self._run(member, prompt, timeout, prt.interactive, model, output_schema),
@@ -371,6 +384,7 @@ class TeamsService:
         }
         kind = "completed" if status == "completed" else "failed"
         await self.s.emit(m.parent_session_id, f"subagent.{kind}", data)
+        await self.supervisor.on_finish(m)
         if m.background:
             with contextlib.suppress(Exception):  # the parent may have been deleted
                 await self.inject(m.parent_session_id, m.notification())

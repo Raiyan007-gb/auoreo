@@ -78,5 +78,26 @@ export function opsMethods(request: OpsRequest) {
       request<KanbanTask>("POST", "/api/kanban", {
         body: { board: "default", body: "", ...body } satisfies KanbanCreate,
       }),
+
+    // --- W1-B: team blackboard + supervisor decisions
+    board: (teamId: string, prefix?: string) =>
+      request<BoardEntry[]>("GET", `/api/teams/${enc(teamId)}/board`, { query: { prefix } }),
+    boardGet: (teamId: string, key: string) =>
+      request<BoardArtifact>("GET", `/api/teams/${enc(teamId)}/board/${boardPath(key)}`),
+    /** Audited operator write (`producer: "api"`); 413 over 64 KiB, 422 for bad keys or secrets. */
+    boardPut: (teamId: string, key: string, value: string) =>
+      request<BoardArtifact>("PUT", `/api/teams/${enc(teamId)}/board/${boardPath(key)}`, {
+        body: { value } satisfies BoardPut,
+      }),
+    teamDecisions: (teamId: string, limit?: number) =>
+      request<TeamDecision[]>("GET", `/api/teams/${enc(teamId)}/decisions`, { query: { limit } }),
   };
 }
+
+// --- W1-B
+export type BoardEntry = S["BoardEntry"];
+export type BoardArtifact = S["BoardArtifact"];
+export type BoardPut = S["BoardPut"];
+export type TeamDecision = S["TeamDecision"];
+/** Board keys contain `/`: encode each segment, keep the separators. */
+const boardPath = (key: string) => key.split("/").map(enc).join("/");

@@ -16,6 +16,7 @@ parameters:
     background: {type: boolean, default: false}
     model: {type: string, description: Optional model alias/group override for the child.}
     output_schema: {type: object, description: JSON Schema the child's final answer must satisfy.}
+    role: {type: string, enum: [worker, supervisor], description: supervisor needs teams_orchestrator_enabled.}
   required: [goal]
   additionalProperties: false
 permission: delegate

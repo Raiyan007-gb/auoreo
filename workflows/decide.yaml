@@ -1,0 +1,23 @@
+name: decide
+description: The researcher gathers facts and ranges, the analyst scores the options with a decision matrix and scenarios and records decision/<slug> on the team board (or answers in text outside a team).
+steps:
+  - id: research
+    agent: researcher
+    input: |-
+      Gather what is needed to make this decision:
+      {{input}}
+
+      List the realistic options, the criteria that matter, the key numbers with sources,
+      and the uncertain quantities as ranges (low / likely / high). No recommendation yet.
+  - id: analyze
+    agent: analyst
+    input: |-
+      Make this decision:
+      {{input}}
+
+      Research notes:
+      {{steps.research.output}}
+
+      Follow your method (frame, `decision_matrix`, `scenario_sim` where uncertainty
+      matters, recommend with sensitivity). Inside a team, put the write-up on the board
+      under `decision/<slug>` and answer with the pointer; otherwise answer in full text.
