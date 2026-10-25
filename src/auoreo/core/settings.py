@@ -430,6 +430,20 @@ class Settings(BaseSettings):
     """Signed update manifest; `{channel}` is substituted. Self-hosters point this at their own."""
     update_pubkeys: list[str] = Field(default_factory=list)
     """Extra base64 raw ed25519 keys trusted for manifests, in addition to the pinned release key."""
+    # --- F1: agent speaks back over WebRTC, barge-in, echo guard, teleop input
+    voice_speak_over_rtc: bool = True
+    """Speak final assistant replies on an outbound audio track of each RTC peer (needs
+    `voice_enabled`; a peer can opt out with `speak: false` in its offer)."""
+    voice_speak_max_chars: int = Field(default=1500, ge=1, le=5000)
+    """Longer replies are cut at a sentence/word boundary and end with "…"; the rest stays text."""
+    voice_barge_in_interrupts_turn: bool = False
+    """Barge-in also cancels the running turn (default: only the spoken output is cut)."""
+    voice_echo_margin: float = Field(default=2.0, ge=1.0, le=20.0)
+    """VAD threshold multiplier while outbound audio plays and for 300 ms after."""
+    voice_echo_corr: float = Field(default=0.8, gt=0.0, le=1.0)
+    """Drop inbound frames whose normalised correlation with the last 1 s of outbound audio exceeds this."""
+    teleop_input_enabled: bool = False
+    """Accept the `auoreo-input` data channel (remote click/type/key/scroll through `computer`)."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

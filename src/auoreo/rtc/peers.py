@@ -17,8 +17,17 @@ at most once per `Settings.rtc_audio_level_interval_s`.
 STT hook: set `RtcManager.on_audio_frames` to a callable
 `(rtc_id: str, session_id: str | None, pcm: numpy.ndarray[int16], sample_rate: int)`
 (sync or async). It receives every resampled chunk (~20 ms) of every peer's audio; it is
-the entry point for a future streaming STT backend. Exceptions are logged and swallowed.
-No outbound (TTS) track exists yet.
+the entry point for the live transcription bridge. Exceptions are logged and swallowed.
+
+Speaking (F1): when voice is enabled, `Settings.voice_speak_over_rtc` is true and the offer did
+not say `speak: false`, an outbound audio track (`auoreo.rtc.outbound`) is attached to the
+offer's audio transceiver before the answer is created (the client must offer audio,
+`sendrecv` or `recvonly`). `Peer.say(pcm, rate)` queues speech, `Peer.stop_speaking()` drops
+it at once and emits `voice.speech_cancelled`. Each speaking peer has an `EchoGuard`.
+
+Teleop input (F1): `input: true` offers (only with `Settings.teleop_input_enabled`, else
+`PermissionError` → 403) accept a client-created `auoreo-input` channel; see
+`auoreo.rtc.teleop`.
 """
 
 from __future__ import annotations
@@ -34,7 +43,10 @@ from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from auoreo.rtc.audio import SAMPLE_RATE, FramesHook, LevelMeter, consume_audio, drain_track
+from auoreo.rtc.echo import EchoGuard
 from auoreo.rtc.events import CHANNEL_LABEL, EventChannel
+from auoreo.rtc.outbound import SpeechQueue, outbound_track
+from auoreo.rtc.teleop import INPUT_LABEL, TeleopChannel
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -78,10 +90,40 @@ class Peer:
     events: EventChannel | None = None
     media_tasks: list[asyncio.Task[None]] = field(default_factory=list)
     has_audio: bool = False
+    speech: SpeechQueue | None = None
+    """Outbound speech queue; None when this peer does not speak (opt-out or no audio m-line)."""
+    echo: EchoGuard | None = None
+    input_allowed: bool = False
+    teleop: TeleopChannel | None = None
+    manager: Any = None
 
     @property
     def state(self) -> str:
         return str(self.pc.connectionState)
+
+    @property
+    def speaking(self) -> bool:
+        return self.speech is not None and self.speech.speaking
+
+    def say(self, pcm: bytes, sample_rate: int = SAMPLE_RATE) -> float:
+        """Queue int16 mono PCM on the outbound track; returns seconds queued (0 if not speaking)."""
+        return self.speech.say(pcm, sample_rate) if self.speech is not None else 0.0
+
+    def stop_speaking(self, reason: str = "client") -> int:
+        """Drop queued speech now; emits `voice.speech_cancelled` when anything was dropped."""
+        if self.speech is None:
+            return 0
+        dropped = self.speech.clear()
+        if dropped and self.manager is not None:
+            data = {
+                "rtc_id": self.rtc_id,
+                "session_id": self.session_id,
+                "reason": reason,
+                "dropped_ms": dropped * 20,
+            }
+            emit = self.manager.svc.emit(self.session_id or "server", "voice.speech_cancelled", data)
+            self.manager._spawn(emit)
+        return dropped
 
 
 class RtcManager:
@@ -93,8 +135,20 @@ class RtcManager:
         self._bg: set[asyncio.Task[Any]] = set()
 
     # ------------------------------------------------------------ signaling
-    async def offer(self, sdp: str, type_: str = "offer", session_id: str | None = None) -> tuple[str, str]:
+    async def offer(
+        self,
+        sdp: str,
+        type_: str = "offer",
+        session_id: str | None = None,
+        *,
+        speak: bool | None = None,
+        input_: bool = False,
+    ) -> tuple[str, str]:
         """Answer a client offer. Returns `(rtc_id, answer_sdp)`."""
+        if input_ and not self.svc.settings.teleop_input_enabled:
+            raise PermissionError("teleop input is disabled (settings.teleop_input_enabled = false)")
+        if input_ and session_id is None:
+            raise ValueError("input: true needs a session_id")
         size = len(sdp.encode())
         if size > MAX_SDP_BYTES:
             raise SdpTooLarge(f"SDP is {size} bytes (limit {MAX_SDP_BYTES})")
@@ -110,13 +164,18 @@ class RtcManager:
 
         ice = [RTCIceServer(urls=u) for u in self.svc.settings.rtc_ice_servers]
         pc = RTCPeerConnection(configuration=RTCConfiguration(iceServers=ice))
-        peer = Peer(rtc_id=f"rtc_{uuid.uuid4().hex[:12]}", session_id=session_id, pc=pc)
+        rtc_id = f"rtc_{uuid.uuid4().hex[:12]}"
+        peer = Peer(rtc_id=rtc_id, session_id=session_id, pc=pc, input_allowed=input_, manager=self)
         self.peers[peer.rtc_id] = peer  # reserve the slot before the first await
         pc.on("datachannel", partial(self._on_datachannel, peer))
         pc.on("track", partial(self._on_track, peer))
         pc.on("connectionstatechange", partial(self._on_state, peer))
         try:
             await pc.setRemoteDescription(RTCSessionDescription(sdp=sdp, type=type_))
+            if self._speaks(speak) and any(t.kind == "audio" for t in pc.getTransceivers()):
+                peer.echo = EchoGuard()
+                peer.speech = SpeechQueue(peer.echo)
+                pc.addTrack(outbound_track(peer.speech))  # reuses the offered audio transceiver
             await pc.setLocalDescription(await pc.createAnswer())
         except Exception as exc:
             self.peers.pop(peer.rtc_id, None)
@@ -129,7 +188,13 @@ class RtcManager:
             actor="client",
             action="rtc.offer",
             session_id=session_id,
-            detail={"rtc_id": peer.rtc_id, "sdp_bytes": size, "audio": peer.has_audio},
+            detail={
+                "rtc_id": peer.rtc_id,
+                "sdp_bytes": size,
+                "audio": peer.has_audio,
+                "speak": peer.speech is not None,
+                "input": input_,
+            },
         )
         return peer.rtc_id, str(pc.localDescription.sdp)
 
@@ -140,6 +205,10 @@ class RtcManager:
             return False
         if peer.events is not None:
             await peer.events.stop()
+        if peer.teleop is not None:
+            await peer.teleop.stop()
+        if peer.speech is not None:
+            peer.speech.clear()
         current = asyncio.current_task()
         for t in peer.media_tasks:
             if t is not current:
@@ -184,7 +253,14 @@ class RtcManager:
         task.add_done_callback(self._bg.discard)
         return task
 
+    def _speaks(self, speak: bool | None) -> bool:
+        st = self.svc.settings
+        return bool(st.voice_enabled and st.voice_speak_over_rtc and speak is not False)
+
     def _on_datachannel(self, peer: Peer, channel: Any) -> None:
+        if channel.label == INPUT_LABEL:
+            self._on_input_channel(peer, channel)
+            return
         if channel.label != CHANNEL_LABEL or peer.events is not None or peer.rtc_id not in self.peers:
             log.info("rtc %s: ignoring data channel %r", peer.rtc_id, channel.label)
             return
@@ -196,6 +272,14 @@ class RtcManager:
             self._spawn(ec.start(peer.session_id))
         else:
             channel.on("open", lambda: self._spawn(ec.start(peer.session_id)))
+
+    def _on_input_channel(self, peer: Peer, channel: Any) -> None:
+        allowed = peer.input_allowed and self.svc.settings.teleop_input_enabled
+        if not allowed or peer.teleop is not None or peer.session_id is None or peer.rtc_id not in self.peers:
+            log.info("rtc %s: ignoring %r (teleop input not enabled)", peer.rtc_id, channel.label)
+            return
+        peer.teleop = TeleopChannel(self.svc, peer.rtc_id, peer.session_id, channel)
+        channel.on("message", peer.teleop.feed)
 
     def _on_track(self, peer: Peer, track: Any) -> None:
         if track.kind == "audio" and not peer.has_audio:

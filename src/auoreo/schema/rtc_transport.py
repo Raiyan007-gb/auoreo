@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from auoreo.schema.chat import RtcOffer as _ChatRtcOffer
+
 
 class RtcJoinRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -36,3 +38,19 @@ class RtcJoinInfo(BaseModel):
 class RtcLeft(BaseModel):
     transport: str
     join_id: str
+
+
+class RtcOffer(_ChatRtcOffer):
+    """Client SDP offer. The client must create the `auoreo-events` data channel first.
+
+    F1: offer an audio m-line (`sendrecv`, or `recvonly` to only listen) to hear the agent;
+    `input: true` additionally accepts an `auoreo-input` data channel (teleop)."""
+
+    speak: bool | None = Field(
+        default=None,
+        description="`false` opts this peer out of spoken replies (default: `settings.voice_speak_over_rtc`)",
+    )
+    input: bool = Field(
+        default=False,
+        description="Accept the `auoreo-input` teleop channel; 403 unless `settings.teleop_input_enabled`",
+    )

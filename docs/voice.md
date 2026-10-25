@@ -104,7 +104,10 @@ a followup and `run_id` is returned; watch it on `/api/events` or `/ws`.
 
 Events: `voice.transcribed{session_id, text, duration_s, backend}`,
 `voice.spoke{chars, backend}`, and from WebRTC `voice.transcript{rtc_id, session_id, text,
-duration_s}`, `voice.barge_in{rtc_id, session_id}`, `voice.error{rtc_id, session_id, message}`.
+duration_s}`, `voice.barge_in{rtc_id, session_id, cancelled, interrupted_turn?}`,
+`voice.speaking{rtc_id, session_id, chars, truncated}`, `voice.spoke{rtc_id, session_id, chars,
+duration_s, backend, cancelled}`, `voice.speech_cancelled{rtc_id, session_id, reason,
+dropped_ms}`, `voice.error{rtc_id, session_id, message}`.
 They go to the session aggregate when a session is known, else to `server`.
 
 ## Live audio (WebRTC)
@@ -114,10 +117,58 @@ as `steer` while a turn is running, else as a `followup`. Endpointing uses the s
 backend: speech confirmed after 100 ms, 300 ms pre-roll, utterance ends after
 `voice_endpoint_silence_ms` of silence (200 ms of it kept) or at 30 s.
 
-**Barge-in:** speech starting while the session's turn runs emits `voice.barge_in`. There is
-no outbound TTS track yet, so nothing is stopped; when the TTS → audio-track item lands, the
-same signal pauses playback before the steer is injected (spec §13.5). Echo guarding
-(`is_tts_echo`) belongs to that item too.
+### The agent speaks back (F1)
+
+Each peer whose offer carries an audio m-line (`sendrecv`, or `recvonly` to only listen) gets
+an outbound audio track when the offer is answered (`auoreo.rtc.outbound`: 48 kHz mono s16,
+20 ms frames, paced against a wall-clock origin, silence when idle). When a final assistant
+`message.completed` (text, no tool calls) lands in the peer's session, `auoreo.voice.speaker`:
+
+1. shapes it with `prepare_spoken_text` (no markdown, code or emoji);
+2. caps it at `voice_speak_max_chars` (default 1500): cut at the last sentence end (else word)
+   with "…" — no summary; the full answer stays in the transcript;
+3. synthesizes sentence chunks (≤ 240 chars) one by one with the selected TTS backend,
+   normalizes each to 16 kHz and queues it with `Peer.say` — the first sentence plays while
+   the rest is synthesized;
+4. emits `voice.speaking` before and `voice.spoke` after.
+
+Opt out globally with `voice_speak_over_rtc: false`, per peer with `"speak": false` in the
+`POST /api/rtc/offer` body. A peer without an audio m-line never speaks.
+
+### Barge-in
+
+While the agent is speaking, the normal 100 ms speech start is suspended and a Hermes-style
+detector runs instead: the user barges in when ≥ 80 % of the last 300 ms is above the speech
+threshold, and never in the first 500 ms after the speech started (the agent's own onset).
+On a barge-in:
+
+- `Peer.stop_speaking()` drops the queued audio immediately (`voice.speech_cancelled`);
+- `voice.barge_in{cancelled: true}` is emitted and the utterance starts with 1200 ms of
+  pre-roll, so the first words are not lost;
+- the running turn is cancelled only with `voice_barge_in_interrupts_turn: true`; by default
+  the utterance becomes a `steer` and only the spoken output is cut;
+- the note `[the user interrupted your spoken reply]` is queued once for the session's next
+  user text (TTL 120 s): as a `pending_user_messages` entry that the runner flushes after the
+  current tool round, or — if still pending — appended to the next transcribed utterance.
+
+Speech that starts while a turn runs but nothing is being spoken still emits
+`voice.barge_in{cancelled: false}` and becomes a steer.
+
+### Echo guard
+
+Without headphones the agent hears itself. While outbound audio plays and for 300 ms after,
+the speech threshold is `voice_speaking_rms × voice_echo_margin` (default ×2). Every inbound
+frame is also compared with the last 1 s of what the outbound track actually played (16 kHz
+ring buffer, normalised cross-correlation over all lags via FFT): above `voice_echo_corr`
+(default 0.8) the frame is replaced by silence. A loopback test whose client mirrors the
+agent's audio back produces no transcript and no barge-in.
+
+### Still hardware-only
+
+Tested only with aiortc loopback, synthetic tones and the fake TTS/VAD/STT backends. Not
+exercised here: a real microphone/speaker, acoustic echo through a room (reverb and speaker
+non-linearity lower the correlation; browsers' `echoCancellation: true` remains the first
+line of defence), real speech against the energy VAD, and Opus over lossy networks.
 
 ## Tools
 

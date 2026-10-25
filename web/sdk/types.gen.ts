@@ -2852,8 +2852,17 @@ export interface components {
         /**
          * RtcOffer
          * @description Client SDP offer. The client must create the `auoreo-events` data channel first.
+         *
+         *     F1: offer an audio m-line (`sendrecv`, or `recvonly` to only listen) to hear the agent;
+         *     `input: true` additionally accepts an `auoreo-input` data channel (teleop).
          */
         RtcOffer: {
+            /**
+             * Input
+             * @description Accept the `auoreo-input` teleop channel; 403 unless `settings.teleop_input_enabled`
+             * @default false
+             */
+            input: boolean;
             /**
              * Sdp
              * @description Offer SDP (≤ 64 KiB, else 413); never logged
@@ -2864,6 +2873,11 @@ export interface components {
              * @description Auto-subscribe the events channel to it
              */
             session_id?: string | null;
+            /**
+             * Speak
+             * @description `false` opts this peer out of spoken replies (default: `settings.voice_speak_over_rtc`)
+             */
+            speak?: boolean | null;
             /**
              * Type
              * @default offer
@@ -5437,6 +5451,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RtcAnswer"];
                 };
+            };
+            /** @description `input: true` while `settings.teleop_input_enabled` is false */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description SDP over 64 KiB */
             413: {
