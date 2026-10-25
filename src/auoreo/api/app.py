@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import mimetypes
 from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
@@ -97,6 +98,11 @@ MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
 A factory returns None to skip; an app with `lifespan(services)` has it entered by the host."""
 
 
+mimetypes.add_type("application/manifest+json", ".webmanifest")  # not in every mime.types
+NO_CACHE = {"sw.js", "sw-assets.json", "manifest.webmanifest", "index.html"}
+"""PWA files the browser must revalidate so a new build's service worker is picked up."""
+
+
 class SpaStaticFiles(StaticFiles):
     """Static files with an SPA fallback: unknown extension-less paths get index.html (200),
     so deep links like /session/<id> work; missing assets still 404."""
@@ -109,7 +115,11 @@ class SpaStaticFiles(StaticFiles):
                 raise
             response = Response(status_code=404)
         if response.status_code == 404 and "." not in path.rsplit("/", 1)[-1]:
-            return await super().get_response("index.html", scope)
+            path, response = "index.html", await super().get_response("index.html", scope)
+        if path.lstrip("/") in NO_CACHE or path in ("", "."):
+            response.headers["Cache-Control"] = "no-cache"
+        if path.lstrip("/") == "sw.js":
+            response.headers["Service-Worker-Allowed"] = "/"
         return response
 
 

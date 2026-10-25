@@ -6,6 +6,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Input, Label } from "@/components/ui/input";
 import { useAsync } from "@/hooks/useAsync";
 import { api, getStoredToken, hasMetaToken, setStoredToken } from "@/lib/api";
+import { isPwaEnabled, pwaSupported, setPwaEnabled } from "@/lib/pwa";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
 
 const THEMES: { value: ThemePref; label: string; icon: typeof SunIcon }[] = [
@@ -19,6 +20,8 @@ export function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
   const health = useAsync(() => api.health(), []);
+  const [pwa, setPwa] = useState(isPwaEnabled);
+  const [pwaNote, setPwaNote] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col">
@@ -85,6 +88,44 @@ export function SettingsPage() {
               </Button>
             ))}
           </div>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Install as app (PWA)</CardTitle>
+            <CardDescription>
+              Registers an app-shell service worker so the browser can install AUOREO and open{" "}
+              <code className="font-mono">/sessions</code> offline. Only the static shell is cached; API calls, live
+              streams and WebSockets always go to the server. Requires https or localhost.
+            </CardDescription>
+          </CardHeader>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              data-testid="pwa-toggle"
+              className="size-4 accent-primary"
+              checked={pwa}
+              disabled={!pwaSupported()}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setPwa(on);
+                setPwaNote(null);
+                setPwaEnabled(on).then(
+                  (active) => setPwaNote(on ? (active ? "Service worker registered." : "Not supported here.") : "Service worker removed."),
+                  (err: unknown) => setPwaNote(`Registration failed: ${String(err)}`),
+                );
+              }}
+            />
+            Install as app (PWA)
+          </label>
+          {!pwaSupported() && (
+            <p className="text-xs text-muted-foreground">Unavailable: service workers need a secure context.</p>
+          )}
+          {pwaNote && (
+            <p role="status" data-testid="pwa-status" className="text-xs text-muted-foreground">
+              {pwaNote}
+            </p>
+          )}
         </Card>
 
         <Card>
