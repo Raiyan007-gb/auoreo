@@ -8,6 +8,7 @@ import asyncio
 from typing import Annotated
 
 import typer
+from rich.markup import escape
 
 from auoreo.cli.common import console, dump_json, settings
 from auoreo.core import diagnostics
@@ -32,9 +33,10 @@ def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
     else:
         icon = {"ok": "[green]✓[/green]", "warn": "[yellow]![/yellow]", "error": "[red]✗[/red]"}
         for c in out:
-            line = f"{icon[c['level']]} {c['check']:12} {c['detail']}"
+            # escape: details carry literal brackets ("[nc-opt-in]") that rich would eat as markup
+            line = f"{icon[c['level']]} {escape(c['check']):12} {escape(c['detail'])}"
             if c["level"] != "ok" and c["remedy"]:
-                line += f"\n    → {c['remedy']}"
+                line += f"\n    → {escape(c['remedy'])}"
             console.print(line)
     if any(c["level"] == "error" for c in out):
         raise typer.Exit(1)

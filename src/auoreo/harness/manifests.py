@@ -170,9 +170,9 @@ class BackendManifest(_Strict):
     requires_binaries: list[str] = Field(default_factory=list)
     """Executables that must be on PATH; reported by `auoreo doctor`."""
     license: str = ""
-    posture: Literal["ok", "gpl-isolated", "nc-opt-in"] = "ok"
-    """License posture surfaced by doctor (spec §13): GPL code runs in a subprocess only;
-    non-commercial weights need an explicit opt-in."""
+    posture: Literal["ok", "gpl-isolated", "agpl-isolated", "nc-opt-in"] = "ok"
+    """License posture surfaced by doctor (spec §13): GPL code runs in a subprocess only,
+    AGPL code only in a separate sidecar process; non-commercial weights need an opt-in."""
     override: bool = False
 
     @field_validator("impl")

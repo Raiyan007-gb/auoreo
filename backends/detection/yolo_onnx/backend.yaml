@@ -1,0 +1,12 @@
+kind: detection
+name: yolo_onnx
+description: >-
+  YOLO26n (ONNX) through a separate AGPL sidecar process reached over HTTP at
+  settings.yolo_sidecar_url. AUOREO only speaks the HTTP contract (docs/perception.md); it
+  never imports ultralytics or loads AGPL code in-process.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: AGPL-3.0 (sidecar only; this client is MIT)
+posture: agpl-isolated

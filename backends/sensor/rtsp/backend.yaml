@@ -1,0 +1,12 @@
+kind: sensor
+name: rtsp
+description: >-
+  RTSP/RTSPS network camera (source "rtsp://[user:pass@]host/path") through OpenCV/FFmpeg,
+  read-only: no PTZ or other camera control. Credentials in the URL are redacted from logs
+  and audit. Needs `pip install opencv-python-headless`.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0 (OpenCV)
+posture: ok

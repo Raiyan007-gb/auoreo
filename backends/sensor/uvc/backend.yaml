@@ -1,0 +1,11 @@
+kind: sensor
+name: uvc
+description: >-
+  USB/UVC camera by device index (source "0", "1", ...) through OpenCV VideoCapture; one
+  frame per sample, presence = scene motion. Needs `pip install opencv-python-headless`.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0 (OpenCV)
+posture: ok

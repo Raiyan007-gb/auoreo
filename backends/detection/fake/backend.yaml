@@ -1,0 +1,12 @@
+kind: detection
+name: fake
+description: >-
+  Test backend - a deterministic colour-blob detector over the image (Pillow only): every
+  region that differs from the background becomes a box, labelled `person` when it is at
+  least 1.6x taller than wide, else `object`. No model weights.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

@@ -357,6 +357,23 @@ class Settings(BaseSettings):
     environment_daytona_snapshot: str | None = None
     environment_sandbox_timeout_s: int = Field(default=3600, ge=60, le=86_400)
     """Lifetime of a cloud sandbox (E2B / Modal / Daytona); it is also destroyed at session close."""
+    # --- W2-C
+    detection_model: str = "nano"
+    """RF-DETR size for `backends/detection/rfdetr`: nano|small|medium|large (Apache-2.0).
+    `xlarge`/`2xlarge` (PML-1.0 weights) are refused by the backend's `check()`."""
+    perception_download_models: bool = False
+    """Let local perception backends (RF-DETR, Grounding-DINO, MediaPipe) download weights."""
+    faces_enabled: bool = False
+    """Face detection opt-in (spec L744). Off: `detect_faces` refuses. Embeddings are never
+    persisted, only returned to the caller that asked for them."""
+    face_nc_opt_in: bool = False
+    """Allow the non-commercial InsightFace backend (its weights are NC-licensed)."""
+    yolo_sidecar_url: str | None = None
+    """Base URL of the AGPL YOLO sidecar process (`backends/detection/yolo_onnx`); never in-process."""
+    perception_sample_rtc_video: bool = False
+    """Sample one frame every `perception_rtc_interval_s` from RTC video tracks into the
+    in-memory `rtc` sensor source (frames are never written to disk)."""
+    perception_rtc_interval_s: float = Field(default=5.0, ge=0.5, le=3600)
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

@@ -1,0 +1,11 @@
+kind: sensor
+name: fake
+description: >-
+  Test probe - scripted presence/readings (source `script:1,0,1`, default 1,1,0) and a
+  generated 160x120 frame with a "person" block when present. No device needed.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

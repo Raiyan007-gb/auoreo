@@ -1,0 +1,11 @@
+kind: sensor
+name: ble
+description: >-
+  Bluetooth LE probe - a stub: no scanner is implemented yet and check() says so. Use an
+  MQTT BLE gateway (mqtt plugin) for BLE sensors today.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

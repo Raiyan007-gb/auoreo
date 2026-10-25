@@ -1,0 +1,13 @@
+kind: detection
+name: grounding_dino
+description: >-
+  Open-vocabulary detection with Grounding-DINO tiny (IDEA-Research/grounding-dino-tiny,
+  Apache-2.0) via Hugging Face transformers: `classes` are free-text phrases. Needs
+  `pip install transformers torch`; weights download only when
+  settings.perception_download_models.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok
