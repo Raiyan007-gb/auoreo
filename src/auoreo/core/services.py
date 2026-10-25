@@ -53,6 +53,7 @@ class Services:
     connections: ConnectionManager = field(init=False)
     memory: MemoryService | None = None
     mcp: McpBridge | None = None
+    rtc: Any = None  # auoreo.rtc.peers.RtcManager, created on first /api/rtc use
 
     def __post_init__(self) -> None:
         self._backends: dict[str, Any] = {}
@@ -139,6 +140,8 @@ class Services:
         self._backends.clear()
 
     async def close(self) -> None:
+        if self.rtc is not None:  # peers emit rtc.closed, so before the DB goes away
+            await self.rtc.close_all()
         await self.connections.close_all(1001)  # before the DB goes away
         await self.close_backends()
         await self.coordinator.shutdown()
