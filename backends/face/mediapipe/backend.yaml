@@ -1,0 +1,12 @@
+kind: face
+name: mediapipe
+description: >-
+  Local-only face detection with MediaPipe Tasks (BlazeFace short-range, Apache-2.0): boxes
+  and 6 keypoints, no embeddings. Needs `pip install mediapipe`; the .tflite model downloads
+  into <home>/models/perception only when settings.perception_download_models.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok

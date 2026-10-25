@@ -1,0 +1,12 @@
+kind: detection
+name: rfdetr
+description: >-
+  RF-DETR (Roboflow) real-time detector with COCO labels; size from settings.detection_model
+  (nano|small|medium|large - Apache-2.0; XL/2XL are PML-1.0 and refused). Needs
+  `pip install rfdetr`; weights download only when settings.perception_download_models.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok

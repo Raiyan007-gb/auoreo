@@ -1,0 +1,12 @@
+kind: face
+name: insightface
+description: >-
+  InsightFace (buffalo_l: SCRFD detection + ArcFace embeddings) via onnxruntime. The model
+  weights are NON-COMMERCIAL: check() fails unless settings.face_nc_opt_in is true. Needs
+  `pip install insightface onnxruntime`; weights only when settings.perception_download_models.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT code / non-commercial research weights
+posture: nc-opt-in

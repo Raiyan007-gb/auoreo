@@ -204,6 +204,10 @@ class RtcManager:
             job = consume_audio(
                 track, meter, partial(self._emit_level, peer), partial(self._frames_hook, peer)
             )
+        elif track.kind == "video" and peer.session_id and self.svc.settings.perception_sample_rtc_video:
+            from auoreo.perception.rtc import sample_video  # W2-C: frames → `rtc` sensor source
+
+            job = sample_video(track, peer.session_id, self.svc.settings.perception_rtc_interval_s)
         else:
             job = drain_track(track)
         peer.media_tasks.append(asyncio.get_running_loop().create_task(job))

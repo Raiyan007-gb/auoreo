@@ -1,0 +1,32 @@
+name: detect_faces
+toolset: vision
+description: >-
+  Detect faces in an image or the screen with the selected face backend. Off unless
+  settings.faces_enabled is true. Returns face boxes only by default; `landmarks` adds
+  keypoints. `embeddings` keeps each face's embedding IN MEMORY ONLY (never in the
+  transcript, database or memory; forgotten after 10 minutes or when the session closes)
+  and returns an opaque ref per face plus pairwise similarities; `compare_to` compares the
+  new faces with earlier refs. No identification against any stored gallery.
+parameters:
+  type: object
+  properties:
+    image: {type: string, description: "Image path or http(s) URL (PNG/JPEG/GIF/WebP)."}
+    source: {type: string, enum: [screen], description: Capture the screen instead of an image.}
+    landmarks: {type: boolean, default: false, description: Include facial keypoints.}
+    embeddings: {type: boolean, default: false, description: Compute embeddings (memory-only refs).}
+    compare_to:
+      type: array
+      items: {type: string}
+      maxItems: 16
+      description: Earlier face refs from this session to compare against (implies embeddings).
+    forget: {type: boolean, default: false, description: Forget all of this session's face refs first.}
+    annotate: {type: boolean, default: false, description: Attach the image with face boxes drawn.}
+  additionalProperties: false
+permission: faces
+pattern_arg: image
+default_action: ask
+is_read_only: true
+is_concurrency_safe: false
+exposure: deferred
+timeout_ms: 120000
+search_hint: detect faces face detection count people faces landmarks

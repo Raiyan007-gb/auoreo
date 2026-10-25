@@ -1,0 +1,27 @@
+name: sensor_read
+toolset: vision
+description: >-
+  Read a sensor probe: presence (yes/no), a reading dict and a confidence per sample, plus
+  the latest frame as an image for camera probes. Probes: fake (scripted), uvc (source =
+  device index "0"), rtsp (source = rtsp:// URL; read-only, no PTZ), rtc (source "current"
+  = this session's WebRTC video), ble (stub). A probe starts on first use in this session
+  and stays open until the session is archived/deleted, it idles out, or `stop` is true.
+parameters:
+  type: object
+  properties:
+    probe: {type: string, description: "Probe backend name (default: settings.backends.sensor, else fake)."}
+    source: {type: string, minLength: 1, description: "Device index, rtsp:// URL, session id/current, or a label."}
+    samples: {type: integer, minimum: 1, maximum: 20, default: 1}
+    interval_ms: {type: integer, minimum: 0, maximum: 10000, default: 0, description: Pause between samples.}
+    image: {type: boolean, default: true, description: Attach the latest frame (camera probes).}
+    stop: {type: boolean, default: false, description: Stop this probe after reading.}
+  required: [source]
+  additionalProperties: false
+permission: sensor
+pattern_arg: source
+default_action: ask
+is_read_only: true
+is_concurrency_safe: false
+exposure: deferred
+timeout_ms: 300000
+search_hint: sensor camera webcam rtsp presence motion probe read frame usb uvc cctv

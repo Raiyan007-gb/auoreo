@@ -1,0 +1,29 @@
+name: detect_objects
+toolset: vision
+description: >-
+  Detect objects in an image with the selected detection backend (default: a local fake
+  colour-blob detector; RF-DETR, Grounding-DINO or a YOLO sidecar when configured). Give an
+  image path/URL or source "screen". Returns one line per box (label, score, pixel
+  [x0, y0, x1, y1]) plus the image with the boxes drawn. `classes` filters labels; with an
+  open-vocabulary backend they are free-text phrases ("a red mug").
+parameters:
+  type: object
+  properties:
+    image: {type: string, description: "Image path or http(s) URL (PNG/JPEG/GIF/WebP)."}
+    source: {type: string, enum: [screen], description: Capture the screen instead of an image.}
+    classes:
+      type: array
+      items: {type: string}
+      maxItems: 32
+      description: Labels (or phrases, open-vocabulary backends) to keep; empty keeps all.
+    threshold: {type: number, minimum: 0, maximum: 1, default: 0.3, description: Minimum score.}
+    annotate: {type: boolean, default: true, description: Attach the image with boxes drawn.}
+  additionalProperties: false
+permission: perception
+pattern_arg: image
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 120000
+search_hint: detect objects object detection bounding boxes find people count things in image camera

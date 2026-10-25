@@ -1,0 +1,11 @@
+kind: face
+name: fake
+description: >-
+  Test backend - roughly square colour blobs become faces with 5 synthetic landmarks and,
+  only when asked, a deterministic unit-vector embedding. No model weights; nothing stored.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok
