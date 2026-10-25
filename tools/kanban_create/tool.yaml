@@ -1,0 +1,16 @@
+name: kanban_create
+description: Create a task on a kanban board (status ready) for workers to claim.
+parameters:
+  type: object
+  properties:
+    board: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$", default: default}
+    title: {type: string, minLength: 1, maxLength: 200}
+    body: {type: string, maxLength: 20000}
+  required: [title]
+  additionalProperties: false
+toolset: kanban
+exposure: deferred
+search_hint: kanban board task queue claim worker
+default_action: allow
+interactive_only: false
+timeout_ms: 30000

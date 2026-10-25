@@ -194,3 +194,58 @@ class RtcPeerInfo(BaseModel):
 
 class RtcClosed(BaseModel):
     closed: bool
+
+
+# --- M5d teams + kanban
+class TeamInfo(BaseModel):
+    id: str
+    name: str
+    description: str = ""
+    lead_session_id: str
+    created_at: datetime
+    members: int = 0
+
+
+class TeamMemberInfo(BaseModel):
+    name: str = Field(description='Member name; "lead" is the team lead session')
+    agent: str
+    session_id: str
+    depth: int
+    status: str = Field(description="lead | queued | running | done | failed | stopped")
+    running: bool = Field(description="Liveness: a run is in progress right now")
+
+
+class TeamDetail(TeamInfo):
+    peers: list[TeamMemberInfo] = Field(default_factory=list)
+
+
+class MailMessage(BaseModel):
+    id: int
+    team_id: str
+    recipient: str
+    sender: str
+    type: str
+    summary: str
+    text: str
+    read: bool
+    created_at: datetime
+
+
+class KanbanTask(BaseModel):
+    id: int
+    board: str
+    title: str
+    body: str
+    status: Literal["ready", "claimed", "blocked", "done"]
+    worker: str | None = None
+    session_id: str | None = None
+    failures: int = 0
+    heartbeat_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class KanbanCreate(_In):
+    board: str = Field(default="default", pattern=r"^[a-z0-9][a-z0-9_-]{0,63}$")
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(default="", max_length=20_000)

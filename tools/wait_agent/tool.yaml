@@ -1,0 +1,14 @@
+name: wait_agent
+toolset: teams
+description: 'Wait for a teammate''s run to finish.'
+parameters:
+  type: object
+  properties:
+    name: {type: string, minLength: 1, maxLength: 64}
+    timeout_ms: {type: integer, minimum: 0, maximum: 3600000, default: 30000}
+  required: [name]
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+interactive_only: false
+timeout_ms: 310000

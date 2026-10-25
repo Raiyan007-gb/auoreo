@@ -1,0 +1,15 @@
+name: kanban_comment
+description: Add a comment to a kanban task (progress notes, findings, hand-off details).
+parameters:
+  type: object
+  properties:
+    task_id: {type: integer, minimum: 1}
+    text: {type: string, minLength: 1, maxLength: 20000}
+  required: [task_id, text]
+  additionalProperties: false
+toolset: kanban
+exposure: deferred
+search_hint: kanban board task queue claim worker
+default_action: allow
+interactive_only: false
+timeout_ms: 30000

@@ -12,7 +12,7 @@ from typing import Any
 
 from sqlalchemy import func, select
 
-from auoreo.core.db import Database, UsageRow, utcnow
+from auoreo.core.db import Database, SessionRow, UsageRow, utcnow
 from auoreo.gateway.types import Usage
 
 PriceFn = Callable[[str, int, int], float | None]
@@ -45,12 +45,46 @@ class UsageLedger:
             await s.commit()
         return row
 
-    async def by_session(self, session_id: str | None = None, limit: int = 200) -> list[UsageRow]:
+    async def by_session(
+        self, session_id: str | None = None, limit: int = 200, *, children: bool = False
+    ) -> list[UsageRow]:
+        """Newest first. `children=True` rolls in every descendant session (delegated
+        subagents, workflow steps) of `session_id`."""
         async with self.db.session() as s:
             q = select(UsageRow).order_by(UsageRow.id.desc()).limit(limit)
             if session_id is not None:
-                q = q.where(UsageRow.session_id == session_id)
+                ids = await self.session_tree(session_id) if children else [session_id]
+                q = q.where(UsageRow.session_id.in_(ids))
             return list((await s.execute(q)).scalars())
+
+    async def session_tree(self, session_id: str, max_depth: int = 16) -> list[str]:
+        """`session_id` plus all of its descendants via `sessions.parent_id`."""
+        ids, frontier = [session_id], [session_id]
+        async with self.db.session() as s:
+            for _ in range(max_depth):
+                q = select(SessionRow.id).where(SessionRow.parent_id.in_(frontier))
+                frontier = [i for i in (await s.execute(q)).scalars() if i not in ids]
+                if not frontier:
+                    break
+                ids.extend(frontier)
+        return ids
+
+    async def totals(self, session_ids: list[str]) -> dict[str, Any]:
+        """Summed tokens/cost over the given sessions."""
+        q = select(
+            func.count(),
+            func.coalesce(func.sum(UsageRow.prompt_tokens), 0),
+            func.coalesce(func.sum(UsageRow.completion_tokens), 0),
+            func.coalesce(func.sum(UsageRow.cost_usd), 0.0),
+        ).where(UsageRow.session_id.in_(session_ids))
+        async with self.db.session() as s:
+            n, p, c, cost = (await s.execute(q)).one()
+        return {
+            "calls": int(n),
+            "prompt_tokens": int(p),
+            "completion_tokens": int(c),
+            "cost_usd": float(cost or 0.0),
+        }
 
     async def session_cost(self, session_id: str) -> float:
         async with self.db.session() as s:
@@ -86,7 +120,7 @@ class UsageLedger:
                     "calls": int(n),
                     "prompt_tokens": int(p),
                     "completion_tokens": int(c),
-                    "cost_usd": float(cost),
+                    "cost_usd": float(cost or 0.0),
                 }
                 for k, n, p, c, cost in rows
             ]

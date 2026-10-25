@@ -9,8 +9,13 @@ router = APIRouter(prefix="/api/usage", tags=["usage"], dependencies=AUTH)
 
 
 @router.get("", response_model=list[UsageRecord])
-async def list_usage(svc: ServicesDep, session_id: str | None = None, limit: int = 200) -> list[UsageRecord]:
-    rows = await svc.coordinator.runner.usage.by_session(session_id, limit=max(1, min(limit, 5000)))
+async def list_usage(
+    svc: ServicesDep, session_id: str | None = None, limit: int = 200, children: bool = False
+) -> list[UsageRecord]:
+    """`children=true` (with `session_id`) rolls child sessions' usage into the parent."""
+    rows = await svc.coordinator.runner.usage.by_session(
+        session_id, limit=max(1, min(limit, 5000)), children=children
+    )
     return [
         UsageRecord(
             id=r.id,

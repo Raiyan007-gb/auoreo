@@ -1,0 +1,14 @@
+name: send_message
+toolset: teams
+description: 'Mail a teammate by name, or "*" for all.'
+parameters:
+  type: object
+  properties:
+    to: {type: string, minLength: 1, maxLength: 64}
+    message: {type: string, minLength: 1, maxLength: 100000}
+    summary: {type: string, maxLength: 200, description: One-line preview (required for broadcasts and messages over 500 chars).}
+  required: [to, message]
+  additionalProperties: false
+default_action: allow
+interactive_only: false
+timeout_ms: 30000

@@ -18,6 +18,8 @@ rules:
   - {permission: bash, pattern: "git diff*", action: allow}
   - {permission: bash, pattern: "git log*", action: allow}
   - {permission: webfetch, pattern: "*", action: ask}
+  # Teams: delegate_task defaults to `ask`; allow it so delegation works headless (M5d).
+  - {permission: delegate, pattern: "*", action: allow}
 # Extra shell deny-globs (unbypassable, checked before any mode, even yolo).
 floors:
   - "*git push --force*"

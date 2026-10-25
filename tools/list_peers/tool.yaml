@@ -1,0 +1,9 @@
+name: list_peers
+toolset: teams
+description: 'List your team and who is running.'
+parameters: {type: object, properties: {}, additionalProperties: false}
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+interactive_only: false
+timeout_ms: 30000

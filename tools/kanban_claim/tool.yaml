@@ -1,0 +1,16 @@
+name: kanban_claim
+description: >-
+  Atomically claim the oldest ready task on a board. Heartbeat while working on it
+  (kanban_heartbeat) or it is reclaimed after 5 minutes.
+parameters:
+  type: object
+  properties:
+    board: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$", default: default}
+    worker: {type: string, minLength: 1, maxLength: 64, description: Worker name (defaults to this session id).}
+  additionalProperties: false
+toolset: kanban
+exposure: deferred
+search_hint: kanban board task queue claim worker
+default_action: allow
+interactive_only: false
+timeout_ms: 30000
