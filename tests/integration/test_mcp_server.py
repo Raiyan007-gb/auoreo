@@ -65,7 +65,7 @@ async def test_list_read_and_deny(services: Services, settings: Settings, workdi
         assert bad.is_error
     async with services.db.session() as s:
         rows = (await s.execute(select(AuditRow).where(AuditRow.action == "tool.call"))).scalars().all()
-    assert any(r.session_id and r.session_id.startswith("mcp:") for r in rows)
+    assert any(r.session_id and r.session_id.startswith("mcp-") for r in rows)
 
 
 async def test_auth_and_origin(services: Services, settings: Settings) -> None:

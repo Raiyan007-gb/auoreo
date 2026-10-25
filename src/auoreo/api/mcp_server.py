@@ -133,7 +133,7 @@ class McpEndpoint:
         self, ctx: ServerRequestContext[Any], params: mt.CallToolRequestParams
     ) -> mt.CallToolResult:
         svc, spec, tools, engine = self._prepare()
-        sid = f"mcp:{_session_id(ctx)}"
+        sid = f"mcp-{_session_id(ctx)}"
         tctx = ToolContext(
             session_id=sid,
             cwd=svc.cwd,

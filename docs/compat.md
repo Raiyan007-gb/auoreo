@@ -79,7 +79,7 @@ lifespan runs the session manager. `MCP-Protocol-Version` is echoed. Disable wit
 - **Execution**: every call runs through the same `ToolExecutor` as the agent loop with a
   `PermissionEngine` from the agent's rules and the unbypassable floors — schema
   validation, hooks, permissions, redaction, result pruning and the audit log all apply.
-  The tool session id is `mcp:<Mcp-Session-Id>` (a random id for sessionless calls).
+  The tool session id is `mcp-<Mcp-Session-Id>` (a random id for sessionless calls).
 - **Non-interactive**: there is no human to ask, so anything that resolves to `ask` (e.g.
   `bash`, `write` in `manual` mode) is **denied** with an explanatory tool error. Allow it
   with a permission rule if you want external clients to use it.
