@@ -1,0 +1,12 @@
+kind: sandbox
+name: bwrap
+description: >-
+  Linux bubblewrap: read-only /usr, private /proc, /dev and PID namespace, no network when
+  net=none, the working directory bound read-write (read-only under read-only mode).
+  Landlock is not layered yet (probe reports it as unavailable).
+impl: impl.py:Backend
+default: false
+requires_binaries: [bwrap]
+requires_env: []
+license: LGPL-2.0-or-later (external binary, run as a subprocess)
+posture: ok

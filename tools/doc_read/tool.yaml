@@ -25,3 +25,4 @@ is_concurrency_safe: true
 is_search_or_read: true
 timeout_ms: 180000
 search_hint: pdf document read extract text tables pages scan
+sandbox_mode: read-only

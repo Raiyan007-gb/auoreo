@@ -1,0 +1,18 @@
+name: ops_disk
+toolset: ops
+description: >-
+  Disk usage of the filesystem holding `path` (default: the working directory) plus the
+  mounted partitions, as compact markdown.
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: Any path on the filesystem to inspect (default ".").}
+  additionalProperties: false
+permission: ops
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 15000
+search_hint: disk space usage free storage partitions filesystem monitor ops
+sandbox_mode: read-only

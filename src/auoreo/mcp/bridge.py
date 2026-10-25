@@ -142,6 +142,7 @@ class McpBridge:
                 exposure=manifest.exposure,
                 timeout_ms=manifest.timeout_ms,
                 search_hint=f"{manifest.name} {t.name}",
+                net="proxy",
             )
             self.s.harness.register_dynamic(
                 ToolDef(tm, f"mcp:{manifest.name}", None, self._make_loader(manifest.name, t.name))

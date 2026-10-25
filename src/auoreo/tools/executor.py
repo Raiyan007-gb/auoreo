@@ -9,21 +9,31 @@ interactive gate → permission (floors, rules, mode, smart-mode guardian, human
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import jsonschema
 
+from auoreo.backends.sandbox import escalation_request
 from auoreo.core.guardian import guardian_verdict
 from auoreo.core.redaction import redact
 from auoreo.core.secrets import child_env
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import LoadError, ToolDef
 from auoreo.runtime.hooks import RESULT_PREVIEW_CHARS, hooks_of
-from auoreo.tools.context import CURRENT_SESSION, ToolContext, ToolError, ToolResult
+from auoreo.tools.context import (
+    CURRENT_EXEC,
+    CURRENT_SESSION,
+    ExecPolicy,
+    ToolContext,
+    ToolError,
+    ToolResult,
+)
 
 if TYPE_CHECKING:
     from auoreo.core.permissions import PermissionEngine
@@ -124,15 +134,23 @@ class ToolExecutor:
         if tool.manifest.interactive_only and not ctx.interactive:
             return self._err(call, f"'{tool.name}' needs a human and this run is non-interactive")
 
+        # Sandbox escalation fields are validated before any prompt (spec §24.9).
+        mode, wider, why = self._sandbox_args(tool, args)
+        if why is not None:
+            return self._err(call, why)
+
         # Stage 2: permission.
         permission = tool.manifest.permission_name
         pattern = self._pattern(tool, args, ctx)
-        decision = engine.evaluate(permission, pattern, tool.manifest.default_action)
+        decision = engine.evaluate(
+            permission, pattern, tool.manifest.default_action, interactive=ctx.interactive
+        )
         audit = {
             "tool": tool.name,
             "permission": permission,
             "pattern": pattern[:500],
             "call_id": call.id,
+            "net": tool.manifest.net,
         }
         reason = decision.detail
         if decision.action == "deny":
@@ -151,13 +169,22 @@ class ToolExecutor:
             )
             if refused is not None:
                 return refused
+        grant_id: str | None = None
+        if wider is not None:
+            refused, grant_id = await self._escalate(call, tool, args, ctx, engine, mode, wider, audit)
+            if refused is not None:
+                return refused
+            mode = wider
 
         # Execute.
         ctx.env = child_env(tool.manifest.requires_env, self.s.secrets)
+        ctx.services.setdefault("services", self.s)
+        policy = ExecPolicy(mode=mode, net=tool.manifest.net, grant_id=grant_id)
         lock = self._lock_for(tool, args, ctx)
         try:
             handler = tool.handler()
             session_token = CURRENT_SESSION.set(ctx.session_id)
+            exec_token = CURRENT_EXEC.set(policy)
             try:
                 coro = handler(args, ctx)
                 if lock is not None:
@@ -166,6 +193,7 @@ class ToolExecutor:
                 else:
                     raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
             finally:
+                CURRENT_EXEC.reset(exec_token)
                 CURRENT_SESSION.reset(session_token)
             result = raw if isinstance(raw, ToolResult) else ToolResult(str(raw))
         except ToolError as exc:
@@ -219,6 +247,8 @@ class ToolExecutor:
         pattern: str,
         audit: dict[str, Any],
         reason: str,
+        *,
+        sticky: bool = True,
     ) -> tuple[ToolOutcome | None, str]:
         """The `ask` path: smart-mode guardian first, then the human. Returns
         `(error outcome or None to proceed, audit reason)`."""
@@ -260,9 +290,66 @@ class ToolExecutor:
                 return self._err(call, f"user rejected this call with feedback: {outcome.message}"), reason
             rejected = ToolResult("user rejected this tool call", is_error=True)
             return ToolOutcome(call, rejected, halt=True), reason
-        if outcome.reply == "always":
+        if outcome.reply == "always" and sticky:
             engine.grant_always(permission, pattern)
         return None, reason
+
+    @staticmethod
+    def _sandbox_args(tool: ToolDef, args: dict[str, Any]) -> tuple[str, str | None, str | None]:
+        """`(mode, wider_mode_to_grant, error)`; only tools that declare `sandbox_mode`."""
+        if "sandbox_mode" not in tool.manifest.parameters.get("properties", {}):
+            return tool.manifest.sandbox_mode, None, None
+        return escalation_request(tool.manifest.sandbox_mode, args)
+
+    async def _escalate(
+        self,
+        call: ToolCall,
+        tool: ToolDef,
+        args: dict[str, Any],
+        ctx: ToolContext,
+        engine: PermissionEngine,
+        from_mode: str,
+        to_mode: str,
+        audit: dict[str, Any],
+    ) -> tuple[ToolOutcome | None, str | None]:
+        """One-call grant for a wider sandbox mode: approval via the ask path with
+        permission `sandbox_escalate` (never `always`), audited with a single-use grant id."""
+        justification = str(args.get("justification", ""))
+        pattern = f"{to_mode}:{justification[:60]}"
+        decision = engine.evaluate("sandbox_escalate", pattern, "ask", interactive=ctx.interactive)
+        if decision.action == "deny":
+            return self._err(call, f"sandbox escalation denied ({decision.detail})"), None
+        if decision.action == "ask" or decision.reason == "mode: yolo":  # yolo never grants a wider mode
+            refused, _ = await self._ask(
+                call,
+                tool,
+                args,
+                ctx,
+                engine,
+                "sandbox_escalate",
+                pattern,
+                audit,
+                decision.detail,
+                sticky=False,
+            )
+            if refused is not None:
+                return refused, None
+        grant_id = uuid.uuid4().hex
+        await self.s.audit.record(
+            actor="agent",
+            action="sandbox.escalate",
+            session_id=ctx.session_id,
+            decision="allow",
+            reason=decision.detail,
+            detail={
+                **audit,
+                "fromMode": from_mode,
+                "toMode": to_mode,
+                "justificationHash": hashlib.sha256(justification.encode()).hexdigest()[:16],
+                "grantId": grant_id,
+            },
+        )
+        return None, grant_id
 
     @staticmethod
     def _err(call: ToolCall, message: str) -> ToolOutcome:

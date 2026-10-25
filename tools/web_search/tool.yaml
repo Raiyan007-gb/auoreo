@@ -20,3 +20,4 @@ is_search_or_read: true
 requires_env: []
 timeout_ms: 30000
 search_hint: web search internet query find pages
+net: direct

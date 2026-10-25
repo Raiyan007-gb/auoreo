@@ -19,3 +19,4 @@ is_concurrency_safe: true
 is_search_or_read: true
 timeout_ms: 30000
 search_hint: find files by name glob pattern
+sandbox_mode: read-only

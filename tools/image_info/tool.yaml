@@ -18,3 +18,4 @@ is_search_or_read: true
 exposure: deferred
 timeout_ms: 30000
 search_hint: image size dimensions format png jpeg metadata
+sandbox_mode: read-only

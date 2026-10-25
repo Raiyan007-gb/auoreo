@@ -37,8 +37,13 @@ _HARDLINE: tuple[re.Pattern[str], ...] = tuple(
         r"\bsystemctl\s+(poweroff|reboot|halt|kexec)\b",
         r"\bsudo\s+(-[a-zA-Z]*S|--stdin|-[a-zA-Z]*A)\b",
         r"\bchmod\s+(-R\s+)?[0-7]*777\s+/(\s|$)",
+        r"\bdocker\b[^|;&]*\s--privileged\b",  # docker never runs privileged (§25.10)
+        r"\bpodman\b[^|;&]*\s--privileged\b",
     )
 )
+# `sudo` (§25.10): `-n` / `--non-interactive` never prompts; anything else may wait for a password.
+_SUDO = re.compile(r"(^|[\s;&|(`])sudo(\s+(?P<flags>(-[a-zA-Z-]+\s*)*))?")
+_SUDO_NONINTERACTIVE = re.compile(r"(^|\s)(-[a-zA-Z]*n[a-zA-Z]*|--non-interactive)(\s|$)")
 _SECRET_PATH = re.compile(r"(^|/)(\.env(\.[^/]*)?|secrets\.db)$")
 _COMPOUND = re.compile(r"[;&|`<>]|\$\(")
 _FILE_PERMISSIONS = frozenset({"read", "edit"})
@@ -99,6 +104,22 @@ def _secret_target(value: str) -> bool:
     return bool(_SECRET_PATH.search(value))
 
 
+def sudo_kind(command: str) -> Literal["bare", "noninteractive"] | None:
+    """`bare` if any `sudo` in the command may prompt, `noninteractive` if every one is `-n`."""
+    kinds = set()
+    for variant in _normalize(command):
+        for m in _SUDO.finditer(variant):
+            flags = m.group("flags") or ""
+            kinds.add("noninteractive" if _SUDO_NONINTERACTIVE.search(" " + flags) else "bare")
+    if "bare" in kinds:
+        return "bare"
+    return "noninteractive" if kinds else None
+
+
+def _names_sudo(pattern: str) -> bool:
+    return pattern.lstrip().startswith("sudo")
+
+
 @dataclass(frozen=True)
 class Decision:
     action: Action
@@ -124,7 +145,7 @@ class PermissionEngine:
             # yolo is only honoured when AUOREO_YOLO was set at process start.
             self.mode = "manual"
 
-    def floor(self, permission: str, pattern: str) -> str | None:
+    def floor(self, permission: str, pattern: str, *, interactive: bool = True) -> str | None:
         """Return a reason if a floor blocks this call."""
         if permission in _FILE_PERMISSIONS and _secret_target(pattern):
             return "secret files are never readable or writable by tools"
@@ -134,11 +155,16 @@ class PermissionEngine:
                     return "blocked by hardline floor (destructive system command)"
                 if any(fnmatch.fnmatchcase(variant, g) for g in self.floors):
                     return "blocked by a configured floor"
+            if not interactive and sudo_kind(pattern) == "bare":
+                return "bare sudo needs a human at a terminal; this run is non-interactive"
         return None
 
-    def evaluate(self, permission: str, pattern: str, default: Action = "ask") -> Decision:
-        if (why := self.floor(permission, pattern)) is not None:
+    def evaluate(
+        self, permission: str, pattern: str, default: Action = "ask", *, interactive: bool = True
+    ) -> Decision:
+        if (why := self.floor(permission, pattern, interactive=interactive)) is not None:
             return Decision("deny", f"floor: {why}")
+        sudo = sudo_kind(pattern) if permission == "bash" else None
         compound = permission == "bash" and is_compound(pattern)
         found: Rule | None = None
         for rule in [*self.rules, *self.session_rules, *self.approved]:
@@ -148,7 +174,14 @@ class PermissionEngine:
                 continue  # compound commands never match a narrow allow rule
             found = rule
         decision = Decision(found.action, "rule", found) if found else Decision(default, "default")
-        return self._apply_mode(decision, permission, pattern)
+        if sudo == "noninteractive":
+            # `sudo -n` runs only on an explicit allow rule naming the sudo command (silent deny on miss).
+            explicit = found is not None and found.action == "allow" and _names_sudo(found.pattern)
+            return decision if explicit else Decision("deny", "floor: sudo -n needs an explicit allow rule")
+        decision = self._apply_mode(decision, permission, pattern)
+        if sudo == "bare" and decision.action == "allow":
+            return Decision("ask", "floor: bare sudo always asks", decision.rule)
+        return decision
 
     def _apply_mode(self, d: Decision, permission: str, pattern: str) -> Decision:
         if self.mode == "plan" and permission == "edit":

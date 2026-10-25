@@ -23,6 +23,7 @@ STARTERS: list[str] = [
     "auoreo.automation.webhooks:start",
     "auoreo.teams:start",  # key = last dotted part → services.ext["teams"]
     "auoreo.plugins:start",  # → services.ext["plugins"]
+    "auoreo.core.sandbox_boot:start",  # → services.ext["sandbox_boot"]; SystemExit under policy=fail
 ]
 
 

@@ -1,0 +1,19 @@
+name: ops_cpu
+toolset: ops
+description: >-
+  Current CPU utilisation (overall and per core over a short sample), core counts, load
+  average and frequency of the machine running auoreo, as compact markdown.
+parameters:
+  type: object
+  properties:
+    interval_s: {type: number, minimum: 0.1, maximum: 5, default: 0.5,
+                 description: Sampling window in seconds.}
+  additionalProperties: false
+permission: ops
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 15000
+search_hint: cpu load usage cores utilisation monitor system health ops
+sandbox_mode: read-only

@@ -1,0 +1,11 @@
+kind: sandbox
+name: none
+description: >-
+  No confinement: a plain subprocess in its own session, killed as a process group on
+  timeout. Reports enforced=false so the model is told isolation is not active.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

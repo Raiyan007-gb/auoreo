@@ -1,0 +1,13 @@
+kind: sandbox
+name: docker
+description: >-
+  Docker container per call: all capabilities dropped, no-new-privileges, uid 1000, PID and
+  memory limits, no network when net=none, the working directory mounted at /work (read-only
+  under read-only mode, plus a read-only root filesystem). Never privileged. Needs the
+  `sandbox-docker` extra (docker SDK) and a reachable daemon.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok

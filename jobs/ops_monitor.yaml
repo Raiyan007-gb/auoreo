@@ -1,0 +1,14 @@
+name: ops_monitor
+description: Periodic machine health check with the ops toolset (CPU, memory, disk, network, top processes).
+schedule: "every 30m"
+agent: ops
+prompt: |
+  It is {{now}} ({{job}}). Check this machine's health: run ops_cpu, ops_mem, ops_disk,
+  ops_net and ops_procs (sort by cpu, limit 10; then by mem, limit 10). Summarize in at most
+  six bullets: anything above 85% CPU/memory/disk, unusual network errors or drops, and
+  processes that dominate resources. Say "all normal" when nothing stands out. Do not
+  change anything on the machine.
+deliver: [log]
+enabled: false
+catch_up: false
+timeout_s: 300

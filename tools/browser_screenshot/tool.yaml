@@ -11,3 +11,4 @@ is_read_only: true
 is_concurrency_safe: false
 timeout_ms: 30000
 search_hint: browser screenshot image png capture page
+net: direct

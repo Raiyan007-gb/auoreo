@@ -55,6 +55,10 @@ class ToolManifest(_Strict):
     max_result_size_chars: int = Field(default=64_000, ge=1_000)
     override: bool = False
     """Required to shadow a lower-precedence tool of the same name."""
+    net: Literal["none", "proxy", "direct"] = "none"
+    """Egress class (spec §25.10): `none` default, `proxy` (MCP/web via proxy), `direct`."""
+    sandbox_mode: Literal["read-only", "workspace-write", "danger-full-access"] = "workspace-write"
+    """Sandbox mode this tool's processes run under; wider needs a one-call escalation."""
 
     @field_validator("parameters")
     @classmethod

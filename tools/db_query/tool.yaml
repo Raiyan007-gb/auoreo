@@ -1,0 +1,23 @@
+name: db_query
+toolset: ops
+description: >-
+  Run ONE read-only SELECT (or WITH … SELECT) against an allow-listed database named in
+  settings.db_query_dsns and return the columns and up to max_rows rows as a markdown table.
+  Writes, PRAGMA/ATTACH and multiple statements are refused; values are redacted.
+parameters:
+  type: object
+  properties:
+    dsn_name: {type: string, description: Name of an allow-listed DSN (settings.db_query_dsns).}
+    sql: {type: string, minLength: 1, maxLength: 20000, description: A single SELECT or WITH query.}
+    max_rows: {type: integer, minimum: 1, maximum: 1000, default: 200}
+  required: [dsn_name, sql]
+  additionalProperties: false
+permission: ops
+pattern_arg: dsn_name
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 60000
+search_hint: database sql select query postgres sqlite mysql table rows ops
+sandbox_mode: read-only
