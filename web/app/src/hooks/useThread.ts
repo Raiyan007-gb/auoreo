@@ -1,12 +1,12 @@
-import type { MessageOut, ServerEvent, SessionInfo } from "@sdk/client";
+import type { MessageOut, ServerEvent, SessionDetail } from "@sdk/client";
 import { TERMINAL_RUN_EVENTS } from "@sdk/client";
-import type { PermissionRequestedData, QuestionAskedData } from "@sdk/contracts";
+import type { PermissionRequestedData, QuestionAskedData } from "@sdk/events";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { emptyThread, fromMessages, type Item, reduceEvents, type ThreadState } from "@/lib/thread";
 
 export interface ThreadView {
-  session: SessionInfo | undefined;
+  session: SessionDetail | undefined;
   items: Item[];
   state: ThreadState;
   /** True once the event replay has caught up (the thread is event-derived from then on). */
@@ -24,7 +24,7 @@ export interface ThreadView {
  * per animation frame; during the initial replay they are flushed once the burst settles.
  */
 export function useThread(sessionId: string): ThreadView {
-  const [session, setSession] = useState<SessionInfo | undefined>(undefined);
+  const [session, setSession] = useState<SessionDetail | undefined>(undefined);
   const [snapshot, setSnapshot] = useState<MessageOut[] | null>(null);
   const [state, setState] = useState<ThreadState>(emptyThread);
   const [live, setLive] = useState(false);
@@ -129,9 +129,12 @@ export function useThread(sessionId: string): ThreadView {
   }, [sessionId]);
 
   const items = useMemo(() => {
-    if (live && (state.items.length > 0 || !snapshot?.length)) return state.items;
+    // A fork's inherited history lives only in `/messages` (no events in this session).
+    const inherited =
+      state.forkedAt !== undefined && snapshot ? fromMessages(snapshot.slice(0, state.forkedAt + 1)) : [];
+    if (live && (state.items.length > 0 || !snapshot?.length)) return inherited.length ? [...inherited, ...state.items] : state.items;
     return snapshot ? fromMessages(snapshot) : [];
-  }, [live, state.items, snapshot]);
+  }, [live, state.items, state.forkedAt, snapshot]);
 
   return {
     session,

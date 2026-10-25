@@ -1,37 +1,17 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, type Plugin } from "vite";
-
-/**
- * FastAPI serves web/dist with `StaticFiles(html=True)`, which has no SPA fallback but does
- * serve `404.html` for unknown paths. Emit a copy of index.html pinned to `<base href="/">`
- * so deep links like /session/<id> boot the app with assets resolved from the root.
- */
-function spaFallback(): Plugin {
-  let outDir = "";
-  return {
-    name: "auoreo-spa-fallback",
-    apply: "build",
-    configResolved(c) {
-      outDir = resolve(c.root, c.build.outDir);
-    },
-    writeBundle() {
-      const html = readFileSync(join(outDir, "index.html"), "utf8");
-      writeFileSync(join(outDir, "404.html"), html.replace("<head>", '<head>\n    <base href="/" />'));
-    },
-  };
-}
+import { defineConfig } from "vite";
 
 const backend = process.env.AUOREO_URL ?? "http://127.0.0.1:4096";
 
-// Vite 8 (Rolldown). Output lands in web/dist, which FastAPI mounts at "/" after its routers.
+// Vite 8 (Rolldown). Output lands in web/dist, which FastAPI mounts at "/" after its routers
+// (`SpaStaticFiles`: extension-less unknown paths get index.html). Assets use absolute
+// `/assets/…` URLs so deep links such as /session/<id> resolve them from the root.
 export default defineConfig({
   root: fileURLToPath(new URL(".", import.meta.url)),
-  base: "./",
-  plugins: [react(), tailwindcss(), spaFallback()],
+  base: "/",
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@sdk": fileURLToPath(new URL("../sdk", import.meta.url)),

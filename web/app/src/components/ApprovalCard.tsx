@@ -1,5 +1,5 @@
 import type { PermissionReplyKind } from "@sdk/client";
-import type { PermissionRequestedData } from "@sdk/contracts";
+import type { PermissionRequestedData } from "@sdk/events";
 import { CheckIcon, ShieldAlertIcon, ShieldCheckIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";

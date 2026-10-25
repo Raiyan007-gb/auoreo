@@ -42,3 +42,23 @@ test("approvals page shows the cross-session queue and rejects inline", async ({
   const pending = (await (await request.get(`/api/permissions/pending?session_id=${s.id}`)).json()) as unknown[];
   expect(pending).toHaveLength(0);
 });
+
+test("approvals page receives new requests live over the WebSocket (no poll, no replay)", async ({ page, request }) => {
+  const old = await createSession(request, "e2e approvals old");
+  await request.post("/api/chat", { data: { session_id: old.id, message: BASH } });
+  await page.goto("/approvals");
+  await expect(page.getByTestId("ws-state")).toHaveAttribute("data-state", "open");
+  await expect(page.getByTestId("approvals-live")).toHaveText("Live over WebSocket.");
+  // The pre-existing request comes from the REST seed, not from replaying history.
+  await expect(page.getByTestId("approval-group").filter({ hasText: "e2e approvals old" })).toBeVisible();
+
+  const s = await createSession(request, "e2e approvals live");
+  await request.post("/api/chat", { data: { session_id: s.id, message: BASH } });
+  const group = page.getByTestId("approval-group").filter({ hasText: s.id });
+  await expect(group).toBeVisible({ timeout: 2500 });
+  await group.getByRole("button", { name: "Approve once" }).click();
+  await expect(group).toBeHidden();
+  const oldGroup = page.getByTestId("approval-group").filter({ hasText: "e2e approvals old" });
+  await oldGroup.getByRole("button", { name: "Approve once" }).click();
+  await expect(oldGroup).toBeHidden();
+});

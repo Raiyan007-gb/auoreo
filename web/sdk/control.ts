@@ -98,6 +98,8 @@ export interface ControlOptions {
   readonly retryDelayMs?: number;
   readonly maxRetries?: number;
   readonly ackTimeoutMs?: number;
+  /** After `maxRetries`, keep probing at this interval while showing "unavailable". */
+  readonly slowRetryMs?: number;
 }
 
 export interface ControlConnection {
@@ -132,6 +134,7 @@ export function connectControl(opts: ControlOptions): ControlConnection {
   const delay = opts.retryDelayMs ?? 2000;
   const maxRetries = opts.maxRetries ?? 5;
   const ackTimeout = opts.ackTimeoutMs ?? 4000;
+  const slowRetry = opts.slowRetryMs ?? 30_000;
   let ws: WebSocket | null = null;
   let state: ControlState = "connecting";
   let attempts = 0;
@@ -167,11 +170,15 @@ export function connectControl(opts: ControlOptions): ControlConnection {
       return;
     }
     switch (type) {
-      case "connected":
+      case "connected": {
+        const c = frame as unknown as WsConnected;
         attempts = 0;
+        // Live-only connect: remember where "now" was so a reconnect replays the gap.
+        if (lastSeq === null && typeof c.server_seq === "number") lastSeq = c.server_seq;
         setState("open");
-        opts.onConnected?.(frame as unknown as WsConnected);
+        opts.onConnected?.(c);
         return;
+      }
       case "ping":
         send({ type: "pong", tick: Number(frame.tick ?? 0) });
         return;
@@ -233,7 +240,12 @@ export function connectControl(opts: ControlOptions): ControlConnection {
 
   const scheduleRetry = () => {
     if (stopped) return;
-    if (attempts >= maxRetries) return setState("unavailable");
+    if (attempts >= maxRetries) {
+      // Out of fast retries: stay "unavailable" (REST fallbacks) but keep probing slowly.
+      setState("unavailable");
+      timer = setTimeout(open, slowRetry);
+      return;
+    }
     attempts += 1;
     setState("reconnecting");
     timer = setTimeout(open, delay * attempts);

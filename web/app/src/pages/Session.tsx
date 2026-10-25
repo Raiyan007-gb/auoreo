@@ -1,24 +1,26 @@
-import type { ExportFormat } from "@sdk/contracts";
+import type { UsageRecord } from "@sdk/client";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDownIcon, DownloadIcon, MinimizeIcon, NavigationIcon, SendIcon, SquareIcon } from "lucide-react";
+import { ArrowDownIcon, NavigationIcon, SendIcon, SquareIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ApprovalCard } from "@/components/ApprovalCard";
 import { INSERT_COMMAND_EVENT } from "@/components/CommandPalette";
 import { ErrorNote } from "@/components/AppShell";
 import { QuestionForm } from "@/components/QuestionForm";
+import { MarkdownText } from "@/components/MarkdownLazy";
+import { SessionActions } from "@/components/SessionActions";
 import { ToolCard } from "@/components/ToolCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { Tip } from "@/components/ui/tooltip";
-import { useSupports } from "@/hooks/useAsync";
 import { useThread } from "@/hooks/useThread";
 import { api } from "@/lib/api";
 import { useControl } from "@/lib/controlContext";
+import { compactSession, type OpNotice, RUN_COMPACT_EVENT } from "@/lib/sessionOps";
 import { STATUS_VARIANT } from "@/lib/status";
 import type { Item } from "@/lib/thread";
-import { cn, download, errorText, fmtTokens, fmtUsd } from "@/lib/utils";
+import { cn, errorText, fmtTokens, fmtUsd } from "@/lib/utils";
 
 function ItemView({ item, awaiting }: { item: Item; awaiting: boolean }) {
   switch (item.kind) {
@@ -33,9 +35,15 @@ function ItemView({ item, awaiting }: { item: Item; awaiting: boolean }) {
       );
     case "assistant":
       return (
-        <div className="max-w-[90%] leading-relaxed whitespace-pre-wrap" data-testid="msg-assistant" data-streaming={item.streaming}>
-          {item.text}
-          {item.streaming && <span aria-hidden className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground align-text-bottom" />}
+        <div className="max-w-[90%] leading-relaxed" data-testid="msg-assistant" data-streaming={item.streaming}>
+          {item.streaming ? (
+            <div className="whitespace-pre-wrap">
+              {item.text}
+              <span aria-hidden className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground align-text-bottom" />
+            </div>
+          ) : (
+            <MarkdownText text={item.text} />
+          )}
         </div>
       );
     case "tool":
@@ -44,6 +52,8 @@ function ItemView({ item, awaiting }: { item: Item; awaiting: boolean }) {
       return (
         <div
           role="status"
+          data-testid="thread-notice"
+          data-code={item.code}
           className={cn(
             "rounded-md px-3 py-1.5 text-xs",
             item.level === "error" && "bg-destructive/10 text-destructive",
@@ -66,12 +76,13 @@ export function SessionRoute() {
 function SessionPage({ id }: { id: string }) {
   const t = useThread(id);
   const control = useControl();
-  const canCompact = useSupports("compact");
-  const canExport = useSupports("export");
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNoticeState] = useState<OpNotice | null>(null);
+  const setNotice = (n: OpNotice | string) => setNoticeState(typeof n === "string" ? { level: "info", text: n } : n);
+  const [archivedOverride, setArchivedOverride] = useState<boolean | null>(null);
+  const [ledger, setLedger] = useState<UsageRecord[] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const didInitialScroll = useRef(false);
@@ -82,6 +93,21 @@ function SessionPage({ id }: { id: string }) {
   const pendingQs = Object.values(t.state.questions);
   const waitingTools = new Set(pendingPerms.map((p) => p.tool));
   const running = t.state.running || t.session?.status === "running";
+  const title = t.state.title || t.session?.title || "";
+  const archived = archivedOverride ?? t.state.archived ?? t.session?.archived ?? false;
+
+  // Per-call usage ledger for the token badge tooltip; refreshed whenever a run ends.
+  useEffect(() => {
+    if (running) return;
+    let cancelled = false;
+    api
+      .usage(id)
+      .then((rows) => !cancelled && setLedger(rows))
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [id, running, t.state.usage.prompt]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns unmemoizable fns; no React Compiler here
   const virtualizer = useVirtualizer({
@@ -108,9 +134,14 @@ function SessionPage({ id }: { id: string }) {
       setText(detail);
       inputRef.current?.focus();
     };
+    const onCompact = () => void compactSession(id).then(setNotice, (e: unknown) => setErr(errorText(e)));
     window.addEventListener(INSERT_COMMAND_EVENT, onInsert);
-    return () => window.removeEventListener(INSERT_COMMAND_EVENT, onInsert);
-  }, []);
+    window.addEventListener(RUN_COMPACT_EVENT, onCompact);
+    return () => {
+      window.removeEventListener(INSERT_COMMAND_EVENT, onInsert);
+      window.removeEventListener(RUN_COMPACT_EVENT, onCompact);
+    };
+  }, [id]);
 
   const guard = async (fn: () => Promise<unknown>) => {
     setErr(null);
@@ -126,7 +157,9 @@ function SessionPage({ id }: { id: string }) {
     if (!message || busy) return;
     setBusy(true);
     await guard(async () => {
-      await api.chat({ session_id: id, message });
+      // `/compact` runs directly so "nothing to compact" (422) comes back as a notice.
+      if (/^\/compact\s*$/.test(message)) setNotice(await compactSession(id));
+      else await api.chat({ session_id: id, message });
       setText("");
     });
     setBusy(false);
@@ -148,26 +181,31 @@ function SessionPage({ id }: { id: string }) {
       setNotice(`Interrupt sent (${via})`);
     });
 
-  const compact = () =>
-    guard(async () => {
-      const r = await api.compact(id);
-      setNotice(`Compacted ${fmtTokens(r.pre_tokens)} → ${fmtTokens(r.post_tokens)} tokens`);
-    });
-
-  const exportAs = (format: ExportFormat) =>
-    guard(async () => {
-      const res = await api.exportSession(id, format);
-      download(`${id}.${format}`, await res.blob());
-    });
-
   const totalTokens = t.state.usage.prompt + t.state.usage.completion;
+  const ledgerTotals = ledger?.reduce(
+    (acc, r) => ({
+      calls: acc.calls + 1,
+      prompt: acc.prompt + r.prompt_tokens,
+      completion: acc.completion + r.completion_tokens,
+      cached: acc.cached + r.cached_tokens,
+      cost: acc.cost + (r.cost_usd ?? 0),
+      estimated: acc.estimated || r.estimated,
+    }),
+    { calls: 0, prompt: 0, completion: 0, cached: 0, cost: 0, estimated: false },
+  );
+  const models = [...new Set(ledger?.map((r) => r.model) ?? [])];
 
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-base font-semibold" data-testid="session-title">
-            {t.session?.title || "Untitled session"}
+            {title || "Untitled session"}
+            {archived && (
+              <Badge variant="outline" className="ml-2 align-middle" data-testid="archived-badge">
+                archived
+              </Badge>
+            )}
           </h1>
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             <Link to="/sessions" className="text-muted-foreground hover:underline">
@@ -190,7 +228,19 @@ function SessionPage({ id }: { id: string }) {
             {running ? "running" : (t.session?.status ?? "…")}
           </Badge>
           <Tip
-            label={`${t.state.usage.prompt.toLocaleString()} prompt + ${t.state.usage.completion.toLocaleString()} completion · ${fmtUsd(t.state.usage.cost)}`}
+            label={
+              ledgerTotals && ledgerTotals.calls > 0 ? (
+                <span data-testid="usage-tooltip">
+                  Usage ledger: {ledgerTotals.calls} call{ledgerTotals.calls === 1 ? "" : "s"} ·{" "}
+                  {ledgerTotals.prompt.toLocaleString()} prompt + {ledgerTotals.completion.toLocaleString()} completion
+                  {ledgerTotals.cached > 0 && ` (${ledgerTotals.cached.toLocaleString()} cached)`} · {fmtUsd(ledgerTotals.cost)}
+                  {ledgerTotals.estimated && " (estimated)"}
+                  {models.length > 0 && <> · {models.join(", ")}</>}
+                </span>
+              ) : (
+                `${t.state.usage.prompt.toLocaleString()} prompt + ${t.state.usage.completion.toLocaleString()} completion · ${fmtUsd(t.state.usage.cost)}`
+              )
+            }
           >
             <Badge variant="secondary" data-testid="token-badge" tabIndex={0}>
               {fmtTokens(totalTokens)} tok · {fmtUsd(t.state.usage.cost)}
@@ -198,23 +248,14 @@ function SessionPage({ id }: { id: string }) {
           </Tip>
           {!t.streamOk && <Badge variant="warning">stream reconnecting</Badge>}
         </div>
-        <div className="flex items-center gap-1">
-          {canCompact && (
-            <Button variant="outline" size="sm" onClick={() => void compact()} disabled={running}>
-              <MinimizeIcon aria-hidden /> Compact
-            </Button>
-          )}
-          {canExport && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => void exportAs("md")} aria-label="Export as Markdown">
-                <DownloadIcon aria-hidden /> MD
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => void exportAs("json")} aria-label="Export as JSON">
-                <DownloadIcon aria-hidden /> JSON
-              </Button>
-            </>
-          )}
-        </div>
+        <SessionActions
+          id={id}
+          title={title}
+          archived={archived}
+          running={running}
+          onArchived={setArchivedOverride}
+          onNotice={setNotice}
+        />
       </header>
 
       <div className="relative min-h-0 flex-1">
@@ -314,8 +355,18 @@ function SessionPage({ id }: { id: string }) {
             </div>
           </form>
           {notice && (
-            <p role="status" className="text-xs text-muted-foreground">
-              {notice}
+            <p
+              role="status"
+              data-testid="action-notice"
+              data-level={notice.level}
+              className={cn(
+                "text-xs",
+                notice.level === "info" && "text-muted-foreground",
+                notice.level === "warn" && "text-warning",
+                notice.level === "error" && "text-destructive",
+              )}
+            >
+              {notice.text}
             </p>
           )}
         </div>

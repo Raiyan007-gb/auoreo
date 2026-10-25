@@ -11,17 +11,30 @@ export function ControlProvider({ children }: { children: React.ReactNode }) {
   const listeners = useRef(new Set<Listener>());
 
   useEffect(() => {
-    const c = api.connectControl({
-      channels: null,
-      onState: setState,
-      onConnected: setConnected,
-      onEvent: (e) => {
-        for (const fn of listeners.current) fn(e);
-      },
-    });
-    conn.current = c;
+    // Live tail: seed `hello.last_seq` with the current head (`GET /api/events/latest`) so
+    // the WS never replays history; if that fails, connect live-only (no last_seq).
+    let c: ControlConnection | null = null;
+    let cancelled = false;
+    const start = (lastSeq?: number) => {
+      if (cancelled) return;
+      c = api.connectControl({
+        channels: null,
+        lastSeq,
+        onState: setState,
+        onConnected: setConnected,
+        onEvent: (e) => {
+          for (const fn of listeners.current) fn(e);
+        },
+      });
+      conn.current = c;
+    };
+    api
+      .latestSeq()
+      .then((r) => start(r.seq))
+      .catch(() => start());
     return () => {
-      c.close();
+      cancelled = true;
+      c?.close();
       conn.current = null;
     };
   }, []);

@@ -16,6 +16,14 @@ const WS_LABEL: Record<string, string> = {
   closed: "Control channel closed",
 };
 
+const WS_SHORT: Record<string, string> = {
+  open: "live",
+  connecting: "connecting",
+  reconnecting: "reconnecting",
+  unavailable: "offline",
+  closed: "closed",
+};
+
 export function AppShell() {
   const [palette, setPalette] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
@@ -56,11 +64,18 @@ export function AppShell() {
               aria-label={WS_LABEL[control.state] ?? control.state}
               data-testid="ws-state"
               data-state={control.state}
-              className={cn(
-                "ml-auto size-2 rounded-full",
-                control.state === "open" ? "bg-success" : control.state === "unavailable" ? "bg-muted-foreground/40" : "bg-warning",
-              )}
-            />
+              tabIndex={0}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-full border px-1.5 py-0.5 text-[10px] text-muted-foreground"
+            >
+              <span
+                aria-hidden
+                className={cn(
+                  "size-2 rounded-full",
+                  control.state === "open" ? "bg-success" : control.state === "unavailable" ? "bg-muted-foreground/40" : "bg-warning animate-pulse",
+                )}
+              />
+              {WS_SHORT[control.state] ?? control.state}
+            </span>
           </Tip>
         </div>
         <nav className="flex flex-1 flex-col gap-0.5 p-2">

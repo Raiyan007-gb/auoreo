@@ -4,7 +4,13 @@
  * `GET /api/sessions/{id}/messages` snapshot for first paint.
  */
 import type { MessageOut, ServerEvent } from "@sdk/client";
-import type { PermissionRequestedData, QuestionAskedData } from "@sdk/contracts";
+import type {
+  CompactionCompletedData,
+  CompactionFailedData,
+  PermissionRequestedData,
+  QuestionAskedData,
+  RunErrorData,
+} from "@sdk/events";
 
 export type ToolStatus = "pending" | "running" | "completed" | "error";
 
@@ -22,7 +28,7 @@ export type Item =
       result?: string;
       meta?: Record<string, unknown>;
     }
-  | { kind: "notice"; key: string; level: "info" | "warn" | "error"; text: string };
+  | { kind: "notice"; key: string; level: "info" | "warn" | "error"; text: string; code?: string };
 
 export type ToolItem = Extract<Item, { kind: "tool" }>;
 
@@ -40,6 +46,11 @@ export interface ThreadState {
   runId?: string;
   agent?: string;
   model?: string;
+  /** Live title from `session.title_updated` (overrides the REST snapshot). */
+  title?: string;
+  archived?: boolean;
+  /** Set by `session.forked`: messages 0..forkedAt were copied (they have no events here). */
+  forkedAt?: number;
   permissions: Record<string, PermissionRequestedData>;
   questions: Record<string, QuestionAskedData>;
 }
@@ -86,6 +97,18 @@ const FAIL_LABEL: Record<string, string> = {
   "run.max_steps": "Stopped at the step limit",
 };
 
+/** Human explanations for `run.blocked` codes (runtime/runner.py). */
+const BLOCK_TEXT: Record<string, string> = {
+  BUDGET: "the session's spend budget is exhausted — raise the cap in settings or start a new session",
+  DOOM_LOOP: "the agent kept repeating the same tool call, so the run was stopped",
+  PERMISSION_REJECTED: "a tool call was rejected, so the run stopped",
+};
+
+const notice = (s: ThreadState, e: ServerEvent, level: "info" | "warn" | "error", text: string, code?: string): ThreadState => ({
+  ...s,
+  items: [...s.items, { kind: "notice", key: `n${e.seq}`, level, text, code }],
+});
+
 type Handler = (s: ThreadState, d: Record<string, unknown>, e: ServerEvent) => ThreadState;
 
 function finishRun(s: ThreadState, d: Record<string, unknown>, e: ServerEvent): ThreadState {
@@ -100,9 +123,17 @@ function finishRun(s: ThreadState, d: Record<string, unknown>, e: ServerEvent): 
   );
   const label = FAIL_LABEL[e.type];
   if (label) {
-    const err = d.error as { code?: string; message?: string } | undefined;
-    const text = err ? `${label}: ${err.code ?? ""} ${err.message ?? ""}`.trim() : label;
-    items = [...items, { kind: "notice", key: `n${e.seq}`, level: e.type === "run.max_steps" ? "warn" : "error", text }];
+    const err = (d.error as RunErrorData | undefined) ?? (d.code ? { code: str(d.code), message: str(d.message) } : undefined);
+    const explained = err?.code ? BLOCK_TEXT[err.code] : undefined;
+    const text = explained
+      ? `${label}: ${explained}${err?.message ? ` (${err.message})` : ""}`
+      : err
+        ? `${label}: ${err.code ?? ""} ${err.message ?? ""}`.trim()
+        : label;
+    items = [
+      ...items,
+      { kind: "notice", key: `n${e.seq}`, level: e.type === "run.max_steps" ? "warn" : "error", text, code: err?.code },
+    ];
   }
   return { ...s, items, running: false };
 }
@@ -218,9 +249,32 @@ const HANDLERS: Record<string, Handler> = {
     const { [str(d.request_id)]: _gone, ...rest } = s.questions;
     return { ...s, questions: rest };
   },
-  "session.compacted": (s, d, e) => ({
-    ...s,
-    items: [...s.items, { kind: "notice", key: `n${e.seq}`, level: "info", text: `Context compacted (${str(d.pre_tokens)} → ${str(d.post_tokens)} tokens)` }],
+  "compaction.started": (s, d, e) =>
+    notice(s, e, "info", `Compacting context (${str(d.trigger) || "manual"})…`, "compaction.started"),
+  "compaction.completed": (s, d, e) => {
+    const c = d as unknown as CompactionCompletedData;
+    return notice(
+      s,
+      e,
+      "info",
+      `Context compacted: ${num(c.pre_tokens).toLocaleString()} → ${num(c.post_tokens).toLocaleString()} tokens, archived ${num(c.archived)} messages`,
+      "compaction.completed",
+    );
+  },
+  "compaction.failed": (s, d, e) => {
+    const c = d as unknown as CompactionFailedData;
+    return notice(s, e, "warn", `Compaction did not run: ${str(c.reason)}`, "compaction.failed");
+  },
+  "session.title_updated": (s, d) => ({ ...s, title: str(d.title) || s.title }),
+  "session.model_changed": (s, d, e) => ({
+    ...notice(s, e, "info", `Model set to ${str(d.model) || "default"}`, "session.model_changed"),
+    model: str(d.model) || undefined,
+  }),
+  "session.archived": (s) => ({ ...s, archived: true }),
+  "session.unarchived": (s) => ({ ...s, archived: false }),
+  "session.forked": (s, d, e) => ({
+    ...notice(s, e, "info", `Forked from ${str(d.parent_id)}`, "session.forked"),
+    forkedAt: typeof d.at_idx === "number" ? d.at_idx : -1,
   }),
 };
 

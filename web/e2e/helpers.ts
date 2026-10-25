@@ -23,6 +23,26 @@ export async function createSession(request: APIRequestContext, title: string): 
   return (await res.json()) as Session;
 }
 
+export async function createUntitled(request: APIRequestContext): Promise<Session> {
+  const res = await request.post("/api/sessions", { data: {} });
+  if (!res.ok()) throw new Error(`create session failed: ${res.status()}`);
+  return (await res.json()) as Session;
+}
+
+/** Post a chat turn over REST and wait until the session is idle with an assistant reply. */
+export async function chatAndWait(request: APIRequestContext, id: string, message: string): Promise<void> {
+  const res = await request.post("/api/chat", { data: { session_id: id, message } });
+  if (res.status() !== 202) throw new Error(`chat failed: ${res.status()}`);
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const s = (await (await request.get(`/api/sessions/${id}`)).json()) as { status: string };
+    const msgs = (await (await request.get(`/api/sessions/${id}/messages`)).json()) as { role: string }[];
+    if (s.status === "idle" && msgs.some((m) => m.role === "assistant")) return;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  throw new Error(`session ${id} did not go idle`);
+}
+
 export async function send(page: Page, text: string): Promise<void> {
   const box = page.getByTestId("composer");
   await box.fill(text);

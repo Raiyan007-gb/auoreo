@@ -24,6 +24,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Commands */
+        get: operations["list_commands_api_commands_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -37,6 +54,26 @@ export interface paths {
          *     `follow=false` returns the replay only (useful for tests and scripts).
          */
         get: operations["events_api_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/events/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Latest
+         * @description Highest event seq so far — lets a client tail from 'now' without replaying history.
+         */
+        get: operations["latest_api_events_latest_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -225,7 +262,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Sessions */
+        /**
+         * List Sessions
+         * @description Archived sessions are hidden unless `?archived=true`.
+         */
         get: operations["list_sessions_api_sessions_get"];
         put?: never;
         /** Create Session */
@@ -247,6 +287,31 @@ export interface paths {
         get: operations["get_session_api_sessions__session_id__get"];
         put?: never;
         post?: never;
+        /**
+         * Delete
+         * @description Deletes the session and its messages (409 while running). Events stay.
+         */
+        delete: operations["delete_api_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Archive
+         * @description Archived messages, newest compaction first; original order within a compaction.
+         */
+        get: operations["archive_api_sessions__session_id__archive_get"];
+        put?: never;
+        /** Archive */
+        post: operations["archive_api_sessions__session_id__archive_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -273,6 +338,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions/{session_id}/compact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Compact */
+        post: operations["compact_api_sessions__session_id__compact_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export
+         * @description `json` = session info + raw messages; `md` = readable transcript.
+         */
+        get: operations["export_api_sessions__session_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fork
+         * @description New session (same agent/workflow/model, `parent_id` set) with every committed message.
+         */
+        post: operations["fork_api_sessions__session_id__fork_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sessions/{session_id}/messages": {
         parameters: {
             query?: never;
@@ -282,6 +404,57 @@ export interface paths {
         };
         /** Get Messages */
         get: operations["get_messages_api_sessions__session_id__messages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unarchive */
+        post: operations["unarchive_api_sessions__session_id__unarchive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Usage */
+        get: operations["list_usage_api_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summary */
+        get: operations["summary_api_usage_summary_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -300,6 +473,28 @@ export interface components {
             responses: {
                 [key: string]: unknown;
             }[];
+        };
+        /** ArchivedMessage */
+        ArchivedMessage: {
+            /**
+             * Archived At
+             * Format: date-time
+             */
+            archived_at: string;
+            /** Compaction Id */
+            compaction_id: string;
+            /** Content */
+            content: string | null;
+            /** Idx */
+            idx: number;
+            /** Role */
+            role: string;
+            /** Tool Call Id */
+            tool_call_id?: string | null;
+            /** Tool Calls */
+            tool_calls?: {
+                [key: string]: unknown;
+            }[] | null;
         };
         /** ChatAccepted */
         ChatAccepted: {
@@ -336,6 +531,40 @@ export interface components {
             session_id?: string | null;
             /** Workflow */
             workflow?: string | null;
+        };
+        /** CommandInfo */
+        CommandInfo: {
+            /** Args Hint */
+            args_hint: string;
+            /** Description */
+            description: string;
+            /**
+             * Handler
+             * @enum {string}
+             */
+            handler: "prompt" | "compact" | "model" | "plan";
+            /** Name */
+            name: string;
+        };
+        /** CompactRequest */
+        CompactRequest: {
+            /** Retain Ratio */
+            retain_ratio?: number | null;
+        };
+        /** CompactionOut */
+        CompactionOut: {
+            /** Archived */
+            archived: number;
+            /** Compaction Id */
+            compaction_id: string;
+            /** Post Tokens */
+            post_tokens: number;
+            /** Pre Tokens */
+            pre_tokens: number;
+            /** Pruned */
+            pruned: number;
+            /** Summary Chars */
+            summary_chars: number;
         };
         /** FactIn */
         FactIn: {
@@ -389,6 +618,11 @@ export interface components {
             status: "ok";
             /** Version */
             version: string;
+        };
+        /** LatestSeq */
+        LatestSeq: {
+            /** Seq */
+            seq: number;
         };
         /** MessageOut */
         MessageOut: {
@@ -480,6 +714,48 @@ export interface components {
             /** Workflow */
             workflow?: string | null;
         };
+        /** SessionDeleted */
+        SessionDeleted: {
+            /** Deleted */
+            deleted: boolean;
+            /** Id */
+            id: string;
+        };
+        /**
+         * SessionDetail
+         * @description `SessionInfo` plus lineage/archive state (fork, archive endpoints).
+         */
+        SessionDetail: {
+            /** Agent */
+            agent: string;
+            /**
+             * Archived
+             * @default false
+             */
+            archived: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Model */
+            model: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Status */
+            status: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Workflow */
+            workflow: string;
+        };
         /** SessionInfo */
         SessionInfo: {
             /** Agent */
@@ -504,6 +780,55 @@ export interface components {
             updated_at: string;
             /** Workflow */
             workflow: string;
+        };
+        /** UsageRecord */
+        UsageRecord: {
+            /** Cached Tokens */
+            cached_tokens: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Cost Usd */
+            cost_usd: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Estimated */
+            estimated: boolean;
+            /** Id */
+            id: number;
+            /** Model */
+            model: string;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Run Id */
+            run_id: string;
+            /** Session Id */
+            session_id: string;
+        };
+        /** UsageSummary */
+        UsageSummary: {
+            /** By Model */
+            by_model: components["schemas"]["UsageTotals"][];
+            /** By Session */
+            by_session: components["schemas"]["UsageTotals"][];
+            /** Days */
+            days: number;
+            total: components["schemas"]["UsageTotals"];
+        };
+        /** UsageTotals */
+        UsageTotals: {
+            /** Calls */
+            calls: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Key */
+            key: string;
+            /** Prompt Tokens */
+            prompt_tokens: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -576,6 +901,41 @@ export interface operations {
             };
         };
     };
+    list_commands_api_commands_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommandInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     events_api_events_get: {
         parameters: {
             query?: {
@@ -602,6 +962,41 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    latest_api_events_latest_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LatestSeq"];
                 };
             };
             /** @description Validation Error */
@@ -982,6 +1377,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                archived?: boolean;
                 token?: string | null;
             };
             header?: {
@@ -1076,7 +1472,119 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SessionInfo"];
+                    "application/json": components["schemas"]["SessionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_api_sessions__session_id__delete: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDeleted"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_api_sessions__session_id__archive_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArchivedMessage"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_api_sessions__session_id__archive_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDetail"];
                 };
             };
             /** @description Validation Error */
@@ -1129,6 +1637,123 @@ export interface operations {
             };
         };
     };
+    compact_api_sessions__session_id__compact_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CompactRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompactionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_api_sessions__session_id__export_get: {
+        parameters: {
+            query?: {
+                format?: "json" | "md";
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                    "text/markdown": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fork_api_sessions__session_id__fork_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_messages_api_sessions__session_id__messages_get: {
         parameters: {
             query?: {
@@ -1153,6 +1778,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MessageOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unarchive_api_sessions__session_id__unarchive_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_usage_api_usage_get: {
+        parameters: {
+            query?: {
+                session_id?: string | null;
+                limit?: number;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageRecord"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_api_usage_summary_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSummary"];
                 };
             };
             /** @description Validation Error */

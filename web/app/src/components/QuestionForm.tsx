@@ -1,4 +1,4 @@
-import type { QuestionAskedData } from "@sdk/contracts";
+import type { QuestionAskedData } from "@sdk/events";
 import { MessageCircleQuestionIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
