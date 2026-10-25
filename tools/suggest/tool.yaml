@@ -1,0 +1,31 @@
+name: suggest
+description: Propose a suggestion to the user; it only runs if they accept it.
+parameters:
+  type: object
+  properties:
+    title: {type: string, minLength: 1, maxLength: 300, description: "One-line summary the user sees."}
+    body: {type: string, maxLength: 4000, description: "Why, evidence (numbers), and what accepting will do."}
+    kind: {type: string, maxLength: 32, default: info, description: "Category, e.g. info, ops, goal, reminder."}
+    deliver:
+      type: string
+      maxLength: 64
+      default: origin
+      description: "origin (this session/UI only) | home | all | <delivery provider>[:<target>]."
+    dedupe_key:
+      type: string
+      maxLength: 128
+      description: "Stable key (e.g. 'ops:disk:/'); a pending suggestion with the same key is not repeated."
+    prompt:
+      type: string
+      maxLength: 8000
+      description: "Optional instruction to run as a new turn if the user accepts."
+    agent: {type: string, maxLength: 64, description: "Agent for the accepted prompt (default: the session's)."}
+    ttl_s: {type: integer, minimum: 60, maximum: 2592000, default: 86400, description: "Expires after this many seconds."}
+  required: [title]
+  additionalProperties: false
+permission: suggest
+default_action: allow
+toolset: suggestions
+exposure: deferred
+search_hint: suggest suggestion propose notify recommend proactive alert anomaly
+timeout_ms: 30000

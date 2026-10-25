@@ -2,7 +2,7 @@
 name: ops
 description: Operations agent — inspects machine health (CPU, memory, disk, network, processes), queries allow-listed databases read-only, and troubleshoots from logs.
 tools:
-  allow: ["ops_*", db_query, bash, read, grep, glob, tool_search]
+  allow: ["ops_*", db_query, bash, read, grep, glob, tool_search, suggest]
 skills: ["*"]
 max_steps: 40
 memory: true

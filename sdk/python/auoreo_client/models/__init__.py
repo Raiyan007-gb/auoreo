@@ -37,6 +37,12 @@ from .fact_action_result import FactActionResult
 from .fact_feedback import FactFeedback
 from .fact_in import FactIn
 from .fact_pin import FactPin
+from .goal_absorb import GoalAbsorb
+from .goal_create import GoalCreate
+from .goal_info import GoalInfo
+from .goal_info_status import GoalInfoStatus
+from .goal_patch import GoalPatch
+from .goal_patch_status_type_0 import GoalPatchStatusType0
 from .harness_entry import HarnessEntry
 from .harness_listing import HarnessListing
 from .harness_listing_entries import HarnessListingEntries
@@ -49,6 +55,8 @@ from .kanban_create import KanbanCreate
 from .kanban_task import KanbanTask
 from .kanban_task_status import KanbanTaskStatus
 from .latest_seq import LatestSeq
+from .list_goals_api_goals_get_status_type_0 import ListGoalsApiGoalsGetStatusType0
+from .list_suggestions_api_suggestions_get_status_type_0 import ListSuggestionsApiSuggestionsGetStatusType0
 from .list_tasks_api_kanban_get_status_type_0 import ListTasksApiKanbanGetStatusType0
 from .mail_message import MailMessage
 from .message_out import MessageOut
@@ -92,6 +100,13 @@ from .session_create import SessionCreate
 from .session_deleted import SessionDeleted
 from .session_detail import SessionDetail
 from .session_info import SessionInfo
+from .suggestion_accepted import SuggestionAccepted
+from .suggestion_create import SuggestionCreate
+from .suggestion_create_action import SuggestionCreateAction
+from .suggestion_info import SuggestionInfo
+from .suggestion_info_action import SuggestionInfoAction
+from .suggestion_info_status import SuggestionInfoStatus
+from .suggestion_proposed import SuggestionProposed
 from .team_detail import TeamDetail
 from .team_info import TeamInfo
 from .team_member_info import TeamMemberInfo
@@ -142,6 +157,12 @@ __all__ = (
     "FactFeedback",
     "FactIn",
     "FactPin",
+    "GoalAbsorb",
+    "GoalCreate",
+    "GoalInfo",
+    "GoalInfoStatus",
+    "GoalPatch",
+    "GoalPatchStatusType0",
     "HarnessEntry",
     "HarnessListing",
     "HarnessListingEntries",
@@ -154,6 +175,8 @@ __all__ = (
     "KanbanTask",
     "KanbanTaskStatus",
     "LatestSeq",
+    "ListGoalsApiGoalsGetStatusType0",
+    "ListSuggestionsApiSuggestionsGetStatusType0",
     "ListTasksApiKanbanGetStatusType0",
     "MailMessage",
     "MessageOut",
@@ -195,6 +218,13 @@ __all__ = (
     "SessionDeleted",
     "SessionDetail",
     "SessionInfo",
+    "SuggestionAccepted",
+    "SuggestionCreate",
+    "SuggestionCreateAction",
+    "SuggestionInfo",
+    "SuggestionInfoAction",
+    "SuggestionInfoStatus",
+    "SuggestionProposed",
     "TeamDetail",
     "TeamInfo",
     "TeamMemberInfo",

@@ -1,0 +1,15 @@
+name: create_goal
+description: Create a long-running user goal to track across sessions.
+parameters:
+  type: object
+  properties:
+    title: {type: string, minLength: 1, maxLength: 300, description: "Short outcome, e.g. 'ship M6'."}
+    description: {type: string, maxLength: 5000, description: "Definition of done, constraints, context."}
+  required: [title]
+  additionalProperties: false
+permission: goals
+default_action: allow
+toolset: goals
+exposure: deferred
+search_hint: goal goals objective progress track long-running create new
+timeout_ms: 30000

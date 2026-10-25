@@ -1,0 +1,25 @@
+name: update_goal
+description: Update a goal's status or progress, or absorb it into another goal.
+parameters:
+  type: object
+  properties:
+    id: {type: integer, minimum: 1, description: "Goal to update."}
+    status:
+      type: string
+      enum: [active, paused, done, dropped]
+      description: "New status (use absorb_into to absorb)."
+    progress: {type: number, minimum: 0, maximum: 1, description: "Fraction complete, 0..1."}
+    title: {type: string, minLength: 1, maxLength: 300}
+    description: {type: string, maxLength: 5000}
+    absorb_into:
+      type: integer
+      minimum: 1
+      description: "Merge this goal into that goal: this one becomes `absorbed`, evidence is merged."
+  required: [id]
+  additionalProperties: false
+permission: goals
+default_action: allow
+toolset: goals
+exposure: deferred
+search_hint: goal goals objective progress track long-running update absorb merge done
+timeout_ms: 30000

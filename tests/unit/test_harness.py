@@ -170,6 +170,7 @@ def test_bundled_commands_are_valid(tmp_path: Path) -> None:
     assert handlers == {
         "compact": "compact",
         "curator": "prompt",
+        "goal": "prompt",
         "model": "model",
         "plan": "plan",
         "review": "prompt",
