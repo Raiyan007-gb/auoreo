@@ -253,7 +253,7 @@ Bot API, hooks blocking a tool call, plugin installed from a local path and hot-
 
 ---
 
-## M6 — P2 backlog (in progress)
+## M6 — P2 backlog ✅ shipped (`2508c57`)
 
 Status: **wave 0** closed the M3–M5 gaps (`a8b5193`): Skills / Plugins & MCP / Jobs / Teams /
 Audit / Doctor / Goals / Welcome pages, `/api/doctor` + `/api/audit[/verify]` + memory facts/files,
@@ -265,8 +265,18 @@ across reopened sessions. **Wave 1** (`6d9a849`, schema v5): Starlark exec polic
 team blackboard + swarm/decide workflows + opt-in supervisor + analyst tools, effort wiring +
 usage latency/outcome + opt-in epsilon-greedy model/effort/top_k bandit, opt-in HyDE /
 GraphRAG-lite / contextual chunking, column encryption + SQLCipher + backups + multi-worker via
-Redis (and the fresh-DB init race fixed). **Wave 2** (environments, remote plane, perception,
-IoT/LiveKit) is in progress; wave 3 is packaging.
+Redis (and the fresh-DB init race fixed). **Wave 2**: execution environments (local · docker ·
+ssh · e2b · modal · daytona · remote) + `use_environment`, UDS daemon + exec-server + signed
+instance bridge, perception (detection · faces default-off · sensors), MQTT/miio plugins,
+`rtc_transport` (aiortc · LiveKit incl. SIP/egress helpers), ICE/TURN doctor rows. **Wave 3**:
+multi-stage Dockerfile + compose, hatchling wheel bundling definitions + `web/dist`, PyInstaller
+onefile (built and run on linux-x64), tag-driven `release.yml`, ed25519-signed `auoreo upgrade`
+with channels + rollback, npm launcher, opt-in app-shell PWA, Electron shell.
+
+Needs your hardware/accounts to verify: real model weights (RF-DETR, MediaPipe, cross-encoder
+beyond MiniLM), cameras, MQTT brokers/miio devices, a LiveKit server/SIP trunk, E2B/Modal/Daytona,
+a Docker daemon, macOS/Windows binaries and signing certificates, and the `UPDATE_SIGNING_KEY`
+release secret.
 
 
 Object/face detection (RF-DETR + MediaPipe, Apache only; faces default-off), MQTT/miio

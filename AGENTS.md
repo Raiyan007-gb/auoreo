@@ -33,7 +33,9 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `src/auoreo/api/`, `src/auoreo/cli/` | FastAPI app (one port; REST + SSE `/api/events` + WS `/ws`) and Typer CLI |
 | `web/` | React SPA (`web/app`), typed SDK (`web/sdk`, generated from `openapi.json`), Playwright e2e; `web/dist` is served at `/` |
 | `sdk/python/` | Generated Python client (`scripts/gen_sdk.sh`, re-run after API changes) + hand-written SSE extras |
-| `docs/` | `roadmap-m3-plus.md` (M3 → M6 plan), `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md` |
+| `src/auoreo/policy/`, `src/auoreo/remote/`, `src/auoreo/perception/`, `src/auoreo/goals/`, `src/auoreo/suggestions/` | Bandit model/effort policy; daemon + exec-server + bridge; sensor sessions; goals; consent-first suggestions |
+| `packaging/`, `Dockerfile`, `compose.yaml`, `packages/npm/`, `desktop/` | Wheel build hook, PyInstaller spec, update-manifest signing; container; npm launcher; Electron shell |
+| `docs/` | `roadmap-m3-plus.md`, `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md`, `environments.md`, `remote.md`, `perception.md`, `teleop.md`, `release.md` |
 
 Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` → repo root
 (bundled) → `extra_roots` from `settings.json`.
