@@ -6,7 +6,10 @@ async def run(args: dict, ctx: ToolContext) -> str:
     if mem is None:
         raise ToolError("memory store is disabled")
     hits = await mem.search(
-        args["query"], limit=int(args.get("limit", 8)), include_archived=bool(args.get("include_archived"))
+        args["query"],
+        limit=int(args.get("limit", 8)),
+        include_archived=bool(args.get("include_archived")),
+        allow_aux=ctx.interactive,  # no HyDE aux call from unattended (job/webhook) sessions
     )
     if not hits:
         return "no results"
