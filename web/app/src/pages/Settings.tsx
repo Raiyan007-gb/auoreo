@@ -1,0 +1,113 @@
+import { ExternalLinkIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
+import { useState } from "react";
+import { ErrorNote, PageHeader } from "@/components/AppShell";
+import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input, Label } from "@/components/ui/input";
+import { useAsync } from "@/hooks/useAsync";
+import { api, getStoredToken, hasMetaToken, setStoredToken } from "@/lib/api";
+import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
+
+const THEMES: { value: ThemePref; label: string; icon: typeof SunIcon }[] = [
+  { value: "light", label: "Light", icon: SunIcon },
+  { value: "dark", label: "Dark", icon: MoonIcon },
+  { value: "system", label: "System", icon: MonitorIcon },
+];
+
+export function SettingsPage() {
+  const [token, setToken] = useState(getStoredToken);
+  const [saved, setSaved] = useState(false);
+  const [theme, setTheme] = useState<ThemePref>(getThemePref);
+  const health = useAsync(() => api.health(), []);
+
+  return (
+    <div className="flex flex-col">
+      <PageHeader title="Settings" description="Browser-local preferences and server status." />
+      <div className="grid max-w-3xl gap-4 p-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>API token</CardTitle>
+            <CardDescription>
+              Sent as <code className="font-mono">Authorization: Bearer</code> when the server sets{" "}
+              <code className="font-mono">AUOREO_SERVER_PASSWORD</code>. Stored in this browser only.
+              {hasMetaToken() && " The server injected a token for this page, which takes precedence."}
+            </CardDescription>
+          </CardHeader>
+          <form
+            className="flex items-end gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setStoredToken(token.trim());
+              setSaved(true);
+              health.reload();
+            }}
+          >
+            <div className="grid flex-1 gap-1">
+              <Label htmlFor="token">Token</Label>
+              <Input
+                id="token"
+                type="password"
+                autoComplete="off"
+                value={token}
+                onChange={(e) => {
+                  setToken(e.target.value);
+                  setSaved(false);
+                }}
+              />
+            </div>
+            <Button type="submit">Save</Button>
+          </form>
+          {saved && (
+            <p role="status" className="text-xs text-success">
+              Saved. Reload the page to reconnect live streams.
+            </p>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Theme</CardTitle>
+          </CardHeader>
+          <div role="radiogroup" aria-label="Theme" className="flex gap-2">
+            {THEMES.map((t) => (
+              <Button
+                key={t.value}
+                role="radio"
+                aria-checked={theme === t.value}
+                variant={theme === t.value ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setTheme(t.value);
+                  setThemePref(t.value);
+                }}
+              >
+                <t.icon aria-hidden /> {t.label}
+              </Button>
+            ))}
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Server health</CardTitle>
+            <CardDescription>
+              Raw <code className="font-mono">GET /api/health</code>.
+            </CardDescription>
+          </CardHeader>
+          <ErrorNote error={health.error} />
+          <pre className="overflow-auto rounded-md bg-muted p-3 font-mono text-xs" data-testid="health-json">
+            {health.data ? JSON.stringify(health.data, null, 2) : "…"}
+          </pre>
+          <div className="flex gap-3 text-sm">
+            <a className="inline-flex items-center gap-1 underline" href="./docs" target="_blank" rel="noreferrer">
+              API docs <ExternalLinkIcon className="size-3" aria-hidden />
+            </a>
+            <a className="inline-flex items-center gap-1 underline" href="./openapi.json" target="_blank" rel="noreferrer">
+              openapi.json <ExternalLinkIcon className="size-3" aria-hidden />
+            </a>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
