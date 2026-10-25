@@ -1,8 +1,7 @@
 import type { SessionInfo } from "@sdk/client";
-import type { PlannedName } from "@sdk/contracts";
-import { ArchiveIcon, GitForkIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
+import { ArchiveIcon, ArchiveRestoreIcon, GitForkIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,11 +9,10 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input, Label, NativeSelect } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tip } from "@/components/ui/tooltip";
-import { useAsync, useSupports } from "@/hooks/useAsync";
+import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 import { STATUS_VARIANT } from "@/lib/status";
 import { errorText, relTime } from "@/lib/utils";
-
 
 function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const navigate = useNavigate();
@@ -97,43 +95,53 @@ function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   );
 }
 
-/** Row action backed by a planned endpoint: disabled with a tooltip until the server has it. */
-function PlannedAction({
-  name,
+function RowAction({
   label,
   icon,
   onClick,
   destructive,
 }: {
-  name: PlannedName;
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
   destructive?: boolean;
 }) {
-  const ok = useSupports(name);
-  const btn = (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      aria-label={label}
-      disabled={ok !== true}
-      onClick={onClick}
-      className={destructive ? "text-destructive hover:text-destructive" : undefined}
-    >
-      {icon}
-    </Button>
-  );
   return (
-    <Tip label={ok === false ? `${label}: available after server upgrade` : label} wrap={ok !== true}>
-      {btn}
+    <Tip label={label}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label={label}
+        onClick={onClick}
+        className={destructive ? "text-destructive hover:text-destructive" : undefined}
+      >
+        {icon}
+      </Button>
     </Tip>
   );
 }
 
+interface Listing {
+  rows: SessionInfo[];
+  /** Ids of archived sessions (only computed when the archived filter is on). */
+  archived: ReadonlySet<string>;
+}
+
+/** `?archived=true` lists archived AND active sessions; diff against the default list to mark them. */
+async function loadListing(showArchived: boolean): Promise<Listing> {
+  if (!showArchived) return { rows: await api.listSessions(), archived: new Set() };
+  const [all, active] = await Promise.all([api.listSessions(200, true), api.listSessions(1000)]);
+  const activeIds = new Set(active.map((s) => s.id));
+  return { rows: all, archived: new Set(all.filter((s) => !activeIds.has(s.id)).map((s) => s.id)) };
+}
+
 export function SessionsPage() {
   const navigate = useNavigate();
-  const sessions = useAsync(() => api.listSessions(), []);
+  const [params, setParams] = useSearchParams();
+  const showArchived = params.get("archived") === "true";
+  const sessions = useAsync(() => loadListing(showArchived), [showArchived]);
+  const rows = sessions.data?.rows;
+  const isArchived = (id: string) => sessions.data?.archived.has(id) ?? false;
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<SessionInfo | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
@@ -155,6 +163,15 @@ export function SessionsPage() {
         description="Every conversation with an agent or workflow."
         actions={
           <>
+            <Button
+              variant={showArchived ? "secondary" : "outline"}
+              size="sm"
+              aria-pressed={showArchived}
+              data-testid="archived-filter"
+              onClick={() => setParams(showArchived ? {} : { archived: "true" })}
+            >
+              <ArchiveIcon aria-hidden /> {showArchived ? "Showing archived" : "Show archived"}
+            </Button>
             <Button variant="outline" size="icon" aria-label="Refresh sessions" onClick={sessions.reload}>
               <RefreshCwIcon />
             </Button>
@@ -166,7 +183,7 @@ export function SessionsPage() {
       />
       <div className="space-y-3 p-4">
         <ErrorNote error={sessions.error ?? actionErr} />
-        {sessions.data && sessions.data.length === 0 ? (
+        {rows && rows.length === 0 ? (
           <EmptyState title="No sessions yet">Start one with “New session”.</EmptyState>
         ) : (
           <Table aria-label="Sessions">
@@ -180,8 +197,8 @@ export function SessionsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(sessions.data ?? []).map((s) => (
-                <TableRow key={s.id} data-testid="session-row" data-session-id={s.id}>
+              {(rows ?? []).map((s) => (
+                <TableRow key={s.id} data-testid="session-row" data-session-id={s.id} data-archived={isArchived(s.id)}>
                   <TableCell className="max-w-md">
                     <button
                       type="button"
@@ -202,6 +219,11 @@ export function SessionsPage() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[s.status] ?? "secondary"}>{s.status}</Badge>
+                    {isArchived(s.id) && (
+                      <Badge variant="outline" className="ml-1">
+                        archived
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="whitespace-nowrap text-xs text-muted-foreground" title={s.updated_at}>
                     {relTime(s.updated_at)}
@@ -213,8 +235,7 @@ export function SessionsPage() {
                           <PlayIcon />
                         </Button>
                       </Tip>
-                      <PlannedAction
-                        name="fork"
+                      <RowAction
                         label="Fork"
                         icon={<GitForkIcon />}
                         onClick={() =>
@@ -224,19 +245,12 @@ export function SessionsPage() {
                           })
                         }
                       />
-                      <PlannedAction
-                        name={s.status === "archived" ? "unarchive" : "archive"}
-                        label={s.status === "archived" ? "Unarchive" : "Archive"}
-                        icon={<ArchiveIcon />}
-                        onClick={() => void act(() => (s.status === "archived" ? api.unarchive(s.id) : api.archive(s.id)))}
+                      <RowAction
+                        label={isArchived(s.id) ? "Unarchive" : "Archive"}
+                        icon={isArchived(s.id) ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
+                        onClick={() => void act(() => (isArchived(s.id) ? api.unarchive(s.id) : api.archive(s.id)))}
                       />
-                      <PlannedAction
-                        name="deleteSession"
-                        label="Delete"
-                        destructive
-                        icon={<Trash2Icon />}
-                        onClick={() => setConfirmDelete(s)}
-                      />
+                      <RowAction label="Delete" destructive icon={<Trash2Icon />} onClick={() => setConfirmDelete(s)} />
                     </div>
                   </TableCell>
                 </TableRow>

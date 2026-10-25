@@ -12,12 +12,14 @@ import { useControl } from "@/lib/controlContext";
 const POLL_MS = 3000;
 
 /**
- * Cross-session approval queue: `GET /api/permissions/pending`, kept live by WS
- * `permission.requested/replied` events (and the `connected` frame's pending list) when the
- * control channel is up, plus a light poll so it stays correct without the WebSocket.
+ * Cross-session approval queue: `GET /api/permissions/pending` once, then kept live by WS
+ * `permission.requested/replied` events (the shared connection tails from
+ * `GET /api/events/latest`, so history is never replayed) and the `connected` frame's
+ * pending list. A 3s REST poll runs only while the WebSocket is down.
  */
 export function ApprovalsPage() {
   const control = useControl();
+  const wsUp = control.state === "open";
   const [pending, setPending] = useState<PendingPermission[]>([]);
   const [sessions, setSessions] = useState<Record<string, SessionInfo>>({});
   const [error, setError] = useState<unknown>(null);
@@ -40,12 +42,14 @@ export function ApprovalsPage() {
         })
         .catch((e: unknown) => !cancelled && setError(e));
     void load();
-    const t = setInterval(load, control.state === "open" ? POLL_MS * 5 : POLL_MS);
+    // WS up: live permission.* events keep the list current (re-seeded on every `connected`).
+    // WS down: fall back to a 3s REST poll.
+    const t = wsUp ? null : setInterval(load, POLL_MS);
     return () => {
       cancelled = true;
-      clearInterval(t);
+      if (t) clearInterval(t);
     };
-  }, [tick, control.state]);
+  }, [tick, wsUp, control.connected]);
 
   useEffect(() => {
     api
@@ -85,7 +89,12 @@ export function ApprovalsPage() {
     <div className="flex flex-col">
       <PageHeader
         title="Approvals"
-        description="Tool calls waiting for a human decision, across all sessions."
+        description={
+          <>
+            Tool calls waiting for a human decision, across all sessions.{" "}
+            <span data-testid="approvals-live">{wsUp ? "Live over WebSocket." : "Polling every 3s (WebSocket down)."}</span>
+          </>
+        }
         actions={
           <Button variant="outline" size="icon" aria-label="Refresh approvals" onClick={() => setTick((t) => t + 1)}>
             <RefreshCwIcon />

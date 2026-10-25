@@ -99,3 +99,14 @@
     @apply outline-2 outline-offset-2 outline-ring;
   }
 }
+
+/* Assistant markdown (components/Markdown.tsx). */
+.prose-auoreo > * + * { margin-top: 0.5rem; }
+.prose-auoreo :where(ul) { list-style: disc; padding-left: 1.25rem; }
+.prose-auoreo :where(ol) { list-style: decimal; padding-left: 1.25rem; }
+.prose-auoreo :where(h1, h2, h3, h4) { font-weight: 600; margin-top: 0.75rem; }
+.prose-auoreo :where(h1) { font-size: 1.15rem; }
+.prose-auoreo :where(h2) { font-size: 1.05rem; }
+.prose-auoreo :where(blockquote) { border-left: 3px solid var(--border); padding-left: 0.75rem; color: var(--muted-foreground); }
+.prose-auoreo :where(:not(pre) > code) { border-radius: 0.25rem; background: var(--muted); padding: 0.1rem 0.3rem; font-family: ui-monospace, monospace; font-size: 0.85em; }
+.prose-auoreo :where(hr) { border-color: var(--border); }

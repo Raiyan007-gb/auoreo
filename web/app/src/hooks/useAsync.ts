@@ -1,6 +1,4 @@
-import type { PlannedName } from "@sdk/contracts";
 import { useCallback, useEffect, useState } from "react";
-import { api } from "@/lib/api";
 
 export interface AsyncState<T> {
   data: T | undefined;
@@ -43,19 +41,4 @@ export function useAsync<T>(fn: () => Promise<T>, deps: readonly unknown[]): Asy
   }, []);
   const setData = useCallback((f: (prev: T | undefined) => T | undefined) => setDataState(f), []);
   return { data, error, loading, reload, setData };
-}
-
-/** Planned endpoint probe (contracts.ts): undefined while probing, then true/false. */
-export function useSupports(name: PlannedName): boolean | undefined {
-  const [ok, setOk] = useState<boolean | undefined>(undefined);
-  useEffect(() => {
-    let cancelled = false;
-    void api.supports(name).then((v) => {
-      if (!cancelled) setOk(v);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [name]);
-  return ok;
 }

@@ -30,8 +30,8 @@ test("memory add + search round trip", async ({ page }) => {
 test("usage, settings, audit and doctor render", async ({ page }) => {
   await page.goto("/usage");
   await expect(page.getByRole("heading", { name: "Usage" })).toBeVisible();
-  await expect(page.getByText(/available after upgrade|Tokens/).first()).toBeVisible();
-  await shot(page, "usage");
+  await expect(page.getByText("Total tokens")).toBeVisible();
+  await shot(page, "usage-page");
 
   await page.goto("/settings");
   await expect(page.getByTestId("health-json")).toContainText('"status": "ok"');

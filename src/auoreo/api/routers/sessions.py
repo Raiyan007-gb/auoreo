@@ -56,12 +56,12 @@ async def list_sessions(svc: ServicesDep, limit: int = 100, archived: bool = Fal
     return [_info(r) for r in rows]
 
 
-@router.get("/{session_id}", response_model=SessionInfo)
-async def get_session(session_id: str, svc: ServicesDep) -> SessionInfo:
+@router.get("/{session_id}", response_model=SessionDetail)
+async def get_session(session_id: str, svc: ServicesDep) -> SessionDetail:
     row = await svc.get_session(session_id)
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
-    return _info(row)
+    return _detail(row)
 
 
 @router.get("/{session_id}/messages", response_model=list[MessageOut])

@@ -3,20 +3,8 @@
  * stream (`GET /api/events`) and the WebSocket control plane (`/ws`, src/auoreo/schema/ws.py).
  * Framework-agnostic: no React here.
  */
-import type {
-  ArchiveResponse,
-  CommandInfo,
-  CompactResult,
-  ExportFormat,
-  ForkResponse,
-  PlannedEndpoint,
-  PlannedName,
-  UsageRow,
-  UsageSummary,
-} from "./contracts";
-import { PLANNED } from "./contracts";
 import { type ControlOptions, connectControl } from "./control";
-import type { components } from "./types.gen";
+import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
 export type SessionInfo = S["SessionInfo"];
@@ -34,6 +22,20 @@ export type PendingPermission = S["PendingPermission"];
 export type PendingQuestion = S["PendingQuestionOut"];
 export type PermissionReplyBody = S["PermissionReply"];
 export type PermissionReplyKind = "once" | "always" | "reject";
+export type SessionDetail = S["SessionDetail"];
+export type SessionDeleted = S["SessionDeleted"];
+export type CompactionOut = S["CompactionOut"];
+export type CompactRequest = S["CompactRequest"];
+export type ArchivedMessage = S["ArchivedMessage"];
+export type UsageRecord = S["UsageRecord"];
+export type UsageSummary = S["UsageSummary"];
+export type UsageTotals = S["UsageTotals"];
+export type CommandInfo = S["CommandInfo"];
+export type LatestSeq = S["LatestSeq"];
+/** `?format=` of GET /api/sessions/{id}/export (from the OpenAPI query parameter). */
+export type ExportFormat = NonNullable<
+  NonNullable<paths["/api/sessions/{session_id}/export"]["get"]["parameters"]["query"]>["format"]
+>;
 
 /** SSE/WS envelope — mirrors `src/auoreo/schema/events.py::ServerEvent` (SSE has no OpenAPI schema). */
 export interface ServerEvent {
@@ -51,11 +53,12 @@ export const EVENT_TYPES = [
   "session.created",
   "session.updated",
   "session.forked",
+  "session.fork_created",
   "session.archived",
   "session.unarchived",
   "session.deleted",
-  "session.compacted",
-  "session.titled",
+  "session.title_updated",
+  "session.model_changed",
   "run.started",
   "run.completed",
   "run.failed",
@@ -79,6 +82,7 @@ export const EVENT_TYPES = [
   "workflow.completed",
   "compaction.started",
   "compaction.completed",
+  "compaction.failed",
   "harness.reloaded",
   "message",
 ] as const;
@@ -98,10 +102,6 @@ export class ApiError extends Error {
     super(typeof detail === "string" ? detail : `HTTP ${status}`);
     this.status = status;
     this.detail = detail;
-  }
-  /** 404 for an unknown route (FastAPI says "Not Found") or 405 — the endpoint is absent. */
-  get routeMissing(): boolean {
-    return this.status === 405 || (this.status === 404 && this.detail === "Not Found");
   }
 }
 
@@ -170,63 +170,19 @@ export function createClient(opts: ClientOptions = {}) {
     return (text ? JSON.parse(text) : undefined) as T;
   }
 
-  // ------------------------------------------------------------ capability probe
-  let capabilities: Promise<Set<string> | null> | null = null;
-  const probeCache = new Map<PlannedName, Promise<boolean>>();
-
-  /** Live `/openapi.json` → set of "METHOD /path". null when unreachable. */
-  function loadCapabilities(): Promise<Set<string> | null> {
-    capabilities ??= fetch(`${base}/openapi.json`)
-      .then(async (r) => {
-        if (!r.ok) return null;
-        const doc = (await r.json()) as { paths?: Record<string, Record<string, unknown>> };
-        const out = new Set<string>();
-        for (const [p, ops] of Object.entries(doc.paths ?? {}))
-          for (const m of Object.keys(ops)) out.add(`${m.toUpperCase()} ${p}`);
-        return out;
-      })
-      .catch(() => null);
-    return capabilities;
-  }
-
-  async function fallbackProbe(ep: PlannedEndpoint): Promise<boolean> {
-    // Harmless request against a session id that cannot exist; "Not Found" means no route.
-    const path = ep.path.replace("{session_id}", "__probe__");
-    try {
-      await request(ep.method === "GET" ? "GET" : ep.method, path, {
-        query: ep.method === "GET" ? { format: "json", days: 1 } : undefined,
-      });
-      return true;
-    } catch (e) {
-      return !(e instanceof ApiError && e.routeMissing);
-    }
-  }
-
-  /** Probe a planned endpoint once per page load. */
-  function supports(name: PlannedName): Promise<boolean> {
-    let p = probeCache.get(name);
-    if (!p) {
-      const ep = PLANNED[name];
-      p = loadCapabilities().then((caps) =>
-        caps ? caps.has(`${ep.method} ${ep.path}`) : fallbackProbe(ep),
-      );
-      probeCache.set(name, p);
-    }
-    return p;
-  }
-
   return {
     request,
-    supports,
     token,
     baseUrl: base,
 
     health: () => request<Health>("GET", "/api/health"),
 
     // sessions
-    listSessions: (limit = 200) => request<SessionInfo[]>("GET", "/api/sessions", { query: { limit } }),
+    /** `archived: true` returns archived AND active sessions (the server's `?archived=true`). */
+    listSessions: (limit = 200, archived = false) =>
+      request<SessionInfo[]>("GET", "/api/sessions", { query: { limit, archived: archived || undefined } }),
     createSession: (body: SessionCreate) => request<SessionInfo>("POST", "/api/sessions", { body }),
-    getSession: (id: string) => request<SessionInfo>("GET", `/api/sessions/${enc(id)}`),
+    getSession: (id: string) => request<SessionDetail>("GET", `/api/sessions/${enc(id)}`),
     messages: (id: string) => request<MessageOut[]>("GET", `/api/sessions/${enc(id)}/messages`),
     cancel: (id: string) =>
       request<Record<string, boolean>>("POST", `/api/sessions/${enc(id)}/cancel`),
@@ -237,23 +193,22 @@ export function createClient(opts: ClientOptions = {}) {
         headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
       }),
 
-    // planned (contracts.ts)
-    fork: (id: string) => request<ForkResponse>("POST", `/api/sessions/${enc(id)}/fork`),
-    archive: (id: string) => request<ArchiveResponse>("POST", `/api/sessions/${enc(id)}/archive`),
-    unarchive: (id: string) =>
-      request<ArchiveResponse>("POST", `/api/sessions/${enc(id)}/unarchive`),
-    deleteSession: (id: string) => request<undefined>("DELETE", `/api/sessions/${enc(id)}`),
+    // session ops, compaction, usage, commands
+    fork: (id: string) => request<SessionDetail>("POST", `/api/sessions/${enc(id)}/fork`),
+    archive: (id: string) => request<SessionDetail>("POST", `/api/sessions/${enc(id)}/archive`),
+    unarchive: (id: string) => request<SessionDetail>("POST", `/api/sessions/${enc(id)}/unarchive`),
+    deleteSession: (id: string) => request<SessionDeleted>("DELETE", `/api/sessions/${enc(id)}`),
     exportSession: (id: string, format: ExportFormat) =>
-      request<Response>("GET", `/api/sessions/${enc(id)}/export`, {
-        query: { format },
-        raw: true,
-      }),
-    compact: (id: string) => request<CompactResult>("POST", `/api/sessions/${enc(id)}/compact`),
-    usage: (sessionId?: string) =>
-      request<UsageRow[]>("GET", "/api/usage", { query: { session_id: sessionId } }),
-    usageSummary: (days: number) =>
-      request<UsageSummary>("GET", "/api/usage/summary", { query: { days } }),
+      request<Response>("GET", `/api/sessions/${enc(id)}/export`, { query: { format }, raw: true }),
+    compact: (id: string, body?: CompactRequest) =>
+      request<CompactionOut>("POST", `/api/sessions/${enc(id)}/compact`, { body }),
+    archivedMessages: (id: string, limit = 1000) =>
+      request<ArchivedMessage[]>("GET", `/api/sessions/${enc(id)}/archive`, { query: { limit } }),
+    usage: (sessionId?: string, limit = 200) =>
+      request<UsageRecord[]>("GET", "/api/usage", { query: { session_id: sessionId, limit } }),
+    usageSummary: (days: number) => request<UsageSummary>("GET", "/api/usage/summary", { query: { days } }),
     commands: () => request<CommandInfo[]>("GET", "/api/commands"),
+    latestSeq: () => request<LatestSeq>("GET", "/api/events/latest"),
 
     // harness
     harness: () => request<HarnessListing>("GET", "/api/harness"),
@@ -375,3 +330,4 @@ export function subscribeEvents(
 }
 
 export * from "./control";
+export * from "./events";

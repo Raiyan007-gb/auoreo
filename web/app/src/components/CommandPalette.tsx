@@ -1,10 +1,10 @@
-import type { HarnessEntry, SessionInfo } from "@sdk/client";
-import type { CommandInfo } from "@sdk/contracts";
+import type { CommandInfo, HarnessEntry, SessionInfo } from "@sdk/client";
 import { Command } from "cmdk";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { api } from "@/lib/api";
+import { RUN_COMPACT_EVENT } from "@/lib/sessionOps";
 import { NAV } from "@/components/nav";
 
 export const INSERT_COMMAND_EVENT = "auoreo:insert-command";
@@ -28,9 +28,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     let cancelled = false;
     api.listSessions(50).then((s) => !cancelled && setSessions(s)).catch(() => undefined);
     api.harnessKind("agents").then((a) => !cancelled && setAgents(a)).catch(() => undefined);
-    void api.supports("commands").then((ok) => {
-      if (ok) api.commands().then((c) => !cancelled && setCommands(c)).catch(() => undefined);
-    });
+    api.commands().then((c) => !cancelled && setCommands(c)).catch(() => undefined);
     return () => {
       cancelled = true;
     };
@@ -63,6 +61,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   {commands.map((c) => (
                     <Command.Item
                       key={c.name}
+                      data-testid="palette-command"
+                      data-command={c.name}
                       value={`/${c.name} ${c.description}`}
                       className={itemCls}
                       onSelect={() =>
@@ -76,6 +76,18 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                       <span className="ml-auto truncate text-xs text-muted-foreground">{c.description}</span>
                     </Command.Item>
                   ))}
+                  {commands.some((c) => c.handler === "compact") && (
+                    <Command.Item
+                      value="run compact now session context"
+                      className={itemCls}
+                      onSelect={() => run(() => window.dispatchEvent(new CustomEvent(RUN_COMPACT_EVENT)))}
+                    >
+                      <span>Run</span>
+                      <span className="font-mono">/compact</span>
+                      <span>now</span>
+                      <span className="ml-auto truncate text-xs text-muted-foreground">compact this session's context</span>
+                    </Command.Item>
+                  )}
                 </Command.Group>
               )}
               <Command.Group heading="Pages" className={groupCls}>
