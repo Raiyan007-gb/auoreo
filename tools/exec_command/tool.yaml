@@ -1,0 +1,43 @@
+name: exec_command
+toolset: shell
+description: >-
+  Start a command in a persistent (unsandboxed) shell process and return its output so far;
+  long-running or interactive processes keep running and are continued with write_stdin.
+parameters:
+  type: object
+  properties:
+    cmd: {type: string, description: "Command run with `bash -lc`."}
+    workdir:
+      type: string
+      description: Directory to run in (default the working directory; outside it needs approval).
+    tty:
+      type: boolean
+      default: false
+      description: Run under a pseudo-terminal (for REPLs, prompts, programs that need a TTY).
+    yield_time_ms:
+      type: integer
+      minimum: 0
+      maximum: 30000
+      default: 10000
+      description: >-
+        Wait at most this long for output; if the process is still running you get a
+        session_id and `[running]`.
+    max_output_tokens:
+      type: integer
+      minimum: 50
+      maximum: 16000
+      default: 4000
+      description: Clip the returned output to about this many tokens (head and tail kept).
+  required: [cmd]
+  additionalProperties: false
+permission: bash
+pattern_arg: cmd
+default_action: ask
+is_destructive: true
+exposure: deferred
+interrupt: cancel
+timeout_ms: 45000
+search_hint: persistent shell interactive process background server repl stdin tty pty long running
+max_result_size_chars: 64000
+net: none
+sandbox_mode: danger-full-access

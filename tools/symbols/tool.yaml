@@ -1,0 +1,32 @@
+name: symbols
+toolset: files
+description: >-
+  Outline a source file or directory with tree-sitter: functions, classes and methods with
+  line ranges (python, js, ts, tsx, go, rust).
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: "File or directory (default: working directory)."}
+    max_files:
+      type: integer
+      minimum: 1
+      maximum: 2000
+      default: 200
+      description: Directory mode only; source files outlined at most.
+    depth:
+      type: integer
+      minimum: 1
+      maximum: 4
+      default: 2
+      description: Nesting levels shown (1 = top-level only, 2 = plus methods).
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+exposure: deferred
+timeout_ms: 60000
+search_hint: outline symbols functions classes methods tree-sitter structure ast
+sandbox_mode: read-only

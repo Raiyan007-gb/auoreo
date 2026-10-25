@@ -276,6 +276,13 @@ class Settings(BaseSettings):
     (OTLP/HTTP to OTEL_EXPORTER_OTLP_ENDPOINT). Needs the `otel` extra."""
     otel_capture_content: bool = False
     """Attach prompt/tool bodies to spans. Off by default (spec §20.1)."""
+    # --- W0-E
+    lsp_timeout_ms: int = Field(default=5000, ge=100, le=600_000)
+    """Per-request timeout for the `lsp` tool's language-server calls."""
+    lsp_servers: dict[str, list[str]] = Field(default_factory=dict)
+    """Language-server argv overrides by language (`python`, `typescript`, `javascript`)."""
+    shell_max_processes: int = Field(default=8, ge=1, le=64)
+    """Live `exec_command` processes allowed per session."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

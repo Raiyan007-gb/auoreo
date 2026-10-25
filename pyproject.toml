@@ -58,6 +58,14 @@ rerank-local = [  # W0-D: backends/rerank/cross_encoder (CPU torch on Linux/Wind
     "sentence-transformers>=5,<6",
     "torch>=2.4",  # direct so [tool.uv.sources] can pin the CPU wheel index
 ]
+code = [
+    "tree-sitter>=0.26.0",
+    "tree-sitter-go>=0.25.0",
+    "tree-sitter-javascript>=0.25.0",
+    "tree-sitter-python>=0.25.0",
+    "tree-sitter-rust>=0.24.2",
+    "tree-sitter-typescript>=0.23.2",
+]
 
 [tool.uv.sources]
 torch = [{ index = "pytorch-cpu", marker = "sys_platform != 'darwin'" }]

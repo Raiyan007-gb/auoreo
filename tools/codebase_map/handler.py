@@ -6,6 +6,7 @@ import shutil
 from collections import Counter
 from pathlib import Path
 
+from auoreo.tools import treesitter
 from auoreo.tools.context import ToolContext, ToolError
 
 SYMBOL_RE = {
@@ -56,7 +57,9 @@ async def run(args: dict, ctx: ToolContext) -> str:
         raise ToolError(f"not a directory: {root}")
     files = await _files(root)
     stamp = max(((root / f).stat().st_mtime for f in files if (root / f).exists()), default=0)
-    key = hashlib.sha256(json.dumps([str(root), len(files), stamp]).encode()).hexdigest()[:16]
+    key = hashlib.sha256(
+        json.dumps([str(root), len(files), stamp, treesitter.available()]).encode()
+    ).hexdigest()[:16]
     cache = ctx.home / "cache" / "codebase_map" / f"{key}.txt"
     if cache.is_file():
         return cache.read_text()
@@ -74,12 +77,15 @@ async def run(args: dict, ctx: ToolContext) -> str:
         "## symbols",
     ]
     limit = int(args.get("max_files", 300))
-    for f in [f for f in files if Path(f).suffix in SYMBOL_RE][:limit]:
-        try:
-            text = (root / f).read_text(errors="replace")[:200_000]
-        except OSError:
-            continue
-        names = SYMBOL_RE[Path(f).suffix].findall(text)[:25]
+    use_ts = treesitter.available()  # tree-sitter outline when the `code` extra is installed
+    for f in [f for f in files if Path(f).suffix in SYMBOL_RE or treesitter.supported(Path(f))][:limit]:
+        names = await asyncio.to_thread(treesitter.top_level_names, root / f) if use_ts else None
+        if names is None and Path(f).suffix in SYMBOL_RE:  # ripgrep-era regex fallback
+            try:
+                text = (root / f).read_text(errors="replace")[:200_000]
+            except OSError:
+                continue
+            names = SYMBOL_RE[Path(f).suffix].findall(text)[:25]
         if names:
             lines.append(f"{f}: {', '.join(names)}")
     out = "\n".join(lines)
