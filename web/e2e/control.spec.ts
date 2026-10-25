@@ -67,6 +67,7 @@ test("interrupt over the WebSocket cancels a pending bash call", async ({ page, 
   await page.getByRole("button", { name: "Interrupt" }).click();
 
   await expect(page.getByTestId("thread-notice").filter({ hasText: "Run interrupted" })).toBeVisible();
+  await expect(page.getByTestId("approval-card")).toHaveCount(0); // the cancelled call's prompt is gone
   await expect(page.locator('[data-testid="tool-card"][data-tool="bash"]')).toHaveAttribute("data-status", "error");
   await expect(page.getByTestId("session-status")).toHaveText("idle");
   await expect(page.getByText("Interrupt sent (ws)")).toBeVisible();

@@ -136,7 +136,8 @@ function finishRun(s: ThreadState, d: Record<string, unknown>, e: ServerEvent): 
       { kind: "notice", key: `n${e.seq}`, level: e.type === "run.max_steps" ? "warn" : "error", text, code: err?.code },
     ];
   }
-  return { ...s, items, running: false };
+  // A terminal run event means no approval or question for this run can still be answered.
+  return { ...s, items, running: false, permissions: {}, questions: {} };
 }
 
 const HANDLERS: Record<string, Handler> = {
