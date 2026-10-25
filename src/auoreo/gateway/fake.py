@@ -60,7 +60,11 @@ class FakeGateway:
         self.efforts: list[str | None] = []
         self.context_window_tokens = context_window_tokens
         self.vision = True
+        self.missing_credentials: set[str] = set()  # models `has_credentials` reports as keyless
         self._n = 0
+
+    def has_credentials(self, model: str) -> bool:
+        return model not in self.missing_credentials
 
     def queue(self, *items: Scripted) -> None:
         self.script.extend(items)

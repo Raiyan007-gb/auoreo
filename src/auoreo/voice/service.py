@@ -45,7 +45,7 @@ TRANSLATE_PROMPT = (
 
 async def translate_text(services: Services, text: str, target: str, source: str | None = None) -> str:
     """One aux call (`purpose=translate`, temperature 0, the `small` group when configured)."""
-    from auoreo.gateway.resolve import resolve_model
+    from auoreo.gateway.aux import resolve_aux_model
     from auoreo.gateway.types import LLMRequest, TextDelta
 
     for tag in (target, source):
@@ -56,7 +56,7 @@ async def translate_text(services: Services, text: str, target: str, source: str
     if len(text) > MAX_TRANSLATE_CHARS:
         raise ToolError(f"text is {len(text)} chars; the limit is {MAX_TRANSLATE_CHARS}")
     st = services.settings
-    model = "small" if "small" in st.models else resolve_model(st)
+    model = resolve_aux_model(st, "translate", gateway=services.gateway)
     system = TRANSLATE_PROMPT.format(target=target, source=f" from {source}" if source else "")
     request = LLMRequest(
         model=model,

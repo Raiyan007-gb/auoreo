@@ -20,6 +20,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+from auoreo.gateway.aux import resolve_aux_model
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import LLMRequest, TextDelta, Usage
 
@@ -80,9 +81,7 @@ def parse_verdict(text: str) -> Verdict:
 
 
 def _model(services: Services, model: str | None) -> str:
-    if "small" in services.settings.models or model is None:
-        return "small"
-    return model
+    return resolve_aux_model(services.settings, "guardian", gateway=services.gateway, main=model)
 
 
 async def _ask(services: Services, request: LLMRequest) -> str:

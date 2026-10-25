@@ -74,6 +74,15 @@ class LLMRequest:
     metadata: dict[str, Any] = field(default_factory=dict)
     reasoning_effort: Literal["low", "medium", "high", "max"] | None = None
     """Agent `effort` (or a policy choice); the gateway maps it to the provider's knob."""
+    session_effort: Literal["low", "medium", "high", "max"] | None = None
+    """Session override (`/effort`); wins over `reasoning_effort`, loses to `AUOREO_EFFORT`."""
+    variant: Any = None
+    """A `harness.manifests.Variant` to shape with; None → the gateway matches
+    `prompts/variants.yaml` against the primary deployment of `model`."""
+    prompt_caching: bool = True
+    """Anthropic-family cache breakpoints (also gated by `gateway_tuning.prompt_caching`)."""
+    turn_state: str | None = None
+    """Per-turn stickiness token sent as `x-auoreo-turn-state`; defaults to `metadata.run_id`."""
 
 
 @dataclass(frozen=True)
@@ -94,6 +103,20 @@ class Usage:
     completion_tokens: int = 0
     cost_usd: float | None = None
     estimated: bool = False
+    cached_tokens: int = 0
+    """Prompt tokens served from the provider's prompt cache (part of `prompt_tokens`)."""
+    reasoning_tokens: int = 0
+    """Thinking tokens (part of `completion_tokens`)."""
+
+    def event_data(self) -> dict[str, Any]:
+        """Token fields for a `usage` event payload."""
+        return {
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "cached_tokens": self.cached_tokens,
+            "reasoning_tokens": self.reasoning_tokens,
+            "cost_usd": self.cost_usd,
+        }
 
 
 @dataclass(frozen=True)

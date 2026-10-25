@@ -16,6 +16,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from auoreo.gateway.aux import resolve_aux_model
 from auoreo.gateway.types import LLMRequest, TextDelta
 
 if TYPE_CHECKING:
@@ -41,10 +42,7 @@ def clip_sentences(text: str, n: int = 2) -> str:
 
 
 def model_for(services: Services) -> str:
-    settings = services.settings
-    if "small" in settings.models or not settings.model:
-        return "small"
-    return settings.model
+    return resolve_aux_model(services.settings, "hyde", gateway=services.gateway)
 
 
 async def _collect(services: Services, request: LLMRequest) -> str:

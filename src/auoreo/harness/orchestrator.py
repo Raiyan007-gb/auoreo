@@ -5,6 +5,7 @@ Nothing here knows about specific agents or tools — it only interprets manifes
 
 from __future__ import annotations
 
+import contextlib
 import platform
 import re
 from dataclasses import dataclass, field
@@ -82,13 +83,13 @@ def pick_variant(harness: Harness, model: str) -> Variant | None:
     vf = harness.snapshot.variants
     if vf is None:
         return None
-    provider = model.split("/", 1)[0] if "/" in model else ""
-    for v in vf.manifest.variants:
-        if v.provider not in {"*", provider}:
-            continue
-        if re.search(v.model_regex, model):
-            return v  # type: ignore[no-any-return]
-    return None
+    from auoreo.core.settings import get_settings
+    from auoreo.gateway.pipeline import match_variant
+    from auoreo.gateway.resolve import primary_deployment
+
+    with contextlib.suppress(Exception):  # a group/alias is shaped by its primary deployment
+        model = primary_deployment(get_settings(), model)
+    return match_variant(list(vf.manifest.variants), model)
 
 
 def build_spec(

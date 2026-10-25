@@ -2,12 +2,17 @@
 
 Routing groups from `settings.models` become Router `model_list` entries (one deployment
 per model in the group). The Router does fallbacks; this module owns retry/backoff for
-retryable errors that happen before the first streamed token (`num_retries=0` in the SDK).
+retryable errors that happen before the first streamed token (`num_retries=0` in the SDK),
+the 529 streak → fallback rule, auth recovery and the stream-idle timeout. Request shaping
+lives in `pipeline.py`, usage parsing in `usage_parse.py`, aux routing in `aux.py`.
 """
 
 from __future__ import annotations
 
 import asyncio
+import functools
+import inspect
+import logging
 import random
 from collections.abc import AsyncIterator, Callable
 from typing import Any
@@ -15,8 +20,27 @@ from typing import Any
 import litellm
 from litellm import exceptions as lx
 
+from auoreo.core.redaction import redact
 from auoreo.core.settings import Settings
-from auoreo.gateway.errors import ErrorCode, GatewayError
+from auoreo.gateway import aux
+from auoreo.gateway.errors import MAX_CAUSE_CHARS, ErrorCode, FallbackTriggeredError, GatewayError
+from auoreo.gateway.pipeline import (
+    ShapeContext,
+    clamp_max_tokens,
+    effort_param,
+    idle_chunks,
+    literal_values,
+    load_variants,
+    lookup_names,
+    match_variant,
+    provider_headers,
+    provider_of,
+    raw_body,
+    reasoning_kwargs,
+    resolve_effort,
+    shape,
+)
+from auoreo.gateway.resolve import expand_alias, primary_deployment
 from auoreo.gateway.types import (
     Finish,
     LLMRequest,
@@ -27,7 +51,9 @@ from auoreo.gateway.types import (
     prompt_chars,
     shrink_data_urls,
 )
+from auoreo.gateway.usage_parse import parse_usage
 
+log = logging.getLogger(__name__)
 litellm.suppress_debug_info = True
 
 # Order matters: subclasses before their bases (e.g. ContextWindowExceeded ⊂ BadRequest).
@@ -51,23 +77,24 @@ _ERROR_MAP: tuple[tuple[type[BaseException], ErrorCode], ...] = (
 MAX_RETRIES = 5
 INITIAL_DELAY_MS = 500
 MAX_DELAY_MS = 10_000
+TURN_STATE_HEADER = "x-auoreo-turn-state"
 
 
-# LiteLLM's `reasoning_effort` takes low | medium | high (mapped per provider, e.g. to Anthropic
-# thinking budgets); our `max` has no portable equivalent, so it is sent as `high`.
-_EFFORT = {"max": "high"}
-
-
-def effort_param(effort: str) -> str:
-    return _EFFORT.get(effort, effort)
+async def _backoff_sleep(seconds: float) -> None:
+    await asyncio.sleep(seconds)
 
 
 def map_error(exc: BaseException) -> GatewayError:
     if isinstance(exc, GatewayError):
         return exc
     status = getattr(exc, "status_code", None)
+    message = str(getattr(exc, "message", exc))
+    cause = redact(raw_body(exc))[:MAX_CAUSE_CHARS]
+    overloaded = status == 529 or "overloaded" in f"{message} {cause}".lower()
     if status == 402:
         code: ErrorCode = "QUOTA"
+    elif overloaded:  # 529 → RATE_LIMIT (spec §24.4); the streak is tracked via `overloaded`
+        code = "RATE_LIMIT"
     else:
         code = next((c for cls, c in _ERROR_MAP if isinstance(exc, cls)), "SERVER")
     retry_after = None
@@ -79,10 +106,13 @@ def map_error(exc: BaseException) -> GatewayError:
             retry_after = None
     return GatewayError(
         code,
-        str(getattr(exc, "message", exc))[:2000],
+        redact(message)[:2000],
         provider=getattr(exc, "llm_provider", None),
         status=status,
         retry_after_ms=retry_after,
+        request_id=headers.get("request-id") or headers.get("x-request-id"),
+        cause=cause,
+        overloaded=overloaded,
     )
 
 
@@ -95,11 +125,6 @@ litellm.drop_params = True
 # `gemini/…` → GEMINI_API_KEY | GOOGLE_API_KEY, `azure/…` → AZURE_API_KEY + _BASE + _VERSION.
 _SUFFIX_PARAM = {"_API_KEY": "api_key", "_API_BASE": "api_base", "_API_VERSION": "api_version"}
 _EXACT_PARAM = {"VERTEXAI_PROJECT": "vertex_project", "VERTEXAI_LOCATION": "vertex_location"}
-
-
-def provider_of(model: str) -> str:
-    """`openrouter/anthropic/claude-sonnet-4.5` → `openrouter` (the LiteLLM provider prefix)."""
-    return model.split("/", 1)[0] if "/" in model else ""
 
 
 def env_names(model: str) -> list[str]:
@@ -151,16 +176,29 @@ def credential_status(model: str, secret: Callable[[str], str | None]) -> tuple[
 def build_model_list(settings: Settings, secret: Callable[[str], str | None]) -> list[dict[str, Any]]:
     model_list: list[dict[str, Any]] = []
     for group, cfg in settings.models.items():
+        weights = settings.gateway_tuning.weights.get(group, [])
         for order, model in enumerate(cfg.models, start=1):
             params: dict[str, Any] = {**credential_params(model, secret)}
             params.update(model=model, order=order)
             if cfg.api_base:
                 params["api_base"] = cfg.api_base
+            if order <= len(weights):
+                params["weight"] = weights[order - 1]
+            if headers := provider_headers(settings, model):
+                params["extra_headers"] = headers
             entry: dict[str, Any] = {"model_name": group, "litellm_params": params}
             if cfg.max_input_tokens:
                 entry["model_info"] = {"max_input_tokens": cfg.max_input_tokens}
             model_list.append(entry)
     return model_list
+
+
+@functools.cache
+def supported_pre_call_checks() -> frozenset[str]:
+    """`optional_pre_call_checks` values the installed Router accepts (introspected)."""
+    router_cls = litellm.Router  # type: ignore[attr-defined]
+    param = inspect.signature(router_cls.__init__).parameters.get("optional_pre_call_checks")
+    return frozenset(literal_values(param.annotation) if param is not None else ())
 
 
 class LiteLLMGateway:
@@ -169,22 +207,35 @@ class LiteLLMGateway:
     def __init__(self, settings: Settings, secret: Callable[[str], str | None]) -> None:
         self.settings = settings
         self.secret = secret
+        self.variants: list[Any] | None = None  # lazily loaded prompts/variants.yaml
         self._model_list = build_model_list(settings, secret)
         self._router = self._make_router()
 
     def _make_router(self) -> Any:
+        tuning = self.settings.gateway_tuning
         groups = {e["model_name"] for e in self._model_list}
         fallbacks = [{g: fb} for g, fb in self.settings.fallbacks.items() if g in groups]
+        policy = [{g: fb} for g, fb in tuning.content_policy_fallbacks.items() if g in groups]
+        extra: dict[str, Any] = {}
+        if any(tuning.weights.values()):
+            extra["enable_weighted_failover"] = True
+        if tuning.session_affinity:
+            if "session_affinity" in supported_pre_call_checks():
+                extra["optional_pre_call_checks"] = ["session_affinity"]
+            else:
+                log.info("litellm Router has no session_affinity pre-call check; skipping")
         return litellm.Router(  # type: ignore[attr-defined]
             model_list=self._model_list,
             routing_strategy="simple-shuffle",
             fallbacks=fallbacks,
             context_window_fallbacks=fallbacks,
+            content_policy_fallbacks=policy,
             enable_pre_call_checks=True,
             num_retries=0,
             allowed_fails=3,
             cooldown_time=5,
             max_fallbacks=5,
+            **extra,
         )
 
     def _ensure(self, model: str) -> None:
@@ -192,18 +243,33 @@ class LiteLLMGateway:
         if any(e["model_name"] == model for e in self._model_list):
             return
         params: dict[str, Any] = {**credential_params(model, self.secret), "model": model}
+        if headers := provider_headers(self.settings, model):
+            params["extra_headers"] = headers
         self._model_list.append({"model_name": model, "litellm_params": params})
         self._router = self._make_router()
 
-    async def stream(self, request: LLMRequest) -> AsyncIterator[StreamItem]:
-        self._ensure(request.model)
+    def has_credentials(self, model: str) -> bool:
+        """Aux-chain probe (no client construction): are `model`'s credentials present?"""
+        return credential_status(model, self.secret)[0]
+
+    def _variant_for(self, deployment: str) -> Any:
+        if self.variants is None:
+            self.variants = load_variants(self.settings)
+        return match_variant(self.variants, deployment)
+
+    def _kwargs(self, request: LLMRequest, model: str) -> dict[str, Any]:
+        """LiteLLM kwargs for one attempt on `model`, shaped by the request pipeline."""
+        tuning = self.settings.gateway_tuning
+        deployment = primary_deployment(self.settings, model)
+        variant = request.variant or self._variant_for(deployment)
+        metadata = dict(request.metadata)
         kwargs: dict[str, Any] = {
-            "model": request.model,
+            "model": model,
             "messages": list(request.messages),
             "stream": True,
             "stream_options": {"include_usage": True},
             "num_retries": 0,
-            "metadata": request.metadata,
+            "metadata": metadata,
         }
         if request.tools:
             kwargs["tools"] = list(request.tools)
@@ -211,23 +277,56 @@ class LiteLLMGateway:
         if request.temperature is not None:
             kwargs["temperature"] = request.temperature
         if request.max_tokens:
-            kwargs["max_tokens"] = request.max_tokens
-        if request.reasoning_effort:  # only when set; drop_params strips it for models without it
-            kwargs["reasoning_effort"] = effort_param(request.reasoning_effort)
-        for f in request.omit_fields:
-            kwargs.pop(f, None)
+            prompt = prompt_chars(request.messages) // 4
+            window = self.context_window(model)
+            floor, buffer = tuning.max_tokens_floor, tuning.overflow_buffer
+            kwargs["max_tokens"] = clamp_max_tokens(request.max_tokens, window, prompt, floor, buffer)
+        effort = resolve_effort(request.reasoning_effort, request.session_effort)
+        kwargs.update(reasoning_kwargs(effort, deployment, variant))
+        if turn := request.turn_state or metadata.get("run_id"):
+            metadata[TURN_STATE_HEADER] = str(turn)
+            kwargs["extra_headers"] = {
+                **provider_headers(self.settings, deployment),
+                TURN_STATE_HEADER: str(turn),
+            }
+        ctx = ShapeContext(
+            model=deployment,
+            variant=variant,
+            vision=self.supports_vision(model),
+            caching=request.prompt_caching and tuning.prompt_caching,
+            cache_ttl=tuning.cache_ttl,
+            omit=request.omit_fields,
+        )
+        return shape(kwargs, ctx)
 
-        resp = await self._open(kwargs)
+    async def stream(self, request: LLMRequest) -> AsyncIterator[StreamItem]:
+        self._ensure(request.model)
+        background = request.metadata.get("purpose") in aux.BACKGROUND_PURPOSES
+        chain = (
+            [request.model]
+            if background
+            else [request.model, *self.settings.fallbacks.get(request.model, [])]
+        )
+        resp: Any = None
+        for i, model in enumerate(chain):  # turn-scoped: the primary is tried again next turn
+            self._ensure(model)
+            try:
+                resp = await self._open(self._kwargs(request, model))
+                break
+            except FallbackTriggeredError:
+                if i == len(chain) - 1:
+                    raise
+                log.warning("%s overloaded; falling back to %s for this turn", model, chain[i + 1])
         calls: dict[int, dict[str, str]] = {}
         seen_usage: Usage | None = None
         text_len = 0
         finish = "stop"
         got_any = False
+        idle = self.settings.gateway_tuning.stream_idle_timeout_s
         try:
-            async for chunk in resp:
-                usage = getattr(chunk, "usage", None)
-                if usage and (usage.prompt_tokens or usage.completion_tokens):
-                    seen_usage = Usage(int(usage.prompt_tokens or 0), int(usage.completion_tokens or 0))
+            async for chunk in idle_chunks(resp, idle):
+                if parsed := parse_usage(getattr(chunk, "usage", None)):
+                    seen_usage = parsed
                 if not chunk.choices:
                     continue
                 choice = chunk.choices[0]
@@ -259,18 +358,51 @@ class LiteLLMGateway:
         yield Finish(finish)
 
     async def _open(self, kwargs: dict[str, Any]) -> Any:
-        delay = INITIAL_DELAY_MS
+        """Open the stream. Foreground: backoff on retryable codes, N consecutive overloaded
+        errors → `FallbackTriggeredError`. Background purposes fail fast (no retry). A 401
+        re-reads the secret store once (key rotated while running) before giving up."""
+        model = str(kwargs["model"])
+        background = (kwargs.get("metadata") or {}).get("purpose") in aux.BACKGROUND_PURPOSES
+        limit = self.settings.gateway_tuning.overload_fallback_after
+        delay, streak, auth_retried = INITIAL_DELAY_MS, 0, False
         for attempt in range(MAX_RETRIES + 1):
             try:
                 return await self._router.acompletion(**kwargs)
             except Exception as exc:
                 err = map_error(exc)
+                if err.code == "AUTH" and not auth_retried and self._recover_auth(model):
+                    auth_retried = True
+                    continue
+                if background:
+                    aux.note_failure(model)
+                    raise err from exc
+                streak = streak + 1 if err.overloaded else 0
+                if streak >= limit:
+                    raise FallbackTriggeredError(model, streak, err) from exc
                 if not err.retryable or attempt == MAX_RETRIES:
                     raise err from exc
                 wait = min(err.retry_after_ms or delay, MAX_DELAY_MS)
-                await asyncio.sleep(wait * (1 + random.uniform(-0.1, 0.1)) / 1000)
+                await _backoff_sleep(wait * (1 + random.uniform(-0.1, 0.1)) / 1000)
                 delay = min(delay * 2, MAX_DELAY_MS)
         raise GatewayError("SERVER", "unreachable")
+
+    def _recover_auth(self, model: str) -> bool:
+        """Drop the cached credentials of `model`'s deployments and re-read the secret store;
+        True when anything changed (worth exactly one retry)."""
+        changed = False
+        for entry in self._model_list:
+            if entry["model_name"] != model:
+                continue
+            params = entry["litellm_params"]
+            fresh = credential_params(params["model"], self.secret)
+            stale = {k: params.get(k) for k in fresh}
+            if fresh and fresh != stale:
+                params.update(fresh)
+                changed = True
+        if changed:
+            log.warning("credentials for %s changed in the secret store; retrying once", model)
+            self._router = self._make_router()
+        return changed
 
     async def embed(self, model: str, texts: list[str], dims: int) -> list[list[float]]:
         try:
@@ -288,19 +420,19 @@ class LiteLLMGateway:
 
     def _deployments(self, model: str) -> list[str]:
         """A routing group expands to its deployments; a raw id is its own deployment."""
-        model = self.settings.aliases.get(model, model)
+        model = expand_alias(self.settings, model)
         group = self.settings.models.get(model)
         return list(group.models) if group and group.models else [model]
 
     def context_window(self, model: str) -> int:
-        group = self.settings.models.get(self.settings.aliases.get(model, model))
+        group = self.settings.models.get(expand_alias(self.settings, model))
         if group is not None and group.max_input_tokens:
             return group.max_input_tokens
         deployments = self._deployments(model)
         if any("[1m]" in m for m in [model, *deployments]):
             return ONE_MILLION
         for dep in deployments:
-            for candidate in _lookup_names(dep):
+            for candidate in lookup_names(dep):
                 try:
                     info = litellm.get_model_info(candidate)
                 except Exception:
@@ -312,7 +444,7 @@ class LiteLLMGateway:
 
     def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
         for dep in self._deployments(model)[:1]:
-            for candidate in _lookup_names(dep):
+            for candidate in lookup_names(dep):
                 try:
                     p, c = litellm.cost_per_token(
                         model=candidate, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
@@ -330,7 +462,7 @@ class LiteLLMGateway:
 
     @staticmethod
     def _deployment_vision(model: str) -> bool:
-        for candidate in _lookup_names(model):
+        for candidate in lookup_names(model):
             try:
                 if litellm.supports_vision(model=candidate):
                     return True
@@ -343,14 +475,6 @@ DEFAULT_CONTEXT_WINDOW = 128_000
 ONE_MILLION = 1_000_000
 
 
-def _lookup_names(model: str) -> list[str]:
-    """`openrouter/anthropic/x` may be unmapped while `anthropic/x` is priced."""
-    names = [model]
-    if model.startswith("openrouter/") and model.count("/") >= 2:
-        names.append(model.split("/", 1)[1])
-    return names
-
-
 __all__ = [
     "LiteLLMGateway",
     "build_model_list",
@@ -358,5 +482,7 @@ __all__ = [
     "credential_status",
     "effort_param",
     "map_error",
+    "provider_headers",
     "provider_of",
+    "supported_pre_call_checks",
 ]

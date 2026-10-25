@@ -23,6 +23,7 @@ from sqlalchemy import select
 
 from auoreo.core import observability as obs
 from auoreo.core.db import MessageArchiveRow, MessageRow
+from auoreo.gateway.aux import resolve_aux_model
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import LLMRequest, TextDelta, Usage
 from auoreo.harness.manifests import HookEvent
@@ -416,7 +417,7 @@ class CompactionService:
         prompt = self.s.harness.snapshot.prompts.get("compaction")
         if prompt is None or prompt.section.role != "compaction":
             raise CompactionError("prompts/compaction.md (role: compaction) is missing")
-        group = "small" if "small" in self.s.settings.models else model
+        group = resolve_aux_model(self.s.settings, "compaction", gateway=self.s.gateway, main=model)
         request = LLMRequest(
             model=group,
             messages=(
