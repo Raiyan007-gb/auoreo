@@ -3,10 +3,21 @@ Import them from `auoreo.core.settings`, which re-exports every name here."""
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+)
+
+_log = logging.getLogger(__name__)
 
 
 class ModelGroup(BaseModel):
@@ -54,19 +65,83 @@ class MemorySettings(BaseModel):
     late_max_chars: int = Field(default=12_000, gt=0)
 
 
+STOP_GATES = ("verify_on_stop", "pre_verify", "kanban")
+_LOOP_BOUNDS: dict[str, tuple[float, float]] = {
+    "max_iterations": (1, 100_000),
+    "delegation_max_iterations": (1, 100_000),
+    "max_parallel_tool_calls": (1, 100),
+    "outer_loop_errors": (1, 8),
+    "doom_loop_repeats": (2, 100),
+    "tool_result_inline_chars": (1_000, 10_000_000),
+    "compaction_threshold_ratio": (0.05, 1.0),
+    "compaction_retain_ratio": (0.0, 0.9),
+    "turn_liveness_s": (0.01, 86_400),
+    "turn_liveness_poll_s": (0.01, 3_600),
+    "run_budget_seconds": (0.01, 7 * 86_400),
+    "token_budget": (1, 10**9),
+    "mot_recovery_limit": (0, 10),
+    "length_boost_cap": (1_024, 1_000_000),
+    "completion_threshold": (0.0, 1.0),
+}
+
+
 class LoopSettings(BaseModel):
-    """§8.10 knobs. Invalid values warn and fall back (never raise)."""
+    """§8.10 knobs. Invalid values warn and fall back to the default (never raise)."""
 
     model_config = ConfigDict(extra="ignore")
     max_iterations: int = 500
+    """Parent IterationBudget (model calls per turn); the agent's `max_steps` stays the step cap."""
+    delegation_max_iterations: int = 50
+    """IterationBudget of a subagent turn (a session with a parent)."""
     max_parallel_tool_calls: int = 10
     outer_loop_errors: int = 8
+    """Consecutive retryable model-call errors before the turn fails: min(this, max(1, steps))."""
     doom_loop_repeats: int = 3
     tool_result_inline_chars: int = 64_000
     compaction_threshold_ratio: float = 0.80
     """Only used when set explicitly in settings.json: auto-compact at ratio × window."""
     compaction_retain_ratio: float = 0.16
     compaction_enabled: bool = True
+    turn_liveness_s: float = 600.0
+    """A running turn with no stream/tool progress for this long is cancelled (`LIVENESS`)."""
+    turn_liveness_poll_s: float = 15.0
+    run_budget_seconds: float | None = None
+    """Wall-clock budget per turn: wrap-up nudge at 80 %, one grace call when spent."""
+    token_budget: int | None = None
+    """Completion-token budget per turn: wrap-up nudge at 90 %, one grace call when spent."""
+    otk_escalate: bool = True
+    """On a `length` cut, retry the same request once with max_tokens 8k → 64k."""
+    mot_recovery_limit: int = 3
+    """Resume nudges after a `length` cut whose outputs join the same assistant message."""
+    length_boost_cap: int = 32_768
+    """max_tokens cap of the 2/4/8/16× continuation boost."""
+    diminishing_returns: bool = True
+    """Token budget: stop continuing after 3 consecutive <500-token continuations."""
+    completion_threshold: float = 0.0
+    """Token budget: a text stop below this fraction of `token_budget` gets a keep-going
+    nudge (0 = off)."""
+    stop_gates: list[str] = Field(default_factory=lambda: list(STOP_GATES))
+
+    @field_validator("*", mode="wrap")
+    @classmethod
+    def _warn_fallback(cls, value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo) -> Any:
+        name = info.field_name or ""
+        default = cls.model_fields[name].get_default(call_default_factory=True)
+        try:
+            out = handler(value)
+        except ValidationError:
+            _log.warning("settings.loop.%s=%r is invalid; using %r", name, value, default)
+            return default
+        lo_hi = _LOOP_BOUNDS.get(name)
+        if lo_hi is not None and out is not None and not lo_hi[0] <= out <= lo_hi[1]:
+            _log.warning("settings.loop.%s=%r is outside %s; using %r", name, out, lo_hi, default)
+            return default
+        if name == "stop_gates":
+            unknown = [g for g in out if g not in STOP_GATES]
+            if unknown:
+                _log.warning("settings.loop.stop_gates: unknown gates %s ignored", unknown)
+            return [g for g in out if g in STOP_GATES]
+        return out
 
 
 # --- W2-A: execution environments (backends/environment/*)

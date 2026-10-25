@@ -50,8 +50,12 @@ async def test_turn_with_parallel_tool_calls_commits_in_model_order(
         "tool.completed",
         "step.started",
         "message.completed",
+        "turn.summary",
         "run.completed",
     ]
+    summary = next(e for e in events if e.type == "turn.summary").data
+    assert summary["steps"] == 2 and summary["tools"] == 2 and summary["model_calls"] == 2
+    assert summary["completion_tokens"] > 0 and summary["duration_ms"] >= 0
     done = [e.data["call_id"] for e in events if e.type == "tool.completed"]
     assert done == ["call_1", "call_2"]
     seqs = [e.seq for e in events]

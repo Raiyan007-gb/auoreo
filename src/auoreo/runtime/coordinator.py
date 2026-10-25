@@ -51,6 +51,7 @@ class SessionRunCoordinator:
             row.workflow,
             row.model,
             history=await self.runner.load_history(session_id),
+            subagent=row.parent_id is not None,
         )
         restore_state(rt.state, rt.history)  # tool_search tools, plan, verify verdict, plan mode
         self._runtimes[session_id] = rt
@@ -109,7 +110,7 @@ class SessionRunCoordinator:
                 try:
                     result = await self._run_request(rt, req)
                 except asyncio.CancelledError:
-                    rt.inbox.next_turn.clear()
+                    rt.inbox.cancel("user", keep_inbox=rt.keep_inbox_on_cancel)
                     raise
                 except Exception:
                     log.exception("run %s crashed", req.run_id)
@@ -225,10 +226,14 @@ class SessionRunCoordinator:
     def result(self, run_id: str) -> TurnResult | None:
         return self._results.get(run_id)
 
-    async def cancel(self, session_id: str) -> bool:
+    async def cancel(self, session_id: str, keep_inbox: bool = True) -> bool:
+        """Cancel the running turn. With `keep_inbox` (the default for user cancels) pending
+        steer/inject input moves to the next turn and queued followups stay queued (they
+        run on the next submit); otherwise they are dropped."""
         rt = self._runtimes.get(session_id)
         if rt is None or rt.task is None or rt.task.done():
             return False
+        rt.keep_inbox_on_cancel = keep_inbox
         rt.task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await rt.task
@@ -251,7 +256,7 @@ class SessionRunCoordinator:
 
     async def shutdown(self) -> None:
         for sid in list(self._runtimes):
-            await self.cancel(sid)
+            await self.cancel(sid, keep_inbox=False)
         for task in list(self._background):
             task.cancel()
         await self.background_idle(timeout=2)

@@ -12,12 +12,15 @@ with a one-sentence hypothetical fact built from the query's words; `"translate"
 `[<metadata.target>] <text>`.
 Guardian calls (`purpose == "guardian"`) pop `guardian_script`; when it is empty they
 answer `$AUOREO_FAKE_GUARDIAN` (default `ESCALATE`).
+`Scripted.finish` overrides the finish reason (`"length"` scripts an output-token cut) and
+`Scripted.delay_s` stalls before streaming.
 Every request is kept in `requests` (with its `reasoning_effort`); `efforts` lists the effort
 of each main-turn call (no `metadata.purpose`) in order.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import math
@@ -47,6 +50,8 @@ class Scripted:
     text: str = ""
     tool_calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     error: GatewayError | None = None
+    finish: str | None = None  # finish reason override (e.g. "length"); default stop/tool_calls
+    delay_s: float = 0.0  # sleep before streaming (liveness tests)
 
 
 class FakeGateway:
@@ -82,6 +87,8 @@ class FakeGateway:
             item = self._auto(request)
         else:
             item = self.script.popleft() if self.script else self._auto(request)
+        if item.delay_s:
+            await asyncio.sleep(item.delay_s)
         if item.error:
             raise item.error
         for word in _chunks(item.text):
@@ -91,7 +98,7 @@ class FakeGateway:
             yield ToolCall(id=f"call_{self._n}", name=name, arguments=json.dumps(args))
         prompt = prompt_chars(request.messages) // 4
         yield Usage(prompt_tokens=prompt, completion_tokens=max(1, len(item.text) // 4), cost_usd=0.0)
-        yield Finish("tool_calls" if item.tool_calls else "stop")
+        yield Finish(item.finish or ("tool_calls" if item.tool_calls else "stop"))
 
     def _auto(self, request: LLMRequest) -> Scripted:
         if request.metadata.get("purpose") == "hyde":

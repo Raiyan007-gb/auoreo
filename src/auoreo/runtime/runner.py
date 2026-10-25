@@ -2,19 +2,17 @@
 
 Spec §8: freeze the request per step, persist the user batch before streaming, run
 concurrency-safe tool calls in parallel and others as barriers, commit results in model
-order, stop on doom loops, and force a tool-free final step when the budget runs out.
+order, stop on doom/denial loops, and force a tool-free final step when the step cap or
+the run budget runs out. Recovery (OTK/overflow/empty), budgets, liveness, stop gates,
+loop guards and sequence repair live in their own modules next to this one.
 """
 
 from __future__ import annotations
 
 import asyncio
 import fnmatch
-import hashlib
-import json
 import logging
 import uuid
-from collections import deque
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
@@ -25,20 +23,24 @@ from auoreo.core import observability as obs
 from auoreo.core.db import MessageRow
 from auoreo.core.permissions import PermissionEngine
 from auoreo.core.policy import policy_engine
-from auoreo.core.redaction import StreamRedactor
 from auoreo.core.usage import UsageLedger
 from auoreo.gateway.errors import GatewayError
-from auoreo.gateway.types import Finish, LLMRequest, TextDelta, ToolCall, Usage, tool_schema
+from auoreo.gateway.types import LLMRequest, ToolCall, tool_schema
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
 from auoreo.policy.bandit import BanditPolicy, Choice
+from auoreo.runtime.budget import GRACE_NOTE, TurnBudget, all_free
 from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
-from auoreo.runtime.hooks import hooks_of
+from auoreo.runtime.guards import LoopGuards
 from auoreo.runtime.inbox import Inbox, RunOptions
+from auoreo.runtime.liveness import LivenessWatchdog
 from auoreo.runtime.multimodal import prepare_messages
+from auoreo.runtime.recovery import model_step
+from auoreo.runtime.sequence import repair
+from auoreo.runtime.stopgates import StopGates, prompt_hook
 from auoreo.runtime.tool_round import ABORTED_BEFORE_DISPATCH, tool_round
 from auoreo.tools.context import SessionState, ToolContext
-from auoreo.tools.executor import ToolExecutor, ToolOutcome
+from auoreo.tools.executor import ToolExecutor
 from auoreo.voice.tone import tone_of
 
 if TYPE_CHECKING:
@@ -47,7 +49,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 TurnStatus = Literal["completed", "blocked", "aborted", "failed", "max_steps"]
-MAX_STOP_BLOCKS = 3
 STEP_LIMIT_NOTE = (
     "You have reached the step limit for this turn. Do not call tools. "
     "Summarize what you did, what is left, and answer now."
@@ -70,6 +71,10 @@ class SessionRuntime:
     running: bool = False
     task: asyncio.Task[None] | None = None
     session_started: bool = False  # SessionStart hooks ran for this runtime
+    subagent: bool = False  # a child session: IterationBudget = delegation_max_iterations
+    generation: int = 0  # bumped per turn; liveness watchdogs of older turns stand down
+    doom_exempt: set[str] = field(default_factory=set)  # tools the user said `always` for
+    keep_inbox_on_cancel: bool = True
 
 
 @dataclass
@@ -78,6 +83,16 @@ class TurnResult:
     status: TurnStatus
     text: str
     error: dict[str, Any] | None = None
+    truncated: bool = False  # a length cut that recovery could not finish
+
+
+@dataclass
+class Turn:
+    """Live state of one running turn: budget/stats, liveness watchdog, latest answer text."""
+
+    budget: TurnBudget
+    watchdog: LivenessWatchdog
+    text: str = ""
 
 
 class AgentRunner:
@@ -172,7 +187,7 @@ class AgentRunner:
                 "generation": self.s.harness.generation,
             },
         )
-        text, hook_error = await self._prompt_hook(sid, spec.name, text)
+        text, hook_error = await prompt_hook(self, sid, spec.name, text)
         if hook_error is not None:
             await self.s.emit(sid, "run.blocked", {"run_id": run_id, "text": "", "error": hook_error})
             return TurnResult(run_id, "blocked", "", hook_error)
@@ -196,11 +211,14 @@ class AgentRunner:
         context = render_context(
             spec, self.s.cwd, engine.mode, memory_block, st.locale or "", tone_of(text, st)
         )
+        rt.generation += 1  # the liveness watchdog is bound to this turn's generation
+        turn = Turn(TurnBudget.for_turn(st.loop, subagent=rt.subagent), LivenessWatchdog(self.s, rt, run_id))
 
         async def question(qs: list[dict[str, Any]]) -> dict[str, Any]:
             return await self.s.questions.ask(sid, qs)
 
         async def emit(event_type: str, data: dict[str, Any]) -> None:
+            turn.watchdog.touch()  # tool progress counts as liveness
             await self.s.emit(sid, event_type, {"run_id": run_id, **data})
 
         ctx = ToolContext(
@@ -215,23 +233,38 @@ class AgentRunner:
             services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec},
         )
         with obs.span("agent.run", model=spec.model, agent=spec.name) as span:  # --- W0-D
-            result = await self._loop(rt, spec, engine, ctx, run_id, context, turn_msg, options)
+            result = await self._watched(rt, spec, engine, ctx, run_id, context, turn_msg, options, turn)
             span.set("status", result.status)
             obs.count("run_completed_total", status=result.status)
         await self.policy.finish(sid, run_id, result.status)
         if self.s.memory is not None and result.text:
             await self.s.memory.record_message(sid, "assistant", result.text)
         await self.s.set_session_status(sid, "idle")
+        await self.s.emit(sid, "turn.summary", {"run_id": run_id, **turn.budget.summary(result.status)})
+        extra: dict[str, Any] = {"error": result.error} if result.error else {}
+        if result.truncated:
+            extra["truncated"] = True
         await self.s.emit(
-            sid,
-            f"run.{result.status}",
-            {
-                "run_id": run_id,
-                "text": result.text[:4000],
-                **({"error": result.error} if result.error else {}),
-            },
+            sid, f"run.{result.status}", {"run_id": run_id, "text": result.text[:4000], **extra}
         )
         return result
+
+    async def _watched(self, rt: SessionRuntime, *args: Any) -> TurnResult:
+        """Run the loop as its own task under the liveness watchdog (cancelled → `LIVENESS`)."""
+        run_id: str = args[3]
+        turn: Turn = args[-1]
+        inner = asyncio.create_task(self._loop(rt, *args))
+        turn.watchdog.start(inner)
+        try:
+            return await inner
+        except asyncio.CancelledError:
+            me = asyncio.current_task()
+            if not turn.watchdog.fired or (me is not None and me.cancelling()):
+                raise
+            msg = f"no stream or tool progress for {turn.watchdog.timeout:g}s"
+            return TurnResult(run_id, "aborted", turn.text, {"code": "LIVENESS", "message": msg})
+        finally:
+            await turn.watchdog.stop()
 
     async def _loop(
         self,
@@ -243,71 +276,74 @@ class AgentRunner:
         context: str,
         turn_msg: dict[str, Any],
         options: RunOptions,
+        turn: Turn,
     ) -> TurnResult:
         sid = rt.session_id
         loop_cfg = self.s.settings.loop
         max_steps = max(1, min(spec.max_steps, loop_cfg.max_iterations, options.max_steps or 10**9))
-        recent: deque[str] = deque(maxlen=max(2, loop_cfg.doom_loop_repeats))
-        final_text = ""
+        error_cap = max(1, min(loop_cfg.outer_loop_errors, max_steps))  # §8.9 outer-loop cap
+        budget, guards = turn.budget, LoopGuards(self, rt, run_id)
+        gates = StopGates(self, rt, spec.name, run_id)
         open_calls: list[ToolCall] = []
-        stop_blocks = 0
+        step = errors = 0
         try:
-            for step in range(1, max_steps + 1):
-                for steer in rt.inbox.claim_step():
-                    await self._persist(rt, {"role": "user", "content": steer})
-                    await self.s.emit(
-                        sid,
-                        "message.created",
-                        {"run_id": run_id, "role": "user", "content": steer, "steer": True},
-                    )
-                last_step = step == max_steps
+            while step < max_steps:
+                step += 1
+                await self._claim_step(rt, run_id, budget.wrapup_note())
+                exhausted = budget.exhausted()
+                last_step = step == max_steps or exhausted is not None
+                note = GRACE_NOTE.format(why=exhausted) if exhausted else None
+                note = note or (STEP_LIMIT_NOTE if last_step else None)
                 tools = self._available(spec, rt.state, options)
-                build = partial(self._request, spec, rt, tools, context, turn_msg, last_step, run_id)
+                build = partial(self._request, spec, rt, tools, context, turn_msg, last_step, run_id, note)
                 await self.compaction.pre_step(rt, build())  # `build` re-renders after compaction
                 await self.s.emit(sid, "step.started", {"run_id": run_id, "step": step, "tools": len(tools)})
-                text, calls = await self._stream_step(rt, run_id, build)
+                budget.consume_step(grace=exhausted is not None)
+                try:
+                    out = await model_step(self, rt, run_id, build, budget, turn.watchdog.touch)
+                except GatewayError as exc:
+                    errors += 1
+                    if not exc.retryable or errors >= error_cap:
+                        raise
+                    await self.s.emit(
+                        sid, "run.retry", {"run_id": run_id, "code": exc.code, "errors": errors}
+                    )
+                    await asyncio.sleep(min(exc.retry_after_ms or 0, 5_000) / 1000)
+                    step -= 1
+                    continue
+                errors = 0
+                text, calls = out.text, out.calls
                 over_budget = await self.usage.over_budget(sid, self.s.settings.max_cost_usd)
                 if last_step or over_budget:
                     calls = []  # forced final step / budget: no further tool calls
-                assistant: dict[str, Any] = {"role": "assistant", "content": text or None}
-                if calls:
-                    assistant["tool_calls"] = [
-                        {
-                            "id": c.id,
-                            "type": "function",
-                            "function": {"name": c.name, "arguments": c.arguments},
-                        }
-                        for c in calls
-                    ]
-                await self._persist(rt, assistant)
-                await self.s.emit(
-                    sid,
-                    "message.completed",
-                    {
-                        "run_id": run_id,
-                        "step": step,
-                        "content": text,
-                        "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in calls],
-                    },
-                )
-                final_text = text or final_text
+                await self._commit_assistant(rt, run_id, step, text, calls)
+                turn.text = text or turn.text
+                if exhausted is not None:  # that was the one grace call
+                    msg = f"run budget exhausted ({exhausted})"
+                    return TurnResult(
+                        run_id, "blocked", turn.text, {"code": "BUDGET_EXHAUSTED", "message": msg}
+                    )
                 if over_budget:
                     msg = f"session cost reached max_cost_usd={self.s.settings.max_cost_usd}"
-                    return TurnResult(run_id, "blocked", final_text, {"code": "BUDGET", "message": msg})
+                    return TurnResult(run_id, "blocked", turn.text, {"code": "BUDGET", "message": msg})
+                if out.empty and not turn.text:
+                    msg = "the model returned an empty response twice"
+                    return TurnResult(run_id, "failed", "", {"code": "EMPTY_RESPONSE", "message": msg})
                 if not calls:
-                    blocked = not last_step and await self._stop_hook(
-                        rt, spec.name, run_id, final_text, stop_blocks
-                    )
-                    if blocked:
-                        stop_blocks += 1
+                    if out.truncated:
+                        return TurnResult(run_id, "completed", turn.text, truncated=True)
+                    if not last_step and (await gates.check(turn.text) or await self._keep_going(rt, budget)):
                         continue
                     status: TurnStatus = "max_steps" if last_step and max_steps > 1 else "completed"
-                    return TurnResult(run_id, status, final_text)
+                    return TurnResult(run_id, status, turn.text)
 
                 open_calls = list(calls)
+                turn.watchdog.touch()
                 outcomes = await tool_round(
                     self, rt, spec, engine, ctx, run_id, calls, {t.name: t for t in tools}
                 )
+                turn.watchdog.touch()
+                budget.tools += len(outcomes)
                 for o in outcomes:
                     open_calls.remove(o.call)
                 for msg in rt.state.pending_user_messages:
@@ -318,77 +354,71 @@ class AgentRunner:
                     return TurnResult(
                         run_id,
                         "blocked",
-                        final_text,
+                        turn.text,
                         {"code": "PERMISSION_REJECTED", "message": "user rejected a tool call"},
                     )
-                for o in outcomes:
-                    recent.append(_signature(o))
-                if len(recent) == recent.maxlen and len(set(recent)) == 1:
-                    return TurnResult(
-                        run_id,
-                        "blocked",
-                        final_text,
-                        {
-                            "code": "DOOM_LOOP",
-                            "message": f"identical tool call repeated {recent.maxlen}x with the same result",
-                        },
-                    )
-            return TurnResult(run_id, "max_steps", final_text)
+                if (guard_error := await guards.observe(outcomes)) is not None:
+                    return TurnResult(run_id, "blocked", turn.text, guard_error)
+                if all_free(outcomes):
+                    budget.iterations.refund()
+            return TurnResult(run_id, "max_steps", turn.text)
         except GatewayError as exc:
-            return TurnResult(run_id, "failed", final_text, {"code": exc.code, "message": exc.message})
+            return TurnResult(run_id, "failed", turn.text, {"code": exc.code, "message": exc.message})
         except CompactionError as exc:  # only raised once the circuit breaker trips
-            return TurnResult(run_id, "failed", final_text, {"code": "COMPACTION", "message": exc.reason})
+            return TurnResult(run_id, "failed", turn.text, {"code": "COMPACTION", "message": exc.reason})
         except asyncio.CancelledError:
             for call in open_calls:
                 await self._persist(
                     rt,
                     {"role": "tool", "tool_call_id": call.id, "content": ABORTED_BEFORE_DISPATCH},
                 )
-            await self.s.set_session_status(sid, "idle")
-            await self.s.emit(sid, "run.aborted", {"run_id": run_id})
+            if not turn.watchdog.fired:  # a liveness cancel is reported by run_turn
+                await self.s.set_session_status(sid, "idle")
+                await self.s.emit(sid, "run.aborted", {"run_id": run_id})
             raise
         except Exception as exc:  # local bug: no retry, surface it (§8.9)
             log.exception("turn crashed")
             return TurnResult(
                 run_id,
                 "failed",
-                final_text,
+                turn.text,
                 {"code": "INTERNAL", "message": f"{type(exc).__name__}: {exc}"},
             )
 
-    # ---------------------------------------------------------------- hooks
-    async def _prompt_hook(self, sid: str, agent: str, text: str) -> tuple[str, dict[str, Any] | None]:
-        """UserPromptSubmit: may rewrite the prompt or deny the turn (before it is persisted)."""
-        hooks = hooks_of(self.s)
-        if hooks is None:
-            return text, None
-        out = await hooks.run(
-            "UserPromptSubmit", session_id=sid, payload={"agent": agent, "text": text}, match_key=agent
-        )
-        if out.denied:
-            return text, {"code": "HOOK_DENIED", "message": out.message}
-        return (out.text if out.text is not None else text), None
+    async def _claim_step(self, rt: SessionRuntime, run_id: str, wrapup: str | None) -> None:
+        """Persist claimed steer/inject input (and a due budget wrap-up nudge) before a step."""
+        for steer in [*rt.inbox.claim_step(), *([wrapup] if wrapup else [])]:
+            await self._persist(rt, {"role": "user", "content": steer})
+            data = {"run_id": run_id, "role": "user", "content": steer, "steer": True}
+            await self.s.emit(rt.session_id, "message.created", data)
 
-    async def _stop_hook(self, rt: SessionRuntime, agent: str, run_id: str, text: str, blocks: int) -> bool:
-        """Stop: a blocking hook appends its reason as a `<stop-hook>` user message and the
-        loop continues (at most MAX_STOP_BLOCKS times per turn). Only reached after a real
-        final answer, never on an API-error turn (those raise before this point)."""
-        hooks = hooks_of(self.s)
-        if hooks is None or blocks >= MAX_STOP_BLOCKS:
-            return False
-        out = await hooks.run(
-            "Stop",
-            session_id=rt.session_id,
-            payload={"agent": agent, "text": text, "stop_blocks": blocks},
-            match_key=agent,
+    async def _keep_going(self, rt: SessionRuntime, budget: TurnBudget) -> bool:
+        """Token budget below `completion_threshold`: one more push (diminishing-returns aware)."""
+        note = budget.continue_note()
+        if note is not None:
+            await self._persist(rt, {"role": "user", "content": note})
+        return note is not None
+
+    async def _commit_assistant(
+        self, rt: SessionRuntime, run_id: str, step: int, text: str, calls: list[ToolCall]
+    ) -> None:
+        assistant: dict[str, Any] = {"role": "assistant", "content": text or None}
+        if calls:
+            assistant["tool_calls"] = [
+                {"id": c.id, "type": "function", "function": {"name": c.name, "arguments": c.arguments}}
+                for c in calls
+            ]
+        await self._persist(rt, assistant)
+        await self.s.emit(
+            rt.session_id,
+            "message.completed",
+            {
+                "run_id": run_id,
+                "step": step,
+                "content": text,
+                "tool_calls": [{"id": c.id, "name": c.name, "arguments": c.arguments} for c in calls],
+            },
         )
-        if not out.blocked:
-            return False
-        msg = f"<stop-hook>\n{out.message}\n</stop-hook>"
-        await self._persist(rt, {"role": "user", "content": msg})
-        data = {"run_id": run_id, "role": "user", "content": msg, "stop_hook": True}
-        await self.s.emit(rt.session_id, "message.created", data)
-        return True
 
     # ------------------------------------------------------------- helpers
     def _available(
@@ -415,6 +445,7 @@ class AgentRunner:
         turn_msg: dict[str, Any],
         last_step: bool,
         run_id: str,
+        note: str | None = None,
     ) -> LLMRequest:
         msgs: list[dict[str, Any]] = [{"role": "system", "content": spec.system_prompt}]
         turn_user_idx = turn_index(rt.history, turn_msg)
@@ -422,9 +453,9 @@ class AgentRunner:
             if i == turn_user_idx and context:
                 m = {**m, "content": f"<context>\n{context}\n</context>\n\n{m['content']}"}
             msgs.append(m)
-        if last_step:
-            msgs.append({"role": "user", "content": STEP_LIMIT_NOTE})
-        msgs = prepare_messages(msgs, self.s.gateway.supports_vision(spec.model))
+        if note:
+            msgs.append({"role": "user", "content": note})
+        msgs = prepare_messages(repair(msgs), self.s.gateway.supports_vision(spec.model))
         variant = spec.variant
         temperature = spec.agent.manifest.temperature
         if temperature is None and variant is not None:
@@ -439,58 +470,3 @@ class AgentRunner:
             reasoning_effort=self.policy.effort(run_id, spec.agent.manifest.effort),
             metadata={"session_id": rt.session_id, "run_id": run_id},
         )
-
-    async def _stream_step(
-        self, rt: SessionRuntime, run_id: str, build: Callable[[], LLMRequest]
-    ) -> tuple[str, list[ToolCall]]:
-        """Stream one step; on a provider CONTEXT overflow compact (retain=0) and retry once."""
-        request = build()
-        try:
-            return await self._stream(rt.session_id, run_id, request)
-        except GatewayError as exc:
-            await self.compaction.recover_overflow(rt, exc, request.model)  # or re-raises
-        return await self._stream(rt.session_id, run_id, build())
-
-    async def _stream(self, sid: str, run_id: str, request: LLMRequest) -> tuple[str, list[ToolCall]]:
-        parts: list[str] = []
-        calls: list[ToolCall] = []
-        scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
-        purpose = str(request.metadata.get("purpose", "turn"))
-        meter = self.usage.meter(sid, run_id, request.model)  # latency + outcome per call
-        async for item in meter.wrap(
-            obs.traced_stream(self.s.gateway.stream(request), model=request.model, purpose=purpose)
-        ):
-            match item:
-                case TextDelta(text=t):
-                    parts.append(t)
-                    if safe := scrub.feed(t):
-                        await self.s.emit(sid, "message.delta", {"run_id": run_id, "text": safe})
-                case ToolCall():
-                    calls.append(item)
-                case Usage():
-                    await meter.record(item)
-                    await self.s.emit(
-                        sid,
-                        "usage",
-                        {
-                            "run_id": run_id,
-                            "model": request.model,
-                            "prompt_tokens": item.prompt_tokens,
-                            "completion_tokens": item.completion_tokens,
-                            "cost_usd": item.cost_usd,
-                        },
-                    )
-                case Finish():
-                    pass
-        if tail := scrub.flush():
-            await self.s.emit(sid, "message.delta", {"run_id": run_id, "text": tail})
-        return "".join(parts), calls
-
-
-def _signature(o: ToolOutcome) -> str:
-    try:
-        args = json.dumps(json.loads(o.call.arguments or "{}"), sort_keys=True)
-    except json.JSONDecodeError:
-        args = o.call.arguments
-    digest = hashlib.sha256(o.result.content.encode()).hexdigest()[:16]
-    return f"{o.call.name}|{args}|{digest}"

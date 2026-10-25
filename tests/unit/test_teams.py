@@ -186,7 +186,9 @@ async def test_mailbox_send_reaches_recipient_next_request(
     await turn(services, kid.session_id, "continue")
     last = gateway.requests_for("CHILD-MAIL")[-1]
     users = [text_of(m["content"]) for m in last.messages if m.get("role") == "user"]
-    assert '<mail from="lead" summary="check X">please check X</mail>' in users
+    # injected mail is drained into the next turn's batch, marked out-of-band (spec §8.1/§8.8)
+    mail = '[OUT-OF-BAND] <mail from="lead" summary="check X">please check X</mail>'
+    assert any(u.endswith(mail) for u in users)
     server = await services.events.replay(0, frozenset({"server"}))
     assert any(e.type == "mailbox.message" and e.data["to"] == "kid" for e in server)
     peers, err = await call_tool(services, tool_ctx(services, kid.session_id), "list_peers", {})
