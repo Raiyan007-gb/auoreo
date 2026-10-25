@@ -15,6 +15,7 @@ KINDS: tuple[str, ...] = (
     "prompts",
     "permissions",
     "mcp",
+    "commands",
 )
 
 

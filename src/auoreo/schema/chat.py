@@ -149,3 +149,22 @@ class ArchivedMessage(BaseModel):
 
 class LatestSeq(BaseModel):
     seq: int
+
+
+class SessionDetail(SessionInfo):
+    """`SessionInfo` plus lineage/archive state (fork, archive endpoints)."""
+
+    parent_id: str | None = None
+    archived: bool = False
+
+
+class SessionDeleted(BaseModel):
+    id: str
+    deleted: bool
+
+
+class CommandInfo(BaseModel):
+    name: str
+    description: str
+    handler: Literal["prompt", "compact", "model", "plan"]
+    args_hint: str

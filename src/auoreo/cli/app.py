@@ -29,3 +29,11 @@ app.add_typer(db.app, name="db", help="Migrate and inspect state.db (Alembic).")
 def version() -> None:
     """Print the version."""
     typer.echo(__version__)
+
+
+# M3 control plane: tunnels, web, logs
+from auoreo.cli.commands import logs, tunnel, web  # noqa: E402
+
+app.command("web")(web.web)
+app.command("logs")(logs.logs)
+app.add_typer(tunnel.app, name="tunnel", help="Expose the server via cloudflared / tailscale.")

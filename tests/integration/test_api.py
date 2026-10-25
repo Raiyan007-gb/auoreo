@@ -38,6 +38,7 @@ def parse_sse(text: str) -> list[dict]:  # type: ignore[type-arg]
 
 async def wait_done(services: Services, sid: str) -> None:
     await services.coordinator.wait(sid, 10)
+    await services.coordinator.background_idle(10)  # title generation
 
 
 async def test_health(client: httpx.AsyncClient) -> None:
@@ -53,7 +54,8 @@ async def test_chat_then_replay_events_and_resume(client: httpx.AsyncClient, ser
     r = await client.get("/api/events", params={"session_id": sid, "follow": "false"})
     assert r.headers["content-type"].startswith("text/event-stream")
     assert r.headers["cache-control"] == "no-cache"
-    evs = parse_sse(r.text)
+    everything = parse_sse(r.text)
+    evs = [e for e in everything if e["type"] != "session.title_updated"]
     kinds = [e["type"] for e in evs]
     assert kinds[0] == "session.created" and kinds[-1] == "run.completed"
     assert evs[-1]["data"]["text"] == "echo: hello"
@@ -61,7 +63,7 @@ async def test_chat_then_replay_events_and_resume(client: httpx.AsyncClient, ser
     r2 = await client.get(
         "/api/events", params={"session_id": sid, "follow": "false"}, headers={"Last-Event-ID": str(mid)}
     )
-    assert [e["seq"] for e in parse_sse(r2.text)] == [e["seq"] for e in evs if e["seq"] > mid]
+    assert [e["seq"] for e in parse_sse(r2.text)] == [e["seq"] for e in everything if e["seq"] > mid]
 
 
 async def test_live_tail_streams_new_events_over_a_real_server(
@@ -165,7 +167,7 @@ async def test_folder_defined_agent(
     await client.post("/api/harness/reload")
     r = await client.post("/api/chat", json={"message": "ahoy", "agent": "pirate"})
     await wait_done(services, r.json()["session_id"])
-    req = gateway.requests[-1]
+    req = [r for r in gateway.requests if r.metadata.get("purpose") != "title"][-1]
     assert "like a pirate" in req.messages[0]["content"]
     assert [t["function"]["name"] for t in req.tools] == ["read"]
 
@@ -225,6 +227,9 @@ async def test_routes_win_over_spa_mount(services: Services, settings: Settings,
         assert (await c.get("/api/health")).json()["status"] == "ok"
         assert "spa" in (await c.get("/")).text
         assert (await c.get("/openapi.json")).status_code == 200
+        deep = await c.get("/session/ses_abc")  # SPA deep link → index.html, 200
+        assert deep.status_code == 200 and "spa" in deep.text
+        assert (await c.get("/assets/missing.js")).status_code == 404
 
 
 async def test_events_latest_seq(client: httpx.AsyncClient, services: Services) -> None:

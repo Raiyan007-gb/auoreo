@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException, status
+from collections.abc import Awaitable
+from typing import Literal
+
+from fastapi import APIRouter, HTTPException, Response, status
 
 from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.core import sessions_ops as ops
 from auoreo.core.db import SessionRow
-from auoreo.schema.chat import MessageOut, SessionCreate, SessionInfo
+from auoreo.schema.chat import MessageOut, SessionCreate, SessionDeleted, SessionDetail, SessionInfo
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"], dependencies=AUTH)
 
@@ -20,6 +24,20 @@ def _info(row: SessionRow) -> SessionInfo:
     )
 
 
+def _detail(row: SessionRow) -> SessionDetail:
+    return SessionDetail(**_info(row).model_dump(), parent_id=row.parent_id, archived=bool(row.archived))
+
+
+async def _guard[T](op: Awaitable[T]) -> T:
+    """Map session-op errors: unknown → 404, running → 409."""
+    try:
+        return await op
+    except KeyError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found") from exc
+    except ops.SessionBusyError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+
+
 @router.post("", response_model=SessionInfo, status_code=status.HTTP_201_CREATED)
 async def create_session(body: SessionCreate, svc: ServicesDep) -> SessionInfo:
     try:
@@ -32,8 +50,10 @@ async def create_session(body: SessionCreate, svc: ServicesDep) -> SessionInfo:
 
 
 @router.get("", response_model=list[SessionInfo])
-async def list_sessions(svc: ServicesDep, limit: int = 100) -> list[SessionInfo]:
-    return [_info(r) for r in await svc.list_sessions(min(max(limit, 1), 1000))]
+async def list_sessions(svc: ServicesDep, limit: int = 100, archived: bool = False) -> list[SessionInfo]:
+    """Archived sessions are hidden unless `?archived=true`."""
+    rows = await svc.list_sessions(min(max(limit, 1), 1000), include_archived=archived)
+    return [_info(r) for r in rows]
 
 
 @router.get("/{session_id}", response_model=SessionInfo)
@@ -66,3 +86,39 @@ async def get_messages(session_id: str, svc: ServicesDep) -> list[MessageOut]:
 async def cancel(session_id: str, svc: ServicesDep) -> dict[str, bool]:
     """Advisory and idempotent: cancelling an idle or unknown session is not an error."""
     return {"cancelled": await svc.coordinator.cancel(session_id)}
+
+
+@router.post("/{session_id}/fork", response_model=SessionDetail, status_code=status.HTTP_201_CREATED)
+async def fork(session_id: str, svc: ServicesDep) -> SessionDetail:
+    """New session (same agent/workflow/model, `parent_id` set) with every committed message."""
+    return _detail(await _guard(ops.fork_session(svc, session_id)))
+
+
+@router.post("/{session_id}/archive", response_model=SessionDetail)
+async def archive(session_id: str, svc: ServicesDep) -> SessionDetail:
+    return _detail(await _guard(ops.set_archived(svc, session_id, True)))
+
+
+@router.post("/{session_id}/unarchive", response_model=SessionDetail)
+async def unarchive(session_id: str, svc: ServicesDep) -> SessionDetail:
+    return _detail(await _guard(ops.set_archived(svc, session_id, False)))
+
+
+@router.delete("/{session_id}", response_model=SessionDeleted)
+async def delete(session_id: str, svc: ServicesDep) -> SessionDeleted:
+    """Deletes the session and its messages (409 while running). Events stay."""
+    await _guard(ops.delete_session(svc, session_id))
+    return SessionDeleted(id=session_id, deleted=True)
+
+
+@router.get(
+    "/{session_id}/export",
+    response_class=Response,
+    responses={200: {"content": {"application/json": {}, "text/markdown": {}}}},
+)
+async def export(session_id: str, svc: ServicesDep, format: Literal["json", "md"] = "json") -> Response:
+    """`json` = session info + raw messages; `md` = readable transcript."""
+    body = await _guard(ops.export_session(svc, session_id, format))
+    media = "application/json" if format == "json" else "text/markdown; charset=utf-8"
+    disposition = f'attachment; filename="{session_id}.{format}"'
+    return Response(body, media_type=media, headers={"Content-Disposition": disposition})

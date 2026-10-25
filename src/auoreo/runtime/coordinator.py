@@ -10,13 +10,16 @@ import asyncio
 import contextlib
 import logging
 import uuid
+from collections.abc import Coroutine
 from typing import TYPE_CHECKING, Any
 
 from auoreo.core.permissions import PermissionEngine
 from auoreo.harness.manifests import WorkflowManifest
 from auoreo.harness.orchestrator import render
+from auoreo.runtime import commands
 from auoreo.runtime.inbox import InputKind, TurnRequest
 from auoreo.runtime.runner import AgentRunner, SessionRuntime, TurnResult
+from auoreo.runtime.titles import generate_title
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -31,6 +34,7 @@ class SessionRunCoordinator:
         self._runtimes: dict[str, SessionRuntime] = {}
         self._results: dict[str, TurnResult] = {}
         self._idle: dict[str, asyncio.Event] = {}
+        self._background: set[asyncio.Task[Any]] = set()
 
     async def runtime(self, session_id: str) -> SessionRuntime:
         rt = self._runtimes.get(session_id)
@@ -68,9 +72,15 @@ class SessionRunCoordinator:
         model: str | None = None,
         interactive: bool = True,
     ) -> str | None:
-        """Queue input. Returns the run id for followups (None for steer/inject)."""
+        """Queue input. Returns the run id for followups (None for steer/inject and for
+        engine-handled slash commands such as `/model`)."""
         rt = await self.runtime(session_id)
         rt.interactive = interactive
+        if kind == "followup" or (kind == "steer" and not rt.running):
+            expanded = await commands.expand(self, rt, text, agent)
+            if expanded.handled:
+                return None
+            text, agent = expanded.text, expanded.agent
         if kind == "inject":
             rt.inbox.inject(text)
             return None
@@ -88,6 +98,8 @@ class SessionRunCoordinator:
         try:
             while (req := rt.inbox.claim_turn()) is not None:
                 rt.running = True
+                row = await self.s.get_session(rt.session_id)
+                needs_title = row is not None and not row.title
                 try:
                     result = await self._run_request(rt, req)
                 except asyncio.CancelledError:
@@ -97,6 +109,8 @@ class SessionRunCoordinator:
                     log.exception("run %s crashed", req.run_id)
                     result = TurnResult(req.run_id, "failed", "", {"code": "INTERNAL"})
                 self._results[req.run_id] = result
+                if needs_title and result.status in {"completed", "max_steps"}:
+                    self._spawn(generate_title(self.s, rt.session_id, req.text, result.text))
         finally:
             rt.running = False
             self._idle.setdefault(rt.session_id, asyncio.Event()).set()
@@ -194,6 +208,24 @@ class SessionRunCoordinator:
             await rt.task
         return True
 
+    def forget(self, session_id: str) -> None:
+        """Drop cached runtime state for a deleted session."""
+        self._runtimes.pop(session_id, None)
+        self._idle.pop(session_id, None)
+
+    def _spawn(self, coro: Coroutine[Any, Any, Any]) -> None:
+        task = asyncio.create_task(coro)
+        self._background.add(task)
+        task.add_done_callback(self._background.discard)
+
+    async def background_idle(self, timeout: float | None = None) -> None:
+        """Wait for background work (title generation) to finish — tests and shutdown."""
+        if self._background:
+            await asyncio.wait(list(self._background), timeout=timeout)
+
     async def shutdown(self) -> None:
         for sid in list(self._runtimes):
             await self.cancel(sid)
+        for task in list(self._background):
+            task.cancel()
+        await self.background_idle(timeout=2)

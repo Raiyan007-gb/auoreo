@@ -17,6 +17,7 @@ from auoreo.harness import frontmatter
 from auoreo.harness.discovery import Candidate, Root
 from auoreo.harness.manifests import (
     AgentManifest,
+    CommandManifest,
     McpServerManifest,
     PermissionFile,
     PromptFamily,
@@ -107,6 +108,18 @@ class FamilyDef:
     text: str
     source: str
     path: Path
+
+
+@dataclass(frozen=True)
+class CommandDef:
+    manifest: CommandManifest
+    template: str
+    source: str
+    path: Path
+
+    @property
+    def name(self) -> str:
+        return self.manifest.name
 
 
 @dataclass(frozen=True)
@@ -310,6 +323,17 @@ def load_family(c: Candidate) -> FamilyDef:
     return FamilyDef(fam, body.strip(), c.root.source, c.path)
 
 
+COMMAND_VARS = {"args", "input"}
+
+
+def load_command(c: Candidate) -> CommandDef:
+    data, body, text = _parse_md(c)
+    manifest = _validate(CommandManifest, data, c.path, text)
+    _check_name(c, manifest.name, text)
+    check_template(body, c.path, allowed=COMMAND_VARS)
+    return CommandDef(manifest, body.strip(), c.root.source, c.path)
+
+
 LOADERS: dict[str, Callable[[Candidate], Any]] = {
     "tools": load_tool,
     "agents": load_agent,
@@ -320,11 +344,13 @@ LOADERS: dict[str, Callable[[Candidate], Any]] = {
     "variants": load_variants,
     "prompts": load_prompt,
     "families": load_family,
+    "commands": load_command,
 }
 
 __all__ = [
     "LOADERS",
     "AgentDef",
+    "CommandDef",
     "FamilyDef",
     "Handler",
     "LoadError",

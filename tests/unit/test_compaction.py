@@ -199,12 +199,12 @@ async def test_manual_compaction_shrinks_archives_and_keeps_system_prompt(
     kinds = [e.type for e in await since(services, sess.id, mark)]
     assert kinds == ["compaction.started", "compaction.completed"]
     # summarizer call: tool-free, small group, temperature 0, compaction template
-    aux = gateway.requests[-1]
+    aux = next(r for r in reversed(gateway.requests) if r.metadata.get("purpose") == "compaction")
     assert aux.model == "small" and aux.tools == () and aux.temperature == 0
     assert aux.tool_choice == "none" and "## Next step" in aux.messages[0]["content"]
     # next turn: byte-identical system prompt, compaction text not in it
     await turns(services, sess.id, 1, start=99)
-    main = [r for r in gateway.requests if r.metadata.get("purpose") != "compaction"]
+    main = [r for r in gateway.requests if r.metadata.get("purpose") not in {"compaction", "title"}]
     assert len({r.messages[0]["content"] for r in main}) == 1
     assert "compacting the middle" not in main[-1].messages[0]["content"]
     assert any("<compaction-summary" in str(m.get("content")) for m in main[-1].messages)

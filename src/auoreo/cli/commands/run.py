@@ -14,6 +14,9 @@ from auoreo.core.services import Services
 _TERMINAL = {"run.completed", "run.failed", "run.blocked", "run.aborted", "run.max_steps"}
 
 
+FORMATS = ("text", "json", "stream-json")
+
+
 def run(
     prompt: Annotated[str, typer.Argument(help="The message to send.")],
     agent: Annotated[str | None, typer.Option(help="Agent folder name.")] = None,
@@ -21,15 +24,27 @@ def run(
     model: Annotated[str | None, typer.Option("--model", "-m", help="Model or routing group.")] = None,
     session: Annotated[str | None, typer.Option("--session", "-s", help="Continue a session.")] = None,
     gateway: Annotated[str | None, typer.Option(help="litellm | fake")] = None,
-    as_json: Annotated[bool, typer.Option("--json", help="Print events as JSON lines.")] = False,
+    fmt: Annotated[
+        str,
+        typer.Option(
+            "--format",
+            help="text (streamed prose) | json (final result object) | stream-json (JSON-lines events)",
+        ),
+    ] = "text",
+    as_json: Annotated[bool, typer.Option("--json", help="Alias of --format stream-json.")] = False,
 ) -> None:
     """Run one message non-interactively (tools needing approval are denied)."""
+    if as_json:
+        fmt = "stream-json"
+    if fmt not in FORMATS:
+        err_console.print(f"[red]--format must be one of {', '.join(FORMATS)}[/red]")
+        raise typer.Exit(2)
     st = settings(gateway=gateway)
-    code = asyncio.run(_run(st, prompt, agent, workflow, model, session, as_json))
+    code = asyncio.run(_run(st, prompt, agent, workflow, model, session, fmt))
     raise typer.Exit(code)
 
 
-async def _run(st, prompt, agent, workflow, model, session, as_json) -> int:  # type: ignore[no-untyped-def]
+async def _run(st, prompt, agent, workflow, model, session, fmt) -> int:  # type: ignore[no-untyped-def]
     svc = await Services.create(st, cwd=Path.cwd(), with_mcp=True)
     try:
         sid = session or (await svc.create_session(agent=agent, workflow=workflow, model=model)).id
@@ -37,18 +52,31 @@ async def _run(st, prompt, agent, workflow, model, session, as_json) -> int:  # 
         run_id = await svc.coordinator.submit(
             sid, prompt, agent=agent, workflow=workflow, model=model, interactive=False
         )
-        status = "failed"
-        while True:
+        status = "completed"
+        final: dict = {}  # type: ignore[type-arg]
+        while run_id is not None:  # None: an engine-handled slash command (no turn)
             ev = await sub.queue.get()
-            if as_json:
+            if fmt == "stream-json":
                 print(json.dumps(ev.model_dump(mode="json")), flush=True)
-            elif ev.aggregate_id == sid:
+            elif fmt == "text" and ev.aggregate_id == sid:
                 _pretty(ev.type, ev.data)
             if ev.aggregate_id == sid and ev.type in _TERMINAL and ev.data.get("run_id") == run_id:
                 status = ev.type.split(".", 1)[1]
+                final = ev.data
                 break
         await svc.coordinator.wait(sid, 5)
-        if not as_json:
+        await svc.coordinator.background_idle(10)
+        if fmt == "json":
+            result = svc.coordinator.result(run_id) if run_id else None
+            out = {
+                "session_id": sid,
+                "run_id": run_id,
+                "status": status,
+                "text": result.text if result else final.get("text", ""),
+                "error": (result.error if result else final.get("error")),
+            }
+            print(json.dumps(out, indent=2), flush=True)
+        elif fmt == "text":
             err_console.print(f"[dim]session {sid} · {status}[/dim]")
         return 0 if status in {"completed", "max_steps"} else 1
     finally:

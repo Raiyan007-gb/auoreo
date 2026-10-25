@@ -72,7 +72,8 @@ async def test_history_is_persisted_and_valid(
     # the next request carries a byte-identical system prompt (cache-safe)
     await services.coordinator.submit(sess.id, "again", interactive=False)
     await services.coordinator.wait(sess.id, 10)
-    systems = {r.messages[0]["content"] for r in gateway.requests}
+    turns = [r for r in gateway.requests if r.metadata.get("purpose") != "title"]
+    systems = {r.messages[0]["content"] for r in turns}
     assert len(systems) == 1
 
 
@@ -96,7 +97,7 @@ async def test_step_limit_forces_tool_free_final_answer(
     )
     status, _ = await run(services, "go")
     assert status == "max_steps"
-    last = gateway.requests[-1]
+    last = [r for r in gateway.requests if r.metadata.get("purpose") != "title"][-1]
     assert last.tool_choice == "none" and "step limit" in last.messages[-1]["content"]
 
 
