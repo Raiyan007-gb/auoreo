@@ -1,0 +1,22 @@
+name: sheet_read
+toolset: files
+description: >-
+  Read a spreadsheet (.xlsx/.xlsm via openpyxl, .csv/.tsv) and return it as a markdown
+  table. Lists the workbook's sheets; `sheet` picks one (default: the first/active).
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: Spreadsheet path, absolute or relative to the working directory.}
+    sheet: {type: string, description: Worksheet name (xlsx only).}
+    max_rows: {type: integer, minimum: 1, maximum: 5000, default: 200}
+  required: [path]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+exposure: deferred
+timeout_ms: 60000
+search_hint: excel xlsx csv tsv spreadsheet sheet table rows

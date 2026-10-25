@@ -1,0 +1,21 @@
+name: ocr
+toolset: vision
+description: >-
+  Extract the text in an image. Uses Tesseract (pytesseract) when it is installed and
+  reports word confidence; otherwise asks a vision model to transcribe the image verbatim.
+  The result says which engine was used.
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: Image path (PNG/JPEG/GIF/WebP).}
+  required: [path]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+exposure: deferred
+timeout_ms: 120000
+search_hint: ocr text recognition transcribe scan image to text

@@ -4,7 +4,10 @@ Behaviour per call:
 1. If scripted responses were queued, pop the next one.
 2. Else if the latest user message starts with `/tool <name> <json-args>`, call that tool
    once, then answer with a summary of its result on the next step.
-3. Else echo the user's message.
+3. Else echo the user's message (`echo: <text> [+N images]` when it carried images).
+
+`vision` (default True) is what `supports_vision` reports; aux calls with
+`metadata.purpose == "vision"` answer with a deterministic description.
 """
 
 from __future__ import annotations
@@ -18,7 +21,18 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from auoreo.gateway.errors import GatewayError
-from auoreo.gateway.types import Finish, LLMRequest, StreamItem, TextDelta, ToolCall, Usage
+from auoreo.gateway.types import (
+    Finish,
+    LLMRequest,
+    StreamItem,
+    TextDelta,
+    ToolCall,
+    Usage,
+    count_images,
+    prompt_chars,
+    shrink_data_urls,
+    text_of,
+)
 
 
 @dataclass
@@ -36,6 +50,7 @@ class FakeGateway:
         self.compaction_script: deque[Scripted] = deque()
         self.requests: list[LLMRequest] = []
         self.context_window_tokens = context_window_tokens
+        self.vision = True
         self._n = 0
 
     def queue(self, *items: Scripted) -> None:
@@ -45,6 +60,8 @@ class FakeGateway:
         self.requests.append(request)
         if request.metadata.get("purpose") == "compaction":  # aux call never eats the main script
             item = self.compaction_script.popleft() if self.compaction_script else _summary(request)
+        elif request.metadata.get("purpose") == "vision":  # nor does a vision aux call
+            item = self._auto(request)
         else:
             item = self.script.popleft() if self.script else self._auto(request)
         if item.error:
@@ -54,7 +71,7 @@ class FakeGateway:
         for name, args in item.tool_calls:
             self._n += 1
             yield ToolCall(id=f"call_{self._n}", name=name, arguments=json.dumps(args))
-        prompt = sum(len(str(m.get("content") or "")) for m in request.messages) // 4
+        prompt = prompt_chars(request.messages) // 4
         yield Usage(prompt_tokens=prompt, completion_tokens=max(1, len(item.text) // 4), cost_usd=0.0)
         yield Finish("tool_calls" if item.tool_calls else "stop")
 
@@ -63,7 +80,16 @@ class FakeGateway:
         if last.get("role") == "tool":
             content = str(last.get("content") or "")
             return Scripted(text=f"Tool result:\n{content[:2000]}")
+        if last.get("role") == "user" and count_images(last.get("content")) and _is_tool_image(last):
+            prev = _last_tool_text(request.messages)
+            return Scripted(text=f"Tool result:\n{prev[:2000]} [+{count_images(last['content'])} images]")
+        if request.metadata.get("purpose") == "vision":
+            n = sum(count_images(m.get("content")) for m in request.messages)
+            return Scripted(text=f"vision: {_last_user_text(request.messages)} [+{n} images]")
         user = _last_user_text(request.messages)
+        images = count_images(_last_user(request.messages).get("content"))
+        if images and not user.startswith("/tool "):
+            return Scripted(text=f"echo: {user} [+{images} images]")
         if user.startswith("/tool ") and request.tool_choice != "none":
             parts = user.split(maxsplit=2)
             name = parts[1] if len(parts) > 1 else ""
@@ -78,13 +104,16 @@ class FakeGateway:
         return [hash_embedding(t, dims) for t in texts]
 
     def count_tokens(self, model: str, text: str) -> int:
-        return max(1, len(text) // 4)
+        return max(1, len(shrink_data_urls(text)) // 4)
 
     def context_window(self, model: str) -> int:
         return self.context_window_tokens
 
     def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
         return 0.0
+
+    def supports_vision(self, model: str) -> bool:
+        return self.vision
 
 
 def _summary(request: LLMRequest) -> Scripted:
@@ -103,10 +132,22 @@ def _chunks(text: str, size: int = 16) -> list[str]:
     return [text[i : i + size] for i in range(0, len(text), size)]
 
 
+def _last_user(messages: tuple[dict[str, Any], ...]) -> dict[str, Any]:
+    return next((m for m in reversed(messages) if m.get("role") == "user"), {})
+
+
+def _is_tool_image(message: dict[str, Any]) -> bool:
+    return text_of(message.get("content")).lstrip().startswith("<tool-image")
+
+
+def _last_tool_text(messages: tuple[dict[str, Any], ...]) -> str:
+    return next((str(m.get("content") or "") for m in reversed(messages) if m.get("role") == "tool"), "")
+
+
 def _last_user_text(messages: tuple[dict[str, Any], ...]) -> str:
     for m in reversed(messages):
         if m.get("role") == "user":
-            content = str(m.get("content") or "")
+            content = text_of(m.get("content"))
             # strip the per-turn <context> wrapper added by the runner
             if content.startswith("<context>") and "</context>" in content:
                 content = content.split("</context>", 1)[1]

@@ -29,6 +29,7 @@ from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
 from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
 from auoreo.runtime.inbox import Inbox
+from auoreo.runtime.multimodal import image_message, prepare_messages, tool_messages
 from auoreo.tools.context import SessionState, ToolContext, ToolResult
 from auoreo.tools.executor import ToolExecutor, ToolOutcome
 
@@ -340,6 +341,7 @@ class AgentRunner:
             msgs.append(m)
         if last_step:
             msgs.append({"role": "user", "content": STEP_LIMIT_NOTE})
+        msgs = prepare_messages(msgs, self.s.gateway.supports_vision(spec.model))
         variant = spec.variant
         temperature = spec.agent.manifest.temperature
         if temperature is None and variant is not None:
@@ -429,12 +431,14 @@ class AgentRunner:
                 )
                 return await self.executor.run(call, tools=tools, ctx=ctx, engine=engine)
 
+        vision = self.s.gateway.supports_vision(spec.model)
+        image_parts: list[dict[str, Any]] = []  # sent after ALL tool messages of the round
         for batch in batches:
             results = await asyncio.gather(*(one(c) for c in batch))
             for o in results:
-                await self._persist(
-                    rt, {"role": "tool", "tool_call_id": o.call.id, "content": o.result.content}
-                )
+                tool_msg, parts = tool_messages(o.call.id, o.result, vision)
+                await self._persist(rt, tool_msg)
+                image_parts.extend(parts)
                 await self.s.emit(
                     rt.session_id,
                     "tool.completed",
@@ -455,6 +459,8 @@ class AgentRunner:
                 rt, {"role": "tool", "tool_call_id": call.id, "content": ABORTED_BEFORE_DISPATCH}
             )
             outcomes.append(ToolOutcome(call, ToolResult(ABORTED_BEFORE_DISPATCH, is_error=True)))
+        if image_parts:
+            await self._persist(rt, image_message(image_parts))
         return outcomes
 
 

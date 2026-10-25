@@ -1,0 +1,22 @@
+name: vision_understand
+toolset: vision
+description: >-
+  Answer a question about an image file or an image URL with a vision model. Uses the
+  session model when it can see images, otherwise the `vision` routing group from
+  settings. The image is normalized (EXIF stripped, at most 1568 px, about 256 KB) first.
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: Local image path (PNG/JPEG/GIF/WebP).}
+    url: {type: string, description: Public http(s) image URL (needs webfetch permission).}
+    question: {type: string, minLength: 1, description: What to find out about the image.}
+  required: [question]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 120000
+search_hint: look at image picture photo describe vision understand

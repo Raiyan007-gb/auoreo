@@ -177,7 +177,7 @@ class ToolExecutor:
         limit = min(tool.manifest.max_result_size_chars, self.s.settings.loop.tool_result_inline_chars)
         spill = self.s.settings.home / "sessions" / ctx.session_id / "tool-results"
         text, prune_meta = prune(text, limit, spill, call.id)
-        result = ToolResult(text, result.is_error, {**result.meta, **prune_meta})
+        result = ToolResult(text, result.is_error, {**result.meta, **prune_meta}, images=result.images)
         await self.s.audit.record(
             actor="agent",
             action="tool.call",

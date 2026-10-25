@@ -1,0 +1,23 @@
+name: screenshot
+toolset: vision
+description: >-
+  Capture the screen (one monitor, default the primary, or a region) and attach it as an
+  image so a vision-capable model can see it. Text-only models get a placeholder; use
+  vision_understand to ask a question about a saved image instead.
+parameters:
+  type: object
+  properties:
+    monitor: {type: integer, minimum: 0, description: "Monitor index: 1 = primary, 0 = all monitors combined."}
+    region:
+      type: array
+      description: "[left, top, width, height] in screen pixels; overrides monitor."
+      items: {type: integer}
+      minItems: 4
+      maxItems: 4
+  additionalProperties: false
+permission: screen
+default_action: ask
+is_read_only: true
+is_concurrency_safe: false
+timeout_ms: 30000
+search_hint: screenshot screen capture display monitor see
