@@ -31,7 +31,8 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
 
-SCHEMA_VERSION = 3  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
+SCHEMA_VERSION = 4  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
+# 4: goals, suggestions (M3–M5 gaps)
 ALEMBIC_DIR = Path(__file__).resolve().parent / "alembic"
 BASELINE_REVISION = "0001"  # the M2 schema; pre-Alembic databases are stamped here
 
@@ -255,6 +256,47 @@ class KanbanCommentRow(Base):
     author: Mapped[str] = mapped_column(String(64))
     text: Mapped[str] = mapped_column(String(20_000))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class GoalRow(Base):
+    """Long-running user goals (spec §2.3, §24.10): `get/create/update_goal`. Schema v4."""
+
+    __tablename__ = "goals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(300))
+    description: Mapped[str] = mapped_column(String(5000), default="")
+    status: Mapped[str] = mapped_column(String(32), default="active", index=True)
+    """active | paused | done | dropped | absorbed"""
+    progress: Mapped[float] = mapped_column(Float, default=0.0)
+    evidence_session_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    absorbed_into: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class SuggestionRow(Base):
+    """Proactive suggestions (spec §16, §24.10): consent-first, never auto-executed. Schema v4."""
+
+    __tablename__ = "suggestions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32), default="info")
+    title: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(String(4000), default="")
+    status: Mapped[str] = mapped_column(String(32), default="pending")
+    """pending | accepted | denied | expired | tombstoned"""
+    deliver: Mapped[str] = mapped_column(String(64), default="origin")
+    origin_session: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    action: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    dedupe_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    delivery_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    __table_args__ = (
+        Index("ix_suggestions_status", "status", "created_at"),
+        Index("ix_suggestions_dedupe", "dedupe_key"),
+    )
 
 
 class SchemaTooNewError(RuntimeError):

@@ -81,8 +81,8 @@ async def test_m2_database_is_migrated_in_place(tmp_path: Path) -> None:
     assert {"usage", "messages_archive"} <= {
         r for (r,) in sqlite3.connect(path).execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
-    assert scalar(path, "SELECT value FROM schema_meta WHERE key='schema_version'") == "3"
-    assert scalar(path, "SELECT version_num FROM alembic_version") == "0003"
+    assert scalar(path, "SELECT value FROM schema_meta WHERE key='schema_version'") == "4"
+    assert scalar(path, "SELECT version_num FROM alembic_version") == "0004"
     assert scalar(path, "SELECT message FROM messages WHERE session_id='ses_m2'") == (
         '{"role": "user", "content": "hi from M2"}'
     )
@@ -96,8 +96,8 @@ async def test_fresh_database_matches_the_orm(tmp_path: Path) -> None:
     db = Database(path)
     await db.init()
     await db.close()
-    assert scalar(path, "SELECT version_num FROM alembic_version") == "0003"
-    assert scalar(path, "SELECT value FROM schema_meta WHERE key='schema_version'") == "3"
+    assert scalar(path, "SELECT version_num FROM alembic_version") == "0004"
+    assert scalar(path, "SELECT value FROM schema_meta WHERE key='schema_version'") == "4"
     engine = create_engine(f"sqlite:///{path}")
     with engine.connect() as conn:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)

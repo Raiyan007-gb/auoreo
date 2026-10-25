@@ -1,0 +1,11 @@
+kind: rerank
+name: none
+description: >-
+  No reranking: the memory pipeline keeps RRF × trust order (top-30 → top-8). Default until a
+  local cross-encoder or a provider reranker is selected in settings.backends.rerank.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok
