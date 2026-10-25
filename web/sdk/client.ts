@@ -7,6 +7,7 @@ import { type ControlOptions, connectControl } from "./control";
 // --- W0-A
 import { opsMethods } from "./ops";
 // --- end W0-A
+import { statusMethods } from "./ops2"; // --- W0-B
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -243,6 +244,9 @@ export function createClient(opts: ClientOptions = {}) {
     addFact: (body: FactIn) =>
       request<{ id: number; created: boolean }>("POST", "/api/memory/facts", { body }),
 
+    // --- W0-B: doctor, audit, memory facts/files/curator, voice (web/sdk/ops2.ts)
+    ...statusMethods(request, base, token),
+
     subscribeEvents: (o: SubscribeOptions, onEvent: (e: ServerEvent) => void, h?: StreamHandlers) =>
       subscribeEvents({ ...o, baseUrl: base, token: token() }, onEvent, h),
     connectControl: (o: Omit<ControlOptions, "baseUrl" | "token">) =>
@@ -342,3 +346,4 @@ export * from "./events";
 // --- W0-A
 export * from "./ops";
 // --- end W0-A
+export type * from "./ops2"; // --- W0-B

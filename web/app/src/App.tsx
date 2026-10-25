@@ -5,7 +5,6 @@ import { ControlProvider } from "@/lib/control";
 import { ApprovalsPage } from "@/pages/Approvals";
 import { HarnessPage } from "@/pages/Harness";
 import { MemoryPage } from "@/pages/Memory";
-import { AuditPage, DoctorPage } from "@/pages/Placeholder";
 import { SessionRoute } from "@/pages/Session";
 import { SessionsPage } from "@/pages/Sessions";
 import { SettingsPage } from "@/pages/Settings";
@@ -16,6 +15,10 @@ import { PluginsPage } from "@/pages/Plugins";
 import { SkillsPage } from "@/pages/Skills";
 import { TeamsPage } from "@/pages/Teams";
 // --- end W0-A
+// --- W0-B
+import { AuditPage } from "@/pages/Audit";
+import { DoctorPage } from "@/pages/Doctor";
+import { WelcomePage } from "@/pages/Welcome";
 
 export function App() {
   return (
@@ -32,6 +35,7 @@ export function App() {
               <Route path="harness" element={<HarnessPage />} />
               <Route path="usage" element={<UsagePage />} />
               <Route path="settings" element={<SettingsPage />} />
+              {/* --- W0-B */}
               <Route path="audit" element={<AuditPage />} />
               <Route path="doctor" element={<DoctorPage />} />
               {/* --- W0-A */}
@@ -40,6 +44,7 @@ export function App() {
               <Route path="jobs" element={<JobsPage />} />
               <Route path="teams" element={<TeamsPage />} />
               {/* --- end W0-A */}
+              <Route path="welcome" element={<WelcomePage />} />
               <Route path="*" element={<div className="p-4"><EmptyState title="Page not found" /></div>} />
             </Route>
           </Routes>

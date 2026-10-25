@@ -9,6 +9,7 @@ import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, Di
 import { Input, Label, NativeSelect } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tip } from "@/components/ui/tooltip";
+import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 import { STATUS_VARIANT } from "@/lib/status";
@@ -181,6 +182,7 @@ export function SessionsPage() {
           </>
         }
       />
+      <WelcomeBanner />
       <div className="space-y-3 p-4">
         <ErrorNote error={sessions.error ?? actionErr} />
         {rows && rows.length === 0 ? (

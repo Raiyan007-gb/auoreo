@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, NativeSelect } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CuratorPanel, FactsPanel, FilesPanel } from "@/components/MemoryPanels";
 import { api } from "@/lib/api";
 import { errorText } from "@/lib/utils";
 
@@ -50,7 +52,23 @@ export function MemoryPage() {
   return (
     <div className="flex flex-col">
       <PageHeader title="Memory" description="Hybrid keyword + semantic recall over facts, documents and past messages." />
-      <div className="grid gap-4 p-4 lg:grid-cols-[1fr_20rem]">
+      <Tabs defaultValue="search" className="p-4">
+        <TabsList aria-label="Memory views">
+          <TabsTrigger value="search">Search</TabsTrigger>
+          <TabsTrigger value="facts">Facts</TabsTrigger>
+          <TabsTrigger value="files">Files</TabsTrigger>
+          <TabsTrigger value="curator">Curator</TabsTrigger>
+        </TabsList>
+        <TabsContent value="facts">
+          <FactsPanel />
+        </TabsContent>
+        <TabsContent value="files">
+          <FilesPanel />
+        </TabsContent>
+        <TabsContent value="curator">
+          <CuratorPanel />
+        </TabsContent>
+        <TabsContent value="search" className="grid gap-4 lg:grid-cols-[1fr_20rem]">
         <section className="space-y-3" aria-label="Search memory">
           <form
             role="search"
@@ -113,7 +131,8 @@ export function MemoryPage() {
             {factErr && <ErrorNote error={factErr} />}
           </form>
         </Card>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

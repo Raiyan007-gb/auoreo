@@ -86,6 +86,130 @@
         "title": "ArchivedMessage",
         "type": "object"
       },
+      "AuditEntry": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "title": "Actor",
+            "type": "string"
+          },
+          "decision": {
+            "default": "",
+            "title": "Decision",
+            "type": "string"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "description": "Redacted detail payload",
+            "title": "Detail",
+            "type": "object"
+          },
+          "prev_hash": {
+            "title": "Prev Hash",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "row_hash": {
+            "title": "Row Hash",
+            "type": "string"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "ts",
+          "actor",
+          "action",
+          "prev_hash",
+          "row_hash"
+        ],
+        "title": "AuditEntry",
+        "type": "object"
+      },
+      "AuditPage": {
+        "properties": {
+          "next_after_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pass as `after_seq` for the next page; null at the end",
+            "title": "Next After Seq"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "AuditPage",
+        "type": "object"
+      },
+      "AuditVerify": {
+        "properties": {
+          "first_break_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Break Seq"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "rows": {
+            "description": "Total audit rows checked",
+            "title": "Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ok",
+          "rows"
+        ],
+        "title": "AuditVerify",
+        "type": "object"
+      },
       "Body_transcribe_api_voice_transcribe_post": {
         "properties": {
           "file": {
@@ -812,6 +936,82 @@
         "title": "DeliveryReplay",
         "type": "object"
       },
+      "DoctorCheck": {
+        "properties": {
+          "check": {
+            "description": "Check name, e.g. `python`, `backend:stt`, `credentials`",
+            "title": "Check",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "ok",
+              "warn",
+              "error"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "remedy": {
+            "default": "",
+            "title": "Remedy",
+            "type": "string"
+          }
+        },
+        "required": [
+          "check",
+          "level",
+          "detail"
+        ],
+        "title": "DoctorCheck",
+        "type": "object"
+      },
+      "DoctorReport": {
+        "description": "Read-only environment report: never repairs, never includes secret values.",
+        "properties": {
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/DoctorCheck"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DoctorSummary"
+          }
+        },
+        "required": [
+          "checks",
+          "summary"
+        ],
+        "title": "DoctorReport",
+        "type": "object"
+      },
+      "DoctorSummary": {
+        "properties": {
+          "error": {
+            "default": 0,
+            "title": "Error",
+            "type": "integer"
+          },
+          "ok": {
+            "default": 0,
+            "title": "Ok",
+            "type": "integer"
+          },
+          "warn": {
+            "default": 0,
+            "title": "Warn",
+            "type": "integer"
+          }
+        },
+        "title": "DoctorSummary",
+        "type": "object"
+      },
       "FactActionResult": {
         "properties": {
           "id": {
@@ -1251,6 +1451,197 @@
           "created_at"
         ],
         "title": "MailMessage",
+        "type": "object"
+      },
+      "MemoryFact": {
+        "properties": {
+          "archived": {
+            "default": false,
+            "title": "Archived",
+            "type": "boolean"
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "pinned": {
+            "default": false,
+            "title": "Pinned",
+            "type": "boolean"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "supersedes_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Id"
+          },
+          "trust": {
+            "title": "Trust",
+            "type": "number"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "number"
+          },
+          "use_count": {
+            "default": 0,
+            "title": "Use Count",
+            "type": "integer"
+          },
+          "valid_from": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          }
+        },
+        "required": [
+          "id",
+          "content",
+          "category",
+          "trust",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "MemoryFact",
+        "type": "object"
+      },
+      "MemoryFactPage": {
+        "properties": {
+          "facts": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryFact"
+            },
+            "title": "Facts",
+            "type": "array"
+          },
+          "total": {
+            "description": "Matches before limit/offset",
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "facts",
+          "total"
+        ],
+        "title": "MemoryFactPage",
+        "type": "object"
+      },
+      "MemoryFile": {
+        "properties": {
+          "content": {
+            "default": "",
+            "description": "Markdown with secrets redacted",
+            "title": "Content",
+            "type": "string"
+          },
+          "exists": {
+            "title": "Exists",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size": {
+            "default": 0,
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "exists"
+        ],
+        "title": "MemoryFile",
+        "type": "object"
+      },
+      "MemoryFiles": {
+        "properties": {
+          "dir": {
+            "title": "Dir",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/MemoryFile"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dir",
+          "files"
+        ],
+        "title": "MemoryFiles",
         "type": "object"
       },
       "MessageOut": {
@@ -2890,6 +3281,41 @@
         ],
         "title": "WebhookRouteInfo",
         "type": "object"
+      },
+      "WelcomeEvent": {
+        "additionalProperties": false,
+        "description": "One onboarding step outcome; recorded in the audit log as `welcome.<action>`.",
+        "properties": {
+          "action": {
+            "enum": [
+              "completed",
+              "skipped",
+              "dismissed",
+              "finished"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "doctor",
+              "credentials",
+              "model",
+              "tunnel",
+              "theme",
+              "demo",
+              "wizard"
+            ],
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step",
+          "action"
+        ],
+        "title": "WelcomeEvent",
+        "type": "object"
       }
     }
   },
@@ -2989,6 +3415,258 @@
         "summary": "Acp",
         "tags": [
           "compat"
+        ]
+      }
+    },
+    "/api/audit": {
+      "get": {
+        "description": "Audit rows in seq order (`newest_first` reverses it). Filters combine with AND.",
+        "operationId": "audit_list_api_audit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "after_seq",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After Seq"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before_seq",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Before Seq"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Action"
+            }
+          },
+          {
+            "in": "query",
+            "name": "newest_first",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Newest First",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit List",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/audit/verify": {
+      "get": {
+        "description": "Recompute the SHA-256 hash chain; `first_break_seq` is the first row that fails.",
+        "operationId": "audit_verify_api_audit_verify_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVerify"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Audit Verify",
+        "tags": [
+          "ops"
         ]
       }
     },
@@ -3880,6 +4558,88 @@
         "summary": "Replay Delivery",
         "tags": [
           "deliveries"
+        ]
+      }
+    },
+    "/api/doctor": {
+      "get": {
+        "description": "The `auoreo doctor` checks against the live server (no repairs, no secret values).",
+        "operationId": "doctor_api_doctor_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Doctor",
+        "tags": [
+          "ops"
         ]
       }
     },
@@ -4793,6 +5553,151 @@
       }
     },
     "/api/memory/facts": {
+      "get": {
+        "description": "Facts newest first. `query` is a case-insensitive substring; archived/expired facts\nappear only with `include_archived`.",
+        "operationId": "list_facts_api_memory_facts_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Query"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_archived",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Archived",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Pinned"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryFactPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Facts",
+        "tags": [
+          "memory"
+        ]
+      },
       "post": {
         "operationId": "add_fact_api_memory_facts_post",
         "parameters": [
@@ -5182,6 +6087,88 @@
           }
         },
         "summary": "Pin Fact",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/memory/files": {
+      "get": {
+        "description": "MEMORY.md / USER.md / PREFS.md / PROJECT.md under `<home>/memory/`, secrets redacted.",
+        "operationId": "memory_files_api_memory_files_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryFiles"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Memory Files",
         "tags": [
           "memory"
         ]
@@ -8546,6 +9533,91 @@
         "summary": "List Webhooks",
         "tags": [
           "webhooks"
+        ]
+      }
+    },
+    "/api/welcome/event": {
+      "post": {
+        "description": "Record an onboarding step (completed / skipped / dismissed) in the audit log.",
+        "operationId": "welcome_event_api_welcome_event_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WelcomeEvent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Welcome Event",
+        "tags": [
+          "ops"
         ]
       }
     },
