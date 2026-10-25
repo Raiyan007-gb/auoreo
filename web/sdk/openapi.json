@@ -210,6 +210,306 @@
         "title": "AuditVerify",
         "type": "object"
       },
+      "BanditArmInfo": {
+        "description": "One configured arm (`settings.bandit.arms`, or derived from the routing groups).",
+        "properties": {
+          "effort": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          }
+        },
+        "required": [
+          "key",
+          "model"
+        ],
+        "title": "BanditArmInfo",
+        "type": "object"
+      },
+      "BanditArmStats": {
+        "properties": {
+          "context_key": {
+            "title": "Context Key",
+            "type": "string"
+          },
+          "effort": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high",
+                  "max"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "mean_reward": {
+            "title": "Mean Reward",
+            "type": "number"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "pulls": {
+            "title": "Pulls",
+            "type": "integer"
+          },
+          "top_k": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Top K"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "model",
+          "context_key",
+          "pulls",
+          "mean_reward",
+          "updated_at"
+        ],
+        "title": "BanditArmStats",
+        "type": "object"
+      },
+      "BanditContextInfo": {
+        "properties": {
+          "context_key": {
+            "title": "Context Key",
+            "type": "string"
+          },
+          "epsilon": {
+            "description": "Exploration rate the next choice in this context uses.",
+            "title": "Epsilon",
+            "type": "number"
+          },
+          "pulls": {
+            "title": "Pulls",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "context_key",
+          "pulls",
+          "epsilon"
+        ],
+        "title": "BanditContextInfo",
+        "type": "object"
+      },
+      "BanditOutcomeInfo": {
+        "properties": {
+          "arm_key": {
+            "title": "Arm Key",
+            "type": "string"
+          },
+          "context_key": {
+            "title": "Context Key",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reward": {
+            "title": "Reward",
+            "type": "number"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "signals": {
+            "additionalProperties": true,
+            "title": "Signals",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "run_id",
+          "context_key",
+          "arm_key",
+          "reward",
+          "created_at"
+        ],
+        "title": "BanditOutcomeInfo",
+        "type": "object"
+      },
+      "BanditResetRequest": {
+        "properties": {
+          "context": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only this context key; omit for all.",
+            "title": "Context"
+          }
+        },
+        "title": "BanditResetRequest",
+        "type": "object"
+      },
+      "BanditResetResult": {
+        "properties": {
+          "arms": {
+            "title": "Arms",
+            "type": "integer"
+          },
+          "outcomes": {
+            "title": "Outcomes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "arms",
+          "outcomes"
+        ],
+        "title": "BanditResetResult",
+        "type": "object"
+      },
+      "BanditStatus": {
+        "properties": {
+          "arms": {
+            "items": {
+              "$ref": "#/components/schemas/BanditArmInfo"
+            },
+            "title": "Arms",
+            "type": "array"
+          },
+          "contexts": {
+            "items": {
+              "$ref": "#/components/schemas/BanditContextInfo"
+            },
+            "title": "Contexts",
+            "type": "array"
+          },
+          "contexts_mode": {
+            "enum": [
+              "agent",
+              "agent+size"
+            ],
+            "title": "Contexts Mode",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "epsilon": {
+            "title": "Epsilon",
+            "type": "number"
+          },
+          "epsilon_decay": {
+            "title": "Epsilon Decay",
+            "type": "number"
+          },
+          "min_epsilon": {
+            "title": "Min Epsilon",
+            "type": "number"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/BanditOutcomeInfo"
+            },
+            "title": "Recent",
+            "type": "array"
+          },
+          "stats": {
+            "items": {
+              "$ref": "#/components/schemas/BanditArmStats"
+            },
+            "title": "Stats",
+            "type": "array"
+          },
+          "weights": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Weights",
+            "type": "object"
+          }
+        },
+        "required": [
+          "enabled",
+          "epsilon",
+          "epsilon_decay",
+          "min_epsilon",
+          "contexts_mode",
+          "weights",
+          "arms",
+          "contexts",
+          "stats",
+          "recent"
+        ],
+        "title": "BanditStatus",
+        "type": "object"
+      },
       "BoardArtifact": {
         "properties": {
           "bytes": {
@@ -8123,6 +8423,187 @@
         "summary": "Stop Plugin",
         "tags": [
           "plugins"
+        ]
+      }
+    },
+    "/api/policy/bandit": {
+      "get": {
+        "description": "Settings, configured arms, per-context arm stats and the 20 latest outcomes.",
+        "operationId": "bandit_status_api_policy_bandit_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BanditStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bandit Status",
+        "tags": [
+          "policy"
+        ]
+      }
+    },
+    "/api/policy/bandit/reset": {
+      "post": {
+        "description": "Forget learned stats and outcomes (one `context`, or all). Settings are unchanged.",
+        "operationId": "bandit_reset_api_policy_bandit_reset_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BanditResetRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BanditResetResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bandit Reset",
+        "tags": [
+          "policy"
         ]
       }
     },

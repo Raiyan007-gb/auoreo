@@ -247,6 +247,7 @@ export function createClient(opts: ClientOptions = {}) {
     // --- W0-B: doctor, audit, memory facts/files/curator, voice (web/sdk/ops2.ts)
     ...statusMethods(request, base, token),
     ...goalsApi(request), // --- W0-C (block at the end of this file)
+    ...policyApi(request), // --- W1-C (block at the end of this file)
 
     subscribeEvents: (o: SubscribeOptions, onEvent: (e: ServerEvent) => void, h?: StreamHandlers) =>
       subscribeEvents({ ...o, baseUrl: base, token: token() }, onEvent, h),
@@ -380,5 +381,32 @@ function goalsApi(request: RequestFn) {
       request<SuggestionProposed>("POST", "/api/suggestions", { body }),
     acceptSuggestion: (id: number) => request<SuggestionAccepted>("POST", `/api/suggestions/${id}/accept`),
     denySuggestion: (id: number) => request<SuggestionInfo>("POST", `/api/suggestions/${id}/deny`),
+  };
+}
+
+// =================================================================== --- W1-C model/effort bandit
+export type BanditStatus = S["BanditStatus"];
+export type BanditArmInfo = S["BanditArmInfo"];
+export type BanditArmStats = S["BanditArmStats"];
+export type BanditOutcomeInfo = S["BanditOutcomeInfo"];
+export type BanditResetResult = S["BanditResetResult"];
+
+/** Payload of the `policy.choice` session event (src/auoreo/schema/policy.py PolicyChoiceData). */
+export interface PolicyChoiceData {
+  run_id: string;
+  context_key: string;
+  arm: BanditArmInfo;
+  explore: boolean;
+  why: string;
+  epsilon: number;
+}
+
+/** `/api/policy/bandit`: status (settings, arms, learned stats, recent outcomes) and reset. */
+function policyApi(request: RequestFn) {
+  return {
+    banditStatus: () => request<BanditStatus>("GET", "/api/policy/bandit"),
+    /** No `context` resets every context. Settings are unchanged. */
+    resetBandit: (context?: string) =>
+      request<BanditResetResult>("POST", "/api/policy/bandit/reset", { body: { context: context ?? null } }),
   };
 }

@@ -11,6 +11,8 @@ Behaviour per call:
 with a one-sentence hypothetical fact built from the query's words.
 Guardian calls (`purpose == "guardian"`) pop `guardian_script`; when it is empty they
 answer `$AUOREO_FAKE_GUARDIAN` (default `ESCALATE`).
+Every request is kept in `requests` (with its `reasoning_effort`); `efforts` lists the effort
+of each main-turn call (no `metadata.purpose`) in order.
 """
 
 from __future__ import annotations
@@ -54,6 +56,7 @@ class FakeGateway:
         self.compaction_script: deque[Scripted] = deque()
         self.guardian_script: deque[str] = deque()
         self.requests: list[LLMRequest] = []
+        self.efforts: list[str | None] = []
         self.context_window_tokens = context_window_tokens
         self.vision = True
         self._n = 0
@@ -63,6 +66,8 @@ class FakeGateway:
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[StreamItem]:
         self.requests.append(request)
+        if "purpose" not in request.metadata:
+            self.efforts.append(request.reasoning_effort)
         if request.metadata.get("purpose") == "compaction":  # aux call never eats the main script
             item = self.compaction_script.popleft() if self.compaction_script else _summary(request)
         elif request.metadata.get("purpose") == "guardian":  # nor does the smart-mode guardian

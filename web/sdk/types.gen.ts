@@ -737,6 +737,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/policy/bandit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bandit Status
+         * @description Settings, configured arms, per-context arm stats and the 20 latest outcomes.
+         */
+        get: operations["bandit_status_api_policy_bandit_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/policy/bandit/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bandit Reset
+         * @description Forget learned stats and outcomes (one `context`, or all). Settings are unchanged.
+         */
+        post: operations["bandit_reset_api_policy_bandit_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/questions/pending": {
         parameters: {
             query?: never;
@@ -1466,6 +1506,121 @@ export interface components {
              * @description Total audit rows checked
              */
             rows: number;
+        };
+        /**
+         * BanditArmInfo
+         * @description One configured arm (`settings.bandit.arms`, or derived from the routing groups).
+         */
+        BanditArmInfo: {
+            /** Effort */
+            effort?: ("low" | "medium" | "high" | "max") | null;
+            /** Key */
+            key: string;
+            /** Model */
+            model: string;
+            /** Top K */
+            top_k?: number | null;
+        };
+        /** BanditArmStats */
+        BanditArmStats: {
+            /** Context Key */
+            context_key: string;
+            /** Effort */
+            effort?: ("low" | "medium" | "high" | "max") | null;
+            /** Key */
+            key: string;
+            /** Mean Reward */
+            mean_reward: number;
+            /** Model */
+            model: string;
+            /** Pulls */
+            pulls: number;
+            /** Top K */
+            top_k?: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** BanditContextInfo */
+        BanditContextInfo: {
+            /** Context Key */
+            context_key: string;
+            /**
+             * Epsilon
+             * @description Exploration rate the next choice in this context uses.
+             */
+            epsilon: number;
+            /** Pulls */
+            pulls: number;
+        };
+        /** BanditOutcomeInfo */
+        BanditOutcomeInfo: {
+            /** Arm Key */
+            arm_key: string;
+            /** Context Key */
+            context_key: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Reward */
+            reward: number;
+            /** Run Id */
+            run_id: string;
+            /** Session Id */
+            session_id: string;
+            /** Signals */
+            signals?: {
+                [key: string]: unknown;
+            };
+        };
+        /** BanditResetRequest */
+        BanditResetRequest: {
+            /**
+             * Context
+             * @description Only this context key; omit for all.
+             */
+            context?: string | null;
+        };
+        /** BanditResetResult */
+        BanditResetResult: {
+            /** Arms */
+            arms: number;
+            /** Outcomes */
+            outcomes: number;
+        };
+        /** BanditStatus */
+        BanditStatus: {
+            /** Arms */
+            arms: components["schemas"]["BanditArmInfo"][];
+            /** Contexts */
+            contexts: components["schemas"]["BanditContextInfo"][];
+            /**
+             * Contexts Mode
+             * @enum {string}
+             */
+            contexts_mode: "agent" | "agent+size";
+            /** Enabled */
+            enabled: boolean;
+            /** Epsilon */
+            epsilon: number;
+            /** Epsilon Decay */
+            epsilon_decay: number;
+            /** Min Epsilon */
+            min_epsilon: number;
+            /** Recent */
+            recent: components["schemas"]["BanditOutcomeInfo"][];
+            /** Stats */
+            stats: components["schemas"]["BanditArmStats"][];
+            /** Weights */
+            weights: {
+                [key: string]: number;
+            };
         };
         /** BoardArtifact */
         BoardArtifact: {
@@ -4621,6 +4776,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PluginInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bandit_status_api_policy_bandit_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanditStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bandit_reset_api_policy_bandit_reset_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["BanditResetRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BanditResetResult"];
                 };
             };
             /** @description Validation Error */

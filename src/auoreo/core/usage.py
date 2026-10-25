@@ -6,17 +6,20 @@ used and the row is marked `estimated`.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import time
+from collections.abc import AsyncIterator, Callable
 from datetime import timedelta
-from typing import Any
+from typing import Any, TypeVar
 
 from sqlalchemy import func, select
 
 from auoreo.core import observability as obs
 from auoreo.core.db import Database, SessionRow, UsageRow, utcnow
+from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Usage
 
 PriceFn = Callable[[str, int, int], float | None]
+T = TypeVar("T")
 
 
 class UsageLedger:
@@ -24,7 +27,17 @@ class UsageLedger:
         self.db = db
         self.price = price
 
-    async def record(self, session_id: str, run_id: str, model: str, usage: Usage) -> UsageRow:
+    async def record(
+        self,
+        session_id: str,
+        run_id: str,
+        model: str,
+        usage: Usage,
+        *,
+        latency_ms: int | None = None,
+        outcome: str | None = None,
+    ) -> UsageRow:
+        """`latency_ms`/`outcome` (`ok` or a GatewayError code) are set for main-turn calls."""
         cost, estimated = usage.cost_usd, usage.estimated
         if cost is None and self.price is not None:
             try:
@@ -40,12 +53,22 @@ class UsageLedger:
             completion_tokens=usage.completion_tokens,
             cost_usd=cost,
             estimated=estimated,
+            latency_ms=latency_ms,
+            outcome=outcome,
         )
         async with self.db.session() as s:
             s.add(row)
             await s.commit()
         obs.record_usage(model, usage.prompt_tokens, usage.completion_tokens, cost)  # --- W0-D
         return row
+
+    def meter(self, session_id: str, run_id: str, model: str) -> UsageMeter:
+        return UsageMeter(self, session_id, run_id, model)
+
+    async def by_run(self, session_id: str, run_id: str) -> list[UsageRow]:
+        async with self.db.session() as s:
+            q = select(UsageRow).where(UsageRow.session_id == session_id, UsageRow.run_id == run_id)
+            return list((await s.execute(q.order_by(UsageRow.id))).scalars())
 
     async def by_session(
         self, session_id: str | None = None, limit: int = 200, *, children: bool = False
@@ -139,4 +162,41 @@ class UsageLedger:
         return {"days": days, "total": total, "by_model": by_model, "by_session": by_session}
 
 
-__all__ = ["UsageLedger"]
+class UsageMeter:
+    """Times one main-turn gateway call. `record` writes the usage row with the wall time
+    since the call opened and `outcome="ok"`; `failed` writes a zero-token row carrying the
+    GatewayError code when the call died before reporting usage."""
+
+    def __init__(self, ledger: UsageLedger, session_id: str, run_id: str, model: str) -> None:
+        self.ledger, self.session_id, self.run_id, self.model = ledger, session_id, run_id, model
+        self.started = time.monotonic()
+        self.recorded = False
+
+    def elapsed_ms(self) -> int:
+        return int((time.monotonic() - self.started) * 1000)
+
+    async def record(self, usage: Usage) -> UsageRow:
+        self.recorded = True
+        return await self.ledger.record(
+            self.session_id, self.run_id, self.model, usage, latency_ms=self.elapsed_ms(), outcome="ok"
+        )
+
+    async def wrap(self, stream: AsyncIterator[T]) -> AsyncIterator[T]:
+        """Pass `stream` through; a GatewayError before usage was reported is metered."""
+        try:
+            async for item in stream:
+                yield item
+        except GatewayError as exc:
+            await self.failed(exc.code)
+            raise
+
+    async def failed(self, code: str) -> None:
+        if self.recorded:
+            return
+        self.recorded = True
+        await self.ledger.record(
+            self.session_id, self.run_id, self.model, Usage(), latency_ms=self.elapsed_ms(), outcome=code
+        )
+
+
+__all__ = ["UsageLedger", "UsageMeter"]

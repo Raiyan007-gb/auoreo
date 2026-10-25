@@ -53,6 +53,15 @@ INITIAL_DELAY_MS = 500
 MAX_DELAY_MS = 10_000
 
 
+# LiteLLM's `reasoning_effort` takes low | medium | high (mapped per provider, e.g. to Anthropic
+# thinking budgets); our `max` has no portable equivalent, so it is sent as `high`.
+_EFFORT = {"max": "high"}
+
+
+def effort_param(effort: str) -> str:
+    return _EFFORT.get(effort, effort)
+
+
 def map_error(exc: BaseException) -> GatewayError:
     if isinstance(exc, GatewayError):
         return exc
@@ -203,6 +212,8 @@ class LiteLLMGateway:
             kwargs["temperature"] = request.temperature
         if request.max_tokens:
             kwargs["max_tokens"] = request.max_tokens
+        if request.reasoning_effort:  # only when set; drop_params strips it for models without it
+            kwargs["reasoning_effort"] = effort_param(request.reasoning_effort)
         for f in request.omit_fields:
             kwargs.pop(f, None)
 
@@ -345,6 +356,7 @@ __all__ = [
     "build_model_list",
     "credential_params",
     "credential_status",
+    "effort_param",
     "map_error",
     "provider_of",
 ]

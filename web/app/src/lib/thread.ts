@@ -3,7 +3,7 @@
  * run.*, message.*, tool.*, usage, permission.*, question.*), plus a builder from the
  * `GET /api/sessions/{id}/messages` snapshot for first paint.
  */
-import type { MessageOut, ServerEvent } from "@sdk/client";
+import type { MessageOut, PolicyChoiceData, ServerEvent } from "@sdk/client";
 import type {
   CompactionCompletedData,
   CompactionFailedData,
@@ -54,6 +54,8 @@ export interface ThreadState {
   forkedAt?: number;
   permissions: Record<string, PermissionRequestedData>;
   questions: Record<string, QuestionAskedData>;
+  /** Latest `policy.choice` (model/effort bandit): the "why this model" chip. */
+  policy?: PolicyChoiceData;
 }
 
 export const emptyThread = (): ThreadState => ({
@@ -271,7 +273,8 @@ const HANDLERS: Record<string, Handler> = {
     const c = d as unknown as CompactionSkippedData;
     return notice(s, e, "warn", `Compaction skipped: ${str(c.reason)}`, "compaction.skipped");
   },
-  "session.title_updated": (s, d) => ({ ...s, title: str(d.title) || s.title }),
+  "policy.choice": (s, d) => ({ ...s, policy: d as unknown as PolicyChoiceData }), // --- W1-C
+  "session.title_updated": (s, d) =>({ ...s, title: str(d.title) || s.title }),
   "session.model_changed": (s, d, e) => ({
     ...notice(s, e, "info", `Model set to ${str(d.model) || "default"}`, "session.model_changed"),
     model: str(d.model) || undefined,
