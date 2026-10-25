@@ -49,6 +49,9 @@ rtc = [
 sandbox-docker = [
     "docker>=7,<8",
 ]
+ssh = [  # W2-A: backends/environment/ssh
+    "asyncssh>=2.21,<3",
+]
 otel = [  # W0-D: tracing + allowlisted metrics (src/auoreo/core/observability.py)
     "opentelemetry-sdk>=1.45,<2",
     "opentelemetry-exporter-otlp-proto-http>=1.45,<2",

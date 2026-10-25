@@ -1,7 +1,8 @@
 name: exec_command
 toolset: shell
 description: >-
-  Start a command in a persistent (unsandboxed) shell process and return its output so far;
+  Start a command in a persistent shell process in the session's execution environment
+  (the local machine, unsandboxed, unless use_environment picked another) and return its output so far;
   long-running or interactive processes keep running and are continued with write_stdin.
 parameters:
   type: object

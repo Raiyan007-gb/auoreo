@@ -1,0 +1,13 @@
+kind: environment
+name: modal
+description: >-
+  Modal Sandbox per AUOREO session (image settings.environment_modal_image, app
+  settings.environment_modal_app), created lazily and terminated at session close. Tokens
+  MODAL_TOKEN_ID / MODAL_TOKEN_SECRET from the secret store; the `modal` SDK is imported
+  lazily (`pip install modal`). Contract-tested only (no live account).
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API (SDK Apache-2.0)
+posture: ok

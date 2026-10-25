@@ -87,6 +87,30 @@ class LoopSettings(BaseModel):
     compaction_enabled: bool = True
 
 
+# --- W2-A: execution environments (backends/environment/*)
+class SshEnvironment(BaseModel):
+    """`settings.environment_ssh`: the host the `ssh` environment backend connects to."""
+
+    model_config = ConfigDict(extra="forbid")
+    host: str
+    port: int = Field(default=22, ge=1, le=65535)
+    username: str
+    key_secret: str | None = Field(default=None, pattern=r"^secret:[A-Za-z0-9_.-]+$")
+    """`secret:<NAME>`: the private key (OpenSSH/PEM text) in the secret store, never a file."""
+    known_hosts: Path | None = None
+    """Required to connect: there is no host-key bypass (a mismatch fails closed)."""
+    connect_timeout_s: float = Field(default=10.0, gt=0, le=120)
+
+
+class NamedEnvironment(BaseModel):
+    """`settings.environments.<name>`: a backend plus Settings overrides for it (e.g.
+    `{"backend": "ssh", "environment_ssh": {...}}`), selected per session by `use_environment`."""
+
+    model_config = ConfigDict(extra="allow")
+    backend: str
+    description: str = ""
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUOREO_", extra="ignore", env_ignore_empty=True)
 
@@ -317,6 +341,22 @@ class Settings(BaseSettings):
     workers: int = Field(default=1, ge=1, le=64)
     """Uvicorn worker processes. >1 refuses to start without `redis_url`; sticky sessions
     are required at the load balancer (approvals, WS connections and runs are per process)."""
+    # --- W2-A
+    environments: dict[str, NamedEnvironment] = Field(default_factory=dict)
+    """Named execution environments a session can switch to with `use_environment`; the
+    default is `backends.environment` (the `local` backend unless set)."""
+    environment_docker_image: str = "python:3.12-slim"
+    environment_docker_network: str = "none"
+    """`network_mode` of the per-session container (`none`, `bridge`, a network name)."""
+    environment_docker_mem_limit: str = "2g"
+    environment_ssh: SshEnvironment | None = None
+    environment_e2b_template: str = "base"
+    environment_modal_app: str = "auoreo-environments"
+    environment_modal_image: str = "python:3.12-slim"
+    environment_daytona_api_url: str = "https://app.daytona.io/api"
+    environment_daytona_snapshot: str | None = None
+    environment_sandbox_timeout_s: int = Field(default=3600, ge=60, le=86_400)
+    """Lifetime of a cloud sandbox (E2B / Modal / Daytona); it is also destroyed at session close."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

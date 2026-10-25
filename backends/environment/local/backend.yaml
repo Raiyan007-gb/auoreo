@@ -1,0 +1,12 @@
+kind: environment
+name: local
+description: >-
+  The local machine: persistent `bash -lc` processes (PTY or pipes) with the scrubbed child
+  environment, a 1 MB ring buffer, a per-session cap and kill on archive/delete/idle. Runs
+  unsandboxed, so it refuses while an enforcing sandbox backend is selected.
+impl: impl.py:Backend
+default: true
+requires_binaries: [bash]
+requires_env: []
+license: MIT
+posture: ok

@@ -60,6 +60,7 @@ class SessionState:
     loaded_tools: set[str] = field(default_factory=set)  # deferred tools surfaced by search
     pending_user_messages: list[str] = field(default_factory=list)
     sandbox_note_shown: bool = False  # `[sandbox: not enforced …]` told once per session
+    environment: str | None = None  # W2-A: `use_environment` override (settings.environments key)
 
 
 TOOLS_LOADED_PREFIX = "loaded (callable from the next step):"

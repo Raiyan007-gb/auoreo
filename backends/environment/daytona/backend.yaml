@@ -1,0 +1,13 @@
+kind: environment
+name: daytona
+description: >-
+  Daytona sandbox per AUOREO session over the REST API (plain httpx): created lazily
+  (POST /sandbox), commands via the toolbox process/execute endpoint, deleted at session close.
+  Key DAYTONA_API_KEY from the secret store. Commands are one-shot (no stdin; a slow command is
+  polled with write_stdin chars=""). Contract-tested only (no live account).
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API (client code MIT)
+posture: ok
