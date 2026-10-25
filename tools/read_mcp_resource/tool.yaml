@@ -10,7 +10,7 @@ parameters:
     uri: {type: string, minLength: 1}
   required: [server, uri]
   additionalProperties: false
-permission: read
+permission: mcp_resource
 pattern_arg: uri
 default_action: ask
 is_read_only: true

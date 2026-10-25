@@ -19,3 +19,11 @@ Replies: tool events `{"decision": "allow"|"deny"|"modify", "message"?: str, "in
 (`modify` replaces the tool arguments before execution); `Stop` events
 `{"block": true, "reason": "..."}` append the reason and let the agent continue. Hooks never
 run on API-error messages.
+
+Details: `matcher` accepts `a|b` alternatives; a `command` argument starting with `./` or
+`../` resolves against the root the hook file lives in (bundled, project or runtime) when
+that file exists there, else against the session cwd. The subprocess gets
+`AUOREO_SESSION_ID` and `AUOREO_HOOK_EVENT` in its (scrubbed) environment. Several hooks on
+one event run in name order; `modify` results chain and the first `deny`/`block` wins.
+`UserPromptSubmit` may answer `{"decision": "modify", "text": "..."}` to rewrite the prompt
+or `deny` to block the turn (`run.blocked`, code `HOOK_DENIED`).
