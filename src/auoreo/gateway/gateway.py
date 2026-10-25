@@ -77,15 +77,76 @@ def map_error(exc: BaseException) -> GatewayError:
     )
 
 
+# Universal providers: a param a model does not accept (e.g. temperature on fixed-temperature
+# reasoning models) is dropped by LiteLLM instead of failing the turn.
+litellm.drop_params = True
+
+# LiteLLM env-var name → completion kwarg. Names come from `litellm.validate_environment`,
+# so any provider LiteLLM knows works by prefix: `anthropic/…` → ANTHROPIC_API_KEY,
+# `gemini/…` → GEMINI_API_KEY | GOOGLE_API_KEY, `azure/…` → AZURE_API_KEY + _BASE + _VERSION.
+_SUFFIX_PARAM = {"_API_KEY": "api_key", "_API_BASE": "api_base", "_API_VERSION": "api_version"}
+_EXACT_PARAM = {"VERTEXAI_PROJECT": "vertex_project", "VERTEXAI_LOCATION": "vertex_location"}
+
+
+def provider_of(model: str) -> str:
+    """`openrouter/anthropic/claude-sonnet-4.5` → `openrouter` (the LiteLLM provider prefix)."""
+    return model.split("/", 1)[0] if "/" in model else ""
+
+
+def env_names(model: str) -> list[str]:
+    """Credential env names LiteLLM still needs for `model` (empty when the env has them)."""
+    try:
+        found = litellm.validate_environment(model)
+    except Exception:  # unknown provider/model: fall back to the naming convention
+        return []
+    return [str(n) for n in found.get("missing_keys") or []]
+
+
+def _param_for(name: str) -> str | None:
+    if name in _EXACT_PARAM:
+        return _EXACT_PARAM[name]
+    return next((p for sfx, p in _SUFFIX_PARAM.items() if name.endswith(sfx)), None)
+
+
+def credential_params(model: str, secret: Callable[[str], str | None]) -> dict[str, str]:
+    """Credentials for `model` from env / keyring / secrets.db, keyed by LiteLLM kwarg.
+
+    The provider prefix picks the names; `<PREFIX>_API_KEY` is the fallback convention for
+    providers LiteLLM cannot describe. Keys only in the secret store (not in the env) are
+    passed explicitly, so LiteLLM never needs them in `os.environ`."""
+    params: dict[str, str] = {}
+    for name in env_names(model):
+        param = _param_for(name)
+        if param and param not in params and (value := secret(name)):
+            params[param] = value
+    prefix = provider_of(model).upper().replace("-", "_")
+    if prefix and "api_key" not in params and (value := secret(f"{prefix}_API_KEY")):
+        params["api_key"] = value
+    return params
+
+
+def credential_status(model: str, secret: Callable[[str], str | None]) -> tuple[bool, str]:
+    """`(ready, detail)` for doctor: which env names are present or missing for `model`."""
+    names = env_names(model)
+    keys = [n for n in names if n.endswith("_API_KEY")]
+    missing = [n for n in names if n not in keys and not secret(n)]
+    if keys and not any(secret(k) for k in keys):
+        missing.insert(0, " or ".join(keys))
+    if missing:
+        return False, f"{model}: missing {', '.join(missing)}"
+    convention = f"{provider_of(model).upper().replace('-', '_')}_API_KEY"
+    have = [n for n in names if secret(n)] or ([convention] if secret(convention) else [])
+    return True, f"{model}: {', '.join(have) or 'credentials found in environment'}"
+
+
 def build_model_list(settings: Settings, secret: Callable[[str], str | None]) -> list[dict[str, Any]]:
     model_list: list[dict[str, Any]] = []
     for group, cfg in settings.models.items():
         for order, model in enumerate(cfg.models, start=1):
-            params: dict[str, Any] = {"model": model, "order": order}
+            params: dict[str, Any] = {**credential_params(model, secret)}
+            params.update(model=model, order=order)
             if cfg.api_base:
                 params["api_base"] = cfg.api_base
-            if model.startswith("openrouter/") and (key := secret("OPENROUTER_API_KEY")):
-                params["api_key"] = key
             entry: dict[str, Any] = {"model_name": group, "litellm_params": params}
             if cfg.max_input_tokens:
                 entry["model_info"] = {"max_input_tokens": cfg.max_input_tokens}
@@ -121,9 +182,7 @@ class LiteLLMGateway:
         """Raw provider ids (not a group) get their own one-deployment group."""
         if any(e["model_name"] == model for e in self._model_list):
             return
-        params: dict[str, Any] = {"model": model}
-        if model.startswith("openrouter/") and (key := self.secret("OPENROUTER_API_KEY")):
-            params["api_key"] = key
+        params: dict[str, Any] = {**credential_params(model, self.secret), "model": model}
         self._model_list.append({"model_name": model, "litellm_params": params})
         self._router = self._make_router()
 
@@ -204,7 +263,8 @@ class LiteLLMGateway:
 
     async def embed(self, model: str, texts: list[str], dims: int) -> list[list[float]]:
         try:
-            resp = await litellm.aembedding(model=model, input=texts, dimensions=dims)
+            creds = credential_params(model, self.secret)
+            resp = await litellm.aembedding(model=model, input=texts, dimensions=dims, **creds)
         except Exception as exc:
             raise map_error(exc) from exc
         return [list(map(float, d["embedding"])) for d in resp.data]
@@ -280,4 +340,11 @@ def _lookup_names(model: str) -> list[str]:
     return names
 
 
-__all__ = ["LiteLLMGateway", "build_model_list", "map_error"]
+__all__ = [
+    "LiteLLMGateway",
+    "build_model_list",
+    "credential_params",
+    "credential_status",
+    "map_error",
+    "provider_of",
+]

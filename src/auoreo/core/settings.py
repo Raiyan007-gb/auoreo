@@ -12,7 +12,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -73,7 +73,7 @@ class LoopSettings(BaseModel):
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="AUOREO_", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="AUOREO_", extra="ignore", env_ignore_empty=True)
 
     home: Path = Field(default_factory=home_dir)
     host: str = "127.0.0.1"
@@ -81,6 +81,15 @@ class Settings(BaseSettings):
     server_password: str | None = None
     gateway: Literal["litellm", "fake"] = "litellm"
     model: str | None = None
+    """`AUOREO_MODEL`: a routing group (`default`, `small`) or `<provider>/<model id>` in
+    LiteLLM form (`openrouter/anthropic/claude-sonnet-4.5`, `anthropic/claude-sonnet-5`).
+    A provider id also becomes the `default` group unless settings.json sets `models`."""
+    small_model: str | None = None
+    """`AUOREO_SMALL_MODEL`: `<provider>/<model id>` for aux calls (titles, compaction,
+    guardian). Unset with a provider `AUOREO_MODEL` → the main model is reused."""
+    embed_model: str | None = None
+    """`AUOREO_EMBED_MODEL`: overrides `memory.embed_model` (pair with `AUOREO_EMBED_DIMS`)."""
+    embed_dims: int | None = None
     agent: str = "default"
     workflow: str = "chat"
     permission_mode: PermissionMode = "manual"
@@ -127,6 +136,24 @@ class Settings(BaseSettings):
     """Let browser tools navigate to private/loopback hosts (SSRF guard off; tests, intranets)."""
     browser_executable_path: Path | None = None
     """Chromium binary for the playwright browser backend; overrides PLAYWRIGHT_BROWSERS_PATH."""
+
+    @model_validator(mode="after")
+    def _models_follow_env(self) -> Settings:
+        """Provider ids in AUOREO_MODEL / AUOREO_SMALL_MODEL define the routing groups unless
+        `models` was set explicitly (settings.json or init), so one env var is enough."""
+        main = self.model if self.model and "/" in self.model else None
+        small = self.small_model if self.small_model and "/" in self.small_model else None
+        if "models" not in self.model_fields_set and (main or small):
+            groups = dict(self.models)
+            if main:
+                groups["default"] = ModelGroup(models=[main])
+            groups["small"] = ModelGroup(models=[small or main or groups["small"].models[0]])
+            self.models = groups
+        if self.embed_model or self.embed_dims:
+            update = {"embed_model": self.embed_model, "dims": self.embed_dims}
+            mem = self.memory.model_copy(update={k: v for k, v in update.items() if v})
+            self.memory = mem
+        return self
 
     @property
     def db_path(self) -> Path:

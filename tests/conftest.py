@@ -25,7 +25,15 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         "AUOREO_MODEL",
         "AUOREO_SERVER_PASSWORD",
         "OPENROUTER_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GROQ_API_KEY",
         "AUOREO_PERMISSION_MODE",
+        "AUOREO_SMALL_MODEL",
+        "AUOREO_EMBED_MODEL",
+        "AUOREO_EMBED_DIMS",
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.fail.Keyring")

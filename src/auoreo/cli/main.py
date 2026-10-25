@@ -11,6 +11,9 @@ def main() -> None:
 
         print(__version__)
         return
+    from auoreo.core.dotenv import load_env_files
+
+    load_env_files()  # provider keys + AUOREO_* from .env (never overrides the real env)
     from auoreo.cli.app import app
 
     app()

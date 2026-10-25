@@ -30,9 +30,15 @@ uv run auoreo harness list
 # keyless demo with the deterministic fake gateway
 AUOREO_GATEWAY=fake uv run auoreo run '/tool read {"path": "README.md"}'
 
-# real models via OpenRouter (LiteLLM Router)
-uv run auoreo secrets set OPENROUTER_API_KEY
+# real models: any LiteLLM provider. Put the provider's key in .env (or the encrypted
+# store) and name the model as <provider>/<model id>; the prefix picks the key.
+cp .env.example .env
+#   ANTHROPIC_API_KEY=...   AUOREO_MODEL=anthropic/claude-sonnet-5
+#   OPENROUTER_API_KEY=...  AUOREO_MODEL=openrouter/anthropic/claude-sonnet-4.5
+#   OPENAI_API_KEY=...      AUOREO_MODEL=openai/gpt-5
+uv run auoreo doctor            # one credentials row per configured model
 uv run auoreo run "summarize this repo"
+uv run auoreo run --model groq/llama-3.3-70b-versatile "hi"   # per-run override
 
 # the API server + web UI on one port (SSE at /api/events, WebSocket at /ws)
 (cd web && npm ci && npm run build)

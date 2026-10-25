@@ -14,7 +14,7 @@ import typer
 
 from auoreo.cli.common import console, dump_json, settings
 from auoreo.core.paths import bundled_root
-from auoreo.core.settings import Settings
+from auoreo.core.settings import ModelGroup, Settings
 from auoreo.harness.discovery import default_roots
 from auoreo.harness.registry import Harness, HarnessError
 
@@ -178,17 +178,7 @@ def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
             )
         )
     if st.gateway == "litellm":
-        from auoreo.core.secrets import SecretStore
-
-        has_key = SecretStore(st.home, st.keyring).get("OPENROUTER_API_KEY") is not None
-        out.append(
-            _check(
-                "credentials",
-                "ok" if has_key else "warn",
-                "OPENROUTER_API_KEY present" if has_key else "OPENROUTER_API_KEY missing",
-                "export OPENROUTER_API_KEY or `auoreo secrets set OPENROUTER_API_KEY`",
-            )
-        )
+        out.extend(_credential_checks(st))
     else:
         out.append(_check("credentials", "ok", "fake gateway (no key needed)"))
     with socket.socket() as s:
@@ -250,3 +240,24 @@ def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
             console.print(line)
     if any(c["level"] == "error" for c in out):
         raise typer.Exit(1)
+
+
+def _credential_checks(st: Settings) -> list[dict[str, str]]:
+    """One row per configured model: the provider prefix decides which key it needs."""
+    from auoreo.core.secrets import SecretStore
+    from auoreo.gateway.gateway import credential_status
+
+    store = SecretStore(st.home, st.keyring)
+    models = [m for g in ("default", "small") for m in st.models.get(g, ModelGroup()).models]
+    if st.model and "/" in st.model:
+        models.insert(0, st.model)
+    rows = []
+    for model in dict.fromkeys(models):
+        ready, detail = credential_status(model, store.get)
+        if ready:
+            rows.append(_check("credentials", "ok", detail))
+            continue
+        key = detail.split("missing ", 1)[-1].split(" or ")[0].split(",")[0]
+        hint = f"set {key} in .env, the environment, or `auoreo secrets set {key}`"
+        rows.append(_check("credentials", "warn", detail, hint))
+    return rows
