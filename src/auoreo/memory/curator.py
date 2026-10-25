@@ -295,7 +295,20 @@ class Curator:
                     log.debug("curator skipped: %s", rep.skipped)
             except Exception:  # a failed pass must not kill the loop
                 log.exception("curator pass failed")
+            await self.refresh_graph()
             await asyncio.sleep(CHECK_EVERY_S)
+
+    async def refresh_graph(self) -> bool:
+        """GraphRAG-lite: rebuild communities when `memory.graph_enabled` and facts changed
+        since the last build (deterministic, no LLM). Never raises."""
+        mem = self.s.memory
+        if mem is None:
+            return False
+        try:
+            return await mem.refresh_graph()
+        except Exception:
+            log.exception("graph rebuild failed")
+            return False
 
     async def close(self) -> None:
         if self._task is not None:

@@ -7,7 +7,8 @@ Behaviour per call:
 3. Else echo the user's message (`echo: <text> [+N images]` when it carried images).
 
 `vision` (default True) is what `supports_vision` reports; aux calls with
-`metadata.purpose == "vision"` answer with a deterministic description.
+`metadata.purpose == "vision"` answer with a deterministic description; `"hyde"` calls answer
+with a one-sentence hypothetical fact built from the query's words.
 Guardian calls (`purpose == "guardian"`) pop `guardian_script`; when it is empty they
 answer `$AUOREO_FAKE_GUARDIAN` (default `ESCALATE`).
 """
@@ -67,7 +68,7 @@ class FakeGateway:
         elif request.metadata.get("purpose") == "guardian":  # nor does the smart-mode guardian
             default = os.environ.get("AUOREO_FAKE_GUARDIAN", "ESCALATE")
             item = Scripted(text=self.guardian_script.popleft() if self.guardian_script else default)
-        elif request.metadata.get("purpose") == "vision":  # nor does a vision aux call
+        elif request.metadata.get("purpose") in ("vision", "hyde"):  # nor does a vision/HyDE aux call
             item = self._auto(request)
         else:
             item = self.script.popleft() if self.script else self._auto(request)
@@ -83,6 +84,8 @@ class FakeGateway:
         yield Finish("tool_calls" if item.tool_calls else "stop")
 
     def _auto(self, request: LLMRequest) -> Scripted:
+        if request.metadata.get("purpose") == "hyde":
+            return Scripted(text=_hyde(_last_user_text(request.messages)))
         last = request.messages[-1] if request.messages else {}
         if last.get("role") == "tool":
             content = str(last.get("content") or "")
@@ -133,6 +136,12 @@ def _summary(request: LLMRequest) -> Scripted:
     body.append(f'## Next step\n> "{(lines[-1] if lines else "")[:120]}"')
     body.append("## Critical context\n- none")
     return Scripted(text="\n\n".join(body))
+
+
+def _hyde(query: str) -> str:
+    """Deterministic hypothetical memory fact built from the query's words (HyDE aux call)."""
+    words = [w for w in "".join(c if c.isalnum() else " " for c in query.lower()).split() if len(w) > 2]
+    return f"{' '.join(words[:24]).capitalize() or 'Nothing'} (hypothetical)."
 
 
 def _chunks(text: str, size: int = 16) -> list[str]:

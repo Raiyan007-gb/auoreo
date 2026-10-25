@@ -16,6 +16,9 @@ class Chunk:
     start_line: int
     end_line: int
     tokens: int
+    span_start: int = -1
+    """Character offset of the chunk's own text in the source document (−1 if unknown)."""
+    span_end: int = -1
 
 
 def _split(text: str, max_tokens: int, count: Counter, level: int = 0) -> list[str]:
@@ -52,10 +55,13 @@ def chunk_text(text: str, max_tokens: int, overlap: int, count: Counter) -> list
         pos = text.find(piece[:80], cursor)
         start = text.count("\n", 0, pos) + 1 if pos >= 0 else 1
         end = start + piece.count("\n")
+        span = (-1, -1)
         if pos >= 0:
+            tail_at = text.rfind(piece[-40:], pos, pos + len(piece) + 200)
+            span = (pos, tail_at + len(piece[-40:]) if tail_at >= 0 else pos + len(piece))
             cursor = pos + len(piece)
         body = f"[continued] {prev_tail} {piece}".strip() if prev_tail else piece
-        chunks.append(Chunk(body, start, end, count(body)))
+        chunks.append(Chunk(body, start, end, count(body), *span))
         words = piece.split()
         tail: list[str] = []
         while words and count(" ".join(tail)) < overlap:
