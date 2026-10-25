@@ -2,6 +2,12 @@ import {
   ActivityIcon,
   BarChart3Icon,
   BrainIcon,
+  // --- W0-A
+  CalendarClockIcon,
+  PlugIcon,
+  SparklesIcon,
+  UsersIcon,
+  // --- end W0-A
   type LucideIcon,
   MessagesSquareIcon,
   PuzzleIcon,
@@ -21,6 +27,12 @@ export const NAV: readonly NavItem[] = [
   { to: "/approvals", label: "Approvals", icon: ShieldCheckIcon },
   { to: "/memory", label: "Memory", icon: BrainIcon },
   { to: "/harness", label: "Harness", icon: PuzzleIcon },
+  // --- W0-A
+  { to: "/skills", label: "Skills", icon: SparklesIcon },
+  { to: "/plugins", label: "Plugins & MCP", icon: PlugIcon },
+  { to: "/jobs", label: "Jobs", icon: CalendarClockIcon },
+  { to: "/teams", label: "Teams", icon: UsersIcon },
+  // --- end W0-A
   { to: "/usage", label: "Usage", icon: BarChart3Icon },
   { to: "/audit", label: "Audit", icon: ScrollTextIcon },
   { to: "/doctor", label: "Doctor", icon: ActivityIcon },
