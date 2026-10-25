@@ -1,0 +1,20 @@
+name: image_info
+toolset: vision
+description: >-
+  Report an image file's real format (by magic bytes), dimensions, mode, frame count and
+  size. Supports PNG, JPEG, GIF and WebP; SVG is rejected.
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: Image path, absolute or relative to the working directory.}
+  required: [path]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+exposure: deferred
+timeout_ms: 30000
+search_hint: image size dimensions format png jpeg metadata

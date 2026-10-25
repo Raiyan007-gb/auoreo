@@ -1,0 +1,11 @@
+kind: capture
+name: fake
+description: >-
+  Test backend - returns a generated 320x200 PNG with a timestamp; no display needed.
+  Select it with settings.backends.capture = "fake".
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

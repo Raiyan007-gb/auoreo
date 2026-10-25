@@ -1,0 +1,9 @@
+kind: capture
+name: mss
+description: Screen capture with the mss library (X11/Wayland-XWayland, macOS, Windows).
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

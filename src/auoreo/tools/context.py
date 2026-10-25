@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from auoreo.gateway.types import ImagePart
+
 if TYPE_CHECKING:
     from auoreo.harness.registry import Harness
 
@@ -19,6 +21,9 @@ class ToolResult:
     content: str
     is_error: bool = False
     meta: dict[str, Any] = field(default_factory=dict)
+    images: list[ImagePart] = field(default_factory=list)
+    """Images for the model; the runner sends them as a follow-up user message when the
+    session model supports vision, else appends `[image omitted: <note>]` placeholders."""
 
 
 class ToolError(Exception):
@@ -85,3 +90,27 @@ class ToolContext:
             return svc.backend(kind)
         except (KeyError, LookupError) as exc:
             raise ToolError(str(exc)) from exc
+
+    async def authorize(self, tool: str, permission: str, pattern: str, default: str = "ask") -> None:
+        """Check a *secondary* permission from inside a handler (e.g. a URL fetched by a
+        tool whose own permission is `read`). Floors and rules apply; `ask` goes to the
+        human when interactive. Raises `ToolError` unless the call is allowed."""
+        engine = self.services.get("engine")
+        if engine is None:
+            return
+        decision = engine.evaluate(permission, pattern, default)
+        if decision.action == "allow":
+            return
+        if decision.action == "deny":
+            raise ToolError(f"permission denied for {permission} `{pattern[:200]}` ({decision.detail})")
+        svc = self.services.get("services")
+        if not self.interactive or svc is None:
+            raise ToolError(
+                f"{permission} `{pattern[:200]}` needs approval but this run is non-interactive; "
+                "allow it with a permission rule"
+            )
+        outcome = await svc.approvals.request(self.session_id, tool, permission, pattern, pattern[:2000])
+        if not outcome.granted:
+            raise ToolError(f"user rejected {permission} `{pattern[:200]}`")
+        if outcome.reply == "always":
+            engine.grant_always(permission, pattern)

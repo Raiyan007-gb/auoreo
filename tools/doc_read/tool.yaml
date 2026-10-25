@@ -1,0 +1,27 @@
+name: doc_read
+toolset: files
+description: >-
+  Read a PDF: text per page (pypdf), tables as markdown (pdfplumber), and - for scanned
+  pages with no text layer - the rendered page attached as an image so a vision model can
+  read it. `pages` selects pages like "1-5" or "1,3,7-9"; at most `max_pages` are read.
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: PDF path, absolute or relative to the working directory.}
+    pages: {type: string, pattern: "^\\s*\\d+(\\s*-\\s*\\d+)?(\\s*,\\s*\\d+(\\s*-\\s*\\d+)?)*\\s*$", description: 'Page selection, 1-based: "3", "1-5", "1,4,8-10".'}
+    max_pages: {type: integer, minimum: 1, maximum: 200, default: 20}
+    mode:
+      type: string
+      enum: [auto, text, tables]
+      default: auto
+      description: "text: page text only; tables: tables only; auto: text plus any tables found."
+  required: [path]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 180000
+search_hint: pdf document read extract text tables pages scan

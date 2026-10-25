@@ -17,7 +17,16 @@ from litellm import exceptions as lx
 
 from auoreo.core.settings import Settings
 from auoreo.gateway.errors import ErrorCode, GatewayError
-from auoreo.gateway.types import Finish, LLMRequest, StreamItem, TextDelta, ToolCall, Usage
+from auoreo.gateway.types import (
+    Finish,
+    LLMRequest,
+    StreamItem,
+    TextDelta,
+    ToolCall,
+    Usage,
+    prompt_chars,
+    shrink_data_urls,
+)
 
 litellm.suppress_debug_info = True
 
@@ -174,7 +183,7 @@ class LiteLLMGateway:
             c = calls[idx]
             yield ToolCall(id=c["id"] or f"call_{idx}", name=c["name"], arguments=c["args"] or "{}")
         if seen_usage is None:  # stream ended without usage: estimate, and say so (§10.8)
-            prompt = sum(len(str(m.get("content") or "")) for m in request.messages)
+            prompt = prompt_chars(request.messages)
             seen_usage = Usage(prompt // 4, max(1, text_len // 4), estimated=True)
         yield seen_usage
         yield Finish(finish)
@@ -202,9 +211,9 @@ class LiteLLMGateway:
 
     def count_tokens(self, model: str, text: str) -> int:
         try:
-            return int(litellm.token_counter(model=model, text=text))
+            return int(litellm.token_counter(model=model, text=shrink_data_urls(text)))
         except Exception:
-            return max(1, len(text) // 4)
+            return max(1, len(shrink_data_urls(text)) // 4)
 
     def _deployments(self, model: str) -> list[str]:
         """A routing group expands to its deployments; a raw id is its own deployment."""
@@ -242,6 +251,21 @@ class LiteLLMGateway:
                 if p or c:
                     return float(p + c)
         return None
+
+    def supports_vision(self, model: str) -> bool:
+        """True only when every deployment of the group accepts images: a fallback to a
+        text-only deployment must not receive `image_url` parts."""
+        return all(self._deployment_vision(dep) for dep in self._deployments(model))
+
+    @staticmethod
+    def _deployment_vision(model: str) -> bool:
+        for candidate in _lookup_names(model):
+            try:
+                if litellm.supports_vision(model=candidate):
+                    return True
+            except Exception:
+                continue
+        return False
 
 
 DEFAULT_CONTEXT_WINDOW = 128_000
