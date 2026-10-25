@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core.db import SuggestionRow
 from auoreo.schema.goals import SuggestionAccepted, SuggestionCreate, SuggestionInfo, SuggestionProposed
 from auoreo.suggestions import SuggestionError, suggestions_of
@@ -33,7 +33,7 @@ async def list_suggestions(
     return [_info(r) for r in await suggestions_of(svc).list(status, limit)]
 
 
-@router.post("", response_model=SuggestionProposed, status_code=201)
+@router.post("", dependencies=[IDEMPOTENT], response_model=SuggestionProposed, status_code=201)
 async def propose_suggestion(svc: ServicesDep, body: SuggestionCreate) -> SuggestionProposed:
     """Record a pending suggestion. Nothing runs until it is accepted."""
     try:

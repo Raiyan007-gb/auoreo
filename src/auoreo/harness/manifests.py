@@ -268,11 +268,15 @@ class WebhookManifest(_Strict):
 
     name: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
     description: str = Field(min_length=1)
-    provider: Literal["github", "generic"] = "generic"
+    provider: Literal["github", "generic", "gitlab", "svix"] = "generic"
+    """github: `X-Hub-Signature-256` body HMAC · generic: V2 `HMAC("<unix-sec>.<body>")` +
+    `X-Timestamp` ±300 s · gitlab: `X-Gitlab-Token` · svix: `svix-*` triple (`whsec_` secret)."""
     secret: str = Field(min_length=1)
-    """`secret:<name>` reference resolved through the secret store (never the value)."""
+    """`secret:<name>` reference resolved through the secret store (never the value);
+    `<name>#prev` keeps verifying for 24 h after `auoreo webhook rotate`."""
     events: list[str] = Field(default_factory=list)
-    """Provider event names to accept (GitHub `X-GitHub-Event`); empty = all."""
+    """Provider event names to accept (`X-GitHub-Event`, `X-Gitlab-Event`, payload `type`/`event`);
+    empty = all."""
     filters: list[WebhookFilter] = Field(default_factory=list)
     agent: str = Field(default="default", pattern=NAME_RE)
     workflow: str | None = None
@@ -283,6 +287,12 @@ class WebhookManifest(_Strict):
     rate_limit_per_minute: int = Field(default=30, ge=1, le=10_000)
     max_body_bytes: int = Field(default=1_048_576, ge=1_024, le=50 * 1_048_576)
     max_steps: int | None = Field(default=None, ge=1, le=500)
+    challenge: bool = False
+    """Answer provider verification challenges before HMAC: `GET ?challenge=<v>` echo and
+    Slack-style `{"type": "url_verification", "challenge": <v>}`."""
+    deliver_only: bool = False
+    """Deliver the rendered `prompt` straight to `deliver` targets (no agent run): 200 once
+    delivered, 502 when every target failed."""
 
 
 class PluginManifest(_Strict):

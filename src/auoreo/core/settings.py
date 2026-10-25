@@ -20,6 +20,7 @@ from pydantic_settings import (
 )
 
 from auoreo.core.paths import home_dir
+from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # --- G1a
 from auoreo.core.settings_models import (
     LiveKitSettings,
     LiveKitSipSettings,
@@ -383,6 +384,8 @@ class Settings(BaseSettings):
     """Inner stt/tts/vad backends the sidecar loads (defaults: fake)."""
     voice_host_timeout_s: float = Field(default=60.0, gt=0, le=3600)
     """Per-request timeout for sidecar calls (a timed-out request fails; the process keeps running)."""
+    http: HttpSecuritySettings = Field(default_factory=HttpSecuritySettings)  # --- G1a
+    webhooks: WebhookSettings = Field(default_factory=WebhookSettings)  # --- G1a
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

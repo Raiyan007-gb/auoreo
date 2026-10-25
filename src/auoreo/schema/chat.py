@@ -251,7 +251,7 @@ class WebhookRouteInfo(BaseModel):
 
 
 class HookAck(BaseModel):
-    status: Literal["accepted", "ignored", "duplicate"]
+    status: Literal["accepted", "ignored", "duplicate", "delivered", "failed"]
     route: str | None = None
     event: str | None = None
     delivery_id: int | None = None

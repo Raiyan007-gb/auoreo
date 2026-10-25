@@ -21,7 +21,7 @@ async def client(services: Services, settings: Settings) -> AsyncIterator[httpx.
     app = create_app(settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         yield c
 
@@ -160,7 +160,7 @@ async def test_ops_endpoints_require_auth(services: Services, settings: Settings
     app = create_app(settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         paths = ("/api/doctor", "/api/audit", "/api/audit/verify", "/api/memory/facts", "/api/memory/files")
         for path in paths:

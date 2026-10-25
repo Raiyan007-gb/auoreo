@@ -16,7 +16,7 @@ from sqlalchemy import select
 
 from auoreo.api.app import create_app
 from auoreo.automation.deliveries import Outbox
-from auoreo.automation.webhooks import sign
+from auoreo.automation.webhooks import sign, sign_v2
 from auoreo.core.db import AuditRow, EventRow
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings
@@ -90,7 +90,7 @@ async def client(services: Services, settings: Settings) -> AsyncIterator[httpx.
     app = create_app(settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         yield c
 
@@ -161,7 +161,7 @@ async def test_signature_is_required_and_checked(client: httpx.AsyncClient) -> N
 async def test_missing_secret_fails_closed(client: httpx.AsyncClient) -> None:
     body = b"{}"
     r = await client.post("/hooks/nosecret", content=body, headers=gh_headers(body))
-    assert r.status_code == 503
+    assert r.status_code == 403
 
 
 async def test_body_must_be_a_json_object(client: httpx.AsyncClient) -> None:
@@ -231,7 +231,7 @@ async def test_rejections_are_audited(client: httpx.AsyncClient, services: Servi
     await client.post("/hooks/nope", content=b"{}")
     await client.post("/hooks/gh", content=b"{}", headers={"Content-Type": "application/json"})
     await post_gh(client, pr(action="closed"))
-    rows = await audits(services)
+    rows = [a for a in await audits(services) if a.action in {"webhook.accepted", "webhook.rejected"}]
     assert [(a.action, a.reason) for a in rows] == [
         ("webhook.rejected", "unknown route"),
         ("webhook.rejected", "bad signature"),
@@ -243,10 +243,22 @@ async def test_generic_provider_signature_and_timestamp(
     client: httpx.AsyncClient, services: Services
 ) -> None:
     body = json.dumps({"event": "deploy", "service": "api", "meta": {"sha": "abc", "n": [1, 2]}}).encode()
-    base = {"Content-Type": "application/json", "X-Signature-256": sign(SECRET, body)}
-    stale = base | {"X-Timestamp": str(int(time.time()) - 3600)}
+    now = int(time.time())
+
+    def v2(ts: int, payload: bytes = body) -> dict[str, str]:
+        return {"Content-Type": "application/json", "X-Signature-256": sign_v2(SECRET, payload, ts)}
+
+    stale = v2(now - 3600) | {"X-Timestamp": str(now - 3600)}
     assert (await client.post("/hooks/gen", content=body, headers=stale)).status_code == 401
-    fresh = base | {"X-Timestamp": str(int(time.time())), "X-Delivery-Id": "d-1"}
+    missing = v2(now)  # no X-Timestamp: rejected (never "skip the check")
+    assert (await client.post("/hooks/gen", content=body, headers=missing)).status_code == 401
+    body_only = {
+        "Content-Type": "application/json",
+        "X-Signature-256": sign(SECRET, body),
+        "X-Timestamp": str(now),
+    }
+    assert (await client.post("/hooks/gen", content=body, headers=body_only)).status_code == 401  # V1 is gone
+    fresh = v2(now) | {"X-Timestamp": str(now), "X-Delivery-Id": "d-1"}
     r = await client.post("/hooks/gen", content=body, headers=fresh)
     assert r.status_code == 202 and r.json()["event"] == "deploy"
     row = await Outbox(services).get(r.json()["delivery_id"])
@@ -254,7 +266,7 @@ async def test_generic_provider_signature_and_timestamp(
     assert 'deploy of api -> {"sha": "abc", "n": [1, 2]}' in row.payload["prompt"]
     # without a delivery id header the body hash dedupes
     other = json.dumps({"event": "deploy", "service": "web"}).encode()
-    h = {"Content-Type": "application/json", "X-Signature-256": sign(SECRET, other)}
+    h = v2(now, other) | {"X-Timestamp": str(now)}
     assert (await client.post("/hooks/gen", content=other, headers=h)).status_code == 202
     assert (await client.post("/hooks/gen", content=other, headers=h)).json() == {"status": "duplicate"}
 

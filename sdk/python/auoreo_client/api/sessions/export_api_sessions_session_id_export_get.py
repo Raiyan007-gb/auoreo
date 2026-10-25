@@ -18,7 +18,6 @@ def _get_kwargs(
     *,
     format_: ExportApiSessionsSessionIdExportGetFormat
     | Unset = ExportApiSessionsSessionIdExportGetFormat.JSON,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -37,13 +36,6 @@ def _get_kwargs(
         json_format_ = format_.value
 
     params["format"] = json_format_
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -95,7 +87,6 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     format_: ExportApiSessionsSessionIdExportGetFormat
     | Unset = ExportApiSessionsSessionIdExportGetFormat.JSON,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError]:
@@ -107,7 +98,6 @@ def sync_detailed(
         session_id (str):
         format_ (ExportApiSessionsSessionIdExportGetFormat | Unset):  Default:
             ExportApiSessionsSessionIdExportGetFormat.JSON.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -122,7 +112,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         session_id=session_id,
         format_=format_,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -140,7 +129,6 @@ def sync(
     client: AuthenticatedClient | Client,
     format_: ExportApiSessionsSessionIdExportGetFormat
     | Unset = ExportApiSessionsSessionIdExportGetFormat.JSON,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | None:
@@ -152,7 +140,6 @@ def sync(
         session_id (str):
         format_ (ExportApiSessionsSessionIdExportGetFormat | Unset):  Default:
             ExportApiSessionsSessionIdExportGetFormat.JSON.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -168,7 +155,6 @@ def sync(
         session_id=session_id,
         client=client,
         format_=format_,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -180,7 +166,6 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     format_: ExportApiSessionsSessionIdExportGetFormat
     | Unset = ExportApiSessionsSessionIdExportGetFormat.JSON,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError]:
@@ -192,7 +177,6 @@ async def asyncio_detailed(
         session_id (str):
         format_ (ExportApiSessionsSessionIdExportGetFormat | Unset):  Default:
             ExportApiSessionsSessionIdExportGetFormat.JSON.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -207,7 +191,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         session_id=session_id,
         format_=format_,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -223,7 +206,6 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     format_: ExportApiSessionsSessionIdExportGetFormat
     | Unset = ExportApiSessionsSessionIdExportGetFormat.JSON,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | None:
@@ -235,7 +217,6 @@ async def asyncio(
         session_id (str):
         format_ (ExportApiSessionsSessionIdExportGetFormat | Unset):  Default:
             ExportApiSessionsSessionIdExportGetFormat.JSON.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -252,7 +233,6 @@ async def asyncio(
             session_id=session_id,
             client=client,
             format_=format_,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

@@ -1,15 +1,20 @@
-"""Shared FastAPI dependencies: services lookup and token auth."""
+"""Shared FastAPI dependencies: services lookup, token auth (+ cookie CSRF) and POST idempotency."""
 
 from __future__ import annotations
 
 import secrets
 from typing import Annotated
+from urllib.parse import urlsplit
 
-from fastapi import Cookie, Depends, Header, HTTPException, Query, Request, status
+from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 
+from auoreo.core.idempotency import Admission, valid_key
 from auoreo.core.services import Services
 
 COOKIE = "auoreo_token"
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+IDEMPOTENCY_STATE = "auoreo_idempotency"
+"""`scope["state"]` key: the admission `IdempotencyMiddleware` completes or releases."""
 
 
 def get_services(request: Request) -> Services:
@@ -23,7 +28,7 @@ def token_matches(
     query_token: str | None = None,
     cookie: str | None = None,
 ) -> bool:
-    """Bearer header → `?token=` (only where the caller allows it) → cookie.
+    """Bearer header → `?token=` (only where the caller allows it: the WS handshake) → cookie.
     Constant-time compare; no password configured means open."""
     if not expected:
         return True
@@ -37,27 +42,73 @@ def token_matches(
     return supplied is not None and secrets.compare_digest(supplied.encode(), expected.encode())
 
 
+def same_origin(request: Request, extra: list[str]) -> bool:
+    """CSRF guard for cookie-authenticated unsafe methods: `Origin` (else `Referer`) must name
+    this host, or an explicitly allowed origin."""
+    source = request.headers.get("origin") or request.headers.get("referer")
+    if not source or source == "null":
+        return False
+    parts = urlsplit(source)
+    origin = f"{parts.scheme}://{parts.netloc}"
+    return parts.netloc.lower() == request.headers.get("host", "").lower() or origin in extra
+
+
 def require_auth(
     request: Request,
     authorization: Annotated[str | None, Header()] = None,
-    token: Annotated[str | None, Query()] = None,
     auoreo_token: Annotated[str | None, Cookie()] = None,
 ) -> None:
-    """Bearer header → `?token=` (GET event stream only) → cookie. Constant-time compare."""
+    """Bearer header → HttpOnly cookie (constant-time). `?token=` is never accepted here (WS
+    handshake only). A cookie-authenticated POST/PUT/PATCH/DELETE also needs a same-origin
+    `Origin`/`Referer` (CSRF)."""
     svc = get_services(request)
-    query_ok = request.method == "GET" and request.url.path == "/api/events"
-    if not token_matches(
-        svc.settings.server_password,
-        authorization=authorization,
-        query_token=token if query_ok else None,
-        cookie=auoreo_token,
-    ):
+    password = svc.settings.server_password
+    if not token_matches(password, authorization=authorization, cookie=auoreo_token):
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "invalid or missing token",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    bearer = bool(authorization and authorization.lower().startswith("bearer "))
+    cookie_write = password and not bearer and request.method not in SAFE_METHODS
+    if cookie_write and not same_origin(request, svc.settings.cors_origins):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "cross-origin request with cookie auth")
+
+
+# ------------------------------------------------------------------ idempotency
+class IdempotentReplay(Exception):
+    """Raised for a duplicate key; the app's handler answers with the stored response."""
+
+    def __init__(self, admission: Admission) -> None:
+        super().__init__(admission.route)
+        self.admission = admission
+
+
+async def admit_request(request: Request, key: str) -> None:
+    """Claim `key` for this route: fresh → run (the middleware stores the response),
+    duplicate → `IdempotentReplay`, still running → 409. Non-UUID → 400."""
+    if not valid_key(key):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "idempotency key must be a UUID")
+    route = getattr(request.scope.get("route"), "path", request.url.path)
+    adm = await get_services(request).idempotency.admit(key, f"{request.method} {route}")
+    if adm.state == "duplicate":
+        raise IdempotentReplay(adm)
+    if adm.state == "in_progress":
+        raise HTTPException(status.HTTP_409_CONFLICT, "a request with this Idempotency-Key is in progress")
+    request.scope.setdefault("state", {})[IDEMPOTENCY_STATE] = adm
+
+
+async def idempotent(
+    request: Request,
+    idempotency_key: Annotated[
+        str | None, Header(description="UUID; a retry with the same key replays the first response")
+    ] = None,
+) -> None:
+    if idempotency_key is not None:
+        await admit_request(request, idempotency_key)
 
 
 ServicesDep = Annotated[Services, Depends(get_services)]
 AUTH = [Depends(require_auth)]
+IDEMPOTENT = Depends(idempotent)
+"""`@router.post(..., dependencies=[IDEMPOTENT])` on every create-style POST."""

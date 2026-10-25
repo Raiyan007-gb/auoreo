@@ -36,6 +36,7 @@ export type UsageSummary = S["UsageSummary"];
 export type UsageTotals = S["UsageTotals"];
 export type CommandInfo = S["CommandInfo"];
 export type LatestSeq = S["LatestSeq"];
+export type AuthStatus = S["AuthStatus"]; // --- G1a
 /** `?format=` of GET /api/sessions/{id}/export (from the OpenAPI query parameter). */
 export type ExportFormat = NonNullable<
   NonNullable<paths["/api/sessions/{session_id}/export"]["get"]["parameters"]["query"]>["format"]
@@ -181,6 +182,10 @@ export function createClient(opts: ClientOptions = {}) {
     baseUrl: base,
 
     health: () => request<Health>("GET", "/api/health"),
+    // --- G1a: HttpOnly cookie for EventSource / WS / the token meta in index.html
+    login: (password: string) => request<AuthStatus>("POST", "/api/auth/login", { body: { password } }),
+    logout: () => request<AuthStatus>("POST", "/api/auth/logout"),
+    authStatus: () => request<AuthStatus>("GET", "/api/auth/status"),
 
     // sessions
     /** `archived: true` returns archived AND active sessions (the server's `?archived=true`). */
@@ -251,7 +256,7 @@ export function createClient(opts: ClientOptions = {}) {
     ...meetingsApi(request, base, token), // --- F4 (block at the end of this file)
 
     subscribeEvents: (o: SubscribeOptions, onEvent: (e: ServerEvent) => void, h?: StreamHandlers) =>
-      subscribeEvents({ ...o, baseUrl: base, token: token() }, onEvent, h),
+      subscribeEvents({ ...o, baseUrl: base }, onEvent, h),
     connectControl: (o: Omit<ControlOptions, "baseUrl" | "token">) =>
       connectControl({ ...o, baseUrl: base, token: token() }),
 
@@ -269,7 +274,6 @@ export interface SubscribeOptions {
   readonly afterSeq?: number;
   readonly follow?: boolean;
   readonly baseUrl?: string;
-  readonly token?: string | null;
   /** Extra SSE event names beyond `EVENT_TYPES`. */
   readonly extraTypes?: readonly string[];
 }
@@ -284,6 +288,8 @@ export interface StreamHandlers {
  * `retry: 3000`) and re-sends `Last-Event-ID`, which the server prefers over `after_seq`.
  * If the browser gives up (readyState CLOSED, e.g. HTTP error), we reopen from the last
  * seen seq after 3s. Events are de-duplicated by `seq`. Returns an unsubscribe function.
+ * Auth: EventSource cannot send headers and the server never accepts `?token=` here, so a
+ * secured server is reached with the HttpOnly cookie set by `login()` (same origin).
  */
 export function subscribeEvents(
   opts: SubscribeOptions,
@@ -319,7 +325,6 @@ export function subscribeEvents(
       after_seq: lastSeq,
       session_id: sessions,
       follow: opts.follow === false ? "false" : undefined,
-      token: opts.token ?? undefined,
     });
     es = new EventSource(`${opts.baseUrl ?? ""}/api/events${q}`);
     for (const t of [...EVENT_TYPES, ...(opts.extraTypes ?? [])])

@@ -14,33 +14,24 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     *,
     body: RtcJoinRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
     if not isinstance(authorization, Unset):
         headers["authorization"] = authorization
 
+    if not isinstance(idempotency_key, Unset):
+        headers["idempotency-key"] = idempotency_key
+
     cookies = {}
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/rtc/join",
-        "params": params,
         "cookies": cookies,
     }
 
@@ -102,8 +93,8 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: RtcJoinRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | RtcJoinInfo]:
     """Join
@@ -112,8 +103,9 @@ def sync_detailed(
     The token in the answer is never logged or audited.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (RtcJoinRequest):
 
@@ -127,8 +119,8 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -143,8 +135,8 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: RtcJoinRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | RtcJoinInfo | None:
     """Join
@@ -153,8 +145,9 @@ def sync(
     The token in the answer is never logged or audited.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (RtcJoinRequest):
 
@@ -169,8 +162,8 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     ).parsed
 
@@ -179,8 +172,8 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: RtcJoinRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | RtcJoinInfo]:
     """Join
@@ -189,8 +182,9 @@ async def asyncio_detailed(
     The token in the answer is never logged or audited.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (RtcJoinRequest):
 
@@ -204,8 +198,8 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -218,8 +212,8 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: RtcJoinRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | RtcJoinInfo | None:
     """Join
@@ -228,8 +222,9 @@ async def asyncio(
     The token in the answer is never logged or audited.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
         body (RtcJoinRequest):
 
@@ -245,8 +240,8 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
-            token=token,
             authorization=authorization,
+            idempotency_key=idempotency_key,
             auoreo_token=auoreo_token,
         )
     ).parsed

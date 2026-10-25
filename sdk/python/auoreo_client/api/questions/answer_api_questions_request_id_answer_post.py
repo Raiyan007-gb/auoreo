@@ -18,7 +18,6 @@ def _get_kwargs(
     request_id: str,
     *,
     body: Answer,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -30,23 +29,11 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/questions/{request_id}/answer".format(
             request_id=quote(str(request_id), safe=""),
         ),
-        "params": params,
         "cookies": cookies,
     }
 
@@ -103,7 +90,6 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: Answer,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[
@@ -113,7 +99,6 @@ def sync_detailed(
 
     Args:
         request_id (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (Answer):
@@ -129,7 +114,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         request_id=request_id,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -146,7 +130,6 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: Answer,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> (
@@ -158,7 +141,6 @@ def sync(
 
     Args:
         request_id (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (Answer):
@@ -175,7 +157,6 @@ def sync(
         request_id=request_id,
         client=client,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -186,7 +167,6 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: Answer,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[
@@ -196,7 +176,6 @@ async def asyncio_detailed(
 
     Args:
         request_id (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (Answer):
@@ -212,7 +191,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         request_id=request_id,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -227,7 +205,6 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: Answer,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> (
@@ -239,7 +216,6 @@ async def asyncio(
 
     Args:
         request_id (str):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (Answer):
@@ -257,7 +233,6 @@ async def asyncio(
             request_id=request_id,
             client=client,
             body=body,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

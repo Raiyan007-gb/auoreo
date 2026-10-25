@@ -15,7 +15,6 @@ def _get_kwargs(
     status: None | str | Unset = UNSET,
     kind: None | str | Unset = UNSET,
     limit: int | Unset = 50,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -44,13 +43,6 @@ def _get_kwargs(
     params["kind"] = json_kind
 
     params["limit"] = limit
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -106,7 +98,6 @@ def sync_detailed(
     status: None | str | Unset = UNSET,
     kind: None | str | Unset = UNSET,
     limit: int | Unset = 50,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[DeliveryInfo]]:
@@ -116,7 +107,6 @@ def sync_detailed(
         status (None | str | Unset):
         kind (None | str | Unset):
         limit (int | Unset):  Default: 50.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -132,7 +122,6 @@ def sync_detailed(
         status=status,
         kind=kind,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -150,7 +139,6 @@ def sync(
     status: None | str | Unset = UNSET,
     kind: None | str | Unset = UNSET,
     limit: int | Unset = 50,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[DeliveryInfo] | None:
@@ -160,7 +148,6 @@ def sync(
         status (None | str | Unset):
         kind (None | str | Unset):
         limit (int | Unset):  Default: 50.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -177,7 +164,6 @@ def sync(
         status=status,
         kind=kind,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -189,7 +175,6 @@ async def asyncio_detailed(
     status: None | str | Unset = UNSET,
     kind: None | str | Unset = UNSET,
     limit: int | Unset = 50,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[DeliveryInfo]]:
@@ -199,7 +184,6 @@ async def asyncio_detailed(
         status (None | str | Unset):
         kind (None | str | Unset):
         limit (int | Unset):  Default: 50.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -215,7 +199,6 @@ async def asyncio_detailed(
         status=status,
         kind=kind,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -231,7 +214,6 @@ async def asyncio(
     status: None | str | Unset = UNSET,
     kind: None | str | Unset = UNSET,
     limit: int | Unset = 50,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[DeliveryInfo] | None:
@@ -241,7 +223,6 @@ async def asyncio(
         status (None | str | Unset):
         kind (None | str | Unset):
         limit (int | Unset):  Default: 50.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -259,7 +240,6 @@ async def asyncio(
             status=status,
             kind=kind,
             limit=limit,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

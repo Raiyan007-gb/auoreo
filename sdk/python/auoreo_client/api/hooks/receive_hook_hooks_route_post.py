@@ -38,9 +38,17 @@ def _parse_response(
 
         return response_202
 
+    if response.status_code == 400:
+        response_400 = cast(Any, None)
+        return response_400
+
     if response.status_code == 401:
         response_401 = cast(Any, None)
         return response_401
+
+    if response.status_code == 403:
+        response_403 = cast(Any, None)
+        return response_403
 
     if response.status_code == 404:
         response_404 = cast(Any, None)
@@ -63,9 +71,9 @@ def _parse_response(
         response_429 = cast(Any, None)
         return response_429
 
-    if response.status_code == 503:
-        response_503 = cast(Any, None)
-        return response_503
+    if response.status_code == 502:
+        response_502 = cast(Any, None)
+        return response_502
 
     if client.raise_on_unexpected_status:
         raise errors.UnexpectedStatus(response.status_code, response.content)

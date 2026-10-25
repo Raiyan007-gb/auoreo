@@ -154,7 +154,7 @@ async def test_board_api_list_get_put_audited(services: Services) -> None:
     app = create_app(services.settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         rows = (await c.get(f"/api/teams/{team.id}/board", params={"prefix": "results/"})).json()
         assert [(r["key"], r["version"], r["producer"], r["bytes"]) for r in rows] == [

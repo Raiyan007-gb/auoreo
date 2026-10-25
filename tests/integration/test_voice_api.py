@@ -33,7 +33,7 @@ async def client(services: Services, settings: Settings) -> AsyncIterator[httpx.
     app = create_app(settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         yield c
 
@@ -168,7 +168,7 @@ async def test_status_reports_real_backend_not_ready(home: Path, workdir: Path, 
     try:
         async with (
             LifespanManager(app),
-            httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+            httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
         ):
             rows = {b["kind"]: b for b in (await c.get("/api/voice/status")).json()["backends"]}
             assert rows["stt"]["name"] == "faster_whisper" and rows["stt"]["ok"] is False
@@ -186,7 +186,7 @@ async def test_voice_disabled_is_503(home: Path, workdir: Path, gateway: FakeGat
     try:
         async with (
             LifespanManager(app),
-            httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+            httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
         ):
             assert (await c.get("/api/voice/status")).json() == {"enabled": False, "backends": []}
             assert (await c.post("/api/voice/speak", json={"text": "hi"})).status_code == 503

@@ -1,4 +1,4 @@
-"""`auoreo webhook list|test` — inbound webhook routes (`webhooks/<route>.yaml`)."""
+"""`auoreo webhook list|test|rotate` — inbound webhook routes (`webhooks/<route>.yaml`)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ from auoreo.automation import lock
 from auoreo.automation.client import URL_HELP, check, local, remote
 from auoreo.automation.deliveries import DeliveryWorker, Outbox
 from auoreo.automation.views import webhook_infos
-from auoreo.automation.webhooks import DELIVERY_HEADER, SIGNATURE_HEADER, secret_name, sign
+from auoreo.automation.webhook_verify import rotate as rotate_secret
+from auoreo.automation.webhook_verify import secret_name, signed_headers
 from auoreo.cli.common import console, dump_json
 from auoreo.core.services import Services
 
@@ -50,21 +51,13 @@ def list_(url: UrlOpt = None, as_json: Annotated[bool, typer.Option("--json")] =
     console.print(table)
 
 
-def _headers(provider: str, secret: str, body: bytes, event: str, delivery_id: str) -> dict[str, str]:
-    event_header = "X-GitHub-Event" if provider == "github" else "X-Event"
-    return {
-        "Content-Type": "application/json",
-        SIGNATURE_HEADER[provider]: sign(secret, body),
-        DELIVERY_HEADER[provider]: delivery_id,
-        event_header: event,
-    }
-
-
 @app.command("test")
 def test(
     route: str,
     file: Annotated[Path, typer.Option("--file", "-f", exists=True, dir_okay=False, help="JSON payload")],
-    event: Annotated[str, typer.Option(help="Event name header (X-GitHub-Event / X-Event)")] = "pull_request",
+    event: Annotated[
+        str, typer.Option(help="Event name header (X-GitHub-Event / X-Gitlab-Event / X-Event)")
+    ] = "pull_request",
     delivery_id: Annotated[str | None, typer.Option("--delivery-id")] = None,
     url: UrlOpt = None,
     wait: Annotated[float, typer.Option(help="In-process: seconds to wait for the delivery")] = 120.0,
@@ -84,7 +77,7 @@ def test(
         if not secret:
             typer.echo(f"secret {m.secret} is not set (auoreo secrets set {secret_name(m)})", err=True)
             raise typer.Exit(1)
-        headers = _headers(m.provider, secret, body, event, did)
+        headers = signed_headers(m.provider, secret, body, event=event, delivery_id=did)
         if url:
             r = remote("POST", url, f"/hooks/{route}", content=body, headers=headers, auth=False)
             return r.status_code, r.json(), None
@@ -100,6 +93,35 @@ def test(
         raise typer.Exit(1)
 
 
+@app.command("rotate")
+def rotate(route: str) -> None:
+    """New secret for <route>: the old one moves to `#prev` (still accepted for 24 h, audited
+    when used). The new value is printed once — paste it into the sender's settings."""
+
+    async def go(svc: Services) -> str:
+        loaded = svc.harness.webhooks.get(route)
+        if loaded is None:
+            typer.echo(f"unknown route '{route}' (known: {sorted(svc.harness.webhooks)})", err=True)
+            raise typer.Exit(1)
+        m = loaded.manifest
+        fresh = rotate_secret(svc.secrets, secret_name(m), m.provider)
+        await svc.audit.record(
+            actor="cli",
+            action="webhook.secret.rotated",
+            decision="allow",
+            reason="auoreo webhook rotate",
+            detail={"route": route[:64]},
+        )
+        return fresh
+
+    fresh = local(go)
+    typer.echo(fresh)
+    typer.echo(
+        f"stored as {route}'s secret; the previous one stays valid for 24 h (#prev). It is not shown again.",
+        err=True,
+    )
+
+
 async def _in_process(
     svc: Services, route: str, body: bytes, headers: dict[str, str], wait: float
 ) -> tuple[int, dict[str, Any], dict[str, Any] | None]:
@@ -107,7 +129,7 @@ async def _in_process(
 
     app_ = create_app(svc.settings, services=svc)
     app_.state.services = svc  # no lifespan: the Services already exist
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app_), base_url="http://cli") as c:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app_), base_url="http://127.0.0.1") as c:
         r = await c.post(f"/hooks/{route}", content=body, headers=headers)
     answer = r.json()
     if r.status_code != 202:

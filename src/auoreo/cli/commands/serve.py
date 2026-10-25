@@ -26,6 +26,9 @@ def serve(
         Path | None,
         typer.Option(help="Also/instead serve on this Unix socket (0600; no token needed on it)."),
     ] = None,
+    queue_bound: Annotated[
+        int | None, typer.Option(help="Queued messages per session before 429 (default 128).", min=1)
+    ] = None,
 ) -> None:
     """Run the API server (one app, one port; optionally a Unix socket too)."""
     import uvicorn
@@ -33,6 +36,8 @@ def serve(
     from auoreo.api.app import create_app
 
     st = settings(host=host, port=port, gateway=gateway, workers=workers)
+    if queue_bound is not None:  # --- G1a
+        st.http.queue_bound = queue_bound
     if not st.is_loopback and not st.server_password:
         err_console.print("[red]refusing to bind a non-loopback address without AUOREO_SERVER_PASSWORD[/red]")
         raise typer.Exit(2)

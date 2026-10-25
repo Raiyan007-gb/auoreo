@@ -210,6 +210,24 @@
         "title": "AuditVerify",
         "type": "object"
       },
+      "AuthStatus": {
+        "properties": {
+          "authenticated": {
+            "title": "Authenticated",
+            "type": "boolean"
+          },
+          "secured": {
+            "title": "Secured",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "secured",
+          "authenticated"
+        ],
+        "title": "AuthStatus",
+        "type": "object"
+      },
       "BanditArmInfo": {
         "description": "One configured arm (`settings.bandit.arms`, or derived from the routing groups).",
         "properties": {
@@ -1628,6 +1646,66 @@
         "title": "EnvironmentInfo",
         "type": "object"
       },
+      "EventsTail": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ServerEvent"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "seq",
+          "events"
+        ],
+        "title": "EventsTail",
+        "type": "object"
+      },
+      "EventsTailRequest": {
+        "properties": {
+          "after_seq": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Seq"
+          },
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
+          "limit": {
+            "default": 50,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "title": "EventsTailRequest",
+        "type": "object"
+      },
       "FactActionResult": {
         "properties": {
           "id": {
@@ -2049,7 +2127,9 @@
             "enum": [
               "accepted",
               "ignored",
-              "duplicate"
+              "duplicate",
+              "delivered",
+              "failed"
             ],
             "title": "Status",
             "type": "string"
@@ -2206,6 +2286,21 @@
           "seq"
         ],
         "title": "LatestSeq",
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "password": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "LoginRequest",
         "type": "object"
       },
       "MailMessage": {
@@ -4006,6 +4101,56 @@
         "title": "SearchHit",
         "type": "object"
       },
+      "ServerEvent": {
+        "properties": {
+          "aggregate_id": {
+            "description": "Session id, or 'server'",
+            "title": "Aggregate Id",
+            "type": "string"
+          },
+          "aggregate_seq": {
+            "description": "Monotonic sequence within the aggregate",
+            "title": "Aggregate Seq",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "data": {
+            "additionalProperties": true,
+            "title": "Data",
+            "type": "object"
+          },
+          "id": {
+            "description": "str(seq) \u2014 use as SSE id / Last-Event-ID",
+            "title": "Id",
+            "type": "string"
+          },
+          "seq": {
+            "description": "Global monotonic sequence (DB autoincrement)",
+            "title": "Seq",
+            "type": "integer"
+          },
+          "type": {
+            "description": "e.g. run.started, message.delta, tool.completed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "type",
+          "aggregate_id",
+          "aggregate_seq",
+          "data",
+          "created_at"
+        ],
+        "title": "ServerEvent",
+        "type": "object"
+      },
       "SessionCreate": {
         "additionalProperties": false,
         "properties": {
@@ -5156,22 +5301,6 @@
         "operationId": "acp_acp_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -5338,22 +5467,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -5420,22 +5533,6 @@
         "operationId": "audit_verify_api_audit_verify_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -5496,10 +5593,160 @@
         ]
       }
     },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "login_api_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Wrong password"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout_api_auth_logout_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/status": {
+      "get": {
+        "operationId": "auth_status_api_auth_status_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Auth Status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/bridge/inbox": {
       "post": {
         "description": "Verify `X-Auoreo-Signature` and deliver into the local team mailbox as\n`from: bridge:<sender>/<member>`. The signature covers the raw body bytes.",
         "operationId": "inbox_api_bridge_inbox_post",
+        "parameters": [
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5552,41 +5799,9 @@
     },
     "/api/chat": {
       "post": {
-        "description": "Queue a message. Returns immediately; follow progress on `GET /api/events`.",
+        "description": "Queue a message. Returns immediately; follow progress on `GET /api/events`.\n`Idempotency-Key` header (or body `request_id`) makes retries safe.",
         "operationId": "chat_api_chat_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
-            "in": "header",
-            "name": "idempotency-key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Idempotency-Key"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -5601,6 +5816,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -5651,6 +5884,9 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "description": "A request with the same idempotency key is still running"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -5660,6 +5896,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "Session queue full (`Retry-After`)"
           }
         },
         "summary": "Chat",
@@ -5672,22 +5911,6 @@
       "get": {
         "operationId": "list_commands_api_commands_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -5757,22 +5980,6 @@
       "get": {
         "operationId": "list_jobs_api_cron_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -5852,22 +6059,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -5939,22 +6130,6 @@
             "schema": {
               "title": "Name",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -6033,22 +6208,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -6062,6 +6221,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -6130,22 +6307,6 @@
               "default": 20,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -6260,22 +6421,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -6365,22 +6510,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -6394,6 +6523,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -6446,22 +6593,6 @@
         "description": "The `auoreo doctor` checks against the live server (no repairs, no secret values).",
         "operationId": "doctor_api_doctor_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -6529,22 +6660,6 @@
         "operationId": "environments_api_environments_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -6611,9 +6726,19 @@
     },
     "/api/events": {
       "get": {
-        "description": "`Last-Event-ID` wins over `?after_seq=`. Filter with repeated `?session_id=`.\n`follow=false` returns the replay only (useful for tests and scripts).",
+        "description": "`Last-Event-ID` wins over `?after_seq=`. Filter with repeated `?session_id=` or\n`?channels=` (`session:<id>`, `job:<id>`, `server`). `follow=false` returns the replay\nonly. A replay over `http.replay_cap` answers 206 and ends with `cap_warning`: reconnect\nwith `Last-Event-ID` to continue.",
         "operationId": "events_api_events_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "follow",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Follow",
+              "type": "boolean"
+            }
+          },
           {
             "in": "query",
             "name": "after_seq",
@@ -6645,45 +6770,24 @@
             }
           },
           {
+            "description": "`session:<id>`, `job:<id>`, `server` (comma-separated)",
             "in": "query",
-            "name": "follow",
-            "required": false,
-            "schema": {
-              "default": true,
-              "title": "Follow",
-              "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
+            "name": "channels",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Token"
-            }
-          },
-          {
-            "in": "header",
-            "name": "last-event-id",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Last-Event-Id"
+              "description": "`session:<id>`, `job:<id>`, `server` (comma-separated)",
+              "title": "Channels"
             }
           },
           {
@@ -6700,6 +6804,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
             }
           },
           {
@@ -6745,6 +6865,9 @@
             },
             "description": "Successful Response"
           },
+          "206": {
+            "description": "Replay truncated at `http.replay_cap`; a `cap_warning` event ends it"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -6767,22 +6890,6 @@
         "description": "Highest event seq so far \u2014 lets a client tail from 'now' without replaying history.",
         "operationId": "latest_api_events_latest_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -6844,6 +6951,89 @@
         ]
       }
     },
+    "/api/events:tail": {
+      "post": {
+        "description": "Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones.",
+        "operationId": "events_tail_api_events_tail_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EventsTailRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsTail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events Tail",
+        "tags": [
+          "events"
+        ]
+      }
+    },
     "/api/goals": {
       "get": {
         "description": "No `status` lists every goal; otherwise only that status.",
@@ -6881,22 +7071,6 @@
               "default": 100,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -6967,22 +7141,6 @@
         "operationId": "create_goal_api_goals_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -6996,6 +7154,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -7064,22 +7240,6 @@
             "schema": {
               "title": "Goal Id",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -7152,22 +7312,6 @@
             "schema": {
               "title": "Goal Id",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -7256,22 +7400,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -7347,22 +7475,6 @@
         "operationId": "listing_api_harness_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -7428,22 +7540,6 @@
         "description": "Re-discover all definition roots. Takes effect at the next turn.",
         "operationId": "reload_api_harness_reload_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -7516,22 +7612,6 @@
             "schema": {
               "title": "Kind",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -7663,22 +7743,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -7746,22 +7810,6 @@
         "operationId": "create_task_api_kanban_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -7775,6 +7823,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -7837,22 +7903,6 @@
         "description": "The most recent REPORT.md.",
         "operationId": "curator_report_api_memory_curator_report_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -7937,22 +7987,6 @@
               "default": false,
               "title": "Force",
               "type": "boolean"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -8087,22 +8121,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -8166,22 +8184,6 @@
         "operationId": "add_fact_api_memory_facts_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -8195,6 +8197,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -8275,22 +8295,6 @@
             "schema": {
               "title": "Fact Id",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -8379,22 +8383,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -8467,22 +8455,6 @@
             "schema": {
               "title": "Fact Id",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -8561,22 +8533,6 @@
         "description": "MEMORY.md / USER.md / PREFS.md / PROJECT.md under `<home>/memory/`, secrets redacted.",
         "operationId": "memory_files_api_memory_files_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -8659,22 +8615,6 @@
               "default": 8,
               "title": "Limit",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -8763,22 +8703,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -8854,22 +8778,6 @@
             "schema": {
               "title": "Request Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -8952,22 +8860,6 @@
         "operationId": "list_plugins_api_plugins_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -9047,22 +8939,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -9076,6 +8952,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -9145,22 +9039,6 @@
             "schema": {
               "title": "Name",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -9235,22 +9113,6 @@
             "schema": {
               "title": "Name",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -9332,22 +9194,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -9422,22 +9268,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -9504,22 +9334,6 @@
         "operationId": "bandit_status_api_policy_bandit_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -9585,22 +9399,6 @@
         "description": "Forget learned stats and outcomes (one `context`, or all). Settings are unchanged.",
         "operationId": "bandit_reset_api_policy_bandit_reset_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -9700,22 +9498,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -9791,22 +9573,6 @@
             "schema": {
               "title": "Request Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -9889,22 +9655,6 @@
         "operationId": "list_peers_api_rtc_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -9975,22 +9725,6 @@
         "operationId": "ice_api_rtc_ice_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -10057,22 +9791,6 @@
         "operationId": "join_api_rtc_join_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -10086,6 +9804,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -10170,22 +9906,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -10252,22 +9972,6 @@
         "operationId": "offer_api_rtc_offer_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -10281,6 +9985,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -10362,22 +10084,6 @@
             "schema": {
               "title": "Rtc Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -10467,22 +10173,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -10550,22 +10240,6 @@
         "operationId": "create_session_api_sessions_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -10579,6 +10253,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -10651,22 +10343,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -10736,22 +10412,6 @@
             "schema": {
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -10840,22 +10500,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -10929,22 +10573,6 @@
             "schema": {
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -11023,22 +10651,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -11114,22 +10726,6 @@
             "schema": {
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -11239,22 +10835,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -11327,22 +10907,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -11356,6 +10920,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -11414,22 +10996,6 @@
             "schema": {
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -11508,22 +11074,6 @@
             "schema": {
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -11626,22 +11176,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -11710,22 +11244,6 @@
         "operationId": "propose_suggestion_api_suggestions_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -11739,6 +11257,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -11808,22 +11344,6 @@
             "schema": {
               "title": "Suggestion Id",
               "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -11901,22 +11421,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -11981,22 +11485,6 @@
       "get": {
         "operationId": "list_teams_api_teams_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -12073,22 +11561,6 @@
             "schema": {
               "title": "Team Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -12173,22 +11645,6 @@
               "default": "",
               "title": "Prefix",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -12279,22 +11735,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -12374,22 +11814,6 @@
             "schema": {
               "title": "Key",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -12487,22 +11911,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -12594,22 +12002,6 @@
                 }
               ],
               "title": "Member"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -12719,22 +12111,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -12814,22 +12190,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -12895,22 +12255,6 @@
         "description": "All meetings, newest first (transcripts omitted; `GET /{id}` has them).",
         "operationId": "list_meetings_api_voice_meetings_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -12980,22 +12324,6 @@
         "operationId": "start_meeting_api_voice_meetings_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -13009,6 +12337,24 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
             }
           },
           {
@@ -13086,22 +12432,6 @@
             "schema": {
               "title": "Meeting Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -13186,22 +12516,6 @@
             "schema": {
               "title": "Meeting Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
             }
           },
           {
@@ -13299,22 +12613,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -13405,22 +12703,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -13505,22 +12787,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -13596,22 +12862,6 @@
         "operationId": "speak_api_voice_speak_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -13681,22 +12931,6 @@
         "description": "Selected stt/tts/vad/wake/desktop backends and their readiness (`check()`).",
         "operationId": "voice_status_api_voice_status_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -13812,22 +13046,6 @@
             }
           },
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -13902,22 +13120,6 @@
         "operationId": "list_webhooks_api_webhooks_get",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -13988,22 +13190,6 @@
         "operationId": "welcome_event_api_welcome_event_post",
         "parameters": [
           {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
-          {
             "in": "header",
             "name": "authorization",
             "required": false,
@@ -14067,6 +13253,83 @@
         ]
       }
     },
+    "/hooks/github/{route}": {
+      "post": {
+        "description": "Alias of `/hooks/{route}` that only matches `provider: github` routes.",
+        "operationId": "receive_github_hook_hooks_github__route__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "route",
+            "required": true,
+            "schema": {
+              "title": "Route",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookAck"
+                }
+              }
+            },
+            "description": "Ignored, duplicate, delivered (deliver_only) or a challenge"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HookAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Body is not a JSON object"
+          },
+          "401": {
+            "description": "Missing/bad signature, or a missing/stale timestamp"
+          },
+          "403": {
+            "description": "Route secret not configured (fail closed)"
+          },
+          "404": {
+            "description": "Unknown or disabled route (or provider mismatch on /hooks/github/\u2026)"
+          },
+          "413": {
+            "description": "Body over max_body_bytes"
+          },
+          "415": {
+            "description": "Not JSON"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Route rate limit exceeded"
+          },
+          "502": {
+            "description": "deliver_only: every delivery target failed"
+          }
+        },
+        "summary": "Receive Github Hook",
+        "tags": [
+          "hooks"
+        ]
+      }
+    },
     "/hooks/health": {
       "get": {
         "operationId": "hooks_health_hooks_health_get",
@@ -14089,6 +13352,53 @@
       }
     },
     "/hooks/{route}": {
+      "get": {
+        "description": "Echo `?challenge=` as text/plain \u2014 only for routes with `challenge: true`.",
+        "operationId": "hook_challenge_hooks__route__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "route",
+            "required": true,
+            "schema": {
+              "title": "Route",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown route"
+          },
+          "405": {
+            "description": "Not a challenge route"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Hook Challenge",
+        "tags": [
+          "hooks"
+        ]
+      },
       "post": {
         "operationId": "receive_hook_hooks__route__post",
         "parameters": [
@@ -14111,7 +13421,7 @@
                 }
               }
             },
-            "description": "Ignored by event/filter, or a duplicate delivery id"
+            "description": "Ignored, duplicate, delivered (deliver_only) or a challenge"
           },
           "202": {
             "content": {
@@ -14123,11 +13433,17 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "description": "Body is not a JSON object"
+          },
           "401": {
-            "description": "Missing or bad signature"
+            "description": "Missing/bad signature, or a missing/stale timestamp"
+          },
+          "403": {
+            "description": "Route secret not configured (fail closed)"
           },
           "404": {
-            "description": "Unknown or disabled route"
+            "description": "Unknown or disabled route (or provider mismatch on /hooks/github/\u2026)"
           },
           "413": {
             "description": "Body over max_body_bytes"
@@ -14148,8 +13464,8 @@
           "429": {
             "description": "Route rate limit exceeded"
           },
-          "503": {
-            "description": "Route secret not configured (fail closed)"
+          "502": {
+            "description": "deliver_only: every delivery target failed"
           }
         },
         "summary": "Receive Hook",
@@ -14163,22 +13479,6 @@
         "description": "Non-streaming \u2192 a `chat.completion` object; `stream: true` \u2192 SSE `chat.completion.chunk`\nlines and `data: [DONE]`. Tool calls are returned, never executed.",
         "operationId": "chat_completions_v1_chat_completions_post",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",
@@ -14271,22 +13571,6 @@
         "description": "Routing groups from `settings.models`, their `auoreo/<group>` forms, and aliases.",
         "operationId": "list_models_v1_models_get",
         "parameters": [
-          {
-            "in": "query",
-            "name": "token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Token"
-            }
-          },
           {
             "in": "header",
             "name": "authorization",

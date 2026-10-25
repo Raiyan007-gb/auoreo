@@ -16,7 +16,6 @@ def _get_kwargs(
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
     translate_to: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -50,13 +49,6 @@ def _get_kwargs(
     else:
         json_translate_to = translate_to
     params["translate_to"] = json_translate_to
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -119,7 +111,6 @@ def sync_detailed(
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
     translate_to: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | VoiceTranscription]:
@@ -132,7 +123,6 @@ def sync_detailed(
         language (None | str | Unset):
         session_id (None | str | Unset):
         translate_to (None | str | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (BodyTranscribeApiVoiceTranscribePost):
@@ -150,7 +140,6 @@ def sync_detailed(
         language=language,
         session_id=session_id,
         translate_to=translate_to,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -169,7 +158,6 @@ def sync(
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
     translate_to: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | VoiceTranscription | None:
@@ -182,7 +170,6 @@ def sync(
         language (None | str | Unset):
         session_id (None | str | Unset):
         translate_to (None | str | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (BodyTranscribeApiVoiceTranscribePost):
@@ -201,7 +188,6 @@ def sync(
         language=language,
         session_id=session_id,
         translate_to=translate_to,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -214,7 +200,6 @@ async def asyncio_detailed(
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
     translate_to: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | VoiceTranscription]:
@@ -227,7 +212,6 @@ async def asyncio_detailed(
         language (None | str | Unset):
         session_id (None | str | Unset):
         translate_to (None | str | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (BodyTranscribeApiVoiceTranscribePost):
@@ -245,7 +229,6 @@ async def asyncio_detailed(
         language=language,
         session_id=session_id,
         translate_to=translate_to,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -262,7 +245,6 @@ async def asyncio(
     language: None | str | Unset = UNSET,
     session_id: None | str | Unset = UNSET,
     translate_to: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | VoiceTranscription | None:
@@ -275,7 +257,6 @@ async def asyncio(
         language (None | str | Unset):
         session_id (None | str | Unset):
         translate_to (None | str | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (BodyTranscribeApiVoiceTranscribePost):
@@ -295,7 +276,6 @@ async def asyncio(
             language=language,
             session_id=session_id,
             translate_to=translate_to,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

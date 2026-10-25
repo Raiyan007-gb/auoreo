@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core.services import Services
 from auoreo.schema.chat import KanbanCreate, KanbanTask
 from auoreo.teams.kanban import KanbanStore, task_dict
@@ -32,7 +32,7 @@ async def list_tasks(
     return [KanbanTask.model_validate(task_dict(r)) for r in rows]
 
 
-@router.post("", response_model=KanbanTask, status_code=201)
+@router.post("", dependencies=[IDEMPOTENT], response_model=KanbanTask, status_code=201)
 async def create_task(svc: ServicesDep, body: KanbanCreate) -> KanbanTask:
     row = await _store(svc).create(body.board, body.title, body.body)
     return KanbanTask.model_validate(task_dict(row))

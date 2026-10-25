@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
-from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core.services import Services
 from auoreo.schema.chat import PluginInfo, PluginPair, PluginPaired, PluginSkillInfo
 
@@ -66,7 +66,7 @@ async def plugin_skills(name: str, svc: ServicesDep) -> list[PluginSkillInfo]:
     return [PluginSkillInfo(name=s.name, description=s.description, body=s.body) for s in skills]
 
 
-@router.post("/{name}/pair", response_model=PluginPaired)
+@router.post("/{name}/pair", dependencies=[IDEMPOTENT], response_model=PluginPaired)
 async def pair(name: str, body: PluginPair, svc: ServicesDep) -> PluginPaired:
     """Allowlist the chat that was shown this pairing code (connector plugins, e.g. telegram)."""
     try:

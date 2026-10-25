@@ -414,6 +414,14 @@ async def run_checks(settings: Settings, *, services: Services | None = None) ->
     at = next((i + 1 for i, c in enumerate(out) if c.check == "db_encryption"), len(out))
     out.insert(at, row)
     # --- end F6
+    # --- G1a: enabled webhook routes whose secret is missing (they answer 403)
+    import contextlib
+
+    from auoreo.automation.webhook_verify import doctor_rows
+
+    with contextlib.suppress(HarnessError):  # a broken harness is already reported above
+        out.extend(Check(*row) for row in doctor_rows(settings, services))
+    # --- end G1a
     return out
 
 

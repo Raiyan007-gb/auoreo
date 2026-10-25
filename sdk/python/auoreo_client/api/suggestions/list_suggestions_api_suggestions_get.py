@@ -17,7 +17,6 @@ def _get_kwargs(
     *,
     status: ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset = UNSET,
     limit: int | Unset = 100,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -41,13 +40,6 @@ def _get_kwargs(
     params["status"] = json_status
 
     params["limit"] = limit
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -102,7 +94,6 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     status: ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset = UNSET,
     limit: int | Unset = 100,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[SuggestionInfo]]:
@@ -111,7 +102,6 @@ def sync_detailed(
     Args:
         status (ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset):
         limit (int | Unset):  Default: 100.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -126,7 +116,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         status=status,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -143,7 +132,6 @@ def sync(
     client: AuthenticatedClient | Client,
     status: ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset = UNSET,
     limit: int | Unset = 100,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[SuggestionInfo] | None:
@@ -152,7 +140,6 @@ def sync(
     Args:
         status (ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset):
         limit (int | Unset):  Default: 100.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -168,7 +155,6 @@ def sync(
         client=client,
         status=status,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -179,7 +165,6 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     status: ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset = UNSET,
     limit: int | Unset = 100,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[SuggestionInfo]]:
@@ -188,7 +173,6 @@ async def asyncio_detailed(
     Args:
         status (ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset):
         limit (int | Unset):  Default: 100.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -203,7 +187,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         status=status,
         limit=limit,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -218,7 +201,6 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     status: ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset = UNSET,
     limit: int | Unset = 100,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[SuggestionInfo] | None:
@@ -227,7 +209,6 @@ async def asyncio(
     Args:
         status (ListSuggestionsApiSuggestionsGetStatusType0 | None | Unset):
         limit (int | Unset):  Default: 100.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -244,7 +225,6 @@ async def asyncio(
             client=client,
             status=status,
             limit=limit,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

@@ -46,7 +46,7 @@ async def client(svc: Services) -> AsyncIterator[httpx.AsyncClient]:
     app = create_app(svc.settings, services=svc)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         yield c
 

@@ -14,7 +14,6 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     *,
     body: OpenAIChatRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -26,21 +25,9 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
-    params: dict[str, Any] = {}
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
-
-    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
-
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/v1/chat/completions",
-        "params": params,
         "cookies": cookies,
     }
 
@@ -106,7 +93,6 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: OpenAIChatRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | OpenAIChatCompletion]:
@@ -116,7 +102,6 @@ def sync_detailed(
     lines and `data: [DONE]`. Tool calls are returned, never executed.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (OpenAIChatRequest): `POST /v1/chat/completions` body. Unknown OpenAI fields (`n`,
@@ -133,7 +118,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -149,7 +133,6 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: OpenAIChatRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | OpenAIChatCompletion | None:
@@ -159,7 +142,6 @@ def sync(
     lines and `data: [DONE]`. Tool calls are returned, never executed.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (OpenAIChatRequest): `POST /v1/chat/completions` body. Unknown OpenAI fields (`n`,
@@ -177,7 +159,6 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -187,7 +168,6 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: OpenAIChatRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | OpenAIChatCompletion]:
@@ -197,7 +177,6 @@ async def asyncio_detailed(
     lines and `data: [DONE]`. Tool calls are returned, never executed.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (OpenAIChatRequest): `POST /v1/chat/completions` body. Unknown OpenAI fields (`n`,
@@ -214,7 +193,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -228,7 +206,6 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: OpenAIChatRequest,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | OpenAIChatCompletion | None:
@@ -238,7 +215,6 @@ async def asyncio(
     lines and `data: [DONE]`. Tool calls are returned, never executed.
 
     Args:
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (OpenAIChatRequest): `POST /v1/chat/completions` body. Unknown OpenAI fields (`n`,
@@ -257,7 +233,6 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

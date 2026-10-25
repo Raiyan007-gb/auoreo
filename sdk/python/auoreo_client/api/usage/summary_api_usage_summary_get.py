@@ -13,7 +13,6 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     *,
     days: int | Unset = 7,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -28,13 +27,6 @@ def _get_kwargs(
     params: dict[str, Any] = {}
 
     params["days"] = days
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -83,7 +75,6 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     days: int | Unset = 7,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | UsageSummary]:
@@ -91,7 +82,6 @@ def sync_detailed(
 
     Args:
         days (int | Unset):  Default: 7.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -105,7 +95,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         days=days,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -121,7 +110,6 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     days: int | Unset = 7,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | UsageSummary | None:
@@ -129,7 +117,6 @@ def sync(
 
     Args:
         days (int | Unset):  Default: 7.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -144,7 +131,6 @@ def sync(
     return sync_detailed(
         client=client,
         days=days,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -154,7 +140,6 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     days: int | Unset = 7,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | UsageSummary]:
@@ -162,7 +147,6 @@ async def asyncio_detailed(
 
     Args:
         days (int | Unset):  Default: 7.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -176,7 +160,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         days=days,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -190,7 +173,6 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     days: int | Unset = 7,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | UsageSummary | None:
@@ -198,7 +180,6 @@ async def asyncio(
 
     Args:
         days (int | Unset):  Default: 7.
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -214,7 +195,6 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             days=days,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

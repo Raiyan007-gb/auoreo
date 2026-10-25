@@ -13,7 +13,6 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     *,
     session_id: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -33,13 +32,6 @@ def _get_kwargs(
     else:
         json_session_id = session_id
     params["session_id"] = json_session_id
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -93,7 +85,6 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     session_id: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[PendingQuestionOut]]:
@@ -101,7 +92,6 @@ def sync_detailed(
 
     Args:
         session_id (None | str | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -115,7 +105,6 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         session_id=session_id,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -131,7 +120,6 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     session_id: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[PendingQuestionOut] | None:
@@ -139,7 +127,6 @@ def sync(
 
     Args:
         session_id (None | str | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -154,7 +141,6 @@ def sync(
     return sync_detailed(
         client=client,
         session_id=session_id,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -164,7 +150,6 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     session_id: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | list[PendingQuestionOut]]:
@@ -172,7 +157,6 @@ async def asyncio_detailed(
 
     Args:
         session_id (None | str | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -186,7 +170,6 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         session_id=session_id,
-        token=token,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -200,7 +183,6 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     session_id: None | str | Unset = UNSET,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | list[PendingQuestionOut] | None:
@@ -208,7 +190,6 @@ async def asyncio(
 
     Args:
         session_id (None | str | Unset):
-        token (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -224,7 +205,6 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             session_id=session_id,
-            token=token,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

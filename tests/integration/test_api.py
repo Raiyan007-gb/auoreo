@@ -22,7 +22,7 @@ async def client(services: Services, settings: Settings) -> AsyncIterator[httpx.
     app = create_app(settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         yield c
 
@@ -197,14 +197,18 @@ async def test_auth_required_when_password_set(services: Services, settings: Set
     app = create_app(settings, services=services)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         assert (await c.get("/api/health")).status_code == 200  # public
         assert (await c.get("/api/sessions")).status_code == 401
         ok = await c.get("/api/sessions", headers={"Authorization": "Bearer s3cret-pass"})
         assert ok.status_code == 200
         assert (await c.get("/api/sessions", params={"token": "s3cret-pass"})).status_code == 401
+        # `?token=` is accepted only on the WS handshake; the browser SSE path is the cookie
         r = await c.get("/api/events", params={"token": "s3cret-pass", "follow": "false"})
+        assert r.status_code == 401
+        c.cookies.set("auoreo_token", "s3cret-pass")
+        r = await c.get("/api/events", params={"follow": "false"})
         assert r.status_code == 200
 
 
@@ -222,7 +226,7 @@ async def test_routes_win_over_spa_mount(services: Services, settings: Settings,
     app = create_app(settings, services=services, web_dist=dist)
     async with (
         LifespanManager(app),
-        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as c,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://127.0.0.1") as c,
     ):
         assert (await c.get("/api/health")).json()["status"] == "ok"
         assert "spa" in (await c.get("/")).text

@@ -15,13 +15,16 @@ def _get_kwargs(
     delivery_id: int,
     *,
     dry_run: bool | Unset = True,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
     if not isinstance(authorization, Unset):
         headers["authorization"] = authorization
+
+    if not isinstance(idempotency_key, Unset):
+        headers["idempotency-key"] = idempotency_key
 
     cookies = {}
     if auoreo_token is not UNSET:
@@ -30,13 +33,6 @@ def _get_kwargs(
     params: dict[str, Any] = {}
 
     params["dry_run"] = dry_run
-
-    json_token: None | str | Unset
-    if isinstance(token, Unset):
-        json_token = UNSET
-    else:
-        json_token = token
-    params["token"] = json_token
 
     params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
 
@@ -88,8 +84,8 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     dry_run: bool | Unset = True,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[DeliveryReplay | HTTPValidationError]:
     """Replay Delivery
@@ -100,8 +96,9 @@ def sync_detailed(
     Args:
         delivery_id (int):
         dry_run (bool | Unset):  Default: True.
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
 
     Raises:
@@ -115,8 +112,8 @@ def sync_detailed(
     kwargs = _get_kwargs(
         delivery_id=delivery_id,
         dry_run=dry_run,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -132,8 +129,8 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     dry_run: bool | Unset = True,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> DeliveryReplay | HTTPValidationError | None:
     """Replay Delivery
@@ -144,8 +141,9 @@ def sync(
     Args:
         delivery_id (int):
         dry_run (bool | Unset):  Default: True.
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
 
     Raises:
@@ -160,8 +158,8 @@ def sync(
         delivery_id=delivery_id,
         client=client,
         dry_run=dry_run,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     ).parsed
 
@@ -171,8 +169,8 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     dry_run: bool | Unset = True,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[DeliveryReplay | HTTPValidationError]:
     """Replay Delivery
@@ -183,8 +181,9 @@ async def asyncio_detailed(
     Args:
         delivery_id (int):
         dry_run (bool | Unset):  Default: True.
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
 
     Raises:
@@ -198,8 +197,8 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         delivery_id=delivery_id,
         dry_run=dry_run,
-        token=token,
         authorization=authorization,
+        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -213,8 +212,8 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     dry_run: bool | Unset = True,
-    token: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
+    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> DeliveryReplay | HTTPValidationError | None:
     """Replay Delivery
@@ -225,8 +224,9 @@ async def asyncio(
     Args:
         delivery_id (int):
         dry_run (bool | Unset):  Default: True.
-        token (None | str | Unset):
         authorization (None | str | Unset):
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         auoreo_token (None | str | Unset):
 
     Raises:
@@ -242,8 +242,8 @@ async def asyncio(
             delivery_id=delivery_id,
             client=client,
             dry_run=dry_run,
-            token=token,
             authorization=authorization,
+            idempotency_key=idempotency_key,
             auoreo_token=auoreo_token,
         )
     ).parsed

@@ -6,7 +6,8 @@ follow-ups. Auth and the browser Origin check run before `accept()`.
 
 Tasks per connection: a reader (socket → inbox queue), the inbound dispatcher (this
 handler's own task), an outbound pump (bus → socket) and a pinger. One send lock keeps
-frames whole and ordered.
+frames whole and ordered. Close codes: 4001 auth expired (`http.ws_auth_ttl_s`; the client
+re-authenticates, ≤3 retries) · 4401 credentials revoked (the server password changed).
 """
 
 from __future__ import annotations
@@ -27,13 +28,17 @@ from starlette.websockets import WebSocketDisconnect
 
 from auoreo.api.deps import token_matches
 from auoreo.core.approvals import pending_dict, reply_with_grants
-from auoreo.core.bus import Subscriber
+from auoreo.core.bus import Subscriber, invalid_channels
 from auoreo.core.event_store import REPLAY_LIMIT
 from auoreo.core.services import Services
+from auoreo.runtime.inbox import InboxFull
 from auoreo.schema.ws import (
+    CLOSE_AUTH_EXPIRED,
     CLOSE_KEEPALIVE,
     CLOSE_POLICY,
+    CLOSE_REVOKED,
     CLOSE_TRY_LATER,
+    MAX_BATCH,
     ClientFrame,
     WsAck,
     WsConnected,
@@ -43,7 +48,11 @@ from auoreo.schema.ws import (
     WsHello,
     WsPermissionReply,
     WsPing,
+    WsServerPong,
     WsSubscribe,
+    WsSubscribed,
+    WsUnsubscribe,
+    WsUnsubscribed,
 )
 
 log = logging.getLogger(__name__)
@@ -54,9 +63,14 @@ HELLO_WAIT_S = 1.0
 """How long to wait for an optional `hello` before falling back to query params."""
 _CLIENT_FRAME: TypeAdapter[Any] = TypeAdapter(ClientFrame)
 _INVALID = object()
+_OVERSIZED = object()
+FOLLOWUP_MEMORY = 256
+"""Followup request ids remembered per connection (for `edit`)."""
 
 Ack = tuple[bool, str | None]
-ErrorSubtype = Literal["unknown_type", "invalid_frame", "binary_dropped", "unauthorized", "not_found"]
+ErrorSubtype = Literal[
+    "unknown_type", "invalid_frame", "binary_dropped", "unauthorized", "not_found", "unknown_channel"
+]
 
 
 def origin_allowed(origin: str | None, extra: list[str]) -> bool:
@@ -75,9 +89,13 @@ def _channels(value: list[str] | None) -> frozenset[str] | None:
 
 
 def split_frames(text: str) -> list[Any]:
-    """One JSON object per message; `\\n`-joined batches are tolerated on read."""
+    """One JSON object per message; `\\n`-joined batches and JSON arrays of ≤32 frames are
+    tolerated on read (an empty or larger array → one `_OVERSIZED` marker)."""
     try:
-        return [json.loads(text)]
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return parsed if 0 < len(parsed) <= MAX_BATCH else [_OVERSIZED]
+        return [parsed]
     except json.JSONDecodeError:
         if "\n" not in text:
             return [_INVALID]
@@ -98,7 +116,8 @@ async def ws_guard(
     auoreo_token: Annotated[str | None, Cookie()] = None,
     origin: Annotated[str | None, Header()] = None,
 ) -> Services:
-    """Runs before `accept()`: a failure rejects the handshake with policy code 1008."""
+    """Runs before `accept()`: a failure rejects the handshake with policy code 1008. This is
+    the only place `?token=` is accepted (browsers cannot set headers on `new WebSocket()`)."""
     svc: Services = websocket.app.state.services
     if not origin_allowed(origin, svc.settings.cors_origins):
         raise WebSocketException(code=CLOSE_POLICY, reason="origin not allowed")
@@ -106,6 +125,7 @@ async def ws_guard(
         svc.settings.server_password, authorization=authorization, query_token=token, cookie=auoreo_token
     ):
         raise WebSocketException(code=CLOSE_POLICY, reason="invalid or missing token")
+    websocket.scope.setdefault("state", {})["auoreo_password"] = svc.settings.server_password
     return svc
 
 
@@ -132,13 +152,18 @@ class WsConnection:
         self.tick = 0
         self.last_pong = time.monotonic()
         self.binary_dropped = 0
+        self.authed_at = time.monotonic()
+        self.password = (ws.scope.get("state") or {}).get("auoreo_password", svc.settings.server_password)
+        self._followups: dict[str, tuple[str, str]] = {}  # request_id → (session_id, run_id)
         self._inbox: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
         self._send_lock = asyncio.Lock()
         self._tasks: list[asyncio.Task[None]] = []
         self._frames: dict[str, Callable[[Any], Awaitable[None]]] = {
             "hello": self._on_hello,
             "subscribe": self._on_subscribe,
+            "unsubscribe": self._on_unsubscribe,
             "pong": self._on_pong,
+            "ping": self._on_ping,
             "control_response": self._on_control_response,
             "control_request": self._on_control_request,
         }
@@ -146,6 +171,7 @@ class WsConnection:
             "interrupt": self._req_interrupt,
             "steer": self._req_steer,
             "followup": self._req_followup,
+            "edit": self._req_edit,
         }
 
     # ------------------------------------------------------------ lifecycle
@@ -292,11 +318,26 @@ class WsConnection:
         interval = max(0.05, self.svc.settings.ws_ping_interval_s)
         while not self.closed:
             await asyncio.sleep(interval)
+            if await self.check_auth():
+                return
             if time.monotonic() - self.last_pong > 2 * interval:
                 await self.close(CLOSE_KEEPALIVE, "no pong for two ping intervals")
                 return
             self.tick += 1
             await self.send(WsPing(type="ping", tick=self.tick, server_seq=await self.svc.events.last_seq()))
+
+    async def check_auth(self) -> bool:
+        """Close with 4401 when the server password changed since the handshake (revoked) or
+        4001 once `http.ws_auth_ttl_s` has passed (expired: reconnect and re-authenticate)."""
+        st = self.svc.settings
+        if st.server_password != self.password:
+            await self.close(CLOSE_REVOKED, "credentials revoked")
+            return True
+        ttl = st.http.ws_auth_ttl_s
+        if ttl is not None and time.monotonic() - self.authed_at > ttl:
+            await self.close(CLOSE_AUTH_EXPIRED, "authentication expired; reconnect")
+            return True
+        return False
 
     # ------------------------------------------------------------- inbound
     async def _handle(self, msg: dict[str, Any]) -> None:
@@ -311,6 +352,10 @@ class WsConnection:
             await self._handle_obj(obj)
 
     async def _handle_obj(self, obj: Any) -> None:
+        if obj is _OVERSIZED:
+            msg = f"invalid request (-32600): a batch is a non-empty JSON array of at most {MAX_BATCH} frames"
+            await self.send(WsError(type="error", subtype="invalid_frame", message=msg, code=-32600))
+            return
         if not isinstance(obj, dict):
             await self.error("invalid_frame", "each frame must be one JSON object")
             return
@@ -334,14 +379,43 @@ class WsConnection:
             if rid is not None:
                 await self.ack(rid, False, f"{type(exc).__name__}: {exc}")
 
+    async def _bad_channels(self, channels: list[str] | None) -> bool:
+        bad = invalid_channels(channels or [])
+        if bad:
+            await self.error("unknown_channel", f"unknown channel(s): {', '.join(sorted(bad))}")
+        return bool(bad)
+
     async def _on_hello(self, frame: WsHello) -> None:
-        await self._subscribe(_channels(frame.channels), frame.last_seq, announce=True)
+        if not await self._bad_channels(frame.channels):
+            await self._subscribe(_channels(frame.channels), frame.last_seq, announce=True)
 
     async def _on_subscribe(self, frame: WsSubscribe) -> None:
+        if await self._bad_channels(frame.channels):
+            return
         await self._subscribe(_channels(frame.channels), frame.last_seq)
+        chans = sorted(self.channels) if self.channels is not None else None
+        server_seq = await self.svc.events.last_seq()
+        await self.send(WsSubscribed(type="subscribed", channels=chans, server_seq=server_seq))
+
+    async def _on_unsubscribe(self, frame: WsUnsubscribe) -> None:
+        if await self._bad_channels(frame.channels):
+            return
+        if self.channels is None:
+            await self.error(
+                "invalid_frame", "subscribed to everything; subscribe to explicit channels first"
+            )
+            return
+        removed = sorted(self.channels & set(frame.channels))
+        remaining = self.channels - set(frame.channels)
+        await self._subscribe(remaining, None)  # live only: nothing new to replay
+        await self.send(WsUnsubscribed(type="unsubscribed", channels=removed, remaining=sorted(remaining)))
 
     async def _on_pong(self, _frame: Any) -> None:
         self.last_pong = time.monotonic()
+
+    async def _on_ping(self, frame: Any) -> None:
+        self.last_pong = time.monotonic()  # a pinging client is alive
+        await self.send(WsServerPong(type="pong", tick=frame.tick, server_seq=self.cursor))
 
     async def _on_control_response(self, frame: WsControlResponse) -> None:
         r = frame.response
@@ -359,6 +433,10 @@ class WsConnection:
             await self.ack(frame.request_id, False, "session not found")
             return
         ok, detail = await self._requests[req.kind](req)
+        if ok and req.kind == "followup" and detail and detail.startswith("run_"):
+            self._followups[frame.request_id] = (req.session_id, detail)
+            while len(self._followups) > FOLLOWUP_MEMORY:
+                self._followups.pop(next(iter(self._followups)))
         await self.ack(frame.request_id, ok, detail)
 
     async def _req_interrupt(self, req: Any) -> Ack:
@@ -366,7 +444,10 @@ class WsConnection:
         return True, "cancelled" if cancelled else "not running"
 
     async def _req_steer(self, req: Any) -> Ack:
-        run_id = await self.svc.coordinator.submit(req.session_id, req.text, "steer")
+        try:
+            run_id = await self.svc.coordinator.submit(req.session_id, req.text, "steer")
+        except InboxFull as exc:
+            return False, f"429 queue full: {exc}"
         return True, run_id or "steered"
 
     async def _req_followup(self, req: Any) -> Ack:
@@ -376,7 +457,19 @@ class WsConnection:
             )
         except KeyError as exc:
             return False, str(exc).strip("'\"")
+        except InboxFull as exc:
+            return False, f"429 queue full: {exc}"
         return True, run_id or "handled"
+
+    async def _req_edit(self, req: Any) -> Ack:
+        """Rewrite a queued followup (by its request id or run id) before it starts."""
+        sid, run_id = self._followups.get(req.target, (req.session_id, req.target))
+        if sid != req.session_id:
+            return False, "that request belongs to another session"
+        rt = await self.svc.coordinator.runtime(req.session_id)
+        if rt.inbox.edit(run_id, req.text):
+            return True, run_id
+        return False, "not queued (already running, finished or unknown)"
 
 
 def _as_hello(msg: dict[str, Any] | None) -> WsHello | None:

@@ -40,9 +40,11 @@ async def app(services: Services, settings: Settings) -> AsyncIterator[Any]:
 
 async def test_generated_client_health_and_session(app: Any) -> None:
     transport = httpx.ASGITransport(app=app)
-    client = AuthenticatedClient(base_url="http://test", token="pw")
+    client = AuthenticatedClient(base_url="http://127.0.0.1", token="pw")
     client.set_async_httpx_client(
-        httpx.AsyncClient(transport=transport, base_url="http://test", headers={"Authorization": "Bearer pw"})
+        httpx.AsyncClient(
+            transport=transport, base_url="http://127.0.0.1", headers={"Authorization": "Bearer pw"}
+        )
     )
     health = await health_api_health_get.asyncio(client=client)
     assert health is not None and health.status == "ok"
@@ -56,7 +58,7 @@ async def test_generated_client_health_and_session(app: Any) -> None:
 
     seen: list[dict[str, Any]] = []
     last = await subscribe_events(
-        "http://test",
+        "http://127.0.0.1",
         "pw",
         0,
         seen.append,
@@ -70,7 +72,13 @@ async def test_generated_client_health_and_session(app: Any) -> None:
     resumed: list[dict[str, Any]] = []
     mid = seen[1]["seq"]
     await subscribe_events(
-        "http://test", "pw", mid, resumed.append, session_ids=[created.id], follow=False, transport=transport
+        "http://127.0.0.1",
+        "pw",
+        mid,
+        resumed.append,
+        session_ids=[created.id],
+        follow=False,
+        transport=transport,
     )
     assert [e["seq"] for e in resumed] == [e["seq"] for e in seen if e["seq"] > mid]
     await client.get_async_httpx_client().aclose()

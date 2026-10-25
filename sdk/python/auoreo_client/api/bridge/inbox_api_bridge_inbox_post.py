@@ -8,14 +8,17 @@ from ...client import AuthenticatedClient, Client
 from ...models.bridge_delivered import BridgeDelivered
 from ...models.bridge_envelope import BridgeEnvelope
 from ...models.http_validation_error import HTTPValidationError
-from ...types import Response
+from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     *,
     body: BridgeEnvelope,
+    idempotency_key: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
+    if not isinstance(idempotency_key, Unset):
+        headers["idempotency-key"] = idempotency_key
 
     _kwargs: dict[str, Any] = {
         "method": "post",
@@ -80,6 +83,7 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: BridgeEnvelope,
+    idempotency_key: None | str | Unset = UNSET,
 ) -> Response[Any | BridgeDelivered | HTTPValidationError]:
     """Inbox
 
@@ -87,6 +91,8 @@ def sync_detailed(
     `from: bridge:<sender>/<member>`. The signature covers the raw body bytes.
 
     Args:
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         body (BridgeEnvelope): `POST /api/bridge/inbox` body. Signed with HMAC-SHA256 over
             `"<timestamp>.<nonce>." + raw body` (header `X-Auoreo-Signature: sha256=<hex>`).
 
@@ -100,6 +106,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        idempotency_key=idempotency_key,
     )
 
     response = client.get_httpx_client().request(
@@ -113,6 +120,7 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: BridgeEnvelope,
+    idempotency_key: None | str | Unset = UNSET,
 ) -> Any | BridgeDelivered | HTTPValidationError | None:
     """Inbox
 
@@ -120,6 +128,8 @@ def sync(
     `from: bridge:<sender>/<member>`. The signature covers the raw body bytes.
 
     Args:
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         body (BridgeEnvelope): `POST /api/bridge/inbox` body. Signed with HMAC-SHA256 over
             `"<timestamp>.<nonce>." + raw body` (header `X-Auoreo-Signature: sha256=<hex>`).
 
@@ -134,6 +144,7 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
+        idempotency_key=idempotency_key,
     ).parsed
 
 
@@ -141,6 +152,7 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: BridgeEnvelope,
+    idempotency_key: None | str | Unset = UNSET,
 ) -> Response[Any | BridgeDelivered | HTTPValidationError]:
     """Inbox
 
@@ -148,6 +160,8 @@ async def asyncio_detailed(
     `from: bridge:<sender>/<member>`. The signature covers the raw body bytes.
 
     Args:
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         body (BridgeEnvelope): `POST /api/bridge/inbox` body. Signed with HMAC-SHA256 over
             `"<timestamp>.<nonce>." + raw body` (header `X-Auoreo-Signature: sha256=<hex>`).
 
@@ -161,6 +175,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        idempotency_key=idempotency_key,
     )
 
     response = await client.get_async_httpx_client().request(**kwargs)
@@ -172,6 +187,7 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: BridgeEnvelope,
+    idempotency_key: None | str | Unset = UNSET,
 ) -> Any | BridgeDelivered | HTTPValidationError | None:
     """Inbox
 
@@ -179,6 +195,8 @@ async def asyncio(
     `from: bridge:<sender>/<member>`. The signature covers the raw body bytes.
 
     Args:
+        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
+            response
         body (BridgeEnvelope): `POST /api/bridge/inbox` body. Signed with HMAC-SHA256 over
             `"<timestamp>.<nonce>." + raw body` (header `X-Auoreo-Signature: sha256=<hex>`).
 
@@ -194,5 +212,6 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
+            idempotency_key=idempotency_key,
         )
     ).parsed
