@@ -187,7 +187,8 @@ class AgentRunner:
         memory_block = ""
         if self.s.memory is not None and spec.agent.manifest.memory and not options.skip_memory:
             try:
-                memory_block = await self.s.memory.context_block(text)
+                top_k = (choice.arm.top_k if choice else None) or 8  # bandit arm may tune recall depth
+                memory_block = await self.s.memory.context_block(text, limit=top_k)
             except Exception:  # recall must never fail the turn
                 log.exception("memory recall failed")
         context = render_context(

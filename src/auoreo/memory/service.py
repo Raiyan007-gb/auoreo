@@ -383,7 +383,7 @@ class MemoryService:
         rows = await self._run(self.store.search_transcript, query, limit, session_id)
         return [Hit("transcript", r.id, r.text, 0.0, r.source, f"session:{r.source}") for r in rows]
 
-    async def context_block(self, query: str, *, allow_aux: bool = True) -> str:
+    async def context_block(self, query: str, *, allow_aux: bool = True, limit: int = 8) -> str:
         """Memory text for the per-turn context snapshot (files + recalled items)."""
         home = self.s.settings.home
         parts: list[str] = []
@@ -393,7 +393,7 @@ class MemoryService:
             parts.append(mem)
         if user:
             parts.append(user)
-        hits = await self.search(query, limit=8, allow_aux=allow_aux)
+        hits = await self.search(query, limit=limit, allow_aux=allow_aux)
         if hits:
             budget = self.cfg.auto_inject_tokens * 4
             lines, used = [], 0

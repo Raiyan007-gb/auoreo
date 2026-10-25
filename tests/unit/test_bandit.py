@@ -234,3 +234,28 @@ async def test_five_turns_learn_and_status_reports(services: Services) -> None:
     assert (arms, outs) == (0, 0)
     arms, outs = await services.coordinator.runner.policy.store.reset()
     assert (arms, outs) == (2, 5)
+
+
+async def test_arm_top_k_sets_the_memory_recall_depth(
+    services: Services, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    services.settings.bandit = BanditSettings(enabled=True, arms=[Arm(model="default", top_k=3)])
+    seen: list[int] = []
+
+    class Mem:
+        async def context_block(self, query: str, *, allow_aux: bool = True, limit: int = 8) -> str:
+            seen.append(limit)
+            return ""
+
+        async def record_message(self, *a: Any, **kw: Any) -> None:
+            return None
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(services, "memory", Mem())
+    sess = await services.create_session()
+    await turn(services, sess.id, "hi")
+    services.settings.bandit.enabled = False
+    await turn(services, sess.id, "again")
+    assert seen == [3, 8]
