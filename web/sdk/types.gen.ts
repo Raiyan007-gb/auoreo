@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/acp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acp
+         * @description JSON-RPC 2.0 entry point for ACP clients (editors).
+         */
+        post: operations["acp_acp_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/chat": {
         parameters: {
             query?: never;
@@ -877,6 +897,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/chat/completions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat Completions
+         * @description Non-streaming → a `chat.completion` object; `stream: true` → SSE `chat.completion.chunk`
+         *     lines and `data: [DONE]`. Tool calls are returned, never executed.
+         */
+        post: operations["chat_completions_v1_chat_completions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Models
+         * @description Routing groups from `settings.models`, their `auoreo/<group>` forms, and aliases.
+         */
+        get: operations["list_models_v1_models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1268,6 +1329,148 @@ export interface components {
             tool_calls?: {
                 [key: string]: unknown;
             }[] | null;
+        };
+        /** OpenAIChatCompletion */
+        OpenAIChatCompletion: {
+            /** Choices */
+            choices: components["schemas"]["OpenAIChoice"][];
+            /** Created */
+            created: number;
+            /** Id */
+            id: string;
+            /** Model */
+            model: string;
+            /**
+             * Object
+             * @default chat.completion
+             * @constant
+             */
+            object: "chat.completion";
+            usage: components["schemas"]["OpenAIUsage"];
+        };
+        /**
+         * OpenAIChatRequest
+         * @description `POST /v1/chat/completions` body. Unknown OpenAI fields (`n`, `top_p`, …) are
+         *     accepted and ignored; tools are the client's — nothing is executed server-side.
+         */
+        OpenAIChatRequest: {
+            /** Max Completion Tokens */
+            max_completion_tokens?: number | null;
+            /** Max Tokens */
+            max_tokens?: number | null;
+            /** Messages */
+            messages: {
+                [key: string]: unknown;
+            }[];
+            /** Model */
+            model: string;
+            /**
+             * Stream
+             * @default false
+             */
+            stream: boolean;
+            /** Stream Options */
+            stream_options?: {
+                [key: string]: unknown;
+            } | null;
+            /** Temperature */
+            temperature?: number | null;
+            /** Tool Choice */
+            tool_choice?: string | {
+                [key: string]: unknown;
+            } | null;
+            /** Tools */
+            tools?: {
+                [key: string]: unknown;
+            }[] | null;
+            /** User */
+            user?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** OpenAIChoice */
+        OpenAIChoice: {
+            /** Finish Reason */
+            finish_reason: string;
+            /**
+             * Index
+             * @default 0
+             */
+            index: number;
+            message: components["schemas"]["OpenAIMessage"];
+        };
+        /** OpenAIMessage */
+        OpenAIMessage: {
+            /** Content */
+            content: string | null;
+            /**
+             * Role
+             * @default assistant
+             * @constant
+             */
+            role: "assistant";
+            /** Tool Calls */
+            tool_calls?: components["schemas"]["OpenAIToolCall"][] | null;
+        };
+        /** OpenAIModel */
+        OpenAIModel: {
+            /**
+             * Created
+             * @default 0
+             */
+            created: number;
+            /** Id */
+            id: string;
+            /**
+             * Object
+             * @default model
+             * @constant
+             */
+            object: "model";
+            /**
+             * Owned By
+             * @default auoreo
+             */
+            owned_by: string;
+        };
+        /** OpenAIModelList */
+        OpenAIModelList: {
+            /** Data */
+            data: components["schemas"]["OpenAIModel"][];
+            /**
+             * Object
+             * @default list
+             * @constant
+             */
+            object: "list";
+        };
+        /** OpenAIToolCall */
+        OpenAIToolCall: {
+            function: components["schemas"]["OpenAIToolCallFunction"];
+            /** Id */
+            id: string;
+            /**
+             * Type
+             * @default function
+             * @constant
+             */
+            type: "function";
+        };
+        /** OpenAIToolCallFunction */
+        OpenAIToolCallFunction: {
+            /** Arguments */
+            arguments: string;
+            /** Name */
+            name: string;
+        };
+        /** OpenAIUsage */
+        OpenAIUsage: {
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Total Tokens */
+            total_tokens: number;
         };
         /** PendingPermission */
         PendingPermission: {
@@ -1705,6 +1908,52 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    acp_acp_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": unknown;
+            };
+        };
+        responses: {
+            /** @description JSON-RPC response or batch */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Only notifications */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     chat_api_chat_post: {
         parameters: {
             query?: {
@@ -3691,6 +3940,116 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    chat_completions_v1_chat_completions_post: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenAIChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenAIChatCompletion"];
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description OpenAI error envelope `{error: {message, type, code}}` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description OpenAI error envelope `{error: {message, type, code}}` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description OpenAI error envelope `{error: {message, type, code}}` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description OpenAI error envelope `{error: {message, type, code}}` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description OpenAI error envelope `{error: {message, type, code}}` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_models_v1_models_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenAIModelList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

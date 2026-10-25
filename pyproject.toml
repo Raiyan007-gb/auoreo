@@ -64,7 +64,7 @@ dev = [
 [tool.ruff]
 line-length = 110
 target-version = "py312"
-extend-exclude = ["tests/fixtures"]
+extend-exclude = ["tests/fixtures", "sdk/python"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "ASYNC"]
@@ -78,7 +78,7 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 mypy_path = "src"
-exclude = ["tests/fixtures/"]
+exclude = ["tests/fixtures/", "sdk/python/"]
 
 [[tool.mypy.overrides]]
 module = ["litellm.*", "sqlite_vec.*", "markdownify.*", "keyring.*", "lark.*", "aiortc.*", "av.*", "numpy.*"]

@@ -176,6 +176,9 @@ class Settings(BaseSettings):
     """Default plugin tool-call / delivery timeout (a tool entry's `timeout_ms` wins)."""
     plugins_backoff_scale: float = Field(default=1.0, ge=0)
     """Multiplier on the 1 s → 30 s crash-restart backoff (tests use 0)."""
+    # --- M5h
+    mcp_server_enabled: bool = True
+    """Serve the default agent's tools to external MCP clients at `POST /mcp` (streamable HTTP)."""
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):
