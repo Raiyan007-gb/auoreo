@@ -5,10 +5,16 @@ Two output modes:
 - `sentinel` (file reads): `«redacted:<label>…»` — non-reusable and carries no entropy, so a
   model that writes the redacted text back cannot corrupt a real secret (see
   `auoreo.tools.writeguard`).
+
+Split secrets (§19.10, I1): zero-width characters (U+200B–U+200D, U+2060, U+FEFF) and C0
+controls other than tab/newline/CR (plus DEL) are stripped before pattern matching; the
+changed spans are mapped back onto the original text, so everything outside a secret keeps
+its invisible characters and the secret span is masked like any other.
 """
 
 from __future__ import annotations
 
+import difflib
 import logging
 import os
 import re
@@ -177,10 +183,42 @@ def _assign(mode: RedactMode) -> Callable[[re.Match[str]], str]:
     return sub
 
 
+_INVISIBLE = re.compile("[\u200b-\u200d\u2060\ufeff\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
 def redact(text: str, mode: RedactMode = "mask", *, force: bool = False) -> str:
     """`force=True` (debug bundles, §24.9) redacts even when `AUOREO_REDACT_SECRETS` is off."""
     if not (ENABLED or force) or not text or mode == "off":
         return text
+    if _INVISIBLE.search(text):
+        return _redact_split(text, mode)
+    return _redact_core(text, mode)
+
+
+def _redact_split(text: str, mode: RedactMode) -> str:
+    """Strip invisible/control characters, redact, then map the changed spans back."""
+    keep = [i for i, ch in enumerate(text) if not _INVISIBLE.match(ch)]
+    stripped = "".join(text[i] for i in keep)
+    redacted = _redact_core(stripped, mode)
+    if redacted == stripped:
+        return _redact_core(text, mode)
+    out: list[str] = []
+    pos = 0  # next original index not yet emitted
+    ops = difflib.SequenceMatcher(None, stripped, redacted, autojunk=False).get_opcodes()
+    for tag, i1, i2, j1, j2 in ops:
+        start = keep[i1] if i1 < len(keep) else len(text)
+        end = keep[i2 - 1] + 1 if i2 > i1 else start
+        if tag == "equal":
+            end = keep[i2 - 1] + 1
+            out.append(text[pos:end])
+        else:
+            out.append(text[pos:start] + redacted[j1:j2])
+        pos = max(pos, end)
+    out.append(text[pos:])
+    return "".join(out)
+
+
+def _redact_core(text: str, mode: RedactMode) -> str:
     if any(p in text for p in ALL_PREFIXES):
         text = _PREFIX_RE.sub(lambda m: _hide(m.group(0), mode), text)
         text = _WEAK_RE.sub(lambda m: _hide(m.group(0), mode), text)
