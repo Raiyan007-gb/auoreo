@@ -32,7 +32,8 @@ class HttpSecuritySettings(BaseModel):
 class WebhookSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    strict_secrets: bool = False
-    """Refuse to start when an enabled route's secret is missing (default: warn + 403)."""
+    strict_secrets: bool = True
+    """Fail closed (spec §19.11): refuse to start when an enabled route's secret is missing.
+    `false` downgrades to a startup warning + 403 per request (local experiments only)."""
     rotation_grace_s: int = Field(default=86_400, ge=0)
     """How long `secret:webhook/<route>#prev` keeps verifying after `auoreo webhook rotate`."""

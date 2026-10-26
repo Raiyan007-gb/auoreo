@@ -19,6 +19,7 @@ parameters:
     max_output_tokens: {type: integer, minimum: 50, maximum: 16000, default: 2000}
   additionalProperties: false
 permission: monitor
+shell_args: [cmd]
 default_action: allow
 exposure: deferred
 interrupt: cancel

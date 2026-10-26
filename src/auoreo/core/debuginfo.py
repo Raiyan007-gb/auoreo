@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from auoreo import __version__
-from auoreo.core.redaction import redact, sentinel
+from auoreo.core.redaction import REDACTION_VERSION, pattern_count, redact, sentinel
 from auoreo.core.settings import Settings
 
 SECRET_ENV_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "DSN")
@@ -66,7 +66,7 @@ class Scrubber:
     def text(self, s: str) -> str:
         for v in self.values:
             s = s.replace(v, sentinel("secret"))
-        return redact(s)
+        return redact(s, force=True)
 
     def obj(self, o: Any) -> Any:
         if isinstance(o, str):
@@ -246,7 +246,12 @@ async def build_bundle(st: Settings, out: Path) -> list[str]:
     logs = log_tails(st.home)
     manifest = {
         "created_at": datetime.now(UTC).isoformat(),
-        "redaction": "forced (patterns + known secret values)",
+        "redaction": {
+            "mode": "forced (patterns + known secret values)",
+            "version": REDACTION_VERSION,
+            "pattern_count": pattern_count(),
+            "known_values": len(scrub.values),
+        },
         "members": [*members, *(f"logs/{n}" for n in logs)],
     }
     out.parent.mkdir(parents=True, exist_ok=True)

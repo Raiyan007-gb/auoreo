@@ -44,6 +44,10 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("PYTHON_KEYRING_BACKEND", "keyring.backends.fail.Keyring")
     monkeypatch.setenv("AUOREO_OFFLINE", "1")  # doctor rtc rows: no STUN / LiveKit probes
+    # The sandbox default is `auto` (bwrap on Linux when installed). The suite pins the
+    # unconfined backend: tests use host-tmp fakes and persistent shells; the auto choice has
+    # its own tests (tests/unit/test_security_h1a_sandbox.py).
+    monkeypatch.setenv("AUOREO_BACKENDS", '{"sandbox": "none"}')
     yield
 
 

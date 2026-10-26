@@ -11,6 +11,10 @@ def main() -> None:
 
         print(__version__)
         return
+    # Freeze yolo + the redaction switch from the REAL process env before any `.env` is read
+    # (§19.3); `load_env_files` also refuses security knobs outright.
+    import auoreo.core.permissions
+    import auoreo.core.redaction  # noqa: F401
     from auoreo.core.dotenv import load_env_files
 
     load_env_files()  # provider keys + AUOREO_* from .env (never overrides the real env)

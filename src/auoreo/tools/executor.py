@@ -26,6 +26,7 @@ from auoreo.core.secrets import child_env, secret_scope
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import LoadError, ToolDef
 from auoreo.runtime.hooks import RESULT_PREVIEW_CHARS, hooks_of
+from auoreo.tools import shell_floor
 from auoreo.tools.args import (
     InvalidArgumentsError,
     format_validation_error,
@@ -147,6 +148,19 @@ class ToolExecutor:
                 detail={"tool": tool.name, "call_id": call.id, "why": why[:300]},
             )
             return self._err(call, f"refused: {why}. Do not retry unchanged.")
+
+        # Shell text: oversized payloads are saved, never run; floors for non-bash shells.
+        limit = self.s.settings.floors.max_inline_command_bytes
+        if shell := shell_floor.check(tool, args, ctx, engine, home=self.s.settings.home, limit=limit):
+            await self.s.audit.record(
+                actor="agent",
+                action="tool.denied",
+                session_id=ctx.session_id,
+                decision="deny",
+                reason=shell[0],
+                detail={"tool": tool.name, "call_id": call.id, "why": shell[1][:300]},
+            )
+            return self._err(call, shell[1])
 
         # Stage 2: permission (a file path outside cwd first passes `external_directory`).
         if (refused := await external_dir_gate(self, call, tool, args, ctx, engine)) is not None:

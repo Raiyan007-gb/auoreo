@@ -23,6 +23,7 @@ from auoreo.core.paths import home_dir
 from auoreo.core.settings_cli import CliSettings  # --- G5a
 from auoreo.core.settings_compaction import CompactionSettings  # --- G2b
 from auoreo.core.settings_engine import ToolEngineSettings  # --- G4a
+from auoreo.core.settings_floors import FloorSettings  # --- H1a
 from auoreo.core.settings_g6 import G6Settings  # --- G6
 from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
 from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # --- G1a
@@ -404,6 +405,7 @@ class Settings(BaseSettings):
     tool_engine: ToolEngineSettings = Field(default_factory=ToolEngineSettings)  # --- G4a
     cli: CliSettings = Field(default_factory=CliSettings)  # --- G5a
     g6: G6Settings = Field(default_factory=G6Settings)  # --- G6
+    floors: FloorSettings = Field(default_factory=FloorSettings)  # --- H1a
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

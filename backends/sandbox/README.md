@@ -13,7 +13,12 @@ Process confinement for tools that run model-supplied commands (`bash` today). A
 
 `none` + `security.sandbox_landlock: true` runs commands under the Landlock helper (fs only).
 
-Select with `settings.backends.sandbox`. At startup the selected backend is probed;
+Select with `settings.backends.sandbox`. Unset (or `"auto"`) probes the strongest local
+backend: `bwrap` on Linux, `seatbelt` on macOS; only when none is usable does it run `none`
+(warning + `sandbox.fallback` audit row + doctor warn; `sandbox_policy: fail` refuses).
+Under an enforcing backend the persistent shells (`exec_command`, `terminal_pty`) refuse:
+set `backends.sandbox: "none"` explicitly to use them unconfined.
+An explicit backend is probed at startup;
 on failure `sandbox_policy: warn` (default) audits `sandbox.fallback` and uses `none`,
 `fail` refuses to start. `auoreo doctor` shows the row with `enforced=` and the policy.
 
