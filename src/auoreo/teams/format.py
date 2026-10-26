@@ -59,13 +59,55 @@ def retry_instruction(error: str, schema: dict[str, Any]) -> str:
     )
 
 
-def check_output(text: str, schema: dict[str, Any]) -> str | None:
-    """None when `text` parses as JSON valid for `schema`, else the error message."""
+def _unfence(text: str) -> str:
     raw = text.strip()
     if raw.startswith("```"):
         raw = raw.strip("`")
         raw = raw.split("\n", 1)[1] if "\n" in raw else raw
         raw = raw.removeprefix("json").strip()
+    return raw
+
+
+def parse_json(text: str) -> Any:
+    """The JSON value of a (possibly fenced) final answer, or None."""
+    try:
+        return json.loads(_unfence(text))
+    except json.JSONDecodeError:
+        return None
+
+
+def check_value(value: Any, schema: dict[str, Any]) -> str | None:
+    """None when `value` is valid for `schema`, else the error message."""
+    try:
+        jsonschema.validate(value, schema)
+    except jsonschema.ValidationError as exc:
+        where = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+        return f"at {where}: {exc.message}"
+    except jsonschema.SchemaError as exc:
+        return f"output_schema is not a valid JSON Schema: {exc.message}"
+    return None
+
+
+# --- I3: handoff schema for child completions (spec §25.11)
+HANDOFF_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "purpose": {"type": "string", "minLength": 1},
+        "files": {"type": "array", "items": {"type": "string", "pattern": r"^[^\s:][^:]*:\d+(-\d+)?$"}},
+        "done": {"type": "boolean"},
+        "commit_hash": {"type": "string", "pattern": "^[0-9a-f]{7,40}$"},
+        "summary": {"type": "string", "minLength": 1, "maxLength": 80},
+        "usage": {"type": "object"},
+    },
+    "required": ["purpose", "files", "done", "summary"],
+}
+"""`{purpose, files:[path:line], done, commit_hash?, summary≤80ch, usage}`; `usage` is filled
+in by the harness from the child's ledger after validation."""
+
+
+def check_output(text: str, schema: dict[str, Any]) -> str | None:
+    """None when `text` parses as JSON valid for `schema`, else the error message."""
+    raw = _unfence(text)
     try:
         value = json.loads(raw)
     except json.JSONDecodeError as exc:

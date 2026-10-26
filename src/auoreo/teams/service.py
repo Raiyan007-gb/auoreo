@@ -23,24 +23,17 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from auoreo.core.db import TeamMemberRow, TeamRow
-from auoreo.runtime.hooks import subagent_stop
-from auoreo.runtime.inbox import RunOptions
+from auoreo.teams import spawn_i3
 from auoreo.teams.board import Board
 from auoreo.teams.ceiling import CeilingEngine, clamp, leaf_permissions, role_for
+from auoreo.teams.child_run import run_child
 from auoreo.teams.control import WAIT_DEFAULT_MS, WAIT_MAX_MS, WAIT_MIN_MS, Control
 from auoreo.teams.fleet import FLEET_CAP, Fleet
-from auoreo.teams.fork import fork_seed
-from auoreo.teams.format import (
-    SCHEMA_MISMATCH,
-    check_output,
-    retry_instruction,
-    schema_instruction,
-    summarize,
-    task_notification,
-)
+from auoreo.teams.fork import ExactSpec, FrozenTurn, fork_seed
+from auoreo.teams.format import HANDOFF_SCHEMA, summarize, task_notification
 from auoreo.teams.kanban import KanbanStore
 from auoreo.teams.mailbox import LEAD, Mailbox, TeamsError
-from auoreo.teams.monitor import BUDGET_EXCEEDED, Budget, ChildMonitor
+from auoreo.teams.monitor import Budget
 from auoreo.teams.scope import workflow_team
 from auoreo.teams.supervisor import Supervisor
 
@@ -59,8 +52,7 @@ __all__ = [
 ]
 
 TASK_NAME_RE = re.compile(r"^[a-z0-9_]{1,64}$")
-MODES = ("spawn", "fork")
-_FINAL = {"completed": "done", "max_steps": "done", "stopped": "stopped"}
+MODES = ("spawn", "fork", "exact")
 
 
 @dataclass
@@ -83,6 +75,13 @@ class Member:
     schema: dict[str, Any] | None = None
     interactive: bool = False
     budget: Budget = field(default_factory=Budget)
+    subagent_id: str = ""  # --- I3: sa-{n}-{hex8}
+    runs: int = 0  # turns run so far (live log `task-<n>.log`)
+    allowed_tools: list[str] | None = None
+    extra_deny: list[str] = field(default_factory=list)
+    exact: ExactSpec | None = None
+    handoff: bool = False
+    handoff_data: dict[str, Any] | None = None
 
     @property
     def task_id(self) -> str:
@@ -109,6 +108,9 @@ class TeamsService:
         self.control = Control(self)
         self.roles: dict[str, str] = {}  # child session id → orchestrator | leaf
         self.last_activity: dict[str, float] = {}  # parent session id → last child heartbeat
+        self.synthetic: dict[str, Any] = {}  # --- I3: session id → recorded synthetic_output
+        self.forks: set[str] = set()  # exact/summary fork children (recursion guard)
+        self.sa_counters: dict[str, int] = {}  # parent session id → spawns so far
 
     @property
     def max_depth(self) -> int:
@@ -259,6 +261,10 @@ class TeamsService:
         role: str | None = None,
         mode: str = "spawn",
         budget: dict[str, Any] | None = None,
+        allowed_tools: list[str] | None = None,
+        inherit_mcp_toolsets: bool | list[str] = False,
+        handoff: bool = False,
+        frozen: FrozenTurn | None = None,
     ) -> Member:
         parent = await self.s.get_session(parent_session_id)
         if parent is None:
@@ -269,6 +275,13 @@ class TeamsService:
             raise TeamsError(f"invalid task name '{name}': use [a-z0-9_]+ (≤64 chars)")
         if mode not in MODES:
             raise TeamsError(f"unknown mode '{mode}' (known: {', '.join(MODES)})")
+        if mode != "spawn" and parent_session_id in self.forks:  # boilerplate recursion guard
+            raise TeamsError("a forked subagent cannot fork again; use mode=spawn or do the work")
+        tools = self.s.harness.tools
+        allowed = spawn_i3.check_allowed(tools, allowed_tools)  # unknown names fail loud
+        extra_deny = spawn_i3.mcp_deny(tools, inherit_mcp_toolsets)
+        if handoff and output_schema is None:
+            output_schema = HANDOFF_SCHEMA
         depth = await self.depth(parent_session_id) + 1
         if depth > self.max_depth:
             raise TeamsError(
@@ -286,6 +299,8 @@ class TeamsService:
         await self.s.emit(parent_session_id, "subagent.spawn_requested", {**base, "background": background})
 
         child = await self.s.create_session(title=name, agent=agent, model=model, parent_id=parent_session_id)
+        member = Member(team.id, name, agent, child.id, parent_session_id, depth, background, model=model)
+        member.subagent_id = spawn_i3.next_subagent_id(self.sa_counters, parent_session_id)
         try:
             async with self.s.db.session() as s:
                 s.add(
@@ -296,6 +311,7 @@ class TeamsService:
                         session_id=child.id,
                         depth=depth,
                         status="queued",
+                        **spawn_i3.member_extras(self, member, child_manifest),
                     )
                 )
                 await s.commit()
@@ -315,15 +331,19 @@ class TeamsService:
             [],
             clamp(child_mode, parent_mode),
             str(self.s.cwd / ".auoreo" / "plans"),
-            denied=denied,
+            denied=denied | spawn_i3.denied_permissions(tools, allowed, extra_deny),
         )
         prt = await self.s.coordinator.runtime(parent_session_id)
-        if mode == "fork":
+        member.allowed_tools, member.extra_deny, member.handoff = allowed, extra_deny, handoff
+        if mode == "exact" and (seeded := await spawn_i3.seed_exact(self, member, frozen, prompt)):
+            prompt = seeded
+        elif mode != "spawn":  # `fork`, or an `exact` cache miss
+            self.forks.add(child.id)
             prompt = fork_seed(prt.history, self.s.settings.teams2.delegation.fork_seed_max_chars) + prompt
         plan = Budget.of(budget)
-        member = Member(team.id, name, agent, child.id, parent_session_id, depth, background)
-        member.role, member.model, member.schema = child_role, model, output_schema
+        member.role, member.schema = child_role, output_schema
         member.interactive, member.budget = prt.interactive, plan
+        spawn_i3.register_usage(member)
         self.members_live[child.id] = member
         self.roles[child.id] = child_role
         await self.supervisor.on_spawn(member, parent.agent, role, prompt)
@@ -351,7 +371,9 @@ class TeamsService:
 
     def member_from_row(self, row: TeamMemberRow, parent: str) -> Member:
         """A `Member` for a child known only from the database (e.g. after a restart)."""
-        m = Member(row.team_id, row.name, row.agent, row.session_id, parent, row.depth)
+        m = Member(row.team_id, row.name, row.agent, row.session_id, parent, row.depth, model=row.model)
+        m.subagent_id = row.subagent_id or ""
+        spawn_i3.register_usage(m)
         m.role = self.roles.get(row.session_id) or role_for(
             self.s.settings.teams_orchestrator_enabled, row.depth
         )
@@ -367,101 +389,7 @@ class TeamsService:
         return manifest.permission_mode or self.s.settings.permission_mode
 
     async def _run(self, m: Member, prompt: str, timeout: float) -> Member:
-        base = {"parent": m.parent_session_id, "child": m.session_id, "name": m.name, "agent": m.agent}
-        schema = m.schema
-        try:
-            await self.fleet.acquire(m)
-        except asyncio.CancelledError:
-            await self._finish(m, "stopped", "", {"code": "CANCELLED", "message": "interrupted while queued"})
-            raise
-        try:
-            m.status = "running"
-            await self._set_status(m, "running")
-            await self.s.emit(m.parent_session_id, "subagent.start", {**base, "role": m.role})
-            text = prompt + ("\n\n" + schema_instruction(schema) if schema else "")
-            status, out, error = await self._turn(m, text, timeout)
-            if schema and status == "completed" and (problem := check_output(out, schema)) is not None:
-                await self.s.emit(m.parent_session_id, "subagent.retry", {**base, "error": problem})
-                status, out, error = await self._turn(m, retry_instruction(problem, schema), timeout)
-                if status == "completed" and (problem := check_output(out, schema)) is not None:
-                    status, error = "failed", {"code": SCHEMA_MISMATCH, "message": problem}
-        except asyncio.CancelledError:
-            await self.s.coordinator.cancel(m.session_id)  # the parent went away: stop the child
-            await self._finish(m, "stopped", "", {"code": "CANCELLED", "message": "interrupted"})
-            raise
-        except Exception as exc:  # a teams bug must not leave the member "running"
-            status, out, error = "failed", "", {"code": "INTERNAL", "message": f"{type(exc).__name__}: {exc}"}
-        finally:
-            self.fleet.release(m.parent_session_id)
-        await self._finish(m, status, out, error)
-        return m
-
-    async def _turn(self, m: Member, text: str, timeout: float) -> tuple[str, str, dict[str, Any] | None]:
-        coord = self.s.coordinator
-        cap = self.s.settings.max_cost_usd
-        if await coord.runner.usage.over_budget(m.session_id, cap):  # spec §25.15: root's cap
-            msg = f"the session tree reached max_cost_usd={cap}; child turn blocked"
-            return "failed", "", {"code": "BUDGET", "message": msg}
-        deny = tuple(sorted(leaf_permissions(self.s.harness.tools))) if m.role == "leaf" else ()
-        options = RunOptions(skip_memory=True, tools_deny=deny)  # no memory for subagents (§16.1)
-        async with ChildMonitor(self, m, m.budget) as monitor:
-            run_id = await coord.submit(
-                m.session_id,
-                text,
-                "followup",
-                agent=m.agent,
-                model=m.model,
-                interactive=m.interactive,
-                options=options,
-            )
-            if run_id is None:  # handled by a slash command (e.g. `/model`)
-                return "completed", "", None
-            try:
-                await coord.wait(m.session_id, timeout)
-            except TimeoutError:
-                await coord.cancel(m.session_id)
-                return "failed", "", {"code": "TIMEOUT", "message": f"child exceeded {timeout:.0f}s"}
-        result = coord.result(run_id)
-        if monitor.verdict is not None:
-            return "failed", result.text if result else "", monitor.verdict
-        if result is None:
-            return "stopped", "", {"code": "CANCELLED", "message": "interrupted"}
-        status = "completed" if result.status in {"completed", "max_steps"} else "failed"
-        if monitor.budget_hit is not None:  # the grace reply is kept; the run still overran
-            msg = f"delegation budget exceeded ({monitor.budget_hit})"
-            return "failed", result.text, {"code": BUDGET_EXCEEDED, "message": msg}
-        return status, result.text, result.error
-
-    async def _finish(self, m: Member, status: str, text: str, error: dict[str, Any] | None) -> None:
-        m.status, m.text, m.error = status, text, error
-        m.usage = await self.s.coordinator.runner.usage.totals(
-            await self.s.coordinator.runner.usage.session_tree(m.session_id)
-        )
-        await self._set_status(m, _FINAL.get(status, "failed"))
-        data = {
-            "parent": m.parent_session_id,
-            "child": m.session_id,
-            "name": m.name,
-            "agent": m.agent,
-            "status": status,
-            "usage": m.usage,
-            **({"error": error} if error else {}),
-        }
-        kind = "complete" if status == "completed" else "failed"
-        await self.s.emit(m.parent_session_id, f"subagent.{kind}", data)
-        await subagent_stop(self.s, data)
-        await self.supervisor.on_finish(m)
-        if m.background:
-            with contextlib.suppress(Exception):  # the parent may have been deleted
-                await self.inject(m.parent_session_id, m.notification())
-
-    async def _set_status(self, m: Member, status: str) -> None:
-        async with self.s.db.session() as s:
-            q = select(TeamMemberRow).where(TeamMemberRow.session_id == m.session_id)
-            row = (await s.execute(q)).scalar()
-            if row is not None:
-                row.status = status
-                await s.commit()
+        return await run_child(self, m, prompt, timeout)  # teams.child_run
 
     async def inject(self, session_id: str, text: str) -> None:
         """Deliver `text` as a user message at the session's next step, without waking it."""

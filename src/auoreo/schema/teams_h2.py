@@ -46,7 +46,8 @@ class DelegationPause(BaseModel):
 
 
 class SubagentInfo(BaseModel):
-    subagent_id: str
+    subagent_id: str = Field(description="sa-{n}-{hex8} (I3); the child session id for older rows")
+    task_id: str = Field(default="", description="The child session id")
     name: str
     agent: str
     depth: int

@@ -1,7 +1,9 @@
 """delegate_task (spec §16.1/§16.2/§25.11): `action=spawn` (default) runs one subagent (`goal`)
 or a batch (`tasks[]`, at most `settings.tools.delegate_batch_concurrency` (3) at a time; a
 foreground batch joins every child's <task-notification> into one result, in task order).
-`mode=fork` seeds the child with a summary of this conversation; `budget{max_tokens,max_usd,
+`mode=fork` seeds the child with a summary of this conversation, `mode=exact` with the whole
+conversation + this agent's exact system prompt and tools (provider cache hits);
+`allowedTools`, `inherit_mcp_toolsets` and `handoff` shape the child per spawn; `budget{max_tokens,max_usd,
 timeout_ms}` bounds it. `action=list|steer|stop` manage this session's children; they are
 synchronous and bypass the pause switch and the depth limit."""
 
@@ -10,6 +12,7 @@ import json
 import uuid
 from typing import Any
 
+from auoreo.teams.fork import FrozenTurn
 from auoreo.teams.tooling import attempt, teams_for
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 
@@ -38,7 +41,25 @@ async def _spawn(
             role=task.get("role"),
             mode=task.get("mode") or args.get("mode") or "spawn",
             budget=task.get("budget") or args.get("budget"),
+            allowed_tools=_pick(task, args, "allowedTools"),
+            inherit_mcp_toolsets=_pick(task, args, "inherit_mcp_toolsets") or False,
+            handoff=bool(_pick(task, args, "handoff")),
+            frozen=_frozen(ctx),
         )
+    )
+
+
+def _pick(task: dict[str, Any], args: dict, key: str) -> Any:
+    return task[key] if key in task else args.get(key)
+
+
+def _frozen(ctx: ToolContext) -> FrozenTurn | None:
+    """The parent's running turn (spec, options, context) for `mode: exact` forks."""
+    spec = ctx.services.get("spec")
+    if spec is None or "turn_msg" not in ctx.services:
+        return None
+    return FrozenTurn(
+        spec, ctx.services.get("options"), ctx.services.get("context") or "", ctx.services["turn_msg"]
     )
 
 
@@ -48,7 +69,7 @@ async def _single(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     member = await _spawn(teams, ctx, args, name, background, args)
     meta = {
         "task_id": member.task_id,
-        "subagent_id": member.task_id,
+        "subagent_id": member.subagent_id,
         "name": name,
         "agent": member.agent,
         "team": member.team_id,
@@ -129,7 +150,7 @@ def _ref(args: dict) -> str:
 async def _list(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     rows = await attempt(teams.control.children(ctx.session_id))
     lines = [
-        f"- {r['name']} ({r['agent']}, {r['role'] or '?'}) id={r['subagent_id']} "
+        f"- {r['name']} ({r['agent']}, {r['role'] or '?'}) id={r['subagent_id']} task={r['task_id']} "
         f"status={r['status']} running={r['running']}"
         for r in rows
     ]

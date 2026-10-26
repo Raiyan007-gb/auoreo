@@ -42,8 +42,9 @@ from auoreo.core.db_migrate import (  # re-exported: older imports use auoreo.co
 if TYPE_CHECKING:
     from auoreo.core.crypto_columns import ColumnCipher
 
-SCHEMA_VERSION = 5  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
+SCHEMA_VERSION = 7  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
 # 4: goals, suggestions (M3–M5 gaps); 5: blackboard, bandit, usage latency, audit triggers (M6)
+# 7 (I3, revision 0007_teams_i3): team_members agent_type/model/color/cwd, usage attribution
 
 
 def utcnow() -> datetime:
@@ -141,6 +142,10 @@ class UsageRow(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)  # v5
     outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)  # v5: ok|error code
+    parent_session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)  # v7 (I3)
+    subagent_id: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)  # v7
+    depth: Mapped[int | None] = mapped_column(Integer, nullable=True)  # v7
+    task_name: Mapped[str | None] = mapped_column(String(64), nullable=True)  # v7
 
 
 class AuditRow(Base):
@@ -235,6 +240,11 @@ class TeamMemberRow(Base):
     depth: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(32), default="running")  # running|done|failed|stopped
     joined_at: Mapped[datetime] = mapped_column(default=utcnow)
+    subagent_id: Mapped[str | None] = mapped_column(String(32), nullable=True)  # v7: sa-{n}-{hex8}
+    agent_type: Mapped[str | None] = mapped_column(String(64), nullable=True)  # v7 (spec §16.4)
+    model: Mapped[str | None] = mapped_column(String(255), nullable=True)  # v7
+    color: Mapped[str | None] = mapped_column(String(16), nullable=True)  # v7
+    cwd: Mapped[str | None] = mapped_column(String(1024), nullable=True)  # v7
     __table_args__ = (Index("ix_team_members_name", "team_id", "name", unique=True),)
 
 
@@ -269,6 +279,7 @@ class KanbanTaskRow(Base):
     heartbeat_at: Mapped[datetime | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow)
+    profile: Mapped[str | None] = mapped_column(String(64), nullable=True)  # v7: worker agent
 
 
 class KanbanCommentRow(Base):

@@ -14,6 +14,7 @@ from typing import Any, TypeVar
 from sqlalchemy import func, select
 
 from auoreo.core import observability as obs
+from auoreo.core import usage_attrib
 from auoreo.core.db import Database, SessionRow, UsageRow, utcnow
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Usage
@@ -56,6 +57,7 @@ class UsageLedger:
             estimated=estimated,
             latency_ms=latency_ms,
             outcome=outcome,
+            **usage_attrib.lookup(session_id),  # --- I3: parent/subagent/depth (spec §25.15)
         )
         async with self.db.session() as s:
             s.add(row)

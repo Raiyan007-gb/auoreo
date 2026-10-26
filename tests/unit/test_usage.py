@@ -10,6 +10,7 @@ from typer.testing import CliRunner
 
 from auoreo.api.app import create_app
 from auoreo.cli.app import app as cli
+from auoreo.core.db import SCHEMA_VERSION
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings
 from auoreo.core.usage import UsageLedger
@@ -116,4 +117,4 @@ def test_cli_stats_and_db_commands() -> None:
     r = runner.invoke(cli, ["db", "history"])
     assert r.exit_code == 0 and "0005" in r.output and "0001" in r.output
     r = runner.invoke(cli, ["db", "current"])
-    assert r.exit_code == 0 and "0005 (head)" in r.output
+    assert r.exit_code == 0 and f"{SCHEMA_VERSION:04d} (head)" in r.output

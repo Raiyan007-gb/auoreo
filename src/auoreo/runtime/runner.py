@@ -177,8 +177,11 @@ class AgentRunner:
         options = options or RunOptions()
         try:
             choice = await self.policy.begin(sid, agent, model or rt.model, run_id, text)
-            spec = apply_run_options(self.s.harness, self._spec(rt, agent, model, choice), options)
-            spec = await apply_session_sources(self.s, sid, spec)  # per-session MCP/plugin toggles
+            if options.exact is not None:  # --- I3: exact fork = the parent's frozen spec, verbatim
+                spec = options.exact.spec
+            else:
+                spec = apply_run_options(self.s.harness, self._spec(rt, agent, model, choice), options)
+                spec = await apply_session_sources(self.s, sid, spec)  # per-session MCP/plugin toggles
         except (KeyError, ValueError) as exc:
             await self.s.emit(sid, "run.failed", {"run_id": run_id, "code": "CONFIG", "message": str(exc)})
             return TurnResult(run_id, "failed", "", {"code": "CONFIG", "message": str(exc)})
@@ -220,6 +223,7 @@ class AgentRunner:
             spec, self.s.cwd, engine.mode, memory_block, st.locale or "", tone_of(text, st)
         )
         context = self.nudge.apply(rt, spec, text, options, context)  # --- G2b: §11.8 nudge
+        context = "" if options.exact is not None else context  # I3: the fork's prefix stays exact
         rt.generation += 1  # the liveness watchdog is bound to this turn's generation
         turn = Turn(TurnBudget.for_turn(st.loop, subagent=rt.subagent), LivenessWatchdog(self.s, rt, run_id))
 
@@ -239,7 +243,8 @@ class AgentRunner:
             interactive=rt.interactive,
             question=question,
             emit=emit,
-            services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec},
+            services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec}
+            | {"context": context, "options": options, "turn_msg": turn_msg},  # I3: exact fork seed
         )
         with (
             obs.span("agent.run", model=spec.model, agent=spec.name) as span,  # --- W0-D
@@ -306,7 +311,7 @@ class AgentRunner:
                 last_step = step == max_steps or exhausted is not None
                 note = GRACE_NOTE.format(why=exhausted) if exhausted else None
                 note = note or (STEP_LIMIT_NOTE if last_step else None)
-                tools = self._available(spec, rt.state, options)
+                tools = options.exact.tools if options.exact else self._available(spec, rt.state, options)
                 build = partial(self._request, spec, rt, tools, context, turn_msg, last_step, run_id, note)
                 await self.compaction.pre_step(rt, build())  # `build` re-renders after compaction
                 await self.s.emit(sid, "step.started", {"run_id": run_id, "step": step, "tools": len(tools)})

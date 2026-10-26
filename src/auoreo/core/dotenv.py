@@ -44,6 +44,7 @@ PROTECTED_PREFIXES: tuple[str, ...] = (
     "AUOREO_EXTRA_ROOTS",
     "AUOREO_HOME",  # would swap in a settings.json (sandbox, redaction, rules) the repo controls
     "AUOREO_PROFILE",  # same: selects <home>/profiles/<name>/settings.json
+    "AUOREO_KANBAN_BOARD",  # I3: a kanban worker's hard board boundary
 )
 _ORIGIN: dict[str, str] = {}
 """name → sha256(value) for every variable a `.env` file put into `os.environ`."""

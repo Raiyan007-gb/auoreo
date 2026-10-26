@@ -8,7 +8,9 @@ from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine
 
-from auoreo.core.db import Base, Database, SchemaTooNewError, SessionRow, UsageRow
+from auoreo.core.db import SCHEMA_VERSION, Base, Database, SchemaTooNewError, SessionRow, UsageRow
+
+HEAD_REVISION = f"{SCHEMA_VERSION:04d}"
 
 # The state.db DDL exactly as M2 (981b59b) created it with `create_all`.
 M2_DDL = """
@@ -81,8 +83,8 @@ async def test_m2_database_is_migrated_in_place(tmp_path: Path) -> None:
     assert {"usage", "messages_archive"} <= {
         r for (r,) in sqlite3.connect(path).execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
-    assert scalar(path, "SELECT value FROM schema_meta WHERE key='schema_version'") == "5"
-    assert scalar(path, "SELECT version_num FROM alembic_version") == "0005"
+    assert scalar(path, "SELECT value FROM schema_meta WHERE key='schema_version'") == str(SCHEMA_VERSION)
+    assert scalar(path, "SELECT version_num FROM alembic_version") == HEAD_REVISION
     assert scalar(path, "SELECT message FROM messages WHERE session_id='ses_m2'") == (
         '{"role": "user", "content": "hi from M2"}'
     )
@@ -96,8 +98,8 @@ async def test_fresh_database_matches_the_orm(tmp_path: Path) -> None:
     db = Database(path)
     await db.init()
     await db.close()
-    assert scalar(path, "SELECT version_num FROM alembic_version") == "0005"
-    assert scalar(path, "SELECT value FROM schema_meta WHERE key='schema_version'") == "5"
+    assert scalar(path, "SELECT version_num FROM alembic_version") == HEAD_REVISION
+    assert scalar(path, "SELECT value FROM schema_meta WHERE key='schema_version'") == str(SCHEMA_VERSION)
     engine = create_engine(f"sqlite:///{path}")
     with engine.connect() as conn:
         diff = compare_metadata(MigrationContext.configure(conn), Base.metadata)
