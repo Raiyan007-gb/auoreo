@@ -3,11 +3,17 @@
 Everything that leaves this module is redacted *unconditionally*: the pattern redactor runs
 whatever `redact_secrets` says, and every known secret value (secret store entries, the
 server password, `*_KEY|*TOKEN*|*SECRET*|*PASSWORD*` env vars) is replaced verbatim, so a
-secret with no recognisable shape is still caught. Database stats are counts, never rows.
+secret with no recognisable shape is still caught. Database stats are counts, never rows:
+`events.json` holds per-type event counts and the seq range, never payloads (§24.9 L882).
+PII is masked too (§25.10): the user's home directory becomes `~`, and the login name,
+e-mail addresses and non-loopback IP addresses are replaced by `<user>`/`<email>`/`<ip>`.
+The manifest carries the audit `chain_head{seq, hash}` (§25.10 L1021).
 """
 
 from __future__ import annotations
 
+import getpass
+import ipaddress
 import json
 import os
 import platform
@@ -25,7 +31,6 @@ from auoreo.core.settings import Settings
 
 SECRET_ENV_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "DSN")
 MIN_SECRET_LEN = 6
-RECENT_EVENTS = 200
 LOG_TAIL_LINES = 400
 PACKAGES = (
     "fastapi",
@@ -62,11 +67,13 @@ class Scrubber:
         except Exception:  # an unreadable store has no values to leak
             pass
         self.values = sorted(values, key=len, reverse=True)
+        self.home = _home_prefix()
+        self.user = _login_name()
 
     def text(self, s: str) -> str:
         for v in self.values:
             s = s.replace(v, sentinel("secret"))
-        return redact(s, force=True)
+        return pii(redact(s, force=True), self.home, self.user)
 
     def obj(self, o: Any) -> Any:
         if isinstance(o, str):
@@ -76,6 +83,47 @@ class Scrubber:
         if isinstance(o, list | tuple):
             return [self.obj(v) for v in o]
         return o
+
+
+EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b")
+IPV4_RE = re.compile(r"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
+IPV6_RE = re.compile(r"(?<![0-9A-Fa-f:])(?:[0-9A-Fa-f]{1,4}:){3,7}[0-9A-Fa-f]{1,4}(?![0-9A-Fa-f:])")
+COMMON_USERS = frozenset({"root", "user", "admin", "runner", "ubuntu", "auoreo"})
+
+
+def _home_prefix() -> str | None:
+    try:
+        home = str(Path.home())
+    except (RuntimeError, KeyError):
+        return None
+    return home if len(home) > 1 else None
+
+
+def _login_name() -> str | None:
+    try:
+        name = getpass.getuser()
+    except (OSError, KeyError):
+        return None
+    return name if len(name) >= 3 and name.lower() not in COMMON_USERS else None
+
+
+def _ip(m: re.Match[str]) -> str:
+    try:
+        addr = ipaddress.ip_address(m.group(0))
+    except ValueError:
+        return m.group(0)
+    return m.group(0) if addr.is_loopback or addr.is_unspecified else "<ip>"
+
+
+def pii(s: str, home: str | None, user: str | None) -> str:
+    """Home prefix → `~`; login name, e-mails, non-loopback IPs masked (idempotent)."""
+    if home:
+        s = s.replace(home, "~")
+    s = EMAIL_RE.sub("<email>", s)
+    if user:
+        s = re.sub(rf"(?<![A-Za-z0-9_]){re.escape(user)}(?![A-Za-z0-9_])", "<user>", s)
+    s = IPV4_RE.sub(_ip, s)
+    return IPV6_RE.sub(_ip, s)
 
 
 # ------------------------------------------------------------------ db inspect
@@ -150,31 +198,42 @@ def versions() -> dict[str, Any]:
     }
 
 
-def recent_events(st: Settings, limit: int = RECENT_EVENTS) -> list[dict[str, Any]]:
-    """The newest durable events (the event log is AUOREO's log of record)."""
+def _read_only(st: Settings) -> sqlite3.Connection | None:
     from auoreo.core import sqlcipher
 
     if not st.db_path.is_file() or sqlcipher.is_encrypted_file(st.db_path):
-        return []
-    con = sqlite3.connect(f"file:{st.db_path}?mode=ro", uri=True)
+        return None
+    return sqlite3.connect(f"file:{st.db_path}?mode=ro", uri=True)
+
+
+def event_stats(st: Settings) -> dict[str, Any]:
+    """Counts, never rows (§24.9 L882): total, seq range and per-type counts of the event log."""
+    out: dict[str, Any] = {"total": 0, "first_seq": None, "last_seq": None, "by_type": {}}
+    con = _read_only(st)
+    if con is None:
+        return out
     try:
-        rows = con.execute(
-            "SELECT seq, aggregate_id, type, data, created_at FROM events ORDER BY seq DESC LIMIT ?", (limit,)
-        ).fetchall()
+        total, first, last = con.execute("SELECT COUNT(*), MIN(seq), MAX(seq) FROM events").fetchone()
+        by_type = con.execute("SELECT type, COUNT(*) FROM events GROUP BY type ORDER BY type").fetchall()
     except sqlite3.Error:
-        return []
+        return out
     finally:
         con.close()
-    out = []
-    for seq, agg, kind, data, created in reversed(rows):
-        try:
-            parsed = json.loads(data) if isinstance(data, str) else data
-        except ValueError:
-            parsed = str(data)[:2000]
-        out.append(
-            {"seq": seq, "aggregate_id": agg, "type": kind, "data": parsed, "created_at": str(created)}
-        )
-    return out
+    return {"total": total, "first_seq": first, "last_seq": last, "by_type": dict(by_type)}
+
+
+def chain_head(st: Settings) -> dict[str, Any] | None:
+    """The audit hash chain's head `{seq, hash}` (verify against `auoreo doctor`)."""
+    con = _read_only(st)
+    if con is None:
+        return None
+    try:
+        row = con.execute("SELECT seq, row_hash FROM audit ORDER BY seq DESC LIMIT 1").fetchone()
+    except sqlite3.Error:
+        return None
+    finally:
+        con.close()
+    return {"seq": row[0], "hash": row[1]} if row else {"seq": 0, "hash": None}
 
 
 def log_tails(home: Path, lines: int = LOG_TAIL_LINES) -> dict[str, str]:
@@ -241,13 +300,14 @@ async def build_bundle(st: Settings, out: Path) -> list[str]:
         "settings.json": settings_view(st),
         "doctor.json": doctor,
         "db.json": db_inspect(st),
-        "events.json": recent_events(st),
+        "events.json": event_stats(st),
     }
     logs = log_tails(st.home)
     manifest = {
         "created_at": datetime.now(UTC).isoformat(),
+        "chain_head": chain_head(st),
         "redaction": {
-            "mode": "forced (patterns + known secret values)",
+            "mode": "forced (patterns + known secret values + PII: home prefix, user, e-mail, IP)",
             "version": REDACTION_VERSION,
             "pattern_count": pattern_count(),
             "known_values": len(scrub.values),
