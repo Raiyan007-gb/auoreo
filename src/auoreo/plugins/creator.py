@@ -6,7 +6,14 @@ base interpreter with `-I`, a scrubbed env and the creator folder as cwd, runnin
 `auoreo_plugin_rt --ephemeral` — and registers `creator__<session8>__<name>` as a dynamic
 tool (default action `ask`, callable only from the defining session). Nothing survives a
 restart: definitions live in memory and the folder is removed on close. Every operation is
-audited with `{session_id, plugin, package_hash}`.
+audited with `{session_id, plugin, plugin_id, package_id, package_hash, plugin_run_id}`.
+
+Packages are immutable (spec §15 L642/L648, I1): the package hash covers name, description,
+parameters and code; re-defining a name with different content creates a NEW version (new
+`package_id`, the old one is stopped) and approval — including an "Always" grant, which is
+keyed `plugin_run: <name>@<package hash>` — never carries over. A session must
+`plugin_inspect` before its first `plugin_define`, and a rejected run tombstones that package
+(no retry-after-reject: define a new version instead).
 """
 
 from __future__ import annotations
@@ -18,6 +25,7 @@ import json
 import re
 import shutil
 import sys
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -52,12 +60,29 @@ class Definition:
     path: Path
     tool_name: str
     sha: str = ""
+    version: int = 1
+    run_id: str = ""
+    rejected: bool = False
     peer: RpcPeer | None = field(default=None, repr=False)
     tool: ToolDef | None = field(default=None, repr=False)
 
     @property
     def active(self) -> bool:
         return self.peer is not None and self.peer.alive
+
+    @property
+    def package_id(self) -> str:
+        return f"pkg_{self.sha[:16]}"
+
+    @property
+    def grant_key(self) -> str:
+        """The `plugin_run` permission pattern: immutable per package, never the bare name."""
+        return f"{self.name}@{self.sha}"
+
+
+def package_hash(name: str, description: str, parameters: dict[str, Any], code: str) -> str:
+    blob = json.dumps([name, description, parameters, code], sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(blob.encode()).hexdigest()
 
 
 def tool_name_for(session_id: str, name: str) -> str:
@@ -78,6 +103,8 @@ class CreatorManager:
     def __init__(self, services: Services) -> None:
         self.s = services
         self.defs: dict[tuple[str, str], Definition] = {}
+        self.inspected: set[str] = set()
+        self.tombstones: set[tuple[str, str]] = set()  # (session_id, package hash) rejected
 
     def folder(self, session_id: str) -> Path:
         return self.s.settings.home / "sessions" / session_id / "creator"
@@ -89,8 +116,26 @@ class CreatorManager:
             session_id=d.session_id,
             decision=decision,
             reason=reason[:64],
-            detail={"session_id": d.session_id, "plugin": d.name, "package_hash": d.sha},
+            detail={
+                "session_id": d.session_id,
+                "plugin": d.name,
+                "plugin_id": d.tool_name,
+                "package_id": d.package_id,
+                "package_hash": d.sha,
+                "version": d.version,
+                "plugin_run_id": d.run_id or None,
+            },
         )
+
+    def mark_inspected(self, session_id: str) -> None:
+        self.inspected.add(session_id)
+
+    async def reject(self, d: Definition, reason: str = "not approved") -> None:
+        """Tombstone this package for the session: the same code is never offered again."""
+        d.rejected = True
+        self.tombstones.add((d.session_id, d.sha))
+        d.run_id = d.run_id or f"prun_{uuid.uuid4().hex[:12]}"
+        await self.audit("run", d, "deny", reason)
 
     def get(self, session_id: str, name: str) -> Definition:
         d = self.defs.get((session_id, name))
@@ -116,7 +161,15 @@ class CreatorManager:
         except ValueError as exc:
             raise CreatorError(f"bad parameters schema: {exc}") from exc
         _check_code(code)
-        if (session_id, name) in self.defs:
+        if session_id not in self.inspected:
+            raise CreatorError("call plugin_inspect first (inspect before define)")
+        description = description or name
+        sha = package_hash(name, description, params, code)
+        version = 1
+        if (prev := self.defs.get((session_id, name))) is not None:
+            if prev.sha == sha:
+                return prev  # same immutable package: nothing to do
+            version = prev.version + 1
             await self.stop(session_id, name)
         folder = self.folder(session_id)
         folder.mkdir(parents=True, exist_ok=True)
@@ -125,19 +178,21 @@ class CreatorManager:
         d = Definition(
             session_id,
             name,
-            description or name,
+            description,
             params,
             code,
             path,
             tool_name_for(session_id, name),
-            hashlib.sha256(code.encode()).hexdigest(),
+            sha,
+            version,
+            rejected=(session_id, sha) in self.tombstones,
         )
         self.defs[(session_id, name)] = d
         await self.audit("define", d)
         return d
 
     def preview(self, d: Definition, limit: int = 1500) -> str:
-        head = f"creator tool {d.tool_name} (sha256 {d.sha[:12]})\n{d.description}\n---\n"
+        head = f"creator tool {d.tool_name} v{d.version} ({d.package_id})\n{d.description}\n---\n"
         return head + (d.code if len(d.code) <= limit else d.code[:limit] + "\n…")
 
     async def run(self, session_id: str, name: str) -> Definition:
@@ -145,6 +200,9 @@ class CreatorManager:
         d = self.get(session_id, name)
         if d.active:
             return d
+        if d.rejected:
+            raise CreatorError(f"{d.package_id} was rejected; define a new version instead")
+        d.run_id = f"prun_{uuid.uuid4().hex[:12]}"
         argv = [getattr(sys, "_base_executable", sys.executable), "-I", str(RT_FILE)]
         argv += ["--ephemeral", str(d.path), "--name", d.name]
 
@@ -238,6 +296,9 @@ class CreatorManager:
             "active": d.active,
             "description": d.description,
             "package_hash": d.sha,
+            "package_id": d.package_id,
+            "version": d.version,
+            "rejected": d.rejected,
             "parameters": json.dumps(d.parameters)[:300],
         }
 
@@ -283,16 +344,16 @@ async def approve(ctx: ToolContext, d: Definition, preview: str) -> bool:
     """Human approval for `plugin_run`: `ctx.ask` when the host wired one, otherwise the
     permission engine (`plugin_run` rules) and the approval broker with a code preview."""
     if ctx.ask is not _default_ask:
-        return await ctx.ask("plugin_run", d.name, preview)
+        return await ctx.ask("plugin_run", d.grant_key, preview)
     engine = ctx.services.get("engine")
     svc = ctx.services.get("services")
     if engine is not None:
-        decision = engine.evaluate("plugin_run", d.name, "ask")
+        decision = engine.evaluate("plugin_run", d.grant_key, "ask")
         if decision.action != "ask":
             return bool(decision.action == "allow")
     if not ctx.interactive or svc is None:
         return False
-    outcome = await svc.approvals.request(ctx.session_id, "plugin_run", "plugin_run", d.name, preview)
+    outcome = await svc.approvals.request(ctx.session_id, "plugin_run", "plugin_run", d.grant_key, preview)
     if outcome.granted and outcome.reply == "always" and engine is not None:
-        engine.grant_always("plugin_run", d.name)
+        engine.grant_always("plugin_run", d.grant_key)  # keyed by the package hash, never the name
     return bool(outcome.granted)

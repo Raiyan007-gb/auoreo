@@ -22,6 +22,8 @@ export function ControlProvider({ children }: { children: React.ReactNode }) {
         lastSeq,
         onState: setState,
         onConnected: setConnected,
+        // 4001: a cookie-authenticated socket outlived its JWT; any REST call refreshes the cookie.
+        onAuthExpired: () => api.latestSeq(),
         onEvent: (e) => {
           for (const fn of listeners.current) fn(e);
         },

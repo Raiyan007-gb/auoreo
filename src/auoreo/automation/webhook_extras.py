@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from auoreo.core.redaction import redact
+from auoreo.core.redaction import redact, redact_obj
 from auoreo.core.secrets import child_env
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from auoreo.harness.manifests import WebhookManifest
 
 log = logging.getLogger(__name__)
-STDOUT_CAP = 1_048_576
+STDOUT_CAP = 16 * 1024  # --- I1: §15 L660 script stdout cap (16 KiB)
 IGNORE = object()
 
 
@@ -118,7 +118,7 @@ async def run_script(services: Services, manifest: WebhookManifest, payload: dic
         return IGNORE
     if not isinstance(result, dict):
         raise ScriptError(f"{manifest.script} must print a JSON object or null")
-    return result
+    return redact_obj(result)  # stdout redacted before it reaches a prompt (§15 L660)
 
 
 async def transform(services: Services, manifest: WebhookManifest, payload: dict[str, Any]) -> Any:

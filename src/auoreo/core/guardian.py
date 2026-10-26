@@ -5,8 +5,11 @@ of the agent prompt) plus the comment-stripped command wrapped in `<command>…<
 to the `small` routing group (or the session model), temperature 0, 16 tokens, 15 s.
 The reply must be exactly `APPROVE`, `DENY` or `ESCALATE`; anything else, a timeout or a
 gateway error escalates to the human. Verdicts are cached by `sha256(permission+pattern)`
-(APPROVE 10 min, DENY 60 s). After 3 consecutive DENYs in a session the guardian is no
-longer consulted for that session (`permission.guardian_breaker`); everything escalates.
+(APPROVE 10 min, DENY 60 s). After 3 consecutive DENYs in a session the breaker trips
+(`permission.guardian_breaker`): the running turn is hard-stopped with the typed error
+`GUARDIAN_BREAKER` (`runtime/guards.py` consumes `take_breaker_stop`; until then every ask in
+that session is denied without a model call), and afterwards the guardian is no longer
+consulted for that session — every ask goes to the human.
 The executor also consults it for an exec-policy `review` in any mode (`core/policy.py`).
 Each call's tokens/cost are recorded in the usage ledger with `run_id="guardian"`.
 """
@@ -45,6 +48,8 @@ class GuardianState:
     cache: dict[str, tuple[Verdict, float]] = field(default_factory=dict)
     denies: dict[str, int] = field(default_factory=dict)
     tripped: set[str] = field(default_factory=set)
+    stop: set[str] = field(default_factory=set)
+    """Sessions whose breaker tripped and whose running turn still has to be hard-stopped."""
 
     def key(self, permission: str, pattern: str) -> str:
         return hashlib.sha256(f"{permission}\0{pattern}".encode()).hexdigest()
@@ -68,6 +73,20 @@ def state_of(services: Services) -> GuardianState:
     if not isinstance(st, GuardianState):
         st = services.ext["guardian"] = GuardianState()
     return st
+
+
+def take_breaker_stop(services: Services, session_id: str) -> bool:
+    """True once after the breaker tripped for `session_id` (the turn must hard-stop)."""
+    st = state_of(services)
+    if session_id in st.stop:
+        st.stop.discard(session_id)
+        return True
+    return False
+
+
+def trip(services: Services, session_id: str) -> None:
+    """Stop consulting the guardian for this session (asks go to the human)."""
+    state_of(services).tripped.add(session_id)
 
 
 def strip_comments(command: str) -> str:
@@ -120,6 +139,8 @@ async def guardian_verdict(
 ) -> Verdict:
     """One guardian call (or a cache hit). Never raises; failures escalate."""
     st = state_of(services)
+    if session_id is not None and session_id in st.stop:
+        return "DENY"  # breaker tripped in this turn: no silent escalation before the hard-stop
     if session_id is not None and session_id in st.tripped:
         return "ESCALATE"
     key = st.key(permission, pattern)
@@ -150,6 +171,7 @@ async def _count(services: Services, st: GuardianState, session_id: str, verdict
     n = st.denies[session_id] = st.denies.get(session_id, 0) + 1
     if n >= BREAKER_DENIES and session_id not in st.tripped:
         st.tripped.add(session_id)
+        st.stop.add(session_id)
         await services.emit(session_id, "permission.guardian_breaker", {"denies": n})
 
 

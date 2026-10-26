@@ -97,6 +97,10 @@ def test_modes_plan_and_accept_edits() -> None:
     plan = PermissionEngine(rules, mode="plan", plans_dir="/p/.auoreo/plans")
     assert plan.evaluate("edit", "/p/src/a.py").action == "deny"
     assert plan.evaluate("edit", "/p/.auoreo/plans/x.md").action == "ask"
+    # I1: separator-aware containment — a sibling prefix or `..` escape is not the plans dir
+    assert plan.evaluate("edit", "/p/.auoreo/plansX/x.md").action == "deny"
+    assert plan.evaluate("edit", "/p/.auoreo/plans/../../src/a.py").action == "deny"
+    assert plan.evaluate("edit", "/p/.auoreo/plans").action == "ask"
     acc = PermissionEngine(rules, mode="acceptEdits")
     assert acc.evaluate("edit", "/p/a.py").action == "allow"
     assert acc.evaluate("bash", "make").action == "ask"

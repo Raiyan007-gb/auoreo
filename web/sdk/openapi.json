@@ -4713,7 +4713,8 @@
         "properties": {
           "identity": {
             "default": "user",
-            "description": "Participant identity (LiveKit token subject)",
+            "deprecated": true,
+            "description": "Ignored: the server mints an opaque uuid4 participant identity (spec \u00a726.10)",
             "maxLength": 128,
             "minLength": 1,
             "pattern": "^[A-Za-z0-9_.@:-]+$",

@@ -4,6 +4,7 @@ unchanged and share the aiortc peers."""
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
@@ -115,9 +116,10 @@ async def test_livekit_join_returns_room_token(
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["transport"] == "livekit" and body["url"] == "wss://sfu.example.net" and body["sdp"] is None
-    assert body["room"] == body["join_id"] == f"auoreo-{row.id}"
+    assert body["room"] == body["join_id"] and row.id not in body["room"]  # opaque uuid4 room
     claims = jwt.decode(body["token"], "s" * 40, algorithms=["HS256"])
-    assert claims["sub"] == "operator" and claims["video"] == {
+    assert claims["sub"] != "operator" and str(uuid.UUID(claims["sub"])) == claims["sub"]  # I1 §26.10
+    assert claims["video"] == {
         "roomJoin": True,
         "room": body["room"],
         "canPublish": True,
@@ -145,5 +147,15 @@ def test_settings_append_livekit_defaults(home: Path) -> None:
     from auoreo.core.settings import Settings
 
     lk = Settings(home=home).livekit
-    assert lk.url is None and lk.cloud_consent is False and lk.token_ttl_s == 3600
+    assert lk.url is None and lk.cloud_consent is False and lk.token_ttl_s == 600
     assert not lk.sip.krisp_enabled and lk.sip.room_prefix == "auoreo-call-"
+
+
+def test_livekit_token_ttl_is_capped_at_15_minutes() -> None:
+    from pydantic import ValidationError
+
+    from auoreo.core.settings_models import LiveKitSettings
+
+    assert LiveKitSettings(token_ttl_s=900).token_ttl_s == 900
+    with pytest.raises(ValidationError):
+        LiveKitSettings(token_ttl_s=901)

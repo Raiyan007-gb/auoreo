@@ -4107,7 +4107,8 @@ export interface components {
         RtcJoinRequest: {
             /**
              * Identity
-             * @description Participant identity (LiveKit token subject)
+             * @deprecated
+             * @description Ignored: the server mints an opaque uuid4 participant identity (spec §26.10)
              * @default user
              */
             identity: string;

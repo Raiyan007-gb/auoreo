@@ -14,7 +14,8 @@ T = TypeVar("T", bound="RtcJoinRequest")
 class RtcJoinRequest:
     """
     Attributes:
-        identity (str | Unset): Participant identity (LiveKit token subject) Default: 'user'.
+        identity (str | Unset): Ignored: the server mints an opaque uuid4 participant identity (spec §26.10) Default:
+            'user'.
         sdp (None | str | Unset): SDP offer; required by the aiortc transport
         session_id (None | str | Unset): Session the media belongs to
     """

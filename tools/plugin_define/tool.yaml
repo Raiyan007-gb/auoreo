@@ -4,7 +4,9 @@ description: >-
   Creator mode: define a session-scoped tool from Python source. `code` must define
   `async def run(args, ctx)` returning a string (or {"content", "is_error"}); it runs later in
   an isolated subprocess. The definition is inert until plugin_run (which needs approval).
-  Standard library only; never install packages or write repository files.
+  Standard library only; never install packages or write repository files. Call
+  plugin_inspect first. Packages are immutable: new content for an existing name becomes a new
+  version that needs fresh approval.
 parameters:
   type: object
   properties:

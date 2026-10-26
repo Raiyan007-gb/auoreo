@@ -188,8 +188,8 @@ def ws_still_valid(conn: Any) -> tuple[int, str] | None:
     tokens = tokens_for(svc)
     if who.claims.sid in tokens.revoked or who.claims.jti in tokens.revoked:
         return CLOSE_REVOKED, "credentials revoked"
-    if not tokens.is_live(who.claims) and who.via != "cookie":
-        return CLOSE_AUTH_EXPIRED, "authentication expired; reconnect"
+    if not tokens.is_live(who.claims):  # --- I1: cookie JWTs expire too; the SPA reconnects
+        return CLOSE_AUTH_EXPIRED, "authentication expired; reconnect"  # with its refreshed cookie
     return None
 
 

@@ -127,6 +127,9 @@ export interface ControlOptions {
   readonly ackTimeoutMs?: number;
   /** After `maxRetries`, keep probing at this interval while showing "unavailable". */
   readonly slowRetryMs?: number;
+  /** Called on 4001 (auth expired) before reconnecting, e.g. a REST call that refreshes the
+   * session cookie. Errors are ignored; the reconnect happens either way. */
+  readonly onAuthExpired?: () => Promise<unknown>;
 }
 
 export interface ControlConnection {
@@ -155,7 +158,8 @@ function newRequestId(): string {
  * Connect the WebSocket control plane: send `hello{last_seq, channels}`, answer `ping` with
  * `pong`, resolve `ack`s, forward ServerEvent frames (deduped by seq), reconnect with
  * linear backoff (2s × attempt, 5 attempts), never retry after 4003/4401/1008 and at most
- * 3 times after 4001 (auth expired). `respond()` is
+ * 3 times in a row after 4001 (auth expired; `onAuthExpired` runs first so a cookie can be
+ * refreshed, and the budget resets once a reconnect succeeds). `respond()` is
  * idempotent per `request_id` (a second answer for the same id is never sent).
  */
 export function connectControl(opts: ControlOptions): ControlConnection {
@@ -207,6 +211,7 @@ export function connectControl(opts: ControlOptions): ControlConnection {
       case "connected": {
         const c = frame as unknown as WsConnected;
         attempts = 0;
+        authRetries = 0; // a fresh credential worked: the next 4001 starts a new budget
         // Live-only connect: remember where "now" was so a reconnect replays the gap.
         if (lastSeq === null && typeof c.server_seq === "number") lastSeq = c.server_seq;
         setState("open");
@@ -286,8 +291,16 @@ export function connectControl(opts: ControlOptions): ControlConnection {
       if (c.code === WS_CLOSE.UNAUTHORIZED || c.code === WS_CLOSE.POLICY || c.code === WS_CLOSE.REVOKED) {
         return setState("unavailable");
       }
-      if (c.code === WS_CLOSE.AUTH_EXPIRED && ++authRetries > 3) {
-        return setState("unavailable");
+      if (c.code === WS_CLOSE.AUTH_EXPIRED) {
+        if (++authRetries > 3) return setState("unavailable");
+        if (opts.onAuthExpired) {
+          setState("reconnecting");
+          void opts
+            .onAuthExpired()
+            .catch(() => undefined)
+            .then(() => scheduleRetry());
+          return;
+        }
       }
       scheduleRetry();
     };

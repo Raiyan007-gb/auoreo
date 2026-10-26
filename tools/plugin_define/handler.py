@@ -12,6 +12,6 @@ async def run(args: dict, ctx: ToolContext) -> str:
     except CreatorError as exc:
         raise ToolError(str(exc)) from exc
     return (
-        f"defined {d.name} (sha256 {d.sha[:12]}); not active yet: call plugin_run "
+        f"defined {d.name} v{d.version} ({d.package_id}); not active yet: call plugin_run "
         f'{{"name": "{d.name}"}} to start it as {d.tool_name}'
     )

@@ -6,8 +6,10 @@ exit in one task); tool calls from runner tasks go through the shared client ses
 
 Resources are exposed through `list_resources` / `read_resource` (used by the
 `list_mcp_resources` / `read_mcp_resource` tools). Elicitation (`mcp/elicitation.py`):
-form mode becomes a question to the user of the session whose tool call is running;
-URL mode is announced and declined — the user completes it in a browser, never us.
+form mode becomes a question to the user of the session whose tool call is running
+(secret fields refused); URL mode is a consent card + `mcp.elicitation.open` for the UI —
+the user completes it in a browser, never us; a `-32042` tool error waits for
+`notifications/elicitation/complete` and retries (≤3).
 Sampling (`mcp/sampling.py`) is offered only to servers with `sampling.enabled`. A
 per-tool `tools.<name>.timeoutMs` overrides the server's `timeout_ms`.
 """
@@ -25,7 +27,12 @@ from mcp.server import MCPServer, Server
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.manifests import McpServerManifest, ToolManifest
 from auoreo.harness.registry import ToolCollisionError
-from auoreo.mcp.elicitation import make_elicitation_callback
+from auoreo.mcp.elicitation import (
+    ElicitationFailed,
+    call_with_elicitation,
+    make_elicitation_callback,
+    notification_handler,
+)
 from auoreo.mcp.sampling import SamplingHandler
 from auoreo.tools.context import CURRENT_SESSION, ToolContext, ToolResult
 from mcp import Client, StdioServerParameters
@@ -58,6 +65,7 @@ class _Connection:
         self.target = target
         self.elicit = elicit
         self.sample: Any = None
+        self.on_message: Any = None
         self.last_session: str | None = None
         """Session of the latest tool call on this server (elicitation fallback when the
         server's request arrives in a task that does not carry `CURRENT_SESSION`)."""
@@ -74,7 +82,11 @@ class _Connection:
             in_process = isinstance(self.target, (MCPServer, Server))
             mode = "legacy" if in_process else "auto"
             async with Client(
-                self.target, mode=mode, elicitation_callback=self.elicit, sampling_callback=self.sample
+                self.target,
+                mode=mode,
+                elicitation_callback=self.elicit,
+                sampling_callback=self.sample,
+                message_handler=self.on_message,
             ) as client:
                 self.client = client
                 self.ready.set()
@@ -124,6 +136,7 @@ class McpBridge:
     async def connect(self, manifest: McpServerManifest, target: Any, timeout: float = 20.0) -> list[str]:
         conn = _Connection(manifest, target)
         conn.elicit = make_elicitation_callback(self.s, manifest.name, lambda: conn.last_session)
+        conn.on_message = notification_handler(self.s, manifest.name)
         if manifest.sampling.enabled:
             conn.sample = SamplingHandler(self.s, manifest, lambda: conn.last_session)
         conn.task = asyncio.create_task(conn.run(), name=f"mcp:{manifest.name}")
@@ -178,8 +191,17 @@ class McpBridge:
             conn = self._conns.get(server)
             if conn is None or conn.client is None:
                 return ToolResult(f"MCP server '{server}' is not connected", is_error=True)
-            conn.last_session = CURRENT_SESSION.get() or ctx.session_id
-            result = await conn.client.call_tool(remote, args, read_timeout_seconds=timeout_s)
+            conn.last_session = sid = CURRENT_SESSION.get() or ctx.session_id
+            client = conn.client
+            try:
+                result = await call_with_elicitation(
+                    self.s,
+                    server,
+                    sid,
+                    lambda: client.call_tool(remote, args, read_timeout_seconds=timeout_s),
+                )
+            except ElicitationFailed as exc:
+                return ToolResult(f"MCP server '{server}': {exc}", is_error=True)
             return ToolResult(_render_content(result), is_error=bool(result.is_error))
 
         return lambda: handler

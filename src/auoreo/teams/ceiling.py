@@ -12,6 +12,7 @@ from collections.abc import Iterable, Mapping
 from typing import Any, cast
 
 from auoreo.core.permissions import Decision, Mode, PermissionEngine
+from auoreo.harness.manifests import Rule
 
 LADDER: dict[str, int] = {"manual": 0, "smart": 1, "acceptEdits": 2, "yolo": 3}
 LEAF_DENIED: tuple[str, ...] = (
@@ -22,6 +23,8 @@ LEAF_DENIED: tuple[str, ...] = (
     "memory",
     "send_message",
     "cronjob",
+    "todo",  # --- I1: §19.6 subagents get `todowrite/task deny` unless permitted
+    "todowrite",
 )
 ORCHESTRATOR_MAX_DEPTH = 2
 
@@ -40,6 +43,22 @@ def leaf_permissions(tools: Mapping[str, Any], names: Iterable[str] = LEAF_DENIE
         if tool is not None:
             out.add(str(tool.manifest.permission_name))
     return frozenset(out)
+
+
+def inherited(parent: PermissionEngine | None) -> tuple[list[Rule], frozenset[str]]:
+    """§19.6: what a child inherits from its parent engine — only `deny ∪ external_directory`
+    rules (agent/user/defaults and session rules such as `run --deny`, in order) plus the
+    parent's own leaf denials. They go into the child's `session_rules`, which the runner
+    keeps across turns and which evaluate after the child's agent rules (no child `allow`
+    resurrects them)."""
+    if parent is None:
+        return [], frozenset()
+    keep = [
+        r
+        for r in (*parent.rules, *parent.session_rules)
+        if r.action == "deny" or r.permission == "external_directory"
+    ]
+    return keep, frozenset(getattr(parent, "denied", frozenset()))
 
 
 def clamp(requested: str, ceiling: str) -> Mode:

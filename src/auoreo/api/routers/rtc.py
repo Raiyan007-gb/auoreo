@@ -6,6 +6,7 @@ see `auoreo.rtc.peers`. Control (approvals, steer, interrupt) stays on `/ws`.
 
 from __future__ import annotations
 
+import uuid
 from typing import Any, NoReturn
 
 from fastapi import APIRouter, HTTPException, Response, status
@@ -155,7 +156,8 @@ async def join(body: RtcJoinRequest, svc: ServicesDep) -> RtcJoinInfo:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
     try:
         inst = transport(svc)
-        info = await inst.join(session_id=body.session_id, identity=body.identity, offer_sdp=body.sdp)
+        identity = str(uuid.uuid4())  # I1 §26.10: server-minted, never the client value
+        info = await inst.join(session_id=body.session_id, identity=identity, offer_sdp=body.sdp)
     except tuple(_JOIN_ERRORS) as exc:
         _raise(exc)
     join_id = str(info.extra.get("join_id") or info.room or "")

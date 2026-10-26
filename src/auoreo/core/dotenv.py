@@ -11,6 +11,14 @@ Security knobs are never taken from a `.env` file (§19.3): `AUOREO_YOLO`,
 must come from the real process environment; a `.env` entry for one is ignored with a
 warning. Child processes still get a scrubbed environment (`core.secrets.child_env`), and
 the executor floor still refuses tool reads of `.env`.
+
+A project `<cwd>/.env` is repository-controlled, so it is held to an ALLOWLIST (I1): of the
+`AUOREO_*` names only `PROJECT_AUOREO_ALLOW` (model/agent names, the fake gateway, port)
+pass — never `AUOREO_CORS_ORIGINS`, `AUOREO_MODELS` (api_base), `AUOREO_HOST`,
+`AUOREO_SERVER_PASSWORD`, `AUOREO_SEARXNG_URL`, … — and other names that would redirect
+traffic or code loading (`*_API_BASE`, `*_URL`, `*_HOST`, proxies, CA bundles, `LD_*`,
+`PYTHON*`, `PATH`) are ignored too. Provider credentials (`*_API_KEY`, `*_TOKEN`, …) load.
+The user's own `<home>/.env` keeps the blocklist only.
 """
 
 from __future__ import annotations
@@ -18,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 from pathlib import Path
 
 from dotenv import dotenv_values
@@ -45,6 +54,25 @@ PROTECTED_PREFIXES: tuple[str, ...] = (
     "AUOREO_HOME",  # would swap in a settings.json (sandbox, redaction, rules) the repo controls
     "AUOREO_PROFILE",  # same: selects <home>/profiles/<name>/settings.json
 )
+PROJECT_AUOREO_ALLOW: frozenset[str] = frozenset(
+    {
+        "AUOREO_MODEL",
+        "AUOREO_SMALL_MODEL",
+        "AUOREO_EMBED_MODEL",
+        "AUOREO_EMBED_DIMS",
+        "AUOREO_AGENT",
+        "AUOREO_WORKFLOW",
+        "AUOREO_GATEWAY",
+        "AUOREO_PORT",
+    }
+)
+"""The only `AUOREO_*` names a project `.env` may set (I1)."""
+_REDIRECT = re.compile(
+    r"(_API_BASE|_URL|_ENDPOINT|_PROXY|_CA_BUNDLE|_HOST)$|^(LD_|DYLD_|PYTHON|SSL_CERT|NODE_|GIT_)"
+    r"|^(PATH|HOME|SHELL|TMPDIR|LITELLM_.*)$",
+    re.IGNORECASE,
+)
+"""Non-`AUOREO_` names that would repoint provider traffic or code loading (project `.env`)."""
 _ORIGIN: dict[str, str] = {}
 """name → sha256(value) for every variable a `.env` file put into `os.environ`."""
 
@@ -52,6 +80,14 @@ _ORIGIN: dict[str, str] = {}
 def is_protected(name: str) -> bool:
     upper = name.upper()
     return any(upper.startswith(p) for p in PROTECTED_PREFIXES)
+
+
+def project_allowed(name: str) -> bool:
+    """Allowlist for a repository-controlled `<cwd>/.env`."""
+    upper = name.upper()
+    if upper.startswith("AUOREO_"):
+        return upper in PROJECT_AUOREO_ALLOW
+    return _REDIRECT.search(upper) is None
 
 
 def _digest(value: str) -> str:
@@ -69,7 +105,7 @@ def load_env_files(cwd: Path | None = None) -> list[str]:
     loaded: list[str] = []
     candidates = [(cwd or Path.cwd()) / ".env"]
     for path in candidates:
-        loaded += _merge(path)
+        loaded += _merge(path, project=True)
     # Home comes from the real environment only (AUOREO_HOME is protected above).
     from auoreo.core.paths import home_dir
 
@@ -79,7 +115,7 @@ def load_env_files(cwd: Path | None = None) -> list[str]:
     return loaded
 
 
-def _merge(path: Path) -> list[str]:
+def _merge(path: Path, *, project: bool = False) -> list[str]:
     if not path.is_file():
         return []
     out: list[str] = []
@@ -87,7 +123,7 @@ def _merge(path: Path) -> list[str]:
     for name, value in dotenv_values(path).items():
         if not name or value is None or value.strip() == "" or name in os.environ:
             continue
-        if is_protected(name):
+        if is_protected(name) or (project and not project_allowed(name)):
             ignored.append(name)
             continue
         os.environ[name] = value
@@ -95,7 +131,8 @@ def _merge(path: Path) -> list[str]:
         out.append(name)
     if ignored:
         log.warning(
-            "ignored security setting(s) %s in %s: set them in the real environment",
+            "ignored security setting(s) %s in %s: set them in the real environment"
+            " (a project .env may only set provider keys and model/agent names)",
             ", ".join(sorted(ignored)),
             path,
         )

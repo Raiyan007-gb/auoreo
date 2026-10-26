@@ -183,23 +183,35 @@ async def test_elicitation_form_decline_and_timeout(services: Services, workdir:
     await bridge.stop()
 
 
-async def test_elicitation_url_mode_is_announced_and_declined(services: Services, workdir: Path) -> None:
+async def test_elicitation_url_mode_consent_card(services: Services, workdir: Path) -> None:
+    """I1: URL mode = consent card (full URL + domain) → `mcp.elicitation.open` for the UI."""
     sess = await services.create_session()
     cb = make_elicitation_callback(services, "rich", lambda: None)
     params = ElicitRequestURLParams(message="Log in", url="https://example.com/login", elicitation_id="e1")
+    opened = [{"question": "q0", "answers": ["Open in browser"], "answer": "Open in browser"}]
+    asker = asyncio.create_task(_answer_when_asked(services, sess.id, opened))
     token = CURRENT_SESSION.set(sess.id)
     try:
         res = await cb(None, params)
     finally:
         CURRENT_SESSION.reset(token)
-    assert res.action == "decline" and "browser" in (res.meta or {}).get("auoreo/message", "")
+    card = (await asker)[0]
+    assert res.action == "accept"
+    assert "https://example.com/login" in card["question"] and "domain: example.com" in card["question"]
     evs = await services.events.replay(0, frozenset({f"session:{sess.id}"}))
-    asked = [e for e in evs if e.type == "question.asked"]
-    assert asked[0].data["mode"] == "url" and asked[0].data["url"] == "https://example.com/login"
-    assert services.questions.pending(sess.id) == []  # nothing waits on the user
-    # through a real (in-process) server as well
+    opens = [e for e in evs if e.type == "mcp.elicitation.open"]
+    assert opens[0].data == {
+        "server": "rich",
+        "url": "https://example.com/login",
+        "domain": "example.com",
+        "elicitation_id": "e1",
+    }
+    # through a real (in-process) server: declining the card declines the elicitation
     bridge = await _rich(services)
+    decline = [{"question": "q0", "answers": ["Decline"], "answer": "Decline"}]
+    asker = asyncio.create_task(_answer_when_asked(services, sess.id, decline))
     text, _ = await _exec(services, workdir, sess.id, "mcp__rich__oauth", {})
+    await asker
     assert text == "oauth: decline"
     await bridge.stop()
 

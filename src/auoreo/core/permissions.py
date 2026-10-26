@@ -263,6 +263,12 @@ def is_sensitive_write(path: str) -> bool:
     return any(rx.fullmatch(path) for rx in res)
 
 
+def path_within(path: str, root: str, cwd: str = ".") -> bool:
+    """Real containment (`..`/symlinks resolved, separator-aware): `plansX/` is not in `plans/`."""
+    p, r = os.path.realpath(os.path.join(cwd, os.path.expanduser(path))), os.path.realpath(root)
+    return p == r or p.startswith(r.rstrip(os.sep) + os.sep)
+
+
 def is_outside(path: str | Path, cwd: str | Path) -> bool:
     p, root = Path(path), Path(cwd)
     return p != root and root not in p.parents
@@ -475,7 +481,8 @@ class PermissionEngine:
 
     def _apply_mode(self, d: Decision, permission: str, pattern: str) -> Decision:
         if self.mode == "plan" and permission == "edit":
-            in_plans = self.plans_dir is not None and pattern.startswith(self.plans_dir)
+            cwd = str(self.context.get("cwd") or ".")
+            in_plans = self.plans_dir is not None and path_within(pattern, self.plans_dir, cwd)  # I1
             return d if in_plans else Decision("deny", "mode", d.rule, note="plan mode blocks edits")
         if d.action != "ask":
             return d

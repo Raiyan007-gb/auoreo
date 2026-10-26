@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import socket
 import threading
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -123,21 +124,28 @@ def test_token_is_room_scoped_with_one_hour_ttl(home: Path, lk_env: None) -> Non
     assert claims["sub"] == "alice" and claims["iss"] == "APIkey123"
     assert claims["video"]["roomJoin"] is True and claims["video"]["room"] == "auoreo-s1"
     assert not claims["video"].get("roomAdmin") and not claims["video"].get("roomCreate")
-    assert claims["exp"] - claims["nbf"] == 3600
+    assert claims["exp"] - claims["nbf"] == 600  # I1 §26.9: default 600 s, max 900
 
 
 async def test_join_creates_the_room_and_returns_a_token(home: Path, lk_env: None) -> None:
     import jwt
 
     be, log = livekit(home)
-    info = await be.join(session_id="ses_01", identity="bob", offer_sdp=None)
-    assert (info.transport, info.room, info.url) == ("livekit", "auoreo-ses_01", "wss://lk.example.com")
-    assert jwt.decode(info.token, "s" * 40, algorithms=["HS256"])["video"]["room"] == "auoreo-ses_01"
-    assert log[0][0] == "create_room" and log[0][1].name == "auoreo-ses_01" and log[1] == ("aclose", None)
+    info = await be.join(session_id="ses_01", identity="bob@example.com", offer_sdp=None)
+    room = info.room
+    assert room is not None and str(uuid.UUID(room)) == room and "ses_01" not in room  # opaque uuid4
+    assert (info.transport, info.url) == ("livekit", "wss://lk.example.com")
+    claims = jwt.decode(info.token, "s" * 40, algorithms=["HS256"])
+    assert claims["video"]["room"] == room
+    assert claims["sub"] == info.extra["identity"] and str(uuid.UUID(claims["sub"])) == claims["sub"]
+    assert "bob" not in info.token and claims["exp"] - claims["nbf"] <= 900
+    assert log[0][0] == "create_room" and log[0][1].name == room and log[1] == ("aclose", None)
+    again = await be.join(session_id="ses_01", identity="u", offer_sdp=None)
+    assert again.room == room and again.extra["identity"] != info.extra["identity"]
     rooms = await be.describe()
-    assert rooms[0]["room"] == "auoreo-ses_01" and "token" not in rooms[0]
-    await be.leave("auoreo-ses_01")
-    assert log[2][0] == "delete_room" and log[2][1].room == "auoreo-ses_01"
+    assert rooms[0]["room"] == room and "token" not in rooms[0]
+    await be.leave(room)
+    assert log[-2][0] == "delete_room" and log[-2][1].room == room
     assert await be.describe() == []
 
 

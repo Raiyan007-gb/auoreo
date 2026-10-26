@@ -109,6 +109,11 @@ async def test_breaker_after_three_denies(services: Services, gateway: FakeGatew
     for i in range(3):
         _, err, _ = await bash(services, workdir, f"rm -rf build{i}", sid=sess.id)
         assert err
+    # I1: until the turn is hard-stopped, asks are denied (never silently escalated)
+    text, err, _ = await bash(services, workdir, "echo pending", sid=sess.id)
+    assert err and text.startswith("denied by the smart-mode guardian")
+    assert guardian_mod.take_breaker_stop(services, sess.id)  # what LoopGuards consumes
+    assert not guardian_mod.take_breaker_stop(services, sess.id)  # once
     text, err, _ = await bash(services, workdir, "echo after", sid=sess.id)
     assert err and "non-interactive" in text  # escalated, guardian not consulted
     assert len(guardian_requests(gateway)) == 3

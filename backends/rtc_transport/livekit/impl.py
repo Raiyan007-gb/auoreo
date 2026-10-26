@@ -1,8 +1,10 @@
 """LiveKit RTC transport (spec §26.8; P2, opt-in): rooms on an SFU, SIP telephony, egress.
 
 `livekit-api` (extra `livekit`) is imported lazily, so nothing below P2 depends on it.
-- `join` creates room `auoreo-<session_id>` (`RoomService.CreateRoom`) and mints a token
-  scoped to that room (`room_join`, identity, TTL `settings.livekit.token_ttl_s` = 1 h).
+- `join` creates an opaque uuid4 room per session (`RoomService.CreateRoom`; a second join for
+  the same session reuses it) and mints a token scoped to that room (`room_join`, TTL
+  `settings.livekit.token_ttl_s` = 600 s, max 900). The participant identity is always minted
+  here as a uuid4: never client-chosen, never PII (spec §26.9/§26.10).
 - SIP: `create_sip_inbound` refuses `numbers=[]` without digest auth or allowed addresses
   and always sets `media_encryption = SIP_MEDIA_ENCRYPT_REQUIRE` (SRTP); the outbound trunk
   uses TLS transport. No REGISTER, no video. `transfer` is a cold SIP REFER (`play_dialtone`).
@@ -81,8 +83,14 @@ def http_url(url: str) -> str:
 
 
 def room_for(session_id: str | None) -> str:
-    sid = re.sub(r"[^A-Za-z0-9_-]", "-", session_id or uuid.uuid4().hex[:12])
-    return f"auoreo-{sid}"[:128]
+    """A fresh opaque room name: a uuid4, never derived from the session id (§26.10)."""
+    del session_id
+    return str(uuid.uuid4())
+
+
+def new_identity() -> str:
+    """Server-minted participant identity (uuid4): no client-chosen or PII identities."""
+    return str(uuid.uuid4())
 
 
 def kind_name(participant: Any) -> str:
@@ -208,7 +216,9 @@ class Backend(TelephonyMixin, RtcTransport):  # type: ignore[misc,valid-type]
     # ------------------------------------------------------------ transport
     async def join(self, *, session_id: str | None, identity: str, offer_sdp: str | None) -> JoinInfo:
         url = self._url()
-        room = room_for(session_id)
+        identity = new_identity()  # the caller's value is ignored (§26.10)
+        same = [r["room"] for r in self.rooms.values() if session_id and r.get("session_id") == session_id]
+        room = same[0] if same else room_for(session_id)
         api = sdk()
         req = api.CreateRoomRequest(name=room, empty_timeout=300, max_participants=16)
         await self._call(lambda lk: lk.room.create_room(req))
@@ -221,7 +231,13 @@ class Backend(TelephonyMixin, RtcTransport):  # type: ignore[misc,valid-type]
             "identity": identity,
             "created_at": datetime.now(UTC),
         }
-        extra = {"join_id": room, "ttl_s": ttl, "cloud": is_cloud(url), "region": self.cfg.region}
+        extra = {
+            "join_id": room,
+            "ttl_s": ttl,
+            "cloud": is_cloud(url),
+            "region": self.cfg.region,
+            "identity": identity,
+        }
         return JoinInfo("livekit", session_id, url=url, token=token, room=room, extra=extra)
 
     async def leave(self, join_id: str) -> None:
