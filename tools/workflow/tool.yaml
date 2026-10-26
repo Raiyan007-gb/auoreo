@@ -1,0 +1,23 @@
+name: workflow
+toolset: teams
+description: >-
+  Start a workflow (a workflows/<name>.yaml agent chain, e.g. research-implement-verify,
+  plan-then-build, decide) on an input, in its own child session. Foreground (default) waits
+  and returns the final step's answer; background=true returns the child session id at once.
+  Needs approval. The child runs non-interactively (it cannot ask questions or approvals).
+parameters:
+  type: object
+  properties:
+    name: {type: string, pattern: "^[a-z0-9][a-z0-9_.-]{0,63}$", description: Workflow name (file stem).}
+    input: {type: string, minLength: 1, maxLength: 50000}
+    background: {type: boolean, default: false}
+    timeout_s: {type: integer, minimum: 10, maximum: 3500, description: "Foreground wait (default from settings: 900)."}
+  required: [name, input]
+  additionalProperties: false
+permission: workflow
+pattern_arg: name
+default_action: ask
+exposure: deferred
+timeout_ms: 3600000
+interrupt: cancel
+search_hint: workflow chain pipeline run agents research implement verify plan build start

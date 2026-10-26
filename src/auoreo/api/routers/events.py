@@ -1,13 +1,13 @@
 """`GET /api/events` — the durable event stream (SSE): replay, then live tail.
-`POST /api/events:tail` — the latest seq plus a short tail, as JSON."""
+`POST /api/events:tail` — the latest seq plus a short tail: SSE ending in `[DONE]`, or JSON."""
 
 import asyncio
-from collections.abc import AsyncIterable
+from collections.abc import AsyncIterable, AsyncIterator
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
-from fastapi.sse import EventSourceResponse, ServerSentEvent
+from fastapi.sse import EventSourceResponse, ServerSentEvent, format_sse_event
 from sqlalchemy import select
 
 from auoreo.api.deps import AUTH, ServicesDep
@@ -96,10 +96,8 @@ async def latest(svc: ServicesDep) -> LatestSeq:
     return LatestSeq(seq=await svc.events.last_seq())
 
 
-@router.post("/events:tail", response_model=EventsTail)
-async def events_tail(svc: ServicesDep, body: EventsTailRequest | None = None) -> EventsTail:
+async def _tail(svc: Services, body: EventsTailRequest) -> EventsTail:
     """Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones."""
-    body = body or EventsTailRequest()
     chans = parse_channels(None, [",".join(body.channels)] if body.channels else None)
     latest_seq = await svc.events.last_seq()
     cursor = body.after_seq
@@ -118,6 +116,44 @@ async def events_tail(svc: ServicesDep, body: EventsTailRequest | None = None) -
     events, _, _ = await replay_page(svc, cursor, chans, REPLAY_LIMIT)
     events = events[-body.limit :] if body.after_seq is None else events[: body.limit]
     return EventsTail(seq=latest_seq, events=events)
+
+
+def wants_json(accept: str | None) -> bool:
+    """JSON snapshot only when the client asks for JSON and not for an event stream."""
+    accept = (accept or "").lower()
+    return "application/json" in accept and "text/event-stream" not in accept
+
+
+async def _tail_stream(tail: EventsTail) -> AsyncIterator[bytes]:
+    yield format_sse_event(comment="connected", retry=3000)
+    for ev in tail.events:
+        yield format_sse_event(data_str=ev.model_dump_json(), event=ev.type, id=ev.id)
+    yield format_sse_event(data_str="[DONE]", event="done", id=str(tail.seq))
+
+
+@router.post(
+    "/events:tail",
+    response_model=EventsTail,
+    responses={
+        200: {
+            "description": "SSE (default): the tail as events, then `event: done` / `data: [DONE]`. "
+            "`Accept: application/json` returns the JSON snapshot instead.",
+            "content": {"text/event-stream": {"schema": {"type": "string"}}},
+        }
+    },
+)
+async def events_tail(
+    svc: ServicesDep,
+    body: EventsTailRequest | None = None,
+    accept: Annotated[str | None, Header()] = None,
+) -> Any:
+    """MCP-style POST-SSE mirror of the GET replay (spec §25.12): the tail (after `after_seq`,
+    else the most recent `limit` events) streamed as SSE and closed by a `[DONE]` sentinel;
+    `Accept: application/json` (without `text/event-stream`) gets the `EventsTail` snapshot."""
+    tail = await _tail(svc, body or EventsTailRequest())
+    if wants_json(accept):
+        return tail
+    return EventSourceResponse(_tail_stream(tail), headers={"Cache-Control": "no-cache"})
 
 
 @router.get(
@@ -157,6 +193,8 @@ async def events(
             return
         while follow:
             if await request.is_disconnected() or sub.overflowed:
+                break
+            if getattr(request.app.state, "shutting_down", False):  # --- H5: lifespan teardown
                 break
             try:
                 ev = await asyncio.wait_for(sub.queue.get(), timeout=1.0)

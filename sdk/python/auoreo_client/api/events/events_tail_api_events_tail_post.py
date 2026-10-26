@@ -14,10 +14,14 @@ from ...types import UNSET, Response, Unset
 def _get_kwargs(
     *,
     body: EventsTailRequest | None | Unset = UNSET,
+    accept: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
+    if not isinstance(accept, Unset):
+        headers["accept"] = accept
+
     if not isinstance(authorization, Unset):
         headers["authorization"] = authorization
 
@@ -76,14 +80,18 @@ def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: EventsTailRequest | None | Unset = UNSET,
+    accept: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[EventsTail | HTTPValidationError]:
     """Events Tail
 
-     Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones.
+     MCP-style POST-SSE mirror of the GET replay (spec §25.12): the tail (after `after_seq`,
+    else the most recent `limit` events) streamed as SSE and closed by a `[DONE]` sentinel;
+    `Accept: application/json` (without `text/event-stream`) gets the `EventsTail` snapshot.
 
     Args:
+        accept (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (EventsTailRequest | None | Unset):
@@ -98,6 +106,7 @@ def sync_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        accept=accept,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -113,14 +122,18 @@ def sync(
     *,
     client: AuthenticatedClient | Client,
     body: EventsTailRequest | None | Unset = UNSET,
+    accept: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> EventsTail | HTTPValidationError | None:
     """Events Tail
 
-     Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones.
+     MCP-style POST-SSE mirror of the GET replay (spec §25.12): the tail (after `after_seq`,
+    else the most recent `limit` events) streamed as SSE and closed by a `[DONE]` sentinel;
+    `Accept: application/json` (without `text/event-stream`) gets the `EventsTail` snapshot.
 
     Args:
+        accept (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (EventsTailRequest | None | Unset):
@@ -136,6 +149,7 @@ def sync(
     return sync_detailed(
         client=client,
         body=body,
+        accept=accept,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -145,14 +159,18 @@ async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
     body: EventsTailRequest | None | Unset = UNSET,
+    accept: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[EventsTail | HTTPValidationError]:
     """Events Tail
 
-     Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones.
+     MCP-style POST-SSE mirror of the GET replay (spec §25.12): the tail (after `after_seq`,
+    else the most recent `limit` events) streamed as SSE and closed by a `[DONE]` sentinel;
+    `Accept: application/json` (without `text/event-stream`) gets the `EventsTail` snapshot.
 
     Args:
+        accept (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (EventsTailRequest | None | Unset):
@@ -167,6 +185,7 @@ async def asyncio_detailed(
 
     kwargs = _get_kwargs(
         body=body,
+        accept=accept,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -180,14 +199,18 @@ async def asyncio(
     *,
     client: AuthenticatedClient | Client,
     body: EventsTailRequest | None | Unset = UNSET,
+    accept: None | str | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> EventsTail | HTTPValidationError | None:
     """Events Tail
 
-     Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones.
+     MCP-style POST-SSE mirror of the GET replay (spec §25.12): the tail (after `after_seq`,
+    else the most recent `limit` events) streamed as SSE and closed by a `[DONE]` sentinel;
+    `Accept: application/json` (without `text/event-stream`) gets the `EventsTail` snapshot.
 
     Args:
+        accept (None | str | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
         body (EventsTailRequest | None | Unset):
@@ -204,6 +227,7 @@ async def asyncio(
         await asyncio_detailed(
             client=client,
             body=body,
+            accept=accept,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

@@ -1,0 +1,6 @@
+[project]
+name = "auoreo-plugin-email"
+version = "0.1.0"
+description = "AUOREO email connector (IMAP IDLE) + SMTP delivery provider"
+requires-python = ">=3.12"
+dependencies = []  # standard library only (asyncio IMAP client, smtplib, email)

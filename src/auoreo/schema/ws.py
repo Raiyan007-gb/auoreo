@@ -166,6 +166,18 @@ class WsError(_Frame):
     """JSON-RPC style code where one applies (-32600 invalid request / oversized batch)."""
 
 
+class WsControlError(_Frame):
+    """Server answer to a client frame of unknown `type` (spec §5.2/§9.3): every client frame
+    maps to a runner input or tool call, anything else is `control_response{subtype:error}`."""
+
+    type: Literal["control_response"]
+    subtype: Literal["error"]
+    error: str
+    code: Literal["unknown_type"] = "unknown_type"
+    request_id: str | None = None
+    frame_type: str | None = None
+
+
 # Close codes (normative, spec §5.3)
 CLOSE_OK = 1000
 CLOSE_GOING_AWAY = 1001

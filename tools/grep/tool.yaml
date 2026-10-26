@@ -1,7 +1,8 @@
 name: grep
 toolset: files
 description: >-
-  Search file contents with a regular expression (ripgrep). Returns matching lines as
+  Search file contents with a regular expression (ripgrep; a built-in Python search when rg
+  is missing). Returns matching lines as
   path:line:text, or only file paths with output_mode=files. Respects .gitignore.
 parameters:
   type: object

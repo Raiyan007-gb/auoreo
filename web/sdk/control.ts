@@ -70,10 +70,31 @@ export interface WsAck {
 }
 export interface WsError {
   type: "error";
-  subtype: "unknown_type" | "invalid_frame" | "binary_dropped" | "unauthorized" | "not_found";
+  subtype: "unknown_type" | "invalid_frame" | "binary_dropped" | "unauthorized" | "not_found" | "unknown_channel";
   message: string;
   request_id?: string | null;
+  code?: number | null;
 }
+/** Server answer to a client frame of unknown `type` (spec §9.3). */
+export interface WsControlError {
+  type: "control_response";
+  subtype: "error";
+  error: string;
+  code: "unknown_type";
+  request_id?: string | null;
+  frame_type?: string | null;
+}
+/** Frame types this client understands; anything else goes to `onUnknown` (or console.warn). */
+export const KNOWN_SERVER_FRAMES = [
+  "connected",
+  "ping",
+  "pong",
+  "ack",
+  "error",
+  "subscribed",
+  "unsubscribed",
+  "control_response",
+] as const;
 
 export const WS_CLOSE = {
   OK: 1000,
@@ -98,6 +119,8 @@ export interface ControlOptions {
   readonly onConnected?: (f: WsConnected) => void;
   readonly onState?: (s: ControlState) => void;
   readonly onError?: (f: WsError) => void;
+  /** A frame of a type this SDK does not know (newer server?). Default: `console.warn`. */
+  readonly onUnknown?: (frame: Record<string, unknown>) => void;
   /** Reconnect delay base (ms) and attempts: 2s × 5 by default. */
   readonly retryDelayMs?: number;
   readonly maxRetries?: number;
@@ -166,6 +189,11 @@ export function connectControl(opts: ControlOptions): ControlConnection {
     waiting.clear();
   };
 
+  const unknownFrame = (frame: Record<string, unknown>) => {
+    if (opts.onUnknown) opts.onUnknown(frame);
+    else console.warn("auoreo ws: unknown frame type", frame.type, frame);
+  };
+
   const handle = (frame: Record<string, unknown>) => {
     const type = frame.type;
     if (typeof frame.seq === "number" && typeof frame.aggregate_id === "string") {
@@ -203,7 +231,21 @@ export function connectControl(opts: ControlOptions): ControlConnection {
         opts.onError?.(e);
         return;
       }
+      case "control_response": {
+        const c = frame as unknown as WsControlError;
+        if (c.request_id) {
+          waiting.get(c.request_id)?.(false);
+          waiting.delete(c.request_id);
+        }
+        opts.onError?.({ type: "error", subtype: "unknown_type", message: c.error, request_id: c.request_id ?? null });
+        return;
+      }
+      case "pong":
+      case "subscribed":
+      case "unsubscribed":
+        return;
       default:
+        unknownFrame(frame);
         return;
     }
   };
@@ -226,11 +268,15 @@ export function connectControl(opts: ControlOptions): ControlConnection {
       if (typeof m.data !== "string") return;
       for (const line of m.data.split("\n")) {
         if (!line.trim()) continue;
+        let parsed: unknown;
         try {
-          handle(JSON.parse(line) as Record<string, unknown>);
+          parsed = JSON.parse(line);
         } catch {
-          /* ignore malformed frame */
+          unknownFrame({ type: null, raw: line.slice(0, 200) });
+          continue;
         }
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) handle(parsed as Record<string, unknown>);
+        else unknownFrame({ type: null, raw: line.slice(0, 200) });
       }
     };
     sock.onclose = (c: CloseEvent) => {

@@ -63,6 +63,9 @@ class DesktopState:
 
 
 class DesktopBackend(ABC):
+    supports_foreground: bool = True
+    """False → the `computer` tool refuses `delivery_mode=foreground` (`foreground_unsupported`)."""
+
     def __init__(self, settings: Any) -> None:
         self.settings = settings
 

@@ -228,11 +228,12 @@ async def test_replay_cap_returns_206_and_cap_warning(client: httpx.AsyncClient,
 async def test_events_tail(client: httpx.AsyncClient, services: Services) -> None:
     for i in range(5):
         await services.emit("server", "custom.t", {"i": i})
-    r = await client.post("/api/events:tail", json={"limit": 2})
+    js = {"Accept": "application/json"}
+    r = await client.post("/api/events:tail", json={"limit": 2}, headers=js)
     body = r.json()
     assert r.status_code == 200 and body["seq"] == await services.events.last_seq()
     assert [e["data"]["i"] for e in body["events"]] == [3, 4]
     first = body["events"][0]["seq"]
-    after = (await client.post("/api/events:tail", json={"after_seq": first, "limit": 10})).json()
+    after = (await client.post("/api/events:tail", json={"after_seq": first, "limit": 10}, headers=js)).json()
     assert [e["data"]["i"] for e in after["events"]] == [4]
-    assert (await client.post("/api/events:tail")).status_code == 200
+    assert (await client.post("/api/events:tail", headers=js)).status_code == 200

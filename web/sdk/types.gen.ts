@@ -437,7 +437,9 @@ export interface paths {
         put?: never;
         /**
          * Events Tail
-         * @description Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones.
+         * @description MCP-style POST-SSE mirror of the GET replay (spec §25.12): the tail (after `after_seq`,
+         *     else the most recent `limit` events) streamed as SSE and closed by a `[DONE]` sentinel;
+         *     `Accept: application/json` (without `text/event-stream`) gets the `EventsTail` snapshot.
          */
         post: operations["events_tail_api_events_tail_post"];
         delete?: never;
@@ -5805,6 +5807,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
+                accept?: string | null;
                 authorization?: string | null;
             };
             path?: never;
@@ -5818,13 +5821,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description SSE (default): the tail as events, then `event: done` / `data: [DONE]`. `Accept: application/json` returns the JSON snapshot instead. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["EventsTail"];
+                    "text/event-stream": string;
                 };
             };
             /** @description Validation Error */

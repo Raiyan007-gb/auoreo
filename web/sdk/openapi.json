@@ -8423,9 +8423,25 @@
     },
     "/api/events:tail": {
       "post": {
-        "description": "Latest seq + up to `limit` events: after `after_seq`, or else the most recent ones.",
+        "description": "MCP-style POST-SSE mirror of the GET replay (spec \u00a725.12): the tail (after `after_seq`,\nelse the most recent `limit` events) streamed as SSE and closed by a `[DONE]` sentinel;\n`Accept: application/json` (without `text/event-stream`) gets the `EventsTail` snapshot.",
         "operationId": "events_tail_api_events_tail_post",
         "parameters": [
+          {
+            "in": "header",
+            "name": "accept",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Accept"
+            }
+          },
           {
             "in": "header",
             "name": "authorization",
@@ -8483,9 +8499,14 @@
                 "schema": {
                   "$ref": "#/components/schemas/EventsTail"
                 }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
               }
             },
-            "description": "Successful Response"
+            "description": "SSE (default): the tail as events, then `event: done` / `data: [DONE]`. `Accept: application/json` returns the JSON snapshot instead."
           },
           "422": {
             "content": {

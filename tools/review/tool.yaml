@@ -1,0 +1,28 @@
+name: review
+toolset: coding
+description: >-
+  Review the working tree before declaring work done: collects the uncommitted diff
+  (git diff HEAD + untracked files) and diagnostics (git diff --check, conflict markers,
+  ruff when the project configures it, running language servers) and returns
+  {blockingErrors[], preventContinuation}. mode=agent additionally runs the reviewer agent
+  (the /review command's instructions) as a foreground subagent and appends its verdict.
+parameters:
+  type: object
+  properties:
+    focus: {type: string, maxLength: 2000, description: What to concentrate on (paths, concern).}
+    mode: {type: string, enum: [static, agent], default: static}
+    max_diff_chars: {type: integer, minimum: 1000, maximum: 200000, default: 20000}
+  additionalProperties: false
+permission: review
+default_action: allow
+is_read_only: true
+exposure: deferred
+timeout_ms: 1800000
+search_hint: review code changes diff diagnostics blocking errors before done verify
+output_schema:
+  type: object
+  properties:
+    blockingErrors: {type: array, items: {type: string}}
+    preventContinuation: {type: boolean}
+    files: {type: array, items: {type: string}}
+  required: [blockingErrors, preventContinuation]

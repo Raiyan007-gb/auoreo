@@ -1,0 +1,34 @@
+name: email
+version: 0.1.0
+description: >-
+  Email connector: IMAP IDLE inbox watch (allowlisted senders become connector messages, body
+  marked UNTRUSTED) and SMTP delivery provider + send_email tool (approval by default).
+  Credentials are secret-store references (`secret:email/...`), never plain values.
+provides: [connector, delivery, tools]
+consumes: [sessions, "secrets:email/*"]
+permissions: [plugin__email__send_email]
+config_schema:
+  type: object
+  properties:
+    imap_host: {type: string, minLength: 1}
+    imap_port: {type: integer, minimum: 1, maximum: 65535, default: 993}
+    imap_tls: {type: boolean, default: true, description: Implicit TLS (IMAPS); false only for local test servers.}
+    mailbox: {type: string, default: INBOX}
+    smtp_host: {type: string, minLength: 1}
+    smtp_port: {type: integer, minimum: 1, maximum: 65535, default: 587}
+    smtp_security: {type: string, enum: [starttls, tls, none], default: starttls}
+    username: {type: string, minLength: 1}
+    password: {type: string, pattern: "^secret:email/[A-Za-z0-9_./-]+$", default: "secret:email/password",
+               description: Secret-store reference to the password / app password.}
+    from_address: {type: string, minLength: 3}
+    allowed_senders:
+      type: array
+      items: {type: string, minLength: 3}
+      description: Addresses (or "@domain") whose mail reaches the agent; everything else is ignored.
+    idle_timeout_s: {type: integer, minimum: 30, maximum: 1740, default: 1500, description: Re-issue IDLE before the 29-minute server cut.}
+    max_body_chars: {type: integer, minimum: 500, maximum: 200000, default: 20000}
+    agent: {type: string, description: Agent for email sessions (default agent when unset).}
+  required: [username, from_address]
+  additionalProperties: false
+entry: plugin.py:Plugin
+enabled: false

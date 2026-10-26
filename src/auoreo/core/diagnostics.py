@@ -426,6 +426,10 @@ async def run_checks(settings: Settings, *, services: Services | None = None) ->
     with contextlib.suppress(HarnessError):  # a broken harness is already reported above
         out.extend(Check(*row) for row in doctor_rows(settings, services))
     # --- end G1a
+    from auoreo.core.diagnostics_tools import tool_binary_checks  # --- H5: rg / ffmpeg rows
+
+    at = next((i for i, c in enumerate(out) if c.check == "credentials"), len(out))
+    out[at:at] = tool_binary_checks()
     return out
 
 

@@ -124,6 +124,7 @@ path = "packaging/hatch_build.py"
 
 [dependency-groups]
 dev = [
+    "aiosmtpd>=1.4.6",  # H5: in-process fake SMTP for the plugins/email contract tests
     "asgi-lifespan>=2.1.0",
     "fakeredis>=2.30,<3",
     "mypy>=2.4.0",

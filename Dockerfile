@@ -47,6 +47,10 @@ ENV PYTHONUNBUFFERED=1 \
     AUOREO_HOME=/data \
     AUOREO_HOST=0.0.0.0 \
     AUOREO_PORT=4096
+# ripgrep backs grep/glob/codebase_map (the tools fall back to Python without it, slower)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ripgrep \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --system --gid 10001 auoreo \
     && useradd --system --uid 10001 --gid auoreo --home-dir /data --shell /usr/sbin/nologin auoreo \
     && mkdir -p /data /work \

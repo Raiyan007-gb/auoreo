@@ -1,0 +1,30 @@
+name: forecast
+toolset: ops
+description: >-
+  Trend and forecast for sampled ops metrics (fed by ops_cpu/ops_mem/ops_disk readings and the
+  ops_monitor job): linear trend (slope per hour, r²), EWMA level, value at the horizon and
+  time until a threshold is crossed. Metrics: cpu.percent, mem.percent, swap.percent,
+  disk.percent:<mount>. Call with no metric (or list=true) to see what has been sampled;
+  sample_now=true takes a fresh reading first.
+parameters:
+  type: object
+  properties:
+    metric: {type: string, maxLength: 260, description: 'Metric name, e.g. "disk.percent:/" or "mem.percent".'}
+    threshold: {type: number, description: Alert level in the metric's unit (default 90).}
+    direction: {type: string, enum: [above, below], default: above,
+                description: "above: alert when rising past threshold; below: when falling under it."}
+    horizon_h: {type: number, exclusiveMinimum: 0, maximum: 8760, default: 24,
+                description: Hours ahead for the projected value.}
+    window_h: {type: number, exclusiveMinimum: 0, maximum: 8760, default: 168,
+               description: Only fit samples from the last N hours.}
+    sample_now: {type: boolean, default: false, description: Take a fresh cpu/mem/disk reading first.}
+    list: {type: boolean, default: false, description: List the stored metrics instead.}
+  additionalProperties: false
+permission: ops
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 30000
+search_hint: forecast predict trend capacity disk full memory growth time to threshold ops predictive
+sandbox_mode: read-only
