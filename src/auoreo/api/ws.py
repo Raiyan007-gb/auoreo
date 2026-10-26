@@ -26,8 +26,8 @@ from fastapi import APIRouter, Cookie, Depends, Header, Query, WebSocket, WebSoc
 from pydantic import TypeAdapter, ValidationError
 from starlette.websockets import WebSocketDisconnect
 
-from auoreo.api import session_auth
-from auoreo.core.approvals import pending_dict, reply_with_grants
+from auoreo.api import session_auth, ws_scope
+from auoreo.core.approvals import reply_with_grants
 from auoreo.core.bus import Subscriber, invalid_channels
 from auoreo.core.event_store import REPLAY_LIMIT
 from auoreo.core.services import Services
@@ -283,16 +283,13 @@ class WsConnection:
             self.cursor = cursor
 
     def _connected(self, server_seq: int) -> WsConnected:
-        svc = self.svc
+        perms, questions = ws_scope.pending_snapshot(self)  # --- I1: capability-scoped
         return WsConnected(
             type="connected",
             server_seq=server_seq,
-            generation=svc.harness.generation,
-            pending_permissions=[pending_dict(p) for p in svc.approvals.pending()],
-            pending_questions=[
-                {"request_id": q.request_id, "session_id": q.session_id, "questions": q.questions}
-                for q in svc.questions.pending()
-            ],
+            generation=self.svc.harness.generation,
+            pending_permissions=perms,
+            pending_questions=questions,
         )
 
     async def _pump(self) -> None:
@@ -423,6 +420,9 @@ class WsConnection:
 
     async def _on_control_response(self, frame: WsControlResponse) -> None:
         r = frame.response
+        if not ws_scope.reply_in_scope(self, frame.request_id):  # --- I1
+            await self.ack(frame.request_id, False, "capability token is scoped to another session")
+            return
         if isinstance(r, WsPermissionReply):
             ok = await reply_with_grants(
                 self.svc.approvals,
