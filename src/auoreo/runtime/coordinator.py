@@ -11,11 +11,12 @@ import contextlib
 import logging
 import uuid
 from collections.abc import AsyncIterator, Coroutine
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from auoreo.core.permissions import PermissionEngine
 from auoreo.harness.manifests import WorkflowManifest
-from auoreo.harness.orchestrator import render
+from auoreo.memory.scrubber import sanitize_context
 from auoreo.runtime import commands
 from auoreo.runtime.compaction_idle import IdleCompactor
 from auoreo.runtime.hooks import hooks_of
@@ -23,6 +24,7 @@ from auoreo.runtime.inbox import InboxFull, InputKind, RunOptions, TurnRequest
 from auoreo.runtime.runner import AgentRunner, SessionRuntime, TurnResult
 from auoreo.runtime.session_memory import SessionMemoryWriter
 from auoreo.runtime.titles import generate_title
+from auoreo.runtime.workflow_loop import run_looping, step_input
 from auoreo.tools.context import restore_state
 
 if TYPE_CHECKING:
@@ -118,6 +120,7 @@ class SessionRunCoordinator:
         engine-handled slash commands such as `/model`). `interactive` is only changed
         when given explicitly: injected mail or steering never flips a session's mode."""
         rt = await self.runtime(session_id)
+        text = sanitize_context(text)  # --- I4 §11.7: strip leaked <memory-context> from input
         await self.idle.preempt(session_id)  # foreground input beats a background compaction
         if interactive is not None:
             rt.interactive = interactive
@@ -197,12 +200,20 @@ class SessionRunCoordinator:
         manifest: WorkflowManifest = wf.manifest
         if len(manifest.steps) == 1:
             step = manifest.steps[0]
-            text = render(step.input, {"input": req.text, "steps": {}})
             # The session's own agent wins for its own workflow; otherwise the step's agent.
             agent = req.agent or (rt.agent if wf_name == rt.workflow else step.agent)
-            return await self.runner.run_turn(
-                rt, text, agent=agent, model=req.model, run_id=req.run_id, options=req.options
-            )
+
+            run_ids = [req.run_id]  # the first iteration carries the request's run id
+
+            async def turn(text: str) -> TurnResult:
+                run_id = run_ids.pop() if run_ids else None
+                return await self.runner.run_turn(
+                    rt, text, agent=agent, model=req.model, run_id=run_id, options=req.options
+                )
+
+            if step.loop is not None:  # --- I4: ralph-lite loop inside the session
+                return await run_looping(step, req.text, {}, turn, partial(self.s.emit, rt.session_id))
+            return await turn(step_input(step, req.text, {}))
         return await self._run_workflow(rt, req, manifest)
 
     async def _run_workflow(self, rt: SessionRuntime, req: TurnRequest, wf: WorkflowManifest) -> TurnResult:
@@ -225,7 +236,7 @@ class SessionRunCoordinator:
             )
             crt = await self.runtime(child.id)
             crt.interactive = rt.interactive
-            text = render(step.input, {"input": req.text, "steps": outputs})
+            text = step_input(step, req.text, outputs)
             await self.s.emit(
                 sid,
                 "workflow.step.started",
@@ -236,7 +247,16 @@ class SessionRunCoordinator:
                     "child_session": child.id,
                 },
             )
-            result = await self.runner.run_turn(crt, text, agent=step.agent, model=req.model)
+            if step.loop is not None:  # --- I4: ralph-lite loop in the step's child session
+                result = await run_looping(
+                    step,
+                    req.text,
+                    outputs,
+                    partial(self.runner.run_turn, crt, agent=step.agent, model=req.model),
+                    partial(self.s.emit, sid),
+                )
+            else:
+                result = await self.runner.run_turn(crt, text, agent=step.agent, model=req.model)
             outputs[step.id] = {"output": result.text, "status": result.status}
             await self.s.emit(
                 sid,

@@ -23,6 +23,7 @@ from auoreo.core import observability as obs
 from auoreo.core.redaction import StreamRedactor
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Finish, LLMRequest, ReasoningDelta, TextDelta, ToolCall, Usage
+from auoreo.memory.scrubber import StreamingContextScrubber
 from auoreo.runtime.budget import OUT_OF_BAND
 
 if TYPE_CHECKING:
@@ -63,6 +64,7 @@ async def stream(
     out = StepOutput()
     parts: list[str] = []
     scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
+    recall = StreamingContextScrubber()  # --- I4 §24.3: a leaked <memory-context> never streams
     think = StreamRedactor()  # thinking is its own stream (`message.reasoning`, spec §17)
     purpose = str(request.metadata.get("purpose", "turn"))
     meter = runner.usage.meter(sid, run_id, request.model)  # latency + outcome per call
@@ -73,6 +75,7 @@ async def stream(
             touch()
         match item:
             case TextDelta(text=t):
+                t = recall.feed(t)
                 parts.append(t)
                 if safe := scrub.feed(t):
                     await s.emit(sid, "message.delta", {"run_id": run_id, "text": safe})
@@ -94,6 +97,10 @@ async def stream(
                 out.finish = reason
     if thought := think.flush():
         await s.emit(sid, "message.reasoning", {"run_id": run_id, "text": thought})
+    if rest := recall.flush():  # a held partial tag that never completed
+        parts.append(rest)
+        if safe := scrub.feed(rest):
+            await s.emit(sid, "message.delta", {"run_id": run_id, "text": safe})
     if tail := scrub.flush():
         await s.emit(sid, "message.delta", {"run_id": run_id, "text": tail})
     out.text = "".join(parts)

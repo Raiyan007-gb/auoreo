@@ -29,5 +29,22 @@ def workspace_row(st: Settings, cwd: Path | None = None) -> Check:
     )
 
 
+def reembed_row(st: Settings) -> Check:
+    from auoreo.memory.reembed import status_offline
+
+    s = status_offline(st)
+    if s is None:
+        return Check("memory_reembed", "ok", "no memory.db yet")
+    if s.stale == 0:
+        return Check("memory_reembed", "ok", f"all vectors use {s.embed_model}")
+    level = "ok" if s.state == "running" else "warn"
+    return Check(
+        "memory_reembed",
+        level,  # type: ignore[arg-type]
+        f"{s.stale} rows embedded with another model ({s.state}, {s.done}/{s.total})",
+        "run `auoreo memory reembed` (it resumes where it stopped)",
+    )
+
+
 async def i4_checks(st: Settings) -> list[Check]:
-    return [workspace_row(st)]
+    return [workspace_row(st), reembed_row(st)]

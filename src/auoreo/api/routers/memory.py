@@ -10,6 +10,7 @@ from auoreo.memory import curator as curator_mod
 from auoreo.memory.files import FILES
 from auoreo.memory.service import MemoryService
 from auoreo.schema.chat import CuratorReport, CuratorReportText, FactActionResult, FactFeedback, FactPin
+from auoreo.schema.i4 import ReembedStatus
 from auoreo.schema.ops import MemoryFact, MemoryFactPage, MemoryFile, MemoryFiles
 
 router = APIRouter(prefix="/api/memory", tags=["memory"], dependencies=AUTH)
@@ -140,3 +141,30 @@ async def memory_files(svc: ServicesDep) -> MemoryFiles:
         text = path.read_text(encoding="utf-8", errors="replace")
         files.append(MemoryFile(name=name, exists=True, content=redact(text), size=len(text.encode())))
     return MemoryFiles(dir=str(d), files=files)
+
+
+# --- I4: resumable re-embed job (spec §11.1 / §24.3)
+def _reembed_job(svc: ServicesDep) -> Any:
+    from auoreo.memory.reembed import ReembedJob
+
+    if svc.memory is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "memory is disabled")
+    job = svc.ext.get("reembed")
+    if job is None:
+        job = svc.ext["reembed"] = ReembedJob(svc)
+    return job
+
+
+@router.get("/reembed", response_model=ReembedStatus)
+async def reembed_status(svc: ServicesDep) -> ReembedStatus:
+    status_: ReembedStatus = await _reembed_job(svc).status()
+    return status_
+
+
+@router.post("/reembed", response_model=ReembedStatus, status_code=status.HTTP_202_ACCEPTED)
+async def reembed_start(svc: ServicesDep) -> ReembedStatus:
+    """Start (or resume) the background re-embed job; returns the current progress."""
+    job = _reembed_job(svc)
+    job.start()
+    status_: ReembedStatus = await job.status()
+    return status_

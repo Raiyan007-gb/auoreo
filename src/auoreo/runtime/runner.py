@@ -212,7 +212,7 @@ class AgentRunner:
             try:
                 top_k = (choice.arm.top_k if choice else None) or 8  # bandit arm may tune recall depth
                 query = await recall_query(self.s, rt, text)  # --- G2b: opt-in rewrite, fail-open
-                memory_block = await self.s.memory.context_block(query, limit=top_k)
+                memory_block = await self.s.memory.context_block(query, limit=top_k, session_id=sid)
             except Exception:  # recall must never fail the turn
                 log.exception("memory recall failed")
         st = self.s.settings

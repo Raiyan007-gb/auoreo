@@ -243,7 +243,9 @@ async def test_arm_top_k_sets_the_memory_recall_depth(
     seen: list[int] = []
 
     class Mem:
-        async def context_block(self, query: str, *, allow_aux: bool = True, limit: int = 8) -> str:
+        async def context_block(
+            self, query: str, *, allow_aux: bool = True, limit: int = 8, **_: object
+        ) -> str:
             seen.append(limit)
             return ""
 

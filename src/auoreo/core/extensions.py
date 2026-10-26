@@ -26,6 +26,8 @@ STARTERS: list[str] = [
     "auoreo.teams:start",  # key = last dotted part → services.ext["teams"]
     "auoreo.plugins:start",  # → services.ext["plugins"]
     "auoreo.memory.curator:start",  # → services.ext["curator"] (deterministic, no LLM)
+    "auoreo.memory.reembed:start",  # I4 → services.ext["reembed"] (resumable re-embed job)
+    "auoreo.memory.tenants:start",  # I4 → services.ext["tenants"] (team.created → memory tenant)
     "auoreo.voice:start",  # M4c → services.ext["voice"]
     "auoreo.goals:start",  # W0-C → services.ext["goals"]
     "auoreo.suggestions:start",  # W0-C → services.ext["suggestions"] (60 s expiry/delivery sweep)

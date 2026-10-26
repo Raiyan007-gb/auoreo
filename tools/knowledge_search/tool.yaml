@@ -13,6 +13,9 @@ parameters:
       type: boolean
       default: false
       description: Also search archived and superseded facts (history; may be outdated).
+    tenant:
+      type: string
+      description: "Memory tenant to search (default: local). Only `local` or this session's team tenant (`team:<id>`)."
   required: [query]
   additionalProperties: false
 default_action: allow
