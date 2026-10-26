@@ -3635,6 +3635,44 @@
         "title": "MessageOut",
         "type": "object"
       },
+      "OAuthSettle": {
+        "additionalProperties": false,
+        "properties": {
+          "flow": {
+            "default": "",
+            "description": "Flow that signed in (loopback/device/manual)",
+            "maxLength": 32,
+            "title": "Flow",
+            "type": "string"
+          }
+        },
+        "title": "OAuthSettle",
+        "type": "object"
+      },
+      "OAuthSettled": {
+        "properties": {
+          "connector": {
+            "title": "Connector",
+            "type": "string"
+          },
+          "flow": {
+            "default": "",
+            "title": "Flow",
+            "type": "string"
+          },
+          "settled": {
+            "description": "A refresh token is stored as `oauth/<connector>`",
+            "title": "Settled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "connector",
+          "settled"
+        ],
+        "title": "OAuthSettled",
+        "type": "object"
+      },
       "OpenAIChatCompletion": {
         "properties": {
           "choices": {
@@ -11291,6 +11329,91 @@
         "summary": "Search",
         "tags": [
           "memory"
+        ]
+      }
+    },
+    "/api/oauth/{connector}/settled": {
+      "post": {
+        "description": "Drop the cached access token for `connector` and emit `authorization/settled`.",
+        "operationId": "settled_api_oauth__connector__settled_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "connector",
+            "required": true,
+            "schema": {
+              "title": "Connector",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OAuthSettle"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OAuthSettled"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Settled",
+        "tags": [
+          "oauth"
         ]
       }
     },

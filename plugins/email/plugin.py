@@ -8,23 +8,33 @@ UNTRUSTED data; it is then flagged `\\Seen`. Other senders are ignored (audited,
 Outbound: `smtplib` in a worker thread (STARTTLS / implicit TLS / none) for both the `email`
 delivery provider and the `send_email` tool (the host asks for approval by default).
 Credentials: `password: "secret:email/<name>"` resolved through `HostAPI.secret` only.
+
+I7: `imap_security: tls | starttls | none` (STARTTLS upgrades the plain connection after the
+greeting, RFC 3501 §6.2.1) and `auth: xoauth2` — IMAP `AUTHENTICATE XOAUTH2` and SMTP
+`AUTH XOAUTH2` with an OAuth access token from the host (`HostAPI.oauth_token`, minted from the
+`oauth/<connector>` refresh token by `auoreo login google`; the plugin never sees the refresh
+token). Mail delivered with `meta.media` (voice notes, MP3 off the chat apps) is attached.
 """
 
 from __future__ import annotations
 
 import asyncio
+import base64
 import contextlib
 import email
 import email.policy
+import mimetypes
 import re
 import smtplib
 import ssl
 from email.message import EmailMessage
 from email.utils import formatdate, make_msgid, parseaddr
+from pathlib import Path
 from typing import Any
 
 NAME = "email"
 WARN_BYTES = 20 * 2**20
+ATTACH_MAX = 16 * 2**20
 RETRY_S = 30.0
 TOOLS: list[dict[str, Any]] = [
     {
@@ -59,6 +69,11 @@ def _quote(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def xoauth2(user: str, token: str) -> str:
+    """The SASL XOAUTH2 initial response (raw; IMAP sends it base64-encoded)."""
+    return f"user={user}\x01auth=Bearer {token}\x01\x01"
+
+
 class ImapClient:
     """Just enough IMAP4rev1 (RFC 3501 + IDLE RFC 2177) for an inbox watcher."""
 
@@ -67,13 +82,26 @@ class ImapClient:
         self._n = 0
 
     @classmethod
-    async def connect(cls, host: str, port: int, tls: bool, timeout: float = 30) -> ImapClient:
-        ctx = ssl.create_default_context() if tls else None
-        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port, ssl=ctx), timeout)
+    async def connect(
+        cls,
+        host: str,
+        port: int,
+        security: str | bool,
+        timeout: float = 30,
+        context: ssl.SSLContext | None = None,
+    ) -> ImapClient:
+        """`security`: "tls" (implicit), "starttls" (upgrade after the greeting) or "none"."""
+        mode = ("tls" if security else "none") if isinstance(security, bool) else security
+        ctx = context or ssl.create_default_context()
+        implicit = ctx if mode == "tls" else None
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port, ssl=implicit), timeout)
         client = cls(reader, writer)
         greeting = await client._line()
         if not greeting.startswith(b"* OK") and not greeting.startswith(b"* PREAUTH"):
             raise EmailError(f"IMAP greeting: {greeting[:80]!r}")
+        if mode == "starttls":
+            await client.command("STARTTLS")
+            await asyncio.wait_for(writer.start_tls(ctx, server_hostname=host), timeout)
         return client
 
     async def _line(self) -> bytes:
@@ -99,6 +127,10 @@ class ImapClient:
         items: list[tuple[bytes, list[bytes]]] = []
         while True:
             line, lits = await self._read_response()
+            if line.startswith(b"+"):  # SASL challenge = an error report; answer empty to end it
+                self.w.write(b"\r\n")
+                await self.w.drain()
+                continue
             if line.startswith(tag + b" "):
                 status = line[len(tag) + 1 :].strip()
                 if not status.startswith(b"OK"):
@@ -108,6 +140,10 @@ class ImapClient:
 
     async def login(self, user: str, password: str) -> None:
         await self.command(f"LOGIN {_quote(user)} {_quote(password)}")
+
+    async def authenticate_xoauth2(self, user: str, token: str) -> None:
+        blob = base64.b64encode(xoauth2(user, token).encode()).decode()
+        await self.command(f"AUTHENTICATE XOAUTH2 {blob}")
 
     async def select(self, mailbox: str) -> None:
         await self.command(f"SELECT {_quote(mailbox)}")
@@ -186,6 +222,15 @@ def untrusted(sender: str, subject: str, body: str, cap: int) -> str:
     )
 
 
+def attach_file(msg: EmailMessage, path: Path, mime: str | None = None) -> None:
+    """Attach a delivered media file (≤ 16 MiB) to an outgoing message."""
+    if path.stat().st_size > ATTACH_MAX:
+        raise EmailError(f"attachment {path.name} is over {ATTACH_MAX} bytes")
+    kind = mime or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+    main, _, sub = kind.partition("/")
+    msg.add_attachment(path.read_bytes(), maintype=main, subtype=sub or "octet-stream", filename=path.name)
+
+
 class Plugin:
     def __init__(self, host: Any) -> None:
         self.host = host
@@ -193,6 +238,7 @@ class Plugin:
         self._task: asyncio.Task[None] | None = None
         self.seen: set[int] = set()
         self.idle_changes = 0
+        self.ssl_context: ssl.SSLContext | None = None  # tests inject a context trusting their CA
 
     # ------------------------------------------------------------- protocol
     def initialize(self, config: dict[str, Any], consumes_granted: list[str]) -> dict[str, Any]:
@@ -222,6 +268,27 @@ class Plugin:
     async def shutdown(self) -> None:
         await self.connector_stop(NAME)
 
+    def xoauth(self) -> bool:
+        return self.config.get("auth", "password") == "xoauth2"
+
+    async def access_token(self) -> str:
+        connector = str(self.config.get("oauth_connector") or "google")
+        try:
+            token = await self.host.oauth_token(connector)
+        except Exception as exc:  # RpcError from the host: not signed in / not declared
+            raise EmailError(f"OAuth token for {connector} unavailable: {exc}") from exc
+        if not token:
+            raise EmailError(f"OAuth token for {connector} unavailable (run `auoreo login {connector}`)")
+        return str(token)
+
+    async def credential(self) -> str:
+        """The password, or an OAuth access token when `auth: xoauth2`."""
+        return await self.access_token() if self.xoauth() else await self.password()
+
+    def imap_security(self) -> str:
+        cfg = self.config
+        return str(cfg.get("imap_security") or ("tls" if cfg.get("imap_tls", True) else "none"))
+
     async def password(self) -> str:
         ref = str(self.config.get("password") or "secret:email/password")
         if not ref.startswith("secret:"):
@@ -235,9 +302,12 @@ class Plugin:
     async def open_imap(self) -> ImapClient:
         cfg = self.config
         client = await ImapClient.connect(
-            cfg["imap_host"], int(cfg.get("imap_port", 993)), bool(cfg.get("imap_tls", True))
+            cfg["imap_host"], int(cfg.get("imap_port", 993)), self.imap_security(), context=self.ssl_context
         )
-        await client.login(cfg["username"], await self.password())
+        if self.xoauth():
+            await client.authenticate_xoauth2(cfg["username"], await self.access_token())
+        else:
+            await client.login(cfg["username"], await self.password())
         await client.select(str(cfg.get("mailbox") or "INBOX"))
         return client
 
@@ -316,7 +386,7 @@ class Plugin:
         cfg = self.config
         host, port = cfg["smtp_host"], int(cfg.get("smtp_port", 587))
         security = cfg.get("smtp_security", "starttls")
-        ctx = ssl.create_default_context()
+        ctx = self.ssl_context or ssl.create_default_context()
         smtp: smtplib.SMTP = (
             smtplib.SMTP_SSL(host, port, context=ctx, timeout=30)
             if security == "tls"
@@ -326,7 +396,10 @@ class Plugin:
             if security == "starttls":
                 smtp.starttls(context=ctx)
             smtp.ehlo()
-            if smtp.has_extn("auth"):  # a plain local relay may offer no AUTH at all
+            if smtp.has_extn("auth") and self.xoauth():
+                raw = xoauth2(cfg["username"], password)
+                smtp.auth("XOAUTH2", lambda challenge=None: raw if challenge is None else "")
+            elif smtp.has_extn("auth"):  # a plain local relay may offer no AUTH at all
                 smtp.login(cfg["username"], password)
             elif security != "none":
                 raise EmailError("the SMTP server offers no AUTH after TLS")
@@ -335,7 +408,7 @@ class Plugin:
     async def smtp(self, msg: EmailMessage) -> str:
         if not self.config.get("smtp_host"):
             raise EmailError("smtp_host is not set")
-        await asyncio.to_thread(self._smtp_send, msg, await self.password())
+        await asyncio.to_thread(self._smtp_send, msg, await self.credential())
         return str(msg["Message-ID"])
 
     async def call_tool(self, name: str, args: dict[str, Any], session_id: str) -> dict[str, Any]:
@@ -361,9 +434,10 @@ class Plugin:
         if reply.get("subject") and not subject.lower().startswith("re:"):
             subject = f"Re: {subject}"
         try:
-            msg_id = await self.smtp(
-                self.build([target], subject, text, in_reply_to=str(reply.get("message_id") or ""))
-            )
+            msg = self.build([target], subject, text, in_reply_to=str(reply.get("message_id") or ""))
+            for item in meta.get("media") or []:
+                await asyncio.to_thread(attach_file, msg, Path(str(item["path"])), item.get("mime"))
+            msg_id = await self.smtp(msg)
         except (EmailError, smtplib.SMTPException, OSError) as exc:
             return {"ok": False, "detail": str(exc), "external_id": None}
         return {"ok": True, "detail": "1 email", "external_id": msg_id}

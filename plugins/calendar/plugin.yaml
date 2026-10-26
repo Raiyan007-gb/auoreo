@@ -3,16 +3,19 @@ version: 0.1.0
 description: >-
   Calendar connector over CalDAV (Nextcloud, Fastmail, iCloud, Radicale, …): calendar_list_events
   (time-range REPORT) and calendar_create_event (PUT of a VEVENT, approval by default).
-  Google Calendar is a stub (use its CalDAV endpoint with an app credential). Reminders are cron
-  jobs + deliveries, not this plugin. Credentials are `secret:calendar/...` references.
+  `provider: google` uses the Google Calendar v3 REST API with an OAuth access token from
+  `auoreo login google` (never overwrites existing events). Reminders are cron jobs +
+  deliveries, not this plugin. Credentials are `secret:calendar/...` references or OAuth.
 provides: [tools]
-consumes: ["secrets:calendar/*"]
+consumes: ["secrets:calendar/*", "oauth:google"]
 permissions: [plugin__calendar__calendar_list_events, plugin__calendar__calendar_create_event]
 config_schema:
   type: object
   properties:
     provider: {type: string, enum: [caldav, google], default: caldav}
-    url: {type: string, pattern: "^https?://", description: Calendar collection URL (ends with /).}
+    url: {type: string, pattern: "^https?://", description: CalDAV collection URL (ends with /).}
+    calendar_id: {type: string, default: primary, description: "Google calendar id (provider: google)."}
+    oauth_connector: {type: string, default: google, description: "OAuth connector for provider: google (consumes oauth:<name>)."}
     username: {type: string}
     password: {type: string, pattern: "^secret:calendar/[A-Za-z0-9_./-]+$", default: "secret:calendar/password"}
     timezone: {type: string, default: UTC, description: Zone name used for naive times in tool calls (IANA).}

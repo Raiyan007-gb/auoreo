@@ -89,6 +89,12 @@ class HostAPI:
         res = await self._rt.request("secret.get", {"name": name})
         return res.get("value") if isinstance(res, dict) else None
 
+    async def oauth_token(self, connector: str) -> str | None:
+        """I7: an OAuth access token for `connectors/<connector>` (`consumes: ["oauth:<connector>"]`);
+        the host refreshes and caches it. Raises `RpcError` when not signed in."""
+        res = await self._rt.request("oauth.token", {"connector": connector})
+        return res.get("access_token") if isinstance(res, dict) else None
+
     async def pairing_request(self, connector: str, chat_id: str, user: str) -> dict[str, Any]:
         """Is `chat_id` allowed? Unknown chats get `{allowed: false, code: "123456"}`."""
         params = {"name": connector, "chat_id": str(chat_id), "user": user}

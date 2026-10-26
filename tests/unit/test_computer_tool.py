@@ -248,3 +248,13 @@ async def test_transcribe_and_speak_tools(services: Services, workdir: Path) -> 
     assert (await asyncio.to_thread(path.read_bytes))[:4] == b"RIFF"
     again = await call(services, ctx, {"text": "Second."}, "speak")
     assert Path(again.meta["path"]).name == "2.wav"
+    # I7: the output carries a MEDIA: envelope that a delivery turns into an Opus voice note
+    assert spoke.meta["media"] in spoke.content and spoke.meta["media"].startswith("MEDIA:{")
+    import shutil
+
+    from auoreo.automation.deliveries import voice_notes
+
+    if shutil.which("ffmpeg") is not None:  # the Opus encode needs the ffmpeg binary
+        body, extra = await voice_notes(services, "telegram", "Here it is.\n" + spoke.meta["media"])
+        assert body == "Here it is." and extra["media"][0]["mime"] == "audio/ogg"
+        assert extra["media"][0]["path"].endswith("audio/voice/1.ogg") and extra["media"][0]["duration_s"] > 0

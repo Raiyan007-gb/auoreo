@@ -182,7 +182,7 @@ def test_bundled_root_checkout(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_pyinstaller_inputs() -> None:
     collect = _load("packaging/pyinstaller/collect.py")
     dirs = collect.bundled_dirs(REPO)
-    assert set(paths.KINDS) | {"policies", "memory"} == set(dirs) == set(paths.BUNDLED_DIRS)
+    assert set(paths.KINDS) | {"policies", "memory", "connectors"} == set(dirs) == set(paths.BUNDLED_DIRS)
     dests = {d for _, d in collect.data_dirs(REPO)}
     assert {d for d in dirs if (REPO / d).is_dir()} <= dests
     hidden = collect.definition_imports(REPO)

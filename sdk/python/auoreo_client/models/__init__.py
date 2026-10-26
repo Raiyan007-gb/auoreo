@@ -122,6 +122,8 @@ from .memory_file import MemoryFile
 from .memory_files import MemoryFiles
 from .message_out import MessageOut
 from .message_out_tool_calls_type_0_item import MessageOutToolCallsType0Item
+from .o_auth_settle import OAuthSettle
+from .o_auth_settled import OAuthSettled
 from .open_ai_chat_completion import OpenAIChatCompletion
 from .open_ai_chat_request import OpenAIChatRequest
 from .open_ai_chat_request_messages_item import OpenAIChatRequestMessagesItem
@@ -351,6 +353,8 @@ __all__ = (
     "MemoryFiles",
     "MessageOut",
     "MessageOutToolCallsType0Item",
+    "OAuthSettle",
+    "OAuthSettled",
     "OpenAIChatCompletion",
     "OpenAIChatRequest",
     "OpenAIChatRequestMessagesItem",

@@ -86,9 +86,32 @@ async def usage_record(host: PluginHost, st: PluginState, p: dict[str, Any]) -> 
     return {"ok": True}
 
 
+async def oauth_token(host: PluginHost, st: PluginState, p: dict[str, Any]) -> Any:
+    """I7: a short-lived access token for `oauth/<connector>` (needs `consumes: ["oauth:<name>"]`).
+    The refresh token never leaves the host; the access token comes from the in-memory cache."""
+    from auoreo.core import oauth_login as oauth
+
+    connector = str(p.get("connector", ""))
+    allowed = f"oauth:{connector}" in st.manifest.consumes
+    await host.s.audit.record(
+        actor=f"plugin:{st.name}",
+        action="plugin.oauth",
+        decision="allow" if allowed else "deny",
+        detail={"connector": connector[:64]},
+    )
+    if not allowed:
+        raise RpcError(f"oauth '{connector}' is not declared in consumes", code=-32001)
+    try:
+        token = await oauth.tokens_for(host.s).access_token(connector)
+    except oauth.OAuthError as exc:
+        raise RpcError(str(exc), code=-32002) from exc
+    return {"access_token": token}
+
+
 HOST_REQUESTS: dict[str, Handler] = {
     "secret.get": secret_get,
     "pairing.request": pairing_request,
     "audit.record": audit_record,
     "usage.record": usage_record,
+    "oauth.token": oauth_token,
 }

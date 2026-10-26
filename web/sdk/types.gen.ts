@@ -877,6 +877,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/oauth/{connector}/settled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Settled
+         * @description Drop the cached access token for `connector` and emit `authorization/settled`.
+         */
+        post: operations["settled_api_oauth__connector__settled_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/permissions/pending": {
         parameters: {
             query?: never;
@@ -3731,6 +3751,30 @@ export interface components {
             tool_calls?: {
                 [key: string]: unknown;
             }[] | null;
+        };
+        /** OAuthSettle */
+        OAuthSettle: {
+            /**
+             * Flow
+             * @description Flow that signed in (loopback/device/manual)
+             * @default
+             */
+            flow: string;
+        };
+        /** OAuthSettled */
+        OAuthSettled: {
+            /** Connector */
+            connector: string;
+            /**
+             * Flow
+             * @default
+             */
+            flow: string;
+            /**
+             * Settled
+             * @description A refresh token is stored as `oauth/<connector>`
+             */
+            settled: boolean;
         };
         /** OpenAIChatCompletion */
         OpenAIChatCompletion: {
@@ -7150,6 +7194,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchHit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    settled_api_oauth__connector__settled_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                connector: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OAuthSettle"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthSettled"];
                 };
             };
             /** @description Validation Error */
