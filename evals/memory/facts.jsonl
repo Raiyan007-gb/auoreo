@@ -1,0 +1,398 @@
+{"content": "The user prefers Neovim as their code editor.", "id": "f0001", "scope": "user", "type": "user"}
+{"content": "The user once tried VS Code for a while but did not keep it.", "id": "f0002", "scope": "user", "type": "user"}
+{"content": "For their code editor, the user always picks Neovim.", "id": "f0003", "scope": "user", "type": "user"}
+{"content": "The user prefers WezTerm as their terminal emulator.", "id": "f0004", "scope": "user", "type": "user"}
+{"content": "The user once tried iTerm2 for a while but did not keep it.", "id": "f0005", "scope": "user", "type": "user"}
+{"content": "For their terminal emulator, the user always picks WezTerm.", "id": "f0006", "scope": "user", "type": "user"}
+{"content": "The user prefers fish as their login shell.", "id": "f0007", "scope": "user", "type": "user"}
+{"content": "The user once tried zsh for a while but did not keep it.", "id": "f0008", "scope": "user", "type": "user"}
+{"content": "For their login shell, the user always picks fish.", "id": "f0009", "scope": "user", "type": "user"}
+{"content": "The user prefers Firefox as their browser.", "id": "f0010", "scope": "user", "type": "user"}
+{"content": "The user once tried Chrome for a while but did not keep it.", "id": "f0011", "scope": "user", "type": "user"}
+{"content": "For their browser, the user always picks Firefox.", "id": "f0012", "scope": "user", "type": "user"}
+{"content": "The user prefers Obsidian as their note taking app.", "id": "f0013", "scope": "user", "type": "user"}
+{"content": "The user once tried Notion for a while but did not keep it.", "id": "f0014", "scope": "user", "type": "user"}
+{"content": "For their note taking app, the user always picks Obsidian.", "id": "f0015", "scope": "user", "type": "user"}
+{"content": "The user prefers Colemak as their keyboard layout.", "id": "f0016", "scope": "user", "type": "user"}
+{"content": "The user once tried QWERTY for a while but did not keep it.", "id": "f0017", "scope": "user", "type": "user"}
+{"content": "For their keyboard layout, the user always picks Colemak.", "id": "f0018", "scope": "user", "type": "user"}
+{"content": "The user prefers Sway as their window manager.", "id": "f0019", "scope": "user", "type": "user"}
+{"content": "The user once tried i3 for a while but did not keep it.", "id": "f0020", "scope": "user", "type": "user"}
+{"content": "For their window manager, the user always picks Sway.", "id": "f0021", "scope": "user", "type": "user"}
+{"content": "The user prefers lazygit as their git client.", "id": "f0022", "scope": "user", "type": "user"}
+{"content": "The user once tried GitKraken for a while but did not keep it.", "id": "f0023", "scope": "user", "type": "user"}
+{"content": "For their git client, the user always picks lazygit.", "id": "f0024", "scope": "user", "type": "user"}
+{"content": "The user prefers Bitwarden as their password manager.", "id": "f0025", "scope": "user", "type": "user"}
+{"content": "The user once tried LastPass for a while but did not keep it.", "id": "f0026", "scope": "user", "type": "user"}
+{"content": "For their password manager, the user always picks Bitwarden.", "id": "f0027", "scope": "user", "type": "user"}
+{"content": "The user prefers Spotify as their music player.", "id": "f0028", "scope": "user", "type": "user"}
+{"content": "The user once tried Apple Music for a while but did not keep it.", "id": "f0029", "scope": "user", "type": "user"}
+{"content": "For their music player, the user always picks Spotify.", "id": "f0030", "scope": "user", "type": "user"}
+{"content": "The user prefers flat white as their coffee order.", "id": "f0031", "scope": "user", "type": "user"}
+{"content": "The user once tried espresso for a while but did not keep it.", "id": "f0032", "scope": "user", "type": "user"}
+{"content": "For their coffee order, the user always picks flat white.", "id": "f0033", "scope": "user", "type": "user"}
+{"content": "The user prefers Jitsi as their meeting tool.", "id": "f0034", "scope": "user", "type": "user"}
+{"content": "The user once tried Zoom for a while but did not keep it.", "id": "f0035", "scope": "user", "type": "user"}
+{"content": "For their meeting tool, the user always picks Jitsi.", "id": "f0036", "scope": "user", "type": "user"}
+{"content": "The user prefers Excalidraw as their diagram tool.", "id": "f0037", "scope": "user", "type": "user"}
+{"content": "The user once tried Visio for a while but did not keep it.", "id": "f0038", "scope": "user", "type": "user"}
+{"content": "For their diagram tool, the user always picks Excalidraw.", "id": "f0039", "scope": "user", "type": "user"}
+{"content": "The user prefers Gruvbox as their color theme.", "id": "f0040", "scope": "user", "type": "user"}
+{"content": "The user once tried Solarized for a while but did not keep it.", "id": "f0041", "scope": "user", "type": "user"}
+{"content": "For their color theme, the user always picks Gruvbox.", "id": "f0042", "scope": "user", "type": "user"}
+{"content": "The user prefers JetBrains Mono as their font for coding.", "id": "f0043", "scope": "user", "type": "user"}
+{"content": "The user once tried Fira Code for a while but did not keep it.", "id": "f0044", "scope": "user", "type": "user"}
+{"content": "For their font for coding, the user always picks JetBrains Mono.", "id": "f0045", "scope": "user", "type": "user"}
+{"content": "The user prefers Fantastical as their calendar app.", "id": "f0046", "scope": "user", "type": "user"}
+{"content": "The user once tried Outlook for a while but did not keep it.", "id": "f0047", "scope": "user", "type": "user"}
+{"content": "For their calendar app, the user always picks Fantastical.", "id": "f0048", "scope": "user", "type": "user"}
+{"content": "The user prefers Thunderbird as their mail client.", "id": "f0049", "scope": "user", "type": "user"}
+{"content": "The user once tried Apple Mail for a while but did not keep it.", "id": "f0050", "scope": "user", "type": "user"}
+{"content": "For their mail client, the user always picks Thunderbird.", "id": "f0051", "scope": "user", "type": "user"}
+{"content": "The user prefers Linear as their task tracker.", "id": "f0052", "scope": "user", "type": "user"}
+{"content": "The user once tried Jira for a while but did not keep it.", "id": "f0053", "scope": "user", "type": "user"}
+{"content": "For their task tracker, the user always picks Linear.", "id": "f0054", "scope": "user", "type": "user"}
+{"content": "The user prefers ThinkPad X1 as their laptop.", "id": "f0055", "scope": "user", "type": "user"}
+{"content": "The user once tried MacBook Air for a while but did not keep it.", "id": "f0056", "scope": "user", "type": "user"}
+{"content": "For their laptop, the user always picks ThinkPad X1.", "id": "f0057", "scope": "user", "type": "user"}
+{"content": "The user prefers Android as their phone platform.", "id": "f0058", "scope": "user", "type": "user"}
+{"content": "The user once tried iOS for a while but did not keep it.", "id": "f0059", "scope": "user", "type": "user"}
+{"content": "For their phone platform, the user always picks Android.", "id": "f0060", "scope": "user", "type": "user"}
+{"content": "The user prefers 14 point as their programming font size.", "id": "f0061", "scope": "user", "type": "user"}
+{"content": "The user once tried 12 point for a while but did not keep it.", "id": "f0062", "scope": "user", "type": "user"}
+{"content": "For their programming font size, the user always picks 14 point.", "id": "f0063", "scope": "user", "type": "user"}
+{"content": "The user prefers pytest as their test runner.", "id": "f0064", "scope": "user", "type": "user"}
+{"content": "The user once tried unittest for a while but did not keep it.", "id": "f0065", "scope": "user", "type": "user"}
+{"content": "For their test runner, the user always picks pytest.", "id": "f0066", "scope": "user", "type": "user"}
+{"content": "The user prefers uv as their package manager.", "id": "f0067", "scope": "user", "type": "user"}
+{"content": "The user once tried pip for a while but did not keep it.", "id": "f0068", "scope": "user", "type": "user"}
+{"content": "For their package manager, the user always picks uv.", "id": "f0069", "scope": "user", "type": "user"}
+{"content": "The user prefers ruff as their linter.", "id": "f0070", "scope": "user", "type": "user"}
+{"content": "The user once tried flake8 for a while but did not keep it.", "id": "f0071", "scope": "user", "type": "user"}
+{"content": "For their linter, the user always picks ruff.", "id": "f0072", "scope": "user", "type": "user"}
+{"content": "The user prefers Signal as their chat app.", "id": "f0073", "scope": "user", "type": "user"}
+{"content": "The user once tried WhatsApp for a while but did not keep it.", "id": "f0074", "scope": "user", "type": "user"}
+{"content": "For their chat app, the user always picks Signal.", "id": "f0075", "scope": "user", "type": "user"}
+{"content": "The user prefers Hetzner as their cloud provider.", "id": "f0076", "scope": "user", "type": "user"}
+{"content": "The user once tried AWS for a while but did not keep it.", "id": "f0077", "scope": "user", "type": "user"}
+{"content": "For their cloud provider, the user always picks Hetzner.", "id": "f0078", "scope": "user", "type": "user"}
+{"content": "The user prefers PostgreSQL as their database.", "id": "f0079", "scope": "user", "type": "user"}
+{"content": "The user once tried MySQL for a while but did not keep it.", "id": "f0080", "scope": "user", "type": "user"}
+{"content": "For their database, the user always picks PostgreSQL.", "id": "f0081", "scope": "user", "type": "user"}
+{"content": "The user prefers Podman as their container runtime.", "id": "f0082", "scope": "user", "type": "user"}
+{"content": "The user once tried Docker for a while but did not keep it.", "id": "f0083", "scope": "user", "type": "user"}
+{"content": "For their container runtime, the user always picks Podman.", "id": "f0084", "scope": "user", "type": "user"}
+{"content": "The user prefers GitHub Actions as their CI service.", "id": "f0085", "scope": "user", "type": "user"}
+{"content": "The user once tried CircleCI for a while but did not keep it.", "id": "f0086", "scope": "user", "type": "user"}
+{"content": "For their CI service, the user always picks GitHub Actions.", "id": "f0087", "scope": "user", "type": "user"}
+{"content": "The user prefers Kobo as their reading device.", "id": "f0088", "scope": "user", "type": "user"}
+{"content": "The user once tried Kindle for a while but did not keep it.", "id": "f0089", "scope": "user", "type": "user"}
+{"content": "For their reading device, the user always picks Kobo.", "id": "f0090", "scope": "user", "type": "user"}
+{"content": "In this project, commit messages follow the Conventional Commits format.", "id": "f0091", "scope": "project", "type": "project"}
+{"content": "Team rule: commit messages must use the Conventional Commits format.", "id": "f0092", "scope": "project", "type": "project"}
+{"content": "In this project, Python formatting follow ruff format with a 110 character line length.", "id": "f0093", "scope": "project", "type": "project"}
+{"content": "Team rule: Python formatting must use ruff format with a 110 character line length.", "id": "f0094", "scope": "project", "type": "project"}
+{"content": "In this project, branch names follow the feature/<ticket>-<slug> pattern.", "id": "f0095", "scope": "project", "type": "project"}
+{"content": "Team rule: branch names must use the feature/<ticket>-<slug> pattern.", "id": "f0096", "scope": "project", "type": "project"}
+{"content": "In this project, database migrations follow one Alembic revision per pull request.", "id": "f0097", "scope": "project", "type": "project"}
+{"content": "Team rule: database migrations must use one Alembic revision per pull request.", "id": "f0098", "scope": "project", "type": "project"}
+{"content": "In this project, API errors follow RFC 7807 problem details.", "id": "f0099", "scope": "project", "type": "project"}
+{"content": "Team rule: API errors must use RFC 7807 problem details.", "id": "f0100", "scope": "project", "type": "project"}
+{"content": "In this project, feature flags follow the flags.yaml registry reviewed weekly.", "id": "f0101", "scope": "project", "type": "project"}
+{"content": "Team rule: feature flags must use the flags.yaml registry reviewed weekly.", "id": "f0102", "scope": "project", "type": "project"}
+{"content": "In this project, log lines follow structured JSON with a request id.", "id": "f0103", "scope": "project", "type": "project"}
+{"content": "Team rule: log lines must use structured JSON with a request id.", "id": "f0104", "scope": "project", "type": "project"}
+{"content": "In this project, dates in docs follow ISO 8601 absolute dates.", "id": "f0105", "scope": "project", "type": "project"}
+{"content": "Team rule: dates in docs must use ISO 8601 absolute dates.", "id": "f0106", "scope": "project", "type": "project"}
+{"content": "In this project, dependency upgrades follow a Renovate batch every Monday.", "id": "f0107", "scope": "project", "type": "project"}
+{"content": "Team rule: dependency upgrades must use a Renovate batch every Monday.", "id": "f0108", "scope": "project", "type": "project"}
+{"content": "In this project, release tags follow semantic versioning with a v prefix.", "id": "f0109", "scope": "project", "type": "project"}
+{"content": "Team rule: release tags must use semantic versioning with a v prefix.", "id": "f0110", "scope": "project", "type": "project"}
+{"content": "In this project, secrets follow the keyring, never committed env files.", "id": "f0111", "scope": "project", "type": "project"}
+{"content": "Team rule: secrets must use the keyring, never committed env files.", "id": "f0112", "scope": "project", "type": "project"}
+{"content": "In this project, code review follow two approvals for changes under payments/.", "id": "f0113", "scope": "project", "type": "project"}
+{"content": "Team rule: code review must use two approvals for changes under payments/.", "id": "f0114", "scope": "project", "type": "project"}
+{"content": "In this project, frontend state follow React context instead of Redux.", "id": "f0115", "scope": "project", "type": "project"}
+{"content": "Team rule: frontend state must use React context instead of Redux.", "id": "f0116", "scope": "project", "type": "project"}
+{"content": "In this project, test fixtures follow factories under tests/factories.", "id": "f0117", "scope": "project", "type": "project"}
+{"content": "Team rule: test fixtures must use factories under tests/factories.", "id": "f0118", "scope": "project", "type": "project"}
+{"content": "In this project, time zones follow UTC everywhere in storage.", "id": "f0119", "scope": "project", "type": "project"}
+{"content": "Team rule: time zones must use UTC everywhere in storage.", "id": "f0120", "scope": "project", "type": "project"}
+{"content": "In this project, SQL style follow lowercase keywords and snake_case tables.", "id": "f0121", "scope": "project", "type": "project"}
+{"content": "Team rule: SQL style must use lowercase keywords and snake_case tables.", "id": "f0122", "scope": "project", "type": "project"}
+{"content": "In this project, docstrings follow Google style with Args and Returns.", "id": "f0123", "scope": "project", "type": "project"}
+{"content": "Team rule: docstrings must use Google style with Args and Returns.", "id": "f0124", "scope": "project", "type": "project"}
+{"content": "In this project, error budgets follow a 99.9 percent monthly availability target.", "id": "f0125", "scope": "project", "type": "project"}
+{"content": "Team rule: error budgets must use a 99.9 percent monthly availability target.", "id": "f0126", "scope": "project", "type": "project"}
+{"content": "In this project, on-call handover follow a written summary in the ops channel.", "id": "f0127", "scope": "project", "type": "project"}
+{"content": "Team rule: on-call handover must use a written summary in the ops channel.", "id": "f0128", "scope": "project", "type": "project"}
+{"content": "In this project, container images follow distroless bases pinned by digest.", "id": "f0129", "scope": "project", "type": "project"}
+{"content": "Team rule: container images must use distroless bases pinned by digest.", "id": "f0130", "scope": "project", "type": "project"}
+{"content": "In this project, translations follow gettext catalogs under locale/.", "id": "f0131", "scope": "project", "type": "project"}
+{"content": "Team rule: translations must use gettext catalogs under locale/.", "id": "f0132", "scope": "project", "type": "project"}
+{"content": "In this project, benchmarks follow pytest-benchmark with a stored baseline.", "id": "f0133", "scope": "project", "type": "project"}
+{"content": "Team rule: benchmarks must use pytest-benchmark with a stored baseline.", "id": "f0134", "scope": "project", "type": "project"}
+{"content": "In this project, API versioning follow a /v2 prefix for breaking changes.", "id": "f0135", "scope": "project", "type": "project"}
+{"content": "Team rule: API versioning must use a /v2 prefix for breaking changes.", "id": "f0136", "scope": "project", "type": "project"}
+{"content": "In this project, design tokens follow the tokens.json file generated from Figma.", "id": "f0137", "scope": "project", "type": "project"}
+{"content": "Team rule: design tokens must use the tokens.json file generated from Figma.", "id": "f0138", "scope": "project", "type": "project"}
+{"content": "In this project, access reviews follow a quarterly audit of admin roles.", "id": "f0139", "scope": "project", "type": "project"}
+{"content": "Team rule: access reviews must use a quarterly audit of admin roles.", "id": "f0140", "scope": "project", "type": "project"}
+{"content": "In this project, incident reports follow a blameless postmortem within five days.", "id": "f0141", "scope": "project", "type": "project"}
+{"content": "Team rule: incident reports must use a blameless postmortem within five days.", "id": "f0142", "scope": "project", "type": "project"}
+{"content": "In this project, cron schedules follow jittered minutes, never on the hour.", "id": "f0143", "scope": "project", "type": "project"}
+{"content": "Team rule: cron schedules must use jittered minutes, never on the hour.", "id": "f0144", "scope": "project", "type": "project"}
+{"content": "In this project, shell scripts follow set -euo pipefail at the top.", "id": "f0145", "scope": "project", "type": "project"}
+{"content": "Team rule: shell scripts must use set -euo pipefail at the top.", "id": "f0146", "scope": "project", "type": "project"}
+{"content": "In this project, pull request size follow under 400 changed lines.", "id": "f0147", "scope": "project", "type": "project"}
+{"content": "Team rule: pull request size must use under 400 changed lines.", "id": "f0148", "scope": "project", "type": "project"}
+{"content": "In this project, config files follow TOML instead of YAML for new tools.", "id": "f0149", "scope": "project", "type": "project"}
+{"content": "Team rule: config files must use TOML instead of YAML for new tools.", "id": "f0150", "scope": "project", "type": "project"}
+{"content": "The billing service is deployed to eu-west-1.", "id": "f0151", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The billing service is now deployed to eu-central-1.", "id": "f0152", "scope": "project", "supersedes": "f0151", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The billing team owns the eu-west-1 rollout plan.", "id": "f0153", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The billing team now owns the eu-central-1 rollout plan.", "id": "f0154", "scope": "project", "supersedes": "f0153", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The search service is deployed to us-east-1.", "id": "f0155", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The search service is now deployed to us-west-2.", "id": "f0156", "scope": "project", "supersedes": "f0155", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The search team owns the us-east-1 rollout plan.", "id": "f0157", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The search team now owns the us-west-2 rollout plan.", "id": "f0158", "scope": "project", "supersedes": "f0157", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The checkout service is deployed to ap-south-1.", "id": "f0159", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The checkout service is now deployed to ap-southeast-1.", "id": "f0160", "scope": "project", "supersedes": "f0159", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The checkout team owns the ap-south-1 rollout plan.", "id": "f0161", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The checkout team now owns the ap-southeast-1 rollout plan.", "id": "f0162", "scope": "project", "supersedes": "f0161", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The notifications service is deployed to eu-north-1.", "id": "f0163", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The notifications service is now deployed to eu-west-3.", "id": "f0164", "scope": "project", "supersedes": "f0163", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The notifications team owns the eu-north-1 rollout plan.", "id": "f0165", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The notifications team now owns the eu-west-3 rollout plan.", "id": "f0166", "scope": "project", "supersedes": "f0165", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The analytics service is deployed to us-east-2.", "id": "f0167", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The analytics service is now deployed to ca-central-1.", "id": "f0168", "scope": "project", "supersedes": "f0167", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The analytics team owns the us-east-2 rollout plan.", "id": "f0169", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The analytics team now owns the ca-central-1 rollout plan.", "id": "f0170", "scope": "project", "supersedes": "f0169", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The auth service is deployed to eu-west-2.", "id": "f0171", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The auth service is now deployed to eu-south-1.", "id": "f0172", "scope": "project", "supersedes": "f0171", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The auth team owns the eu-west-2 rollout plan.", "id": "f0173", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The auth team now owns the eu-south-1 rollout plan.", "id": "f0174", "scope": "project", "supersedes": "f0173", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The media service is deployed to sa-east-1.", "id": "f0175", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The media service is now deployed to us-east-1.", "id": "f0176", "scope": "project", "supersedes": "f0175", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The media team owns the sa-east-1 rollout plan.", "id": "f0177", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The media team now owns the us-east-1 rollout plan.", "id": "f0178", "scope": "project", "supersedes": "f0177", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The reporting service is deployed to ap-northeast-1.", "id": "f0179", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The reporting service is now deployed to ap-northeast-3.", "id": "f0180", "scope": "project", "supersedes": "f0179", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The reporting team owns the ap-northeast-1 rollout plan.", "id": "f0181", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The reporting team now owns the ap-northeast-3 rollout plan.", "id": "f0182", "scope": "project", "supersedes": "f0181", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The ledger service is deployed to eu-central-2.", "id": "f0183", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The ledger service is now deployed to eu-west-1.", "id": "f0184", "scope": "project", "supersedes": "f0183", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The ledger team owns the eu-central-2 rollout plan.", "id": "f0185", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The ledger team now owns the eu-west-1 rollout plan.", "id": "f0186", "scope": "project", "supersedes": "f0185", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The inventory service is deployed to us-west-1.", "id": "f0187", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The inventory service is now deployed to us-east-2.", "id": "f0188", "scope": "project", "supersedes": "f0187", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The inventory team owns the us-west-1 rollout plan.", "id": "f0189", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The inventory team now owns the us-east-2 rollout plan.", "id": "f0190", "scope": "project", "supersedes": "f0189", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The recommendations service is deployed to ap-east-1.", "id": "f0191", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The recommendations service is now deployed to ap-southeast-2.", "id": "f0192", "scope": "project", "supersedes": "f0191", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The recommendations team owns the ap-east-1 rollout plan.", "id": "f0193", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The recommendations team now owns the ap-southeast-2 rollout plan.", "id": "f0194", "scope": "project", "supersedes": "f0193", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The gateway service is deployed to me-south-1.", "id": "f0195", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The gateway service is now deployed to eu-central-1.", "id": "f0196", "scope": "project", "supersedes": "f0195", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The gateway team owns the me-south-1 rollout plan.", "id": "f0197", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The gateway team now owns the eu-central-1 rollout plan.", "id": "f0198", "scope": "project", "supersedes": "f0197", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The exports service is deployed to af-south-1.", "id": "f0199", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The exports service is now deployed to eu-west-2.", "id": "f0200", "scope": "project", "supersedes": "f0199", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The exports team owns the af-south-1 rollout plan.", "id": "f0201", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The exports team now owns the eu-west-2 rollout plan.", "id": "f0202", "scope": "project", "supersedes": "f0201", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The scheduler service is deployed to ca-west-1.", "id": "f0203", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The scheduler service is now deployed to us-west-2.", "id": "f0204", "scope": "project", "supersedes": "f0203", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The scheduler team owns the ca-west-1 rollout plan.", "id": "f0205", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The scheduler team now owns the us-west-2 rollout plan.", "id": "f0206", "scope": "project", "supersedes": "f0205", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The payouts service is deployed to eu-west-3.", "id": "f0207", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The payouts service is now deployed to eu-north-1.", "id": "f0208", "scope": "project", "supersedes": "f0207", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The payouts team owns the eu-west-3 rollout plan.", "id": "f0209", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The payouts team now owns the eu-north-1 rollout plan.", "id": "f0210", "scope": "project", "supersedes": "f0209", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The geocoding service is deployed to ap-south-2.", "id": "f0211", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The geocoding service is now deployed to ap-south-1.", "id": "f0212", "scope": "project", "supersedes": "f0211", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The geocoding team owns the ap-south-2 rollout plan.", "id": "f0213", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The geocoding team now owns the ap-south-1 rollout plan.", "id": "f0214", "scope": "project", "supersedes": "f0213", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The webhooks service is deployed to us-gov-west-1.", "id": "f0215", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The webhooks service is now deployed to us-east-1.", "id": "f0216", "scope": "project", "supersedes": "f0215", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The webhooks team owns the us-gov-west-1 rollout plan.", "id": "f0217", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The webhooks team now owns the us-east-1 rollout plan.", "id": "f0218", "scope": "project", "supersedes": "f0217", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The catalog service is deployed to il-central-1.", "id": "f0219", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The catalog service is now deployed to eu-central-1.", "id": "f0220", "scope": "project", "supersedes": "f0219", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The catalog team owns the il-central-1 rollout plan.", "id": "f0221", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The catalog team now owns the eu-central-1 rollout plan.", "id": "f0222", "scope": "project", "supersedes": "f0221", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The profiles service is deployed to mx-central-1.", "id": "f0223", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The profiles service is now deployed to us-east-2.", "id": "f0224", "scope": "project", "supersedes": "f0223", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The profiles team owns the mx-central-1 rollout plan.", "id": "f0225", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The profiles team now owns the us-east-2 rollout plan.", "id": "f0226", "scope": "project", "supersedes": "f0225", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The chat service is deployed to ap-southeast-3.", "id": "f0227", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The chat service is now deployed to ap-northeast-2.", "id": "f0228", "scope": "project", "supersedes": "f0227", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The chat team owns the ap-southeast-3 rollout plan.", "id": "f0229", "scope": "project", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The chat team now owns the ap-northeast-2 rollout plan.", "id": "f0230", "scope": "project", "supersedes": "f0229", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The platform team's daily standup is at 9:30.", "id": "f0231", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The platform team's daily standup is no longer at 9:30; it is at 10:15.", "contradicts": "f0231", "id": "f0232", "scope": "team", "supersedes": "f0231", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The payments team's daily standup is at 10:00.", "id": "f0233", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The payments team's daily standup is no longer at 10:00; it is at 11:00.", "contradicts": "f0233", "id": "f0234", "scope": "team", "supersedes": "f0233", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The growth team's daily standup is at 9:00.", "id": "f0235", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The growth team's daily standup is no longer at 9:00; it is at 9:45.", "contradicts": "f0235", "id": "f0236", "scope": "team", "supersedes": "f0235", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The mobile team's daily standup is at 11:30.", "id": "f0237", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The mobile team's daily standup is no longer at 11:30; it is at 13:00.", "contradicts": "f0237", "id": "f0238", "scope": "team", "supersedes": "f0237", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The data team's daily standup is at 14:00.", "id": "f0239", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The data team's daily standup is no longer at 14:00; it is at 15:30.", "contradicts": "f0239", "id": "f0240", "scope": "team", "supersedes": "f0239", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The security team's daily standup is at 8:45.", "id": "f0241", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The security team's daily standup is no longer at 8:45; it is at 9:15.", "contradicts": "f0241", "id": "f0242", "scope": "team", "supersedes": "f0241", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The design team's daily standup is at 16:00.", "id": "f0243", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The design team's daily standup is no longer at 16:00; it is at 10:30.", "contradicts": "f0243", "id": "f0244", "scope": "team", "supersedes": "f0243", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The support team's daily standup is at 8:00.", "id": "f0245", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The support team's daily standup is no longer at 8:00; it is at 8:30.", "contradicts": "f0245", "id": "f0246", "scope": "team", "supersedes": "f0245", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The infra team's daily standup is at 13:30.", "id": "f0247", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The infra team's daily standup is no longer at 13:30; it is at 14:30.", "contradicts": "f0247", "id": "f0248", "scope": "team", "supersedes": "f0247", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The research team's daily standup is at 15:00.", "id": "f0249", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The research team's daily standup is no longer at 15:00; it is at 16:30.", "contradicts": "f0249", "id": "f0250", "scope": "team", "supersedes": "f0249", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The sales team's daily standup is at 9:15.", "id": "f0251", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The sales team's daily standup is no longer at 9:15; it is at 10:45.", "contradicts": "f0251", "id": "f0252", "scope": "team", "supersedes": "f0251", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The legal team's daily standup is at 12:00.", "id": "f0253", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The legal team's daily standup is no longer at 12:00; it is at 12:30.", "contradicts": "f0253", "id": "f0254", "scope": "team", "supersedes": "f0253", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The finance team's daily standup is at 10:30.", "id": "f0255", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The finance team's daily standup is no longer at 10:30; it is at 11:45.", "contradicts": "f0255", "id": "f0256", "scope": "team", "supersedes": "f0255", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The hiring team's daily standup is at 17:00.", "id": "f0257", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The hiring team's daily standup is no longer at 17:00; it is at 9:30.", "contradicts": "f0257", "id": "f0258", "scope": "team", "supersedes": "f0257", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The devrel team's daily standup is at 11:00.", "id": "f0259", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The devrel team's daily standup is no longer at 11:00; it is at 14:15.", "contradicts": "f0259", "id": "f0260", "scope": "team", "supersedes": "f0259", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The qa team's daily standup is at 9:45.", "id": "f0261", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The qa team's daily standup is no longer at 9:45; it is at 16:15.", "contradicts": "f0261", "id": "f0262", "scope": "team", "supersedes": "f0261", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The ml team's daily standup is at 10:45.", "id": "f0263", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The ml team's daily standup is no longer at 10:45; it is at 13:45.", "contradicts": "f0263", "id": "f0264", "scope": "team", "supersedes": "f0263", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The ops team's daily standup is at 7:30.", "id": "f0265", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The ops team's daily standup is no longer at 7:30; it is at 8:15.", "contradicts": "f0265", "id": "f0266", "scope": "team", "supersedes": "f0265", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The web team's daily standup is at 13:00.", "id": "f0267", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The web team's daily standup is no longer at 13:00; it is at 15:15.", "contradicts": "f0267", "id": "f0268", "scope": "team", "supersedes": "f0267", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The api team's daily standup is at 14:45.", "id": "f0269", "scope": "team", "type": "project", "valid_from": "2025-03-01", "valid_to": "2026-02-01"}
+{"content": "The api team's daily standup is no longer at 14:45; it is at 11:15.", "contradicts": "f0269", "id": "f0270", "scope": "team", "supersedes": "f0269", "type": "project", "valid_from": "2026-02-01"}
+{"content": "The team's deploy freeze window is Fridays after 3pm.", "id": "f0271", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the deploy freeze window for my experiment is Fridays after 3pm (temporary).", "id": "f0272", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's staging database host is db-stg-2.internal.", "id": "f0273", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the staging database host for my experiment is db-stg-2.internal (temporary).", "id": "f0274", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's on-call pager tool is PagerDuty.", "id": "f0275", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the on-call pager tool for my experiment is PagerDuty (temporary).", "id": "f0276", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's VPN endpoint is vpn.corp.example.", "id": "f0277", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the VPN endpoint for my experiment is vpn.corp.example (temporary).", "id": "f0278", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's design review day is Wednesday.", "id": "f0279", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the design review day for my experiment is Wednesday (temporary).", "id": "f0280", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's expense limit is 200 euros without approval.", "id": "f0281", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the expense limit for my experiment is 200 euros without approval (temporary).", "id": "f0282", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's support SLA is four business hours.", "id": "f0283", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the support SLA for my experiment is four business hours (temporary).", "id": "f0284", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's default branch is main.", "id": "f0285", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the default branch for my experiment is main (temporary).", "id": "f0286", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's artifact registry is registry.example.internal.", "id": "f0287", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the artifact registry for my experiment is registry.example.internal (temporary).", "id": "f0288", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's load test tool is k6.", "id": "f0289", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the load test tool for my experiment is k6 (temporary).", "id": "f0290", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's status page is status.example.com.", "id": "f0291", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the status page for my experiment is status.example.com (temporary).", "id": "f0292", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's demo environment is demo-3.example.dev.", "id": "f0293", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the demo environment for my experiment is demo-3.example.dev (temporary).", "id": "f0294", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's feature flag service is Unleash.", "id": "f0295", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the feature flag service for my experiment is Unleash (temporary).", "id": "f0296", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's error tracker is Sentry.", "id": "f0297", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the error tracker for my experiment is Sentry (temporary).", "id": "f0298", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's metrics backend is VictoriaMetrics.", "id": "f0299", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the metrics backend for my experiment is VictoriaMetrics (temporary).", "id": "f0300", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's tracing backend is Tempo.", "id": "f0301", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the tracing backend for my experiment is Tempo (temporary).", "id": "f0302", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's docs site is docs.example.dev.", "id": "f0303", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the docs site for my experiment is docs.example.dev (temporary).", "id": "f0304", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's ticket prefix is OPS-.", "id": "f0305", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the ticket prefix for my experiment is OPS- (temporary).", "id": "f0306", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's release captain is Mira.", "id": "f0307", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the release captain for my experiment is Mira (temporary).", "id": "f0308", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The team's backup schedule is every six hours.", "id": "f0309", "scope": "user", "type": "reference"}
+{"content": "Scratch note: the backup schedule for my experiment is every six hours (temporary).", "id": "f0310", "owner_session": "other-session", "scope": "session", "type": "project"}
+{"content": "The user prefers Neovim as their code editor with the LazyVim distribution.", "id": "f0311", "scope": "user", "type": "user"}
+{"content": "The user tried VS Code once but found the editor too slow on their laptop.", "id": "f0312", "scope": "user", "type": "user"}
+{"content": "Coding sessions usually happen in the morning before standup.", "id": "f0313", "scope": "user", "type": "user"}
+{"content": "The user's favourite programming language is Rust, followed by Python.", "id": "f0314", "scope": "user", "type": "user"}
+{"content": "The team's legacy services are written in Java 8.", "id": "f0315", "scope": "user", "type": "user"}
+{"content": "The user is learning the Zig language on weekends.", "id": "f0316", "scope": "user", "type": "user"}
+{"content": "The user lives in Lisbon, Portugal, in the Alfama district.", "id": "f0317", "scope": "user", "type": "user"}
+{"content": "The user's sister lives in Porto.", "id": "f0318", "scope": "user", "type": "user"}
+{"content": "The user grew up in Toronto before moving to Europe.", "id": "f0319", "scope": "user", "type": "user"}
+{"content": "Schedule meetings in the Europe/Lisbon time zone; the user avoids calls before 10:00.", "id": "f0320", "scope": "user", "type": "user"}
+{"content": "The US team meets in the America/New_York zone on Thursdays.", "id": "f0321", "scope": "user", "type": "user"}
+{"content": "Calendar invites should include a video link.", "id": "f0322", "scope": "user", "type": "user"}
+{"content": "Commit messages use the imperative mood with a 72 character subject line.", "id": "f0323", "scope": "user", "type": "user"}
+{"content": "Pull requests need two approvals before merge.", "id": "f0324", "scope": "user", "type": "user"}
+{"content": "The user writes release notes at the end of every sprint.", "id": "f0325", "scope": "user", "type": "user"}
+{"content": "Production runs on PostgreSQL 17 with logical replication to a read replica.", "id": "f0326", "scope": "user", "type": "user"}
+{"content": "Local development uses SQLite for speed.", "id": "f0327", "scope": "user", "type": "user"}
+{"content": "The analytics warehouse is BigQuery.", "id": "f0328", "scope": "user", "type": "user"}
+{"content": "The user's dog is a border collie named Pixel.", "id": "f0329", "scope": "user", "type": "user"}
+{"content": "The neighbour's cat is called Mochi.", "id": "f0330", "scope": "user", "type": "user"}
+{"content": "Pixel density matters for the user's monitor choice.", "id": "f0331", "scope": "user", "type": "user"}
+{"content": "The user drinks a flat white with oat milk every morning.", "id": "f0332", "scope": "user", "type": "user"}
+{"content": "The office coffee machine broke last week.", "id": "f0333", "scope": "user", "type": "user"}
+{"content": "The user stopped drinking tea after university.", "id": "f0334", "scope": "user", "type": "user"}
+{"content": "All services are hosted on Google Cloud in the europe-west1 region.", "id": "f0335", "scope": "user", "type": "user"}
+{"content": "A legacy batch job still runs on an AWS EC2 instance.", "id": "f0336", "scope": "user", "type": "user"}
+{"content": "The user's personal blog is on a cheap VPS.", "id": "f0337", "scope": "user", "type": "user"}
+{"content": "The user wants pytest output in quiet mode with only failures shown.", "id": "f0338", "scope": "user", "type": "user"}
+{"content": "Formatting is enforced by ruff format in CI.", "id": "f0339", "scope": "user", "type": "user"}
+{"content": "Test fixtures live in the tests/fixtures folder.", "id": "f0340", "scope": "user", "type": "user"}
+{"content": "The user's shell is fish with the starship prompt.", "id": "f0341", "scope": "user", "type": "user"}
+{"content": "CI scripts are written for bash.", "id": "f0342", "scope": "user", "type": "user"}
+{"content": "The user dislikes PowerShell on Windows machines.", "id": "f0343", "scope": "user", "type": "user"}
+{"content": "The user's birthday is on the 14th of March.", "id": "f0344", "scope": "user", "type": "user"}
+{"content": "The company anniversary party is in March.", "id": "f0345", "scope": "user", "type": "user"}
+{"content": "The user's partner celebrates in July.", "id": "f0346", "scope": "user", "type": "user"}
+{"content": "The user types on a split keyboard using the Colemak-DH layout.", "id": "f0347", "scope": "user", "type": "user"}
+{"content": "The laptop keyboard has a US ANSI layout.", "id": "f0348", "scope": "user", "type": "user"}
+{"content": "The user is considering a new mechanical keyboard with quieter switches.", "id": "f0349", "scope": "user", "type": "user"}
+{"content": "Use OpenRouter as the default LLM provider with Claude Sonnet as the main model.", "id": "f0350", "scope": "user", "type": "user"}
+{"content": "Local experiments sometimes run Ollama models.", "id": "f0351", "scope": "user", "type": "user"}
+{"content": "The provider invoice arrives on the first of each month.", "id": "f0352", "scope": "user", "type": "user"}
+{"content": "Reply in English, but the user also reads Portuguese comfortably.", "id": "f0353", "scope": "user", "type": "user"}
+{"content": "Documentation is translated to Spanish by a vendor.", "id": "f0354", "scope": "user", "type": "user"}
+{"content": "The user is taking German lessons.", "id": "f0355", "scope": "user", "type": "user"}
+{"content": "Dates in reports use ISO 8601 format like 2026-10-25.", "id": "f0356", "scope": "user", "type": "user"}
+{"content": "Reports are exported as PDF every Friday.", "id": "f0357", "scope": "user", "type": "user"}
+{"content": "The quarterly report deadline moved to November.", "id": "f0358", "scope": "user", "type": "user"}
+{"content": "The user's manager is Dana Okafor, head of platform engineering.", "id": "f0359", "scope": "user", "type": "user"}
+{"content": "Dana organises the book club on Wednesdays.", "id": "f0360", "scope": "user", "type": "user"}
+{"content": "The platform team has six engineers.", "id": "f0361", "scope": "user", "type": "user"}
+{"content": "The user focuses best while listening to lo-fi hip hop or ambient music.", "id": "f0362", "scope": "user", "type": "user"}
+{"content": "The user plays bass guitar in a weekend band.", "id": "f0363", "scope": "user", "type": "user"}
+{"content": "Music streaming is blocked on the office network.", "id": "f0364", "scope": "user", "type": "user"}
+{"content": "Deploys go through GitHub Actions: tag a release, CI builds the image, Argo CD syncs it.", "id": "f0365", "scope": "user", "type": "user"}
+{"content": "The deploy freeze runs from mid December to early January.", "id": "f0366", "scope": "user", "type": "user"}
+{"content": "Hotfixes require a postmortem within a week.", "id": "f0367", "scope": "user", "type": "user"}
+{"content": "The user is allergic to peanuts and avoids tree nuts.", "id": "f0368", "scope": "user", "type": "user"}
+{"content": "The team lunch on Fridays is usually pizza.", "id": "f0369", "scope": "user", "type": "user"}
+{"content": "The user is trying a vegetarian diet this month.", "id": "f0370", "scope": "user", "type": "user"}
+{"content": "Payments Platform stores ledgers in PostgreSQL 17 with logical replication.", "id": "f0371", "scope": "user", "type": "user"}
+{"content": "Priya Raman leads the Payments Platform team.", "id": "f0372", "scope": "user", "type": "user"}
+{"content": "Read replicas are rebuilt every quarter.", "id": "f0373", "scope": "user", "type": "user"}
+{"content": "Northwind Analytics is headquartered in Gdansk near the old harbour.", "id": "f0374", "scope": "user", "type": "user"}
+{"content": "Tomasz works for Northwind Analytics as a data engineer.", "id": "f0375", "scope": "user", "type": "user"}
+{"content": "Remote contractors invoice monthly.", "id": "f0376", "scope": "user", "type": "user"}
+{"content": "Marco adopted a greyhound named Biscuit last spring.", "id": "f0377", "scope": "user", "type": "user"}
+{"content": "Lena's brother is Marco, a carpenter in Bologna.", "id": "f0378", "scope": "user", "type": "user"}
+{"content": "Dogs are not allowed in the co-working space.", "id": "f0379", "scope": "user", "type": "user"}
+{"content": "Kestrel Labs builds everything in Elixir and Phoenix.", "id": "f0380", "scope": "user", "type": "user"}
+{"content": "The Orion project is owned by Kestrel Labs.", "id": "f0381", "scope": "user", "type": "user"}
+{"content": "Code reviews happen asynchronously across time zones.", "id": "f0382", "scope": "user", "type": "user"}
+{"content": "Hiroshi Tanaka is away from 3 to 17 August, hiking in Hokkaido.", "id": "f0383", "scope": "user", "type": "user"}
+{"content": "Dana reports to Hiroshi Tanaka on the infra team.", "id": "f0384", "scope": "user", "type": "user"}
+{"content": "Holiday requests go through the HR portal.", "id": "f0385", "scope": "user", "type": "user"}
+{"content": "Bluefin Studio ran the yearly retreat in Sintra.", "id": "f0386", "scope": "user", "type": "user"}
+{"content": "Sam is a designer at Bluefin Studio.", "id": "f0387", "scope": "user", "type": "user"}
+{"content": "Travel bookings use the corporate card.", "id": "f0388", "scope": "user", "type": "user"}
+{"content": "The Atlas migration moves the Billing API from Heroku to Fly.io.", "id": "f0389", "scope": "user", "type": "user"}
+{"content": "Atlas cutover for the Billing API is planned for 14 November.", "id": "f0390", "scope": "user", "type": "user"}
+{"content": "Atlas rollback keeps Heroku warm for the Billing API for a week.", "id": "f0391", "scope": "user", "type": "user"}
+{"content": "The Lisbon flat lease with Senhora Costa renews every March.", "id": "f0392", "scope": "user", "type": "user"}
+{"content": "Senhora Costa fixed the Lisbon flat boiler in October.", "id": "f0393", "scope": "user", "type": "user"}
+{"content": "The Lisbon flat internet contract with Senhora Costa ends next year.", "id": "f0394", "scope": "user", "type": "user"}
+{"content": "The user likes teal more than any other colour.", "id": "f0395", "scope": "user", "type": "user"}
+{"content": "Slides follow the corporate colour palette.", "id": "f0396", "scope": "user", "type": "user"}
+{"content": "The user drinks oolong tea when the day starts.", "id": "f0397", "scope": "user", "type": "user"}
+{"content": "Coffee in the office kitchen is free.", "id": "f0398", "scope": "user", "type": "user"}
