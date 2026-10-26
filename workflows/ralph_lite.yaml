@@ -1,0 +1,18 @@
+name: ralph_lite
+description: Ralph-lite loop — run the same task repeatedly (state lives in the files and the plan) until the agent reports DONE, at most 5 iterations.
+steps:
+  - id: work
+    agent: default
+    input: |-
+      {{input}}
+
+      Ralph-lite iteration {{loop.iteration}}. Work in small verified increments: check the
+      current state of the files and the plan, do the next most important piece, run the
+      relevant checks. When everything asked for is finished and verified, end your answer
+      with a line that says exactly DONE. Otherwise end with a short note of what is left.
+
+      Previous iteration's answer (empty on the first one):
+      {{loop.last}}
+    loop:
+      until: "(?m)^DONE\\s*$"
+      max_iterations: 5

@@ -306,7 +306,7 @@ def load_workflow(c: Candidate) -> Loaded:
     manifest = _validate(WorkflowManifest, data, c.path, text)
     _check_name(c, manifest.name, text)
     for step in manifest.steps:
-        check_template(step.input, c.path, allowed={"input", "steps"})
+        check_template(step.input, c.path, allowed={"input", "steps", "loop"})
     return Loaded(manifest, c.root.source, c.path)
 
 

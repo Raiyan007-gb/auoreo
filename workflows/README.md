@@ -10,3 +10,16 @@ steps:
   - {id: plan, agent: planner, input: "{{input}}"}
   - {id: build, agent: default, input: "Implement this plan:\n{{steps.plan.output}}"}
 ```
+
+A step may loop (ralph-lite, spec §9.3): it re-runs in the same session until `until` holds —
+a regex searched in the step's output, or `check:completed|nonempty|json` — or
+`max_iterations` is reached. `{{loop.iteration}}` (1-based) and `{{loop.last}}` (the previous
+iteration's output) are available in its `input`. See `ralph_lite.yaml`.
+
+```yaml
+steps:
+  - id: work
+    agent: default
+    input: "{{input}}\n(iteration {{loop.iteration}})"
+    loop: {until: "(?m)^DONE\\s*$", max_iterations: 5}
+```
