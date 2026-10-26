@@ -217,7 +217,8 @@ class LiveKitSettings(BaseModel):
     api_key_secret: str = "LIVEKIT_API_KEY"
     api_secret_secret: str = "LIVEKIT_API_SECRET"
     cloud_consent: bool = False
-    token_ttl_s: int = Field(default=3600, ge=60, le=86_400)
+    token_ttl_s: int = Field(default=600, ge=60, le=900)
+    """Room-token lifetime (§26.9: ≤15 min; the client re-joins for a fresh one)."""
     sip: LiveKitSipSettings = Field(default_factory=LiveKitSipSettings)
     # --- F5
     region: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")

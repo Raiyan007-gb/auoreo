@@ -19,7 +19,8 @@ class RtcJoinRequest(BaseModel):
         min_length=1,
         max_length=128,
         pattern=r"^[A-Za-z0-9_.@:-]+$",
-        description="Participant identity (LiveKit token subject)",
+        deprecated=True,
+        description="Ignored: the server mints an opaque uuid4 participant identity (spec §26.10)",
     )
     sdp: str | None = Field(default=None, description="SDP offer; required by the aiortc transport")
 
