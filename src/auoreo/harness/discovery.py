@@ -38,6 +38,9 @@ _SUBPATH: dict[str, str] = {"families": "prompts/families", "variants": "prompts
 class Root:
     source: str  # "runtime" | "project" | "bundled" | "extra:<n>"
     path: Path
+    trust_home: Path | None = None
+    """Set on the project root: its active kinds load only once the workspace is trusted
+    in `<trust_home>/trusted_workspaces.json` (see `harness.trust`)."""
 
 
 @dataclass(frozen=True)
@@ -80,7 +83,7 @@ def default_roots(home: Path, cwd: Path, bundled: Path, extra: list[Path] | None
     """Precedence: runtime (`~/.auoreo`) > project (`<cwd>/.auoreo`) > bundled > extra."""
     roots = [
         Root("runtime", home),
-        Root("project", cwd / ".auoreo"),
+        Root("project", cwd / ".auoreo", trust_home=home),
         Root("bundled", bundled),
     ]
     roots += [Root(f"extra:{i}", p) for i, p in enumerate(extra or [])]

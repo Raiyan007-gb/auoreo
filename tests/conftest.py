@@ -48,6 +48,9 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # unconfined backend: tests use host-tmp fakes and persistent shells; the auto choice has
     # its own tests (tests/unit/test_security_h1a_sandbox.py).
     monkeypatch.setenv("AUOREO_BACKENDS", '{"sandbox": "none"}')
+    # I4 workspace trust: the suite's project roots (`<workdir>/.auoreo`) are trusted;
+    # tests/unit/test_workspace_trust.py unsets this to exercise the untrusted path.
+    monkeypatch.setenv("AUOREO_SECURITY_TRUST_ALL_WORKSPACES", "1")
     yield
 
 

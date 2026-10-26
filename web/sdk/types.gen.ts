@@ -2024,6 +2024,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workspace/trust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Trust */
+        get: operations["get_trust_api_workspace_trust_get"];
+        put?: never;
+        /** Set Trust */
+        post: operations["set_trust_api_workspace_trust_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/hooks/github/{route}": {
         parameters: {
             query?: never;
@@ -4960,6 +4978,35 @@ export interface components {
              * @enum {string}
              */
             step: "doctor" | "credentials" | "model" | "tunnel" | "theme" | "demo" | "wizard";
+        };
+        /** WorkspaceTrust */
+        WorkspaceTrust: {
+            /**
+             * Skipped
+             * @description `kind/name` definitions skipped from `<cwd>/.auoreo` (untrusted)
+             */
+            skipped?: string[];
+            /**
+             * Trust All
+             * @description AUOREO_SECURITY_TRUST_ALL_WORKSPACES is set
+             * @default false
+             */
+            trust_all: boolean;
+            /** Trusted */
+            trusted: boolean;
+            /**
+             * Workspace
+             * @description realpath of the server's working directory
+             */
+            workspace: string;
+        };
+        /** WorkspaceTrustIn */
+        WorkspaceTrustIn: {
+            /**
+             * Revoke
+             * @default false
+             */
+            revoke: boolean;
         };
     };
     responses: never;
@@ -9581,6 +9628,76 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trust_api_workspace_trust_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTrust"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_trust_api_workspace_trust_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceTrustIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTrust"];
+                };
             };
             /** @description Validation Error */
             422: {

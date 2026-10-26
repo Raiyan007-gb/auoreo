@@ -230,6 +230,8 @@ from .webhook_route_info_provider import WebhookRouteInfoProvider
 from .welcome_event import WelcomeEvent
 from .welcome_event_action import WelcomeEventAction
 from .welcome_event_step import WelcomeEventStep
+from .workspace_trust import WorkspaceTrust
+from .workspace_trust_in import WorkspaceTrustIn
 
 __all__ = (
     "AddFactApiMemoryFactsPostResponseAddFactApiMemoryFactsPost",
@@ -450,4 +452,6 @@ __all__ = (
     "WelcomeEvent",
     "WelcomeEventAction",
     "WelcomeEventStep",
+    "WorkspaceTrust",
+    "WorkspaceTrustIn",
 )

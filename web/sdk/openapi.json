@@ -6584,6 +6584,50 @@
         ],
         "title": "WelcomeEvent",
         "type": "object"
+      },
+      "WorkspaceTrust": {
+        "properties": {
+          "skipped": {
+            "description": "`kind/name` definitions skipped from `<cwd>/.auoreo` (untrusted)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "trust_all": {
+            "default": false,
+            "description": "AUOREO_SECURITY_TRUST_ALL_WORKSPACES is set",
+            "title": "Trust All",
+            "type": "boolean"
+          },
+          "trusted": {
+            "title": "Trusted",
+            "type": "boolean"
+          },
+          "workspace": {
+            "description": "realpath of the server's working directory",
+            "title": "Workspace",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace",
+          "trusted"
+        ],
+        "title": "WorkspaceTrust",
+        "type": "object"
+      },
+      "WorkspaceTrustIn": {
+        "properties": {
+          "revoke": {
+            "default": false,
+            "title": "Revoke",
+            "type": "boolean"
+          }
+        },
+        "title": "WorkspaceTrustIn",
+        "type": "object"
       }
     }
   },
@@ -16543,6 +16587,151 @@
         "summary": "Welcome Event",
         "tags": [
           "ops"
+        ]
+      }
+    },
+    "/api/workspace/trust": {
+      "get": {
+        "operationId": "get_trust_api_workspace_trust_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceTrust"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Trust",
+        "tags": [
+          "workspace"
+        ]
+      },
+      "post": {
+        "operationId": "set_trust_api_workspace_trust_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/WorkspaceTrustIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceTrust"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Trust",
+        "tags": [
+          "workspace"
         ]
       }
     },

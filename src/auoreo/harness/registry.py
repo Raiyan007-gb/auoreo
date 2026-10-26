@@ -29,6 +29,14 @@ from auoreo.harness.loader import (
 )
 from auoreo.harness.manifests import AgentManifest
 from auoreo.harness.skill_sources import ExternalSkill, SkillCatalog
+from auoreo.harness.trust import (
+    SKIP_NOTE,
+    UNTRUSTED_SKIP,
+    is_trusted,
+    sanitize_agent_manifest,
+    strip_allow,
+    workspace_of,
+)
 from auoreo.tools.availability import Availability
 
 log = logging.getLogger(__name__)
@@ -92,11 +100,28 @@ class Snapshot:
     variants: Loaded | None = None
     errors: list[LoadError] = field(default_factory=list)
     shadowed: list[Shadowed] = field(default_factory=list)
+    untrusted: list[tuple[str, str, Path]] = field(default_factory=list)
+    """(kind, name, path) skipped from an untrusted project root (`harness.trust`)."""
+
+
+def _gated(root: Root) -> bool:
+    return root.trust_home is not None and not is_trusted(root.trust_home, workspace_of(root.path))
+
+
+def _untrusted_view(item: Any, kind: str) -> Any:
+    """Inert-only view of a definition from an untrusted root."""
+    if kind == "agents":
+        return AgentDef(sanitize_agent_manifest(item.manifest), item.body, item.source, item.path)
+    if kind == "permissions":
+        manifest = item.manifest.model_copy(update={"rules": strip_allow(list(item.manifest.rules))})
+        return Loaded(manifest, item.source, item.path)
+    return item
 
 
 def _load_snapshot(roots: list[Root], strict_overlays: bool, error_on_collision: bool = False) -> Snapshot:
     snap = Snapshot()
     fatal: list[LoadError] = []
+    gated = {r.path for r in roots if _gated(r)}
 
     def record(err: LoadError, source: str, collision: bool = False) -> None:
         snap.errors.append(err)
@@ -108,11 +133,17 @@ def _load_snapshot(roots: list[Root], strict_overlays: bool, error_on_collision:
     for kind in NAMED_KINDS:
         target: dict[str, Any] = getattr(snap, kind)
         for cand in iter_candidates(roots, kind):
+            untrusted = cand.root.path in gated
+            if untrusted and kind in UNTRUSTED_SKIP:
+                snap.untrusted.append((kind, cand.name, cand.path))
+                continue
             try:
                 item = LOADERS[kind](cand)
             except LoadError as err:
                 record(err, cand.root.source)
                 continue
+            if untrusted:
+                item = _untrusted_view(item, kind)
             name = item.name if hasattr(item, "name") else cand.name
             if name in target:
                 winner = target[name]
@@ -140,7 +171,9 @@ def _load_snapshot(roots: list[Root], strict_overlays: bool, error_on_collision:
     # Permission layers: every file loads; lowest precedence first (last match wins).
     for cand in reversed(list(iter_candidates(roots, "permissions"))):
         try:
-            snap.permission_layers.append(LOADERS["permissions"](cand))
+            layer = LOADERS["permissions"](cand)
+            untrusted = cand.root.path in gated
+            snap.permission_layers.append(_untrusted_view(layer, "permissions") if untrusted else layer)
         except LoadError as err:
             record(err, cand.root.source)
 
@@ -427,4 +460,10 @@ class Harness:
             row("permissions", p.path.stem, p.source, p.path, f"{len(p.manifest.rules)} rules")
             for p in self._snap.permission_layers
         ]
+        out["untrusted"] = [row(kind, n, "project", p, SKIP_NOTE) for kind, n, p in self._snap.untrusted]
         return out
+
+    @property
+    def untrusted(self) -> list[tuple[str, str, Path]]:
+        """Definitions skipped because the project workspace is not trusted."""
+        return list(self._snap.untrusted)
