@@ -1,7 +1,7 @@
 name: terminal_pty
 toolset: shell
 description: >-
-  Open a persistent pseudo-terminal on the local machine (unsandboxed) running `cmd`
+  Open a persistent pseudo-terminal on the local machine (inside the sandbox backend) running `cmd`
   (e.g. `bash -i`, `python3`, `top -b`, an ssh or REPL session) and return its first output
   and a session_id. Continue it with terminal_pty_send / terminal_pty_read, stop it with
   terminal_pty_signal or terminal_pty_close, and see open ones with terminal_pty_list.
@@ -27,4 +27,4 @@ timeout_ms: 45000
 search_hint: terminal pty interactive shell session repl ssh tty persistent
 max_result_size_chars: 64000
 net: none
-sandbox_mode: danger-full-access
+sandbox_mode: workspace-write

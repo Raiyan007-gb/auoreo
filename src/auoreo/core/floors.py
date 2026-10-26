@@ -25,6 +25,8 @@ then checks each argv:
   `git reset --hard`, `checkout .|-f`, `restore .`, `clean -f`, `branch -D`,
   `push --force-with-lease|--delete`, `commit --amend`, `--no-verify`, `--no-gpg-sign`,
   `git config <write>`, and `bash <file>` for a payload saved under `<home>/blocked/`.
+* **ask, human only** (H1b, `floors_literal`): a literal secret in the command (a stored
+  value or a high-confidence key shape): masked card, one-shot, deny when unattended.
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from auoreo.core.floors_literal import find as literal_secrets  # noqa: F401  (H1b re-export)
 from auoreo.core.floors_secrets import is_secret_path as is_secret_path  # re-export
 from auoreo.core.floors_secrets import scan
 

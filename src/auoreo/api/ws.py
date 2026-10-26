@@ -26,7 +26,7 @@ from fastapi import APIRouter, Cookie, Depends, Header, Query, WebSocket, WebSoc
 from pydantic import TypeAdapter, ValidationError
 from starlette.websockets import WebSocketDisconnect
 
-from auoreo.api.deps import token_matches
+from auoreo.api import session_auth
 from auoreo.core.approvals import pending_dict, reply_with_grants
 from auoreo.core.bus import Subscriber, invalid_channels
 from auoreo.core.event_store import REPLAY_LIMIT
@@ -36,7 +36,6 @@ from auoreo.schema.ws import (
     CLOSE_AUTH_EXPIRED,
     CLOSE_KEEPALIVE,
     CLOSE_POLICY,
-    CLOSE_REVOKED,
     CLOSE_TRY_LATER,
     MAX_BATCH,
     ClientFrame,
@@ -122,12 +121,8 @@ async def ws_guard(
     svc: Services = websocket.app.state.services
     if not origin_allowed(origin, svc.settings.cors_origins):
         raise WebSocketException(code=CLOSE_POLICY, reason="origin not allowed")
-    open_ws = svc.settings.cli.ws_auth == "off"  # --- G5a: `serve --ws-auth off` (loopback only)
-    if not open_ws and not token_matches(
-        svc.settings.server_password, authorization=authorization, query_token=token, cookie=auoreo_token
-    ):
+    if not session_auth.ws_admit(websocket, svc, authorization, token, auoreo_token):  # --- H1b
         raise WebSocketException(code=CLOSE_POLICY, reason="invalid or missing token")
-    websocket.scope.setdefault("state", {})["auoreo_password"] = svc.settings.server_password
     return svc
 
 
@@ -156,6 +151,7 @@ class WsConnection:
         self.binary_dropped = 0
         self.authed_at = time.monotonic()
         self.password = (ws.scope.get("state") or {}).get("auoreo_password", svc.settings.server_password)
+        self.principal = (ws.scope.get("state") or {}).get("auoreo_principal")  # --- H1b
         self._followups: dict[str, tuple[str, str]] = {}  # request_id → (session_id, run_id)
         self._inbox: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
         self._send_lock = asyncio.Lock()
@@ -264,7 +260,7 @@ class WsConnection:
     ) -> None:
         """Swap the bus subscription (subscribe first so nothing falls in the gap), then
         replay `seq > last_seq` in pages. No `last_seq` = live only from now."""
-        svc = self.svc
+        svc, channels = self.svc, session_auth.ws_channels(self, channels)  # --- H1b: capability scope
         async with self._send_lock:
             old, self.sub = self.sub, svc.bus.subscribe(channels)
             self.channels = channels
@@ -332,8 +328,8 @@ class WsConnection:
         """Close with 4401 when the server password changed since the handshake (revoked) or
         4001 once `http.ws_auth_ttl_s` has passed (expired: reconnect and re-authenticate)."""
         st = self.svc.settings
-        if st.server_password != self.password:
-            await self.close(CLOSE_REVOKED, "credentials revoked")
+        if (gone := session_auth.ws_still_valid(self)) is not None:  # --- H1b: + JWT revoke/expiry
+            await self.close(*gone)
             return True
         ttl = st.http.ws_auth_ttl_s
         if ttl is not None and time.monotonic() - self.authed_at > ttl:
@@ -447,6 +443,9 @@ class WsConnection:
 
     async def _on_control_request(self, frame: WsControlRequest) -> None:
         req = frame.request
+        if session_auth.ws_scope_session(self) not in (None, req.session_id):  # --- H1b
+            await self.ack(frame.request_id, False, "capability token is scoped to another session")
+            return
         if await self.svc.get_session(req.session_id) is None:
             await self.ack(frame.request_id, False, "session not found")
             return

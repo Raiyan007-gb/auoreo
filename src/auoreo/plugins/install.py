@@ -25,7 +25,16 @@ from typing import Any, Literal
 from auoreo.core.secrets import child_env
 
 RT_FILE = Path(__file__).with_name("rt") / "auoreo_plugin_rt.py"
-HASH_EXCLUDE = {".venv", "lock.json", "__pycache__", ".git", "pairing.json", "sessions.json", ".pytest_cache"}
+HASH_EXCLUDE = {
+    ".venv",
+    "lock.json",
+    "__pycache__",
+    ".git",
+    "pairing.json",
+    "sessions.json",
+    ".pytest_cache",
+    "quarantine.json",  # H1b: the marker never changes what was verified
+}
 INSTALL_ENV = (
     "HTTP_PROXY",
     "HTTPS_PROXY",

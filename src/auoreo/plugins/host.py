@@ -36,6 +36,7 @@ from auoreo.plugins.bridge import (
 )
 from auoreo.plugins.connectors import InboundRouter, PairingStore, file_config
 from auoreo.plugins.protocol import RpcError, RpcPeer
+from auoreo.plugins.quarantine import is_quarantined  # --- H1b
 from auoreo.plugins.requests import HOST_REQUESTS
 from auoreo.tools.context import ToolResult
 
@@ -115,7 +116,11 @@ class PluginHost:
                 changes["stopped"].append(name)
             for name, (manifest, src) in wanted.items():
                 st = self.plugins.get(name)
-                enabled = manifest.enabled and self.s.settings.plugins_enabled
+                enabled = (
+                    manifest.enabled
+                    and self.s.settings.plugins_enabled
+                    and not is_quarantined(self.home, name)
+                )
                 if st is None:
                     st = self.plugins[name] = PluginState(name, manifest, src)
                     st.status = "stopped" if enabled else "disabled"
@@ -341,7 +346,11 @@ class PluginHost:
             await self._stop(st, "stopped")
             st.manifest, st.src = wanted[name]
             st.wanted = True
-            if st.manifest.enabled and self.s.settings.plugins_enabled:
+            if (
+                st.manifest.enabled
+                and self.s.settings.plugins_enabled
+                and not is_quarantined(self.home, name)
+            ):
                 await self._start(st)
             else:
                 st.status = "disabled"

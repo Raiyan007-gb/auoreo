@@ -1,16 +1,17 @@
 """Open a persistent local PTY (spec §9.3 `terminal_pty`). Permission rules and floors ran
-in the executor on `cmd`; like `exec_command` it refuses under an enforcing sandbox."""
+in the executor on `cmd`. The shell runs inside the selected sandbox backend (bwrap/seatbelt
+wrap the PTY process with the tool's profile); it refuses only when the backend cannot wrap a
+long-lived process (e.g. docker)."""
 
 import os
 import time
 
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 from auoreo.tools.pty_jobs import guarded, pty_registry, render_pty, services_of, set_winsize
-from auoreo.tools.shell_sessions import refuse_if_sandboxed
+from auoreo.tools.shell_sessions import ctx_argv
 
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
-    refuse_if_sandboxed(ctx, "terminal_pty")
     if os.name != "posix":
         raise ToolError("terminal_pty needs a POSIX host (pty); use exec_command instead")
     workdir = ctx.resolve_path(args.get("workdir") or ".")
@@ -21,9 +22,10 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
         raise ToolError(f"workdir is not a directory: {workdir}")
     reg = pty_registry(services_of(ctx))
     cmd = str(args["cmd"])
+    argv = ctx_argv(ctx, cmd, workdir=workdir, tty=True, tool="terminal_pty")
     env = {**ctx.env, "TERM": str(args.get("term") or "dumb")}
     p = await guarded(
-        reg.start(session_id=ctx.session_id, cmd=cmd, cwd=workdir, env=env, tty=True, granted=cmd)
+        reg.start(session_id=ctx.session_id, cmd=cmd, cwd=workdir, env=env, tty=True, granted=cmd, argv=argv)
     )
     reg.started[p.id] = time.monotonic()
     set_winsize(p, int(args.get("rows", 40)), int(args.get("cols", 120)))

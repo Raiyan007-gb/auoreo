@@ -450,3 +450,6 @@ from auoreo.core.diagnostics_rtc import (  # noqa: E402
 
 EXTRA_CHECKS.append(rtc_checks)
 __all__ = ["STUN_TIMEOUT_S", "stun_binding", "stun_target"]
+from auoreo.core.diagnostics_h1b import h1b_checks  # noqa: E402  --- H1b: keyring/ws/plugin quarantine
+
+EXTRA_CHECKS.append(h1b_checks)

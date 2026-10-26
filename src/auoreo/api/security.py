@@ -7,7 +7,6 @@ Auth itself is the `require_auth` dependency (`deps.py`), so a bad Host never re
 
 from __future__ import annotations
 
-import html
 import json
 import logging
 import socket
@@ -21,6 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from auoreo.api.deps import COOKIE, IDEMPOTENCY_STATE, IdempotentReplay
+from auoreo.api.session_auth import RefreshCookieMiddleware
 from auoreo.core.idempotency import Admission
 from auoreo.core.settings import Settings
 
@@ -173,22 +173,24 @@ async def _replay(_request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(body, status_code=200, headers={"Idempotent-Replayed": "true"})
 
 
-# ------------------------------------------------------------------ SPA token injection
+# ------------------------------------------------------------------ SPA auth marker
 def index_with_token(index: Path, scope: Scope, password: str | None) -> HTMLResponse | None:
-    """`index.html` with `<meta name="auoreo-token">` — only for a request that already holds
-    the valid HttpOnly cookie. Unauthenticated pages never get the token."""
+    """`index.html` with `<meta name="auoreo-auth" content="cookie">` — only for a request that
+    already holds a valid session-JWT cookie. It tells the SPA to rely on the HttpOnly cookie
+    (sent automatically, refreshed on activity); no secret is ever written into the page."""
     if not password:
         return None
-    from auoreo.api.deps import token_matches
+    from auoreo.api.session_auth import client_ip, principal
 
+    svc = getattr(scope["app"].state, "services", None)
     cookie = Request(scope).cookies.get(COOKIE)
-    if not cookie or not token_matches(password, cookie=cookie):
+    if svc is None or not cookie or principal(svc, cookie=cookie, ip=client_ip(scope)) is None:
         return None
     try:
         text = index.read_text(encoding="utf-8")
     except OSError:
         return None
-    meta = f'<meta name="auoreo-token" content="{html.escape(password, quote=True)}">'
+    meta = '<meta name="auoreo-auth" content="cookie">'
     text = text.replace("</head>", f"  {meta}\n  </head>", 1) if "</head>" in text else meta + text
     headers = {"Cache-Control": "no-store", "Vary": "Cookie", "Referrer-Policy": "same-origin"}
     return HTMLResponse(text, headers=headers)
@@ -198,4 +200,5 @@ def install(app: FastAPI, settings: Settings) -> None:
     """Call after CORS is added: Host check ends up outermost."""
     app.add_exception_handler(IdempotentReplay, _replay)
     app.add_middleware(IdempotencyMiddleware)
+    app.add_middleware(RefreshCookieMiddleware)  # --- H1b: sliding session-JWT cookie
     app.add_middleware(HostCheckMiddleware, settings=settings)

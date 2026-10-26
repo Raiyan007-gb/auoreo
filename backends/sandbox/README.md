@@ -1,8 +1,8 @@
 # backends/sandbox/
 
-Process confinement for tools that run model-supplied commands (`bash` today). ABC:
-`src/auoreo/backends/sandbox.py` — `run(ExecSpec) -> ExecResult`, `capabilities()`,
-`check()`.
+Process confinement for tools that run model-supplied commands (`bash`, the persistent
+shells). ABC: `src/auoreo/backends/sandbox.py` — `run(ExecSpec) -> ExecResult`,
+`wrap_long_lived(ExecSpec, tty=) -> (argv, enforced) | None`, `capabilities()`, `check()`.
 
 | backend | default | enforces | needs |
 |---|---|---|---|
@@ -16,8 +16,15 @@ Process confinement for tools that run model-supplied commands (`bash` today). A
 Select with `settings.backends.sandbox`. Unset (or `"auto"`) probes the strongest local
 backend: `bwrap` on Linux, `seatbelt` on macOS; only when none is usable does it run `none`
 (warning + `sandbox.fallback` audit row + doctor warn; `sandbox_policy: fail` refuses).
-Under an enforcing backend the persistent shells (`exec_command`, `terminal_pty`) refuse:
-set `backends.sandbox: "none"` explicitly to use them unconfined.
+Persistent shells (`exec_command`/`write_stdin`, `terminal_pty`, `monitor`'s streaming `cmd`)
+spawn **inside** the selected backend through `SandboxBackend.wrap_long_lived(spec, tty=)`:
+`bwrap` wraps the long-lived `bash -lc` in the same argv profile as one-shot `bash`
+(ro system, rw session cwd under `workspace-write`, `--unshare-net` for `net: none`, Landlock
+layered when available; a PTY keeps its private controlling terminal, so `--new-session` is
+dropped for `tty`), `seatbelt` prefixes `sandbox-exec -p <profile>`, `none` passes it
+through (or under `security.sandbox_landlock` wraps it in the Landlock helper). A backend that
+cannot wrap a long-lived process (`docker` today, or any backend without the hook that
+enforces isolation) makes these tools refuse; they never run unconfined under it.
 An explicit backend is probed at startup;
 on failure `sandbox_policy: warn` (default) audits `sandbox.fallback` and uses `none`,
 `fail` refuses to start. `auoreo doctor` shows the row with `enforced=` and the policy.

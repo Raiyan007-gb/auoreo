@@ -113,6 +113,12 @@ class SandboxBackend(ABC):
     async def run(self, spec: ExecSpec) -> ExecResult:
         """Run `spec.argv`; kill it after `timeout_s` (then `timed_out=True`, exit -9)."""
 
+    def wrap_long_lived(self, spec: ExecSpec, *, tty: bool = False) -> tuple[list[str], bool] | None:
+        """`(argv, enforced)` that runs `spec.argv` as a long-lived process (a persistent shell
+        or PTY) under this backend's confinement, or None when the backend cannot wrap one
+        (the caller then refuses rather than run it unconfined). H1b, spec §19.8."""
+        return None
+
     async def _audit(self, action: str, detail: dict[str, Any]) -> None:
         if self.audit is not None:
             await self.audit(action, detail)

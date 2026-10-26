@@ -101,6 +101,12 @@ class Backend(SandboxBackend):
     def capabilities(self) -> dict[str, bool]:
         return {"fs_isolation": True, "net_isolation": True}
 
+    def wrap_long_lived(self, spec: ExecSpec, *, tty: bool = False) -> tuple[list[str], bool] | None:
+        """`sandbox-exec -p <profile>` confines a long-lived process as well as a one-shot."""
+        if sys.platform != "darwin" or not os.access(SANDBOX_EXEC, os.X_OK) or spec.outside_cwd():
+            return None
+        return build_argv(spec), True
+
     async def run(self, spec: ExecSpec) -> ExecResult:
         await self.check_mounts(spec)
         status = await self.check()

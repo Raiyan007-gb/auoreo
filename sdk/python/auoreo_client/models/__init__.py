@@ -39,6 +39,8 @@ from .bridge_envelope import BridgeEnvelope
 from .cancel_api_sessions_session_id_cancel_post_response_cancel_api_sessions_session_id_cancel_post import (
     CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost,
 )
+from .capability_request import CapabilityRequest
+from .capability_token import CapabilityToken
 from .chat_accepted import ChatAccepted
 from .chat_request import ChatRequest
 from .chat_request_mode import ChatRequestMode
@@ -261,6 +263,8 @@ __all__ = (
     "BridgeDelivered",
     "BridgeEnvelope",
     "CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost",
+    "CapabilityRequest",
+    "CapabilityToken",
     "ChatAccepted",
     "ChatRequest",
     "ChatRequestMode",

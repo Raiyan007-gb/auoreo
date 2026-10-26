@@ -2,7 +2,7 @@ name: exec_command
 toolset: shell
 description: >-
   Start a command in a persistent shell process in the session's execution environment
-  (the local machine, unsandboxed, unless use_environment picked another) and return its output so far;
+  (the local machine inside the selected sandbox backend, unless use_environment picked another) and return its output so far;
   long-running or interactive processes keep running and are continued with write_stdin.
 parameters:
   type: object
@@ -41,4 +41,4 @@ timeout_ms: 45000
 search_hint: persistent shell interactive process background server repl stdin tty pty long running
 max_result_size_chars: 64000
 net: none
-sandbox_mode: danger-full-access
+sandbox_mode: workspace-write

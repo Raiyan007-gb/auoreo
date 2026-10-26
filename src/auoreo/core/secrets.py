@@ -11,6 +11,7 @@ import contextlib
 import json
 import logging
 import os
+import time
 from collections.abc import Callable, Iterable, Iterator
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 
 from auoreo.core.dotenv import from_dotenv
+from auoreo.core.keyring_policy import backend_allowed
 
 try:
     import fcntl
@@ -33,6 +35,7 @@ ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "TZ")
 else a tool needs comes from its manifest `requires_env`; tools that need a terminal type set
 `TERM` themselves (terminal_pty's `term` argument), so it is not inherited from the host."""
 ENV_ALLOWED_PREFIXES = ("AUOREO_TELEMETRY_",)
+ROTATION_SUFFIXES = ("#prev", "#rotated_at", "#prev_expires")
 
 
 class SecretStoreError(RuntimeError):
@@ -101,14 +104,15 @@ class SecretStore:
 
     # ---------------------------------------------------------------- key mgmt
     def _key(self, create: bool) -> bytes | None:
-        if (k := _keyring_get(KEY_NAME)) is not None:
+        keyring_ok = backend_allowed(self.policy)  # --- H1b: forbid-file refuses file keyrings too
+        if keyring_ok and (k := _keyring_get(KEY_NAME)) is not None:
             return k.encode()
         if self.policy != "forbid-file" and self.key_file.is_file():
             return self.key_file.read_bytes().strip()
         if not create:
             return None
         key = Fernet.generate_key()
-        if _keyring_set(KEY_NAME, key.decode()):
+        if keyring_ok and _keyring_set(KEY_NAME, key.decode()):
             return key
         if self.policy != "allow-file":
             raise SecretStoreError("no usable OS keyring and AUOREO_KEYRING forbids a key file")
@@ -173,6 +177,55 @@ class SecretStore:
     def names(self) -> list[str]:
         return sorted(self._load())
 
+    # --- H1b: rotation with a grace window (spec §25.14) + values for the literal scanner
+    def rotate(self, name: str, value: str, grace_s: int, now: float | None = None) -> bool:
+        """New value into `name`; the old one moves to `<name>#prev` with `#rotated_at` and
+        `#prev_expires` (now + grace). Returns whether a previous value was kept."""
+        t = int(time.time() if now is None else now)
+        with self._locked():
+            data = self._load()
+            old = data.get(name)
+            if old and grace_s > 0:
+                data.update({f"{name}#prev": old, f"{name}#rotated_at": str(t)})
+                data[f"{name}#prev_expires"] = str(t + grace_s)
+            else:
+                for suffix in ROTATION_SUFFIXES:
+                    data.pop(f"{name}{suffix}", None)
+            data[name] = value
+            self._save(data)
+        return bool(old and grace_s > 0)
+
+    def candidates(self, name: str) -> list[str]:
+        """`[current, previous]` — the previous value only inside its grace window."""
+        out = [v for v in (self._resolve(name), self._resolve(f"{name}#prev")) if v]
+        return list(dict.fromkeys(out))
+
+    def purge_expired(self, now: float | None = None) -> list[str]:
+        """Drop `#prev` values whose grace window has passed; returns the base names."""
+        t = time.time() if now is None else now
+        with self._locked():
+            data = self._load()
+            gone = [
+                n.removesuffix("#prev_expires")
+                for n, v in data.items()
+                if n.endswith("#prev_expires") and v.strip().isdigit() and int(v) <= t
+            ]
+            for base in gone:
+                for suffix in ROTATION_SUFFIXES:
+                    data.pop(f"{base}{suffix}", None)
+            if gone:
+                self._save(data)
+        return gone
+
+    def values(self) -> list[str]:
+        """Every stored secret value (rotation metadata excluded) — for in-process matching
+        only (the literal-secret command floor); never logged or returned to a tool."""
+        try:
+            data = self._load()
+        except SecretStoreError:
+            return []
+        return [v for n, v in data.items() if not n.endswith(("#rotated_at", "#prev_expires"))]
+
     def get(self, name: str, *, by: str | None = None) -> str | None:
         """env → keyring → secrets.db. Never raises for a missing value.
 
@@ -203,14 +256,21 @@ class SecretStore:
         env = os.environ.get(name)
         if env is not None and not from_dotenv(name):
             return env
-        if (v := _keyring_get(name)) is not None:
+        if backend_allowed(self.policy) and (v := _keyring_get(name)) is not None:
             return v
         try:
-            if (v := self._load().get(name)) is not None:
+            data = self._load()
+            if name.endswith("#prev") and _expired(data.get(f"{name.removesuffix('#prev')}#prev_expires")):
+                return None  # past its rotation grace window
+            if (v := data.get(name)) is not None:
                 return v
         except SecretStoreError as exc:
             log.warning("secret store unavailable: %s", exc)
         return env
+
+
+def _expired(stamp: str | None) -> bool:
+    return bool(stamp and stamp.strip().isdigit() and int(stamp) <= time.time())
 
 
 def child_env(requires: list[str], secrets: SecretStore | None) -> dict[str, str]:

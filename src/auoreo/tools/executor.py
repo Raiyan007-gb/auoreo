@@ -26,7 +26,7 @@ from auoreo.core.secrets import child_env, secret_scope
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import LoadError, ToolDef
 from auoreo.runtime.hooks import RESULT_PREVIEW_CHARS, hooks_of
-from auoreo.tools import shell_floor
+from auoreo.tools import gates_literal, shell_floor
 from auoreo.tools.args import (
     InvalidArgumentsError,
     format_validation_error,
@@ -182,6 +182,10 @@ class ToolExecutor:
             "net": tool.manifest.net,
         }
         reason = decision.detail
+        literal = gates_literal.scan(self, tool, args)  # --- H1b: literal secrets -> masked, human-only
+        if literal is not None:
+            pattern = gates_literal.mask_pattern(pattern, literal, tool, args)
+            audit["pattern"] = pattern[:500]
         if decision.action == "deny":
             await self.s.audit.record(
                 actor="agent",
@@ -192,7 +196,13 @@ class ToolExecutor:
                 detail=audit,
             )
             return self._err(call, f"permission denied ({decision.detail}). Do not retry unchanged.")
-        if decision.action == "ask":
+        if literal is not None:  # always a human, one-shot, masked card (§25.10)
+            if refused := await gates_literal.gate(
+                self, call, tool, ctx, permission, pattern, literal, audit
+            ):
+                return refused
+            reason = f"floor: {gates_literal.NOTE}"
+        elif decision.action == "ask":
             refused, reason = await self._ask(
                 call, tool, args, ctx, engine, permission, pattern, audit, reason
             )

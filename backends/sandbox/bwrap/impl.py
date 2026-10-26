@@ -33,9 +33,13 @@ ETC_RO = (
 )
 
 
-def build_argv(spec: ExecSpec, bwrap: str = "bwrap", landlock_python: str | None = None) -> list[str]:
+def build_argv(
+    spec: ExecSpec, bwrap: str = "bwrap", landlock_python: str | None = None, *, new_session: bool = True
+) -> list[str]:
     """The full bwrap command line for `spec` (pure; unit-tested). With `landlock_python`
-    the inner argv is wrapped in the Landlock helper (applied after bwrap's mounts)."""
+    the inner argv is wrapped in the Landlock helper (applied after bwrap's mounts).
+    `new_session=False` keeps the caller's private PTY as the controlling terminal (a PTY the
+    server opened for this process only, so TIOCSTI cannot reach another terminal)."""
     cwd = str(spec.cwd)
     argv = [bwrap, "--ro-bind", "/usr", "/usr"]
     for p in SYSTEM_RO:
@@ -46,7 +50,7 @@ def build_argv(spec: ExecSpec, bwrap: str = "bwrap", landlock_python: str | None
     argv += ["--unshare-pid", "--unshare-user-try", "--unshare-ipc", "--unshare-uts"]
     if spec.net == "none":
         argv.append("--unshare-net")
-    argv += ["--die-with-parent", "--new-session", "--cap-drop", "ALL"]
+    argv += ["--die-with-parent", *(["--new-session"] if new_session else []), "--cap-drop", "ALL"]
     argv += ["--ro-bind" if spec.mode == "read-only" else "--bind", cwd, cwd]
     for p in spec.readable:
         argv += ["--ro-bind", str(p), str(p)]
@@ -90,6 +94,13 @@ class Backend(SandboxBackend):
 
     def capabilities(self) -> dict[str, bool]:
         return {"fs_isolation": True, "net_isolation": True}
+
+    def wrap_long_lived(self, spec: ExecSpec, *, tty: bool = False) -> tuple[list[str], bool] | None:
+        """Persistent shells / PTYs run inside the same bwrap profile as one-shot commands."""
+        bwrap = shutil.which("bwrap")
+        if bwrap is None or spec.outside_cwd():
+            return None
+        return build_argv(spec, bwrap, landlock_python(), new_session=not tty), True
 
     async def run(self, spec: ExecSpec) -> ExecResult:
         await self.check_mounts(spec)

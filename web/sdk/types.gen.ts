@@ -65,6 +65,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/capability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Capability
+         * @description A `/ws` token that only sees and steers `session_id` (`serve --ws-auth capability`).
+         */
+        post: operations["capability_api_auth_capability_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -91,7 +111,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Logout
+         * @description Revoke the cookie's login (every refreshed token of it) and clear the cookie.
+         */
         post: operations["logout_api_auth_logout_post"];
         delete?: never;
         options?: never;
@@ -2216,6 +2239,10 @@ export interface components {
         AuthStatus: {
             /** Authenticated */
             authenticated: boolean;
+            /** Expires At */
+            expires_at?: number | null;
+            /** Method */
+            method?: string | null;
             /** Secured */
             secured: boolean;
         };
@@ -2484,6 +2511,24 @@ export interface components {
             timestamp: number;
             /** To Member */
             to_member: string;
+        };
+        /** CapabilityRequest */
+        CapabilityRequest: {
+            /** Session Id */
+            session_id: string;
+        };
+        /**
+         * CapabilityToken
+         * @description A `/ws` credential scoped to one session (`serve --ws-auth capability`); pass it as
+         *     `?token=` or `Authorization: Bearer` on the handshake. Never logged.
+         */
+        CapabilityToken: {
+            /** Expires At */
+            expires_at: number;
+            /** Session Id */
+            session_id: string;
+            /** Token */
+            token: string;
         };
         /** ChatAccepted */
         ChatAccepted: {
@@ -5043,6 +5088,50 @@ export interface operations {
             };
         };
     };
+    capability_api_auth_capability_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CapabilityRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CapabilityToken"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     login_api_auth_login_post: {
         parameters: {
             query?: never;
@@ -5088,7 +5177,9 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -5099,6 +5190,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuthStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

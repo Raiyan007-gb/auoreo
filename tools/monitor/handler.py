@@ -20,7 +20,7 @@ from pathlib import Path
 
 from auoreo.backends.sandbox import ExecSpec, SandboxError
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
-from auoreo.tools.shell_sessions import clip_tokens, refuse_if_sandboxed
+from auoreo.tools.shell_sessions import clip_tokens, ctx_argv
 
 _SECRET = re.compile(r"(^|/)(\.env(\.[^/]*)?|secrets\.db)$")
 KEEP_LINES = 200
@@ -67,9 +67,9 @@ def _line_of(text: str, pos: int) -> str:
 
 
 async def _stream(ctx: ToolContext, cmd: str, w: Watch) -> tuple[str, int | None]:
-    refuse_if_sandboxed(ctx, "monitor (streaming cmd)")
+    argv = ctx_argv(ctx, cmd, workdir=None, tty=False, tool="monitor (streaming cmd)")
     proc = await asyncio.create_subprocess_exec(
-        "bash", "-lc", cmd, cwd=str(ctx.cwd), env=dict(ctx.env), stdin=asyncio.subprocess.DEVNULL,
+        *argv, cwd=str(ctx.cwd), env=dict(ctx.env), stdin=asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, start_new_session=True,
         limit=1 << 20,
     )  # fmt: skip

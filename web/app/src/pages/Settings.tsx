@@ -33,7 +33,7 @@ export function SettingsPage() {
             <CardDescription>
               Sent as <code className="font-mono">Authorization: Bearer</code> when the server sets{" "}
               <code className="font-mono">AUOREO_SERVER_PASSWORD</code>. Stored in this browser only.
-              {hasMetaToken() && " The server injected a token for this page, which takes precedence."}
+              {hasMetaToken() && " This page is signed in with a short-lived session cookie, which takes precedence."}
             </CardDescription>
           </CardHeader>
           <form

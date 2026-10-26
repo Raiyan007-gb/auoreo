@@ -11,9 +11,11 @@ from pydantic import BaseModel, ConfigDict, Field
 class CliSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    ws_auth: Literal["token", "off"] = "token"
-    """`/ws` handshake auth: `token` = the server password (like HTTP); `off` skips it, which
-    `auoreo serve` only allows on a loopback bind."""
+    ws_auth: Literal["token", "off", "jwt", "capability"] = "token"
+    """`/ws` handshake auth: `token` = the server password or a session JWT (like HTTP);
+    `jwt` = only a session JWT (`POST /api/auth/login` cookie or `?token=<jwt>`), never the raw
+    password; `capability` = only a per-session capability token (`POST /api/auth/capability`),
+    which scopes the connection to that session; `off` skips it (loopback binds only)."""
     ws_ping_timeout_s: float = Field(default=60.0, gt=0)
     """Protocol-level WebSocket ping timeout handed to uvicorn (`--ws-ping-timeout`)."""
     share_base_url: str | None = None

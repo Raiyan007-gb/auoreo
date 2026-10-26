@@ -40,8 +40,8 @@ from starlette.responses import JSONResponse
 from starlette.types import Message, Receive, Scope, Send
 
 from auoreo import __version__
-from auoreo.api.deps import COOKIE, token_matches
 from auoreo.api.mcp_resources import McpCatalog, session_id_of
+from auoreo.api.session_auth import COOKIE, client_ip, principal
 from auoreo.api.ws import origin_allowed
 from auoreo.core.permissions import PermissionEngine
 from auoreo.core.policy import policy_engine
@@ -113,10 +113,14 @@ class McpEndpoint:
         if not origin_allowed(request.headers.get("origin"), svc.settings.cors_origins):
             await JSONResponse({"detail": "origin not allowed"}, 403)(scope, receive, send)
             return
-        if not token_matches(
-            svc.settings.server_password,
-            authorization=request.headers.get("authorization"),
-            cookie=request.cookies.get(COOKIE),
+        if (
+            principal(
+                svc,
+                authorization=request.headers.get("authorization"),
+                cookie=request.cookies.get(COOKIE),
+                ip=client_ip(request),
+            )
+            is None
         ):
             await JSONResponse(
                 {"detail": "invalid or missing token"}, 401, headers={"WWW-Authenticate": "Bearer"}
