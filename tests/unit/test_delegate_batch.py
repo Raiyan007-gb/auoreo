@@ -18,7 +18,7 @@ def gateway() -> RoutedGateway:
 
 async def spawned(svc: Services, parent: str) -> int:
     evs = await svc.events.replay(0, frozenset({f"session:{parent}"}), limit=100_000)
-    return sum(e.type == "subagent.started" for e in evs)
+    return sum(e.type == "subagent.start" for e in evs)
 
 
 async def test_foreground_batch_joins_results_in_order(services: Services, gateway: RoutedGateway) -> None:

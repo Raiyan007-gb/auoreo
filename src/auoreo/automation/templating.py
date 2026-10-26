@@ -1,16 +1,22 @@
-"""Lenient prompt templates, payload filters, and the untrusted-data envelope."""
+"""Lenient prompt templates, payload filters, and the untrusted-data envelope.
+
+Filters (spec §15): leaf ops `equals|contains|in|regex|exists|in_file` (all set ops must hold)
+and the combinators `all` / `any` / `not` (nestable). Templates get `{{__raw__}}` = the raw
+request body (`RAW_CAP` characters) when the caller supplies it."""
 
 from __future__ import annotations
 
 import json
 import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from auoreo.harness.loader import VAR_RE
 from auoreo.harness.manifests import WebhookFilter
 
 MAX_VALUE_CHARS = 2000
+RAW_CAP = 4000
 _MISSING = object()
 
 
@@ -65,26 +71,60 @@ def _exists(value: Any, want: bool) -> bool:
     return (value is not _MISSING and value is not None) == want
 
 
+def _in(value: Any, want: list[str]) -> bool:
+    return value is not _MISSING and as_text(value) in want
+
+
 _CHECKS: dict[str, Callable[[Any, Any], bool]] = {
     "equals": _equals,
+    "in_": _in,
     "contains": _contains,
     "regex": _regex,
     "exists": _exists,
 }
 
 
-def filter_matches(f: WebhookFilter, payload: dict[str, Any]) -> bool:
-    """Every condition set on the filter must hold."""
-    value = dotted(payload, f.field)
+def _file_values(base: Path | None, name: str) -> list[str]:
+    """Lines of `<base>/<name>` (comments/blank skipped); [] when unreadable or escaping `base`."""
+    if base is None:
+        return []
+    root = base.resolve()
+    path = (root / name).resolve()
+    if not path.is_relative_to(root):
+        return []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    return [ln.strip() for ln in lines if ln.strip() and not ln.lstrip().startswith("#")]
+
+
+def filter_matches(f: WebhookFilter, payload: dict[str, Any], base: Path | None = None) -> bool:
+    """Combinators recurse; a leaf passes when every condition set on it holds."""
+    if f.all_ is not None:
+        return all(filter_matches(c, payload, base) for c in f.all_)
+    if f.any_ is not None:
+        return any(filter_matches(c, payload, base) for c in f.any_)
+    if f.not_ is not None:
+        return not filter_matches(f.not_, payload, base)
+    value = dotted(payload, f.field or "")
     for op, check in _CHECKS.items():
         want = getattr(f, op)
         if want is not None and not check(value, want):
             return False
-    return True
+    return f.in_file is None or _in(value, _file_values(base, f.in_file))
 
 
-def first_failing(filters: list[WebhookFilter], payload: dict[str, Any]) -> WebhookFilter | None:
-    return next((f for f in filters if not filter_matches(f, payload)), None)
+def first_failing(
+    filters: list[WebhookFilter], payload: dict[str, Any], base: Path | None = None
+) -> WebhookFilter | None:
+    return next((f for f in filters if not filter_matches(f, payload, base)), None)
+
+
+def raw_text(body: bytes) -> str:
+    """`{{__raw__}}`: the request body as text, capped at `RAW_CAP` characters."""
+    text = body.decode("utf-8", "replace")
+    return text if len(text) <= RAW_CAP else text[:RAW_CAP] + "…"
 
 
 def untrusted(source: str, text: str) -> str:

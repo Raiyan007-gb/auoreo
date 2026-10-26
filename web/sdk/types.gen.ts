@@ -185,7 +185,12 @@ export interface paths {
         /** List Jobs */
         get: operations["list_jobs_api_cron_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create Job
+         * @description Create `<home>/jobs/<name>.yaml` (a reminder for `in 20m`); `dry_run` only previews the
+         *     next 5 fires. 409 when the name is taken, 422 for an invalid schedule or field.
+         */
+        post: operations["create_job_api_cron_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -256,6 +261,43 @@ export interface paths {
         /** Job Runs */
         get: operations["job_runs_api_cron__name__runs_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/delegation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Delegation State */
+        get: operations["delegation_state_api_delegation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/delegation/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Pause
+         * @description Flip `delegation.pause` at runtime (audited); new spawns are refused while paused.
+         */
+        put: operations["set_pause_api_delegation_pause_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -546,6 +588,26 @@ export interface paths {
         put?: never;
         /** Create Task */
         post: operations["create_task_api_kanban_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mailbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Mailbox
+         * @description Alias of `GET /api/teams/{team_id}/mailbox` (spec §16.8 endpoint name).
+         */
+        get: operations["mailbox_api_mailbox_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1360,6 +1422,23 @@ export interface paths {
         post: operations["share_api_sessions__session_id__share_post"];
         /** Unshare */
         delete: operations["unshare_api_sessions__session_id__share_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/subagents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Subagents */
+        get: operations["subagents_api_sessions__session_id__subagents_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2425,6 +2504,47 @@ export interface components {
             /** Summary Chars */
             summary_chars: number;
         };
+        /** CronCreate */
+        CronCreate: {
+            /**
+             * Agent
+             * @default default
+             */
+            agent: string;
+            /**
+             * Catch Up
+             * @default true
+             */
+            catch_up: boolean;
+            /** Deliver */
+            deliver?: string[];
+            /** Description */
+            description?: string | null;
+            /**
+             * Dry Run
+             * @description Validate and preview; nothing is saved
+             * @default false
+             */
+            dry_run: boolean;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Name */
+            name: string;
+            /** Prompt */
+            prompt: string;
+            /**
+             * Schedule
+             * @description 5-field cron | every <n>m|h|d | in <n>m|h|d | ISO datetime
+             */
+            schedule: string;
+            /** Timeout S */
+            timeout_s?: number | null;
+            /** Tz */
+            tz?: string | null;
+        };
         /** CronJobInfo */
         CronJobInfo: {
             /** Agent */
@@ -2458,6 +2578,34 @@ export interface components {
             job: string;
             /** Paused */
             paused: boolean;
+        };
+        /** CronPlan */
+        CronPlan: {
+            /**
+             * Catch Up
+             * @description Catch-up class for a missed fire
+             */
+            catch_up: string;
+            /** Created */
+            created: boolean;
+            /** Dry Run */
+            dry_run: boolean;
+            /**
+             * Kind
+             * @description cron | interval | date
+             */
+            kind: string;
+            /** Name */
+            name: string;
+            /**
+             * Next Fires
+             * @description Next (up to) 5 fire times, ISO-8601
+             */
+            next_fires: string[];
+            /** Schedule */
+            schedule: string;
+            /** Tz */
+            tz: string;
         };
         /** CronRunAccepted */
         CronRunAccepted: {
@@ -2559,6 +2707,34 @@ export interface components {
             markdown: string;
             /** Path */
             path: string;
+        };
+        /** DelegationPause */
+        DelegationPause: {
+            /** Paused */
+            paused: boolean;
+        };
+        /** DelegationState */
+        DelegationState: {
+            /**
+             * Paused
+             * @description True: new spawns are refused (list/steer/stop still work)
+             */
+            paused: boolean;
+            /**
+             * Queued
+             * @description Children waiting for a slot
+             */
+            queued: number;
+            /**
+             * Running
+             * @description Children running right now (process-wide)
+             */
+            running: number;
+            /**
+             * Source
+             * @description settings | api
+             */
+            source: string;
         };
         /** DeliveryInfo */
         DeliveryInfo: {
@@ -4069,6 +4245,27 @@ export interface components {
             /** Taps */
             taps: string[];
         };
+        /** SubagentInfo */
+        SubagentInfo: {
+            /** Agent */
+            agent: string;
+            /** Depth */
+            depth: number;
+            /** Name */
+            name: string;
+            /** Role */
+            role: string | null;
+            /** Running */
+            running: boolean;
+            /** Status */
+            status: string;
+            /** Subagent Id */
+            subagent_id: string;
+            /** Usage */
+            usage?: {
+                [key: string]: unknown;
+            };
+        };
         /** SuggestionAccepted */
         SuggestionAccepted: {
             /** Run Id */
@@ -4904,6 +5101,45 @@ export interface operations {
             };
         };
     };
+    create_job_api_cron_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CronCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CronPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     pause_job_api_cron__name__pause_post: {
         parameters: {
             query?: never;
@@ -5035,6 +5271,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CronRunInfo"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delegation_state_api_delegation_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_pause_api_delegation_pause_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelegationPause"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DelegationState"];
                 };
             };
             /** @description Validation Error */
@@ -5678,6 +5984,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KanbanTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mailbox_api_mailbox_get: {
+        parameters: {
+            query: {
+                team_id: string;
+                member?: string | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailMessage"][];
                 };
             };
             /** @description Validation Error */
@@ -7537,6 +7879,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SharesRevoked"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    subagents_api_sessions__session_id__subagents_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubagentInfo"][];
                 };
             };
             /** @description Validation Error */

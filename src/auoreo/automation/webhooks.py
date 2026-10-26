@@ -1,9 +1,10 @@
 """Webhook ingress (spec §5.1, §19.11): `POST /hooks/<route>` → verify → filter → enqueue → 202.
 
-Order: route (404) → body cap (413) → challenge (`challenge: true` routes only, 200) →
-secret present (403, fail closed) → provider signature on the raw body, current then `#prev`
-within the rotation grace (401) → JSON content type / object (415 / 400) → event + filters
-(200 ignored) → duplicate delivery id (200 duplicate) → rate limit (429) → enqueue → 202, or
+Order: route (404) → IP allowlist (`allowed_cidrs`, 403) → body cap (413) → challenge
+(`challenge: true` routes only, 200) → secret present (403, fail closed) → provider signature
+on the raw body, current then `#prev` within the rotation grace (401) → JSON content type /
+object (415 / 400) → `script:` + `transform` hooks (200 ignored on drop, 502 on failure) →
+event + filters (200 ignored) → duplicate delivery id (200 duplicate) → rate limit (429) → enqueue → 202, or
 for `deliver_only` routes deliver now → 200 / 502. Every decision is audited without the body.
 Signature schemes live in `webhook_verify`.
 """
@@ -21,7 +22,8 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy.exc import IntegrityError
 
 from auoreo.automation.deliveries import DeliveryWorker, outbox_of
-from auoreo.automation.templating import dotted, first_failing, render, untrusted
+from auoreo.automation.templating import dotted, first_failing, raw_text, render, untrusted
+from auoreo.automation.webhook_extras import IGNORE, ScriptError, client_ip, ip_in, transform
 from auoreo.automation.webhook_verify import (
     DELIVERY_HEADER,
     DELIVERY_HEADERS,
@@ -152,6 +154,12 @@ class WebhookIngress:
         manifest = self.route(route, provider)
         if manifest is None:
             return await self._audit(route, HookResult(404, {"detail": "not found"}, "unknown route"), {})
+        if manifest.allowed_cidrs:
+            trusted = self.services.settings.teams2.webhook_trusted_proxies
+            ip = client_ip(request.client.host if request.client else None, request.headers, trusted)
+            if not ip_in(ip, manifest.allowed_cidrs):
+                res = HookResult(403, {"detail": "forbidden"}, "ip not allowed")
+                return await self._audit(route, res, {"ip": ip[:64]})
         try:
             body = await read_capped(request, manifest.max_body_bytes)
         except BodyTooLarge:
@@ -210,6 +218,18 @@ class WebhookIngress:
         self, manifest: WebhookManifest, headers: dict[str, str], body: bytes, payload: dict[str, Any]
     ) -> HookResult:
         route = manifest.name
+        try:
+            changed = await transform(self.services, manifest, payload)
+        except ScriptError as exc:
+            log.warning("webhook route %s: transform failed: %s", route, exc)
+            return await self._audit(
+                route, HookResult(502, {"detail": "transform failed"}, str(exc)[:300]), {}
+            )
+        if changed is IGNORE:
+            return await self._audit(
+                route, HookResult(200, {"status": "ignored"}, "dropped by transform"), {}
+            )
+        payload = changed
         event = event_name(manifest, headers, payload)
         action = payload.get("action")
         delivery_id = delivery_id_of(manifest, headers, body)
@@ -217,9 +237,9 @@ class WebhookIngress:
         names = {event, f"{event}.{action}"} if isinstance(action, str) else {event}
         if manifest.events and not names & set(manifest.events):
             return await self._audit(route, HookResult(200, {"status": "ignored"}, f"event {event!r}"), info)
-        failing = first_failing(manifest.filters, payload)
+        failing = first_failing(manifest.filters, payload, self.services.settings.home / "webhooks")
         if failing is not None:
-            res = HookResult(200, {"status": "ignored"}, f"filter {failing.field}")
+            res = HookResult(200, {"status": "ignored"}, f"filter {failing.label}")
             return await self._audit(route, res, info)
         outbox = outbox_of(self.services)
         dup = HookResult(200, {"status": "duplicate"}, "duplicate delivery id")
@@ -228,9 +248,9 @@ class WebhookIngress:
         if not self._rate_ok(route, manifest.rate_limit_per_minute):
             res = HookResult(429, {"detail": "rate limit exceeded"}, "rate limit")
             return await self._audit(route, res, info)
-        built = build_payload(manifest, payload, event, delivery_id)
+        built = build_payload(manifest, payload, event, delivery_id, raw_text(body))
         if manifest.deliver_only:
-            return await self._deliver_now(manifest, payload, built, info)
+            return await self._deliver_now(manifest, payload, built, info | {"raw": raw_text(body)})
         row = await outbox.enqueue(
             "webhook", route, delivery_id, built, manifest.deliver[0] if manifest.deliver else "log"
         )
@@ -245,7 +265,13 @@ class WebhookIngress:
         """`deliver_only`: the row is born `delivering` (the worker never claims it, so no agent
         runs); the rendered template goes to the targets in order. 200 delivered / 502."""
         route, svc = manifest.name, self.services
-        text = render(manifest.prompt, {"event": payload, "route": route, "delivery_id": info["delivery_id"]})
+        values = {
+            "event": payload,
+            "route": route,
+            "delivery_id": info["delivery_id"],
+            "__raw__": info.pop("raw"),
+        }
+        text = render(manifest.prompt, values)
         row = DeliveryRow(
             kind="webhook",
             source=route,
@@ -294,10 +320,11 @@ def _json_object(body: bytes) -> dict[str, Any] | None:
 
 
 def build_payload(
-    manifest: WebhookManifest, payload: dict[str, Any], event: str, delivery_id: str
+    manifest: WebhookManifest, payload: dict[str, Any], event: str, delivery_id: str, raw: str = ""
 ) -> dict[str, Any]:
     """What the worker needs: the rendered, envelope-wrapped prompt and where to deliver."""
-    rendered = render(manifest.prompt, {"event": payload, "route": manifest.name, "delivery_id": delivery_id})
+    values = {"event": payload, "route": manifest.name, "delivery_id": delivery_id, "__raw__": raw}
+    rendered = render(manifest.prompt, values)
     return {
         "prompt": untrusted(f"webhook:{manifest.name}", rendered),
         "agent": manifest.agent,

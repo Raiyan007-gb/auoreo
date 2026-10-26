@@ -9,12 +9,17 @@ description: Run ruff on edited Python files.
 event: PostToolUse             # PreToolUse | PostToolUse | PermissionRequest | UserPromptSubmit
                                # | SessionStart | SessionEnd | PreCompact | PostCompact | Stop
                                # | SubagentStop (a delegated child run ended; matcher = child agent)
+                               # | transform (matcher = payload kind, e.g. webhook:<route>)
 matcher: "edit|write"          # fnmatch over the tool name (or agent name for session events)
 command: ["./scripts/lint-hook.sh"]   # argv, no shell; cwd = session cwd; scrubbed env
 timeout_ms: 5000
 on_error: warn                 # warn | block (a crashing/timeout hook blocks the action)
 enabled: true
 ```
+
+`transform` hooks get `{kind, payload}` and fold it in name order: reply `{"payload": {...}}`
+to replace it for the next hook, `{"drop": true}` to drop it (`on_error: block` also drops),
+`{}` to keep it. Webhook ingress runs them after a route's `script:`.
 
 Replies: tool events `{"decision": "allow"|"deny"|"modify", "message"?: str, "input"?: {...}}`
 (`modify` replaces the tool arguments before execution); `Stop` events

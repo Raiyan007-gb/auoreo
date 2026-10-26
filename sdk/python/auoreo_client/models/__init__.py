@@ -46,14 +46,18 @@ from .command_info import CommandInfo
 from .command_info_handler import CommandInfoHandler
 from .compact_request import CompactRequest
 from .compaction_out import CompactionOut
+from .cron_create import CronCreate
 from .cron_job_info import CronJobInfo
 from .cron_paused import CronPaused
+from .cron_plan import CronPlan
 from .cron_run_accepted import CronRunAccepted
 from .cron_run_info import CronRunInfo
 from .curator_contradiction import CuratorContradiction
 from .curator_merge import CuratorMerge
 from .curator_report import CuratorReport
 from .curator_report_text import CuratorReportText
+from .delegation_pause import DelegationPause
+from .delegation_state import DelegationState
 from .delivery_info import DeliveryInfo
 from .delivery_info_result import DeliveryInfoResult
 from .delivery_replay import DeliveryReplay
@@ -180,6 +184,8 @@ from .shared_session import SharedSession
 from .shared_session_messages_item import SharedSessionMessagesItem
 from .shares_revoked import SharesRevoked
 from .skill_sources import SkillSources
+from .subagent_info import SubagentInfo
+from .subagent_info_usage import SubagentInfoUsage
 from .suggestion_accepted import SuggestionAccepted
 from .suggestion_create import SuggestionCreate
 from .suggestion_create_action import SuggestionCreateAction
@@ -249,14 +255,18 @@ __all__ = (
     "CommandInfoHandler",
     "CompactionOut",
     "CompactRequest",
+    "CronCreate",
     "CronJobInfo",
     "CronPaused",
+    "CronPlan",
     "CronRunAccepted",
     "CronRunInfo",
     "CuratorContradiction",
     "CuratorMerge",
     "CuratorReport",
     "CuratorReportText",
+    "DelegationPause",
+    "DelegationState",
     "DeliveryInfo",
     "DeliveryInfoResult",
     "DeliveryReplay",
@@ -379,6 +389,8 @@ __all__ = (
     "SharedSessionMessagesItem",
     "SharesRevoked",
     "SkillSources",
+    "SubagentInfo",
+    "SubagentInfoUsage",
     "SuggestionAccepted",
     "SuggestionCreate",
     "SuggestionCreateAction",

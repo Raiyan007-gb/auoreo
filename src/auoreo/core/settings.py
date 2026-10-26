@@ -38,6 +38,7 @@ from auoreo.core.settings_models import (
 )
 from auoreo.core.settings_obs import LoggingSettings  # --- G5c
 from auoreo.core.settings_security import ApprovalSettings, SecuritySettings
+from auoreo.core.settings_teams2 import Teams2Settings  # --- H2
 from auoreo.core.settings_tools import ToolSettings  # --- G4b
 from auoreo.policy.config import BanditSettings
 from auoreo.remote.config import BridgePeer, RemoteEnvironment  # --- W2-B
@@ -404,6 +405,7 @@ class Settings(BaseSettings):
     tool_engine: ToolEngineSettings = Field(default_factory=ToolEngineSettings)  # --- G4a
     cli: CliSettings = Field(default_factory=CliSettings)  # --- G5a
     g6: G6Settings = Field(default_factory=G6Settings)  # --- G6
+    teams2: Teams2Settings = Field(default_factory=Teams2Settings)  # --- H2
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

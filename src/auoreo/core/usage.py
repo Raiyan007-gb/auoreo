@@ -119,8 +119,25 @@ class UsageLedger:
             )
             return float((await s.execute(q)).scalar_one() or 0.0)
 
+    async def root_of(self, session_id: str, max_depth: int = 16) -> str:
+        """The top-level ancestor of `session_id` via `sessions.parent_id` (itself if none)."""
+        current = session_id
+        async with self.db.session() as s:
+            for _ in range(max_depth):
+                row = await s.get(SessionRow, current)
+                if row is None or not row.parent_id:
+                    break
+                current = row.parent_id
+        return current
+
+    async def tree_cost(self, session_id: str) -> float:
+        """Spend of `session_id`'s root and every descendant (spec §25.15: child spend counts
+        toward the parent's `max_cost_usd`)."""
+        tree = await self.session_tree(await self.root_of(session_id))
+        return float((await self.totals(tree))["cost_usd"])
+
     async def over_budget(self, session_id: str, cap: float | None) -> bool:
-        return cap is not None and await self.session_cost(session_id) >= cap
+        return cap is not None and await self.tree_cost(session_id) >= cap
 
     async def summary(self, days: int = 7) -> dict[str, Any]:
         since = utcnow() - timedelta(days=max(days, 0))

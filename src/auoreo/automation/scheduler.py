@@ -283,12 +283,13 @@ class JobScheduler:
         sched = self.schedule_of(m.name)
         tz = sched.tz if sched else UTC
         prompt = render(m.prompt, {"now": datetime.now(tz).isoformat(timespec="minutes"), "job": m.name})
+        timeout_s = m.timeout_s or self.s.settings.teams2.job_timeout_s  # §16.7 hard interrupt
         payload = {
             "prompt": prompt,
             "agent": m.agent,
             "workflow": m.workflow,
             "deliver": list(m.deliver),
-            "timeout_s": m.timeout_s,
+            "timeout_s": timeout_s,
             "job": m.name,
             "run_id": run_id,
         }
@@ -300,7 +301,7 @@ class JobScheduler:
             return None
         claimed = await outbox.claim(row.id)
         if claimed is None:  # the background worker took it first
-            return await outbox.wait_terminal(row.id, m.timeout_s + 60, poll=0.5)
+            return await outbox.wait_terminal(row.id, timeout_s + 60, poll=0.5)
         worker = self.s.ext.get("deliveries")
         if not isinstance(worker, DeliveryWorker):
             worker = DeliveryWorker(self.s)

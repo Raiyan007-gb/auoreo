@@ -30,9 +30,9 @@ from auoreo.harness.manifests import (
     SkillManifest,
     ToolManifest,
     VariantsFile,
-    WebhookManifest,
     WorkflowManifest,
 )
+from auoreo.harness.manifests_webhook import WebhookManifest, filter_leaves, strip_raw
 from auoreo.tools.context import ToolContext, ToolResult
 
 Handler = Callable[[dict[str, Any], ToolContext], Awaitable["str | ToolResult"]]
@@ -422,8 +422,8 @@ def load_webhook(c: Candidate) -> Loaded:
             "secret must be a 'secret:<name>' reference, never a value",
             frontmatter.locate_key(text, "secret"),
         )
-    check_template(manifest.prompt, c.path, allowed={"event", "route", "delivery_id"})
-    for f in manifest.filters:
+    check_template(strip_raw(manifest.prompt), c.path, allowed={"event", "route", "delivery_id"})
+    for f in filter_leaves(manifest.filters):
         if f.regex is not None:
             try:
                 re.compile(f.regex)

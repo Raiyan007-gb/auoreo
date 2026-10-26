@@ -1,6 +1,6 @@
 name: delegate_task
 toolset: teams
-description: 'Run a self-contained task in a subagent (goal), or several at once (tasks[], at most 3 run concurrently); returns <task-notification>s.'
+description: 'Run a self-contained task in a subagent (goal), or several at once (tasks[], at most 3 run concurrently); returns <task-notification>s. action=list|steer|stop manages your subagents.'
 parameters:
   type: object
   properties:
@@ -17,6 +17,29 @@ parameters:
     model: {type: string, description: Optional model alias/group override for the child.}
     output_schema: {type: object, description: JSON Schema the child's final answer must satisfy.}
     role: {type: string, enum: [worker, supervisor], description: supervisor needs teams_orchestrator_enabled.}
+    action:
+      type: string
+      enum: [spawn, list, steer, stop]
+      default: spawn
+      description: >-
+        spawn (default) starts subagents; list shows this session's subagents; steer sends
+        message to a running one (arrives at its next step); stop interrupts one. list/steer/stop
+        bypass the pause switch and depth limit.
+    subagent_id: {type: string, minLength: 1, maxLength: 64, description: "steer/stop: task id (or name) of your subagent."}
+    message: {type: string, minLength: 1, maxLength: 20000, description: "steer: what to tell the running subagent."}
+    mode:
+      type: string
+      enum: [spawn, fork]
+      default: spawn
+      description: spawn = fresh context; fork = the child starts with a summary of this conversation.
+    budget:
+      type: object
+      description: Per-child limits; exhaustion forces one summarise-now reply, then TOOL_BUDGET_EXCEEDED.
+      properties:
+        max_tokens: {type: integer, minimum: 1}
+        max_usd: {type: number, exclusiveMinimum: 0}
+        timeout_ms: {type: integer, minimum: 1000, maximum: 86400000}
+      additionalProperties: false
     tasks:
       type: array
       minItems: 1
@@ -33,6 +56,14 @@ parameters:
           name: {type: string, pattern: "^[a-z0-9_]{1,64}$"}
           model: {type: string}
           output_schema: {type: object}
+          mode: {type: string, enum: [spawn, fork]}
+          budget:
+            type: object
+            properties:
+              max_tokens: {type: integer, minimum: 1}
+              max_usd: {type: number, exclusiveMinimum: 0}
+              timeout_ms: {type: integer, minimum: 1000, maximum: 86400000}
+            additionalProperties: false
         required: [goal]
         additionalProperties: false
   additionalProperties: false

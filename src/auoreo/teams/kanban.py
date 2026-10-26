@@ -3,12 +3,17 @@ reclaim and auto-block after repeated failures.
 
 Claim settles at most once: one `UPDATE … WHERE id=(first ready) AND status='ready'`
 statement and `rowcount == 1` decides the winner (SQLite serializes writers).
+
+Links (`blocks|relates|parent|duplicates` → another task) and attachments (a path or URL with
+a note) are stored as structured comments (author `__link__` / `__attach__`, JSON text), so
+they need no extra tables; `comments()` hides them and `show()` returns them separately.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -26,6 +31,8 @@ FAILURE_LIMIT = 2
 STALE_AFTER_S = 300
 RECLAIM_EVERY_S = 60
 STATUSES = ("ready", "claimed", "blocked", "done")
+LINK_KINDS = ("blocks", "relates", "parent", "duplicates")
+LINK_AUTHOR, ATTACH_AUTHOR = "__link__", "__attach__"
 
 
 class KanbanError(ValueError):
@@ -144,7 +151,7 @@ class KanbanStore:
         row = await self._transition(task_id, worker, allowed=("claimed", "ready"), status="done")
         if summary:
             await self.comment(task_id, worker or row.worker or "worker", summary)
-        await self._event("task_done", row)
+        await self._event("done", row)
         return row
 
     async def block(self, task_id: int, reason: str, worker: str | None = None) -> KanbanTaskRow:
@@ -163,7 +170,7 @@ class KanbanStore:
         )
         await self.comment(task_id, worker or current.worker or "worker", f"blocked: {reason}")
         if status == "blocked":
-            await self._event("task_blocked", row)
+            await self._event("blocked", row)
         return row
 
     async def comment(self, task_id: int, author: str, text: str) -> KanbanCommentRow:
@@ -174,14 +181,74 @@ class KanbanStore:
             await s.commit()
         return row
 
-    async def comments(self, task_id: int) -> list[KanbanCommentRow]:
+    async def comments(self, task_id: int, *, structured: bool = False) -> list[KanbanCommentRow]:
+        """Plain comments; `structured=True` returns only the link/attachment records."""
         async with self.s.db.session() as s:
             q = (
                 select(KanbanCommentRow)
                 .where(KanbanCommentRow.task_id == task_id)
                 .order_by(KanbanCommentRow.id)
             )
-            return list((await s.execute(q)).scalars())
+            rows = list((await s.execute(q)).scalars())
+        special = (LINK_AUTHOR, ATTACH_AUTHOR)
+        return [r for r in rows if (r.author in special) == structured]
+
+    async def link(self, task_id: int, kind: str, other_id: int, by: str = "worker") -> dict[str, Any]:
+        if kind not in LINK_KINDS:
+            raise KanbanError(f"unknown link kind '{kind}' (known: {', '.join(LINK_KINDS)})")
+        if task_id == other_id:
+            raise KanbanError("a task cannot link to itself")
+        await self.get(other_id)
+        record = {"kind": kind, "task_id": other_id, "by": by}
+        await self.comment(task_id, LINK_AUTHOR, json.dumps(record))
+        await self.s.emit("server", "kanban.linked", {"id": task_id, **record})
+        return record
+
+    async def attach(self, task_id: int, ref: str, note: str = "", by: str = "worker") -> dict[str, Any]:
+        """Attach a workspace path or URL (stored as a reference; content is not copied)."""
+        ref = ref.strip()
+        if not ref or len(ref) > 2000:
+            raise KanbanError("attachment reference must be 1..2000 characters")
+        record = {"ref": ref, "note": note[:2000], "by": by}
+        await self.comment(task_id, ATTACH_AUTHOR, json.dumps(record))
+        return record
+
+    async def unblock(self, task_id: int, by: str = "orchestrator", note: str = "") -> KanbanTaskRow:
+        """Orchestrator: a blocked task goes back to `ready` with its failure count reset."""
+        row = await self._transition(
+            task_id,
+            None,
+            allowed=("blocked",),
+            status="ready",
+            failures=0,
+            worker=None,
+            session_id=None,
+            heartbeat_at=None,
+        )
+        await self.comment(task_id, by, f"unblocked{': ' + note if note else ''}")
+        await self._event("unblocked", row)
+        return row
+
+    async def show(self, task_id: int) -> dict[str, Any]:
+        """The task with its comments, links (both directions) and attachments."""
+        row = await self.get(task_id)
+        records = await self.comments(task_id, structured=True)
+        links = [json.loads(r.text) for r in records if r.author == LINK_AUTHOR]
+        attachments = [json.loads(r.text) for r in records if r.author == ATTACH_AUTHOR]
+        async with self.s.db.session() as s:
+            q = select(KanbanCommentRow).where(
+                KanbanCommentRow.author == LINK_AUTHOR, KanbanCommentRow.task_id != task_id
+            )
+            incoming = [
+                {"kind": f"{rec['kind']}<-", "task_id": r.task_id}
+                for r in (await s.execute(q)).scalars()
+                if (rec := json.loads(r.text)).get("task_id") == task_id
+            ]
+        notes = [
+            {"author": c.author, "text": c.text, "created_at": c.created_at}
+            for c in await self.comments(task_id)
+        ]
+        return {**task_dict(row), "comments": notes, "links": links + incoming, "attachments": attachments}
 
     async def list_tasks(
         self, board: str | None = None, status: str | None = None, limit: int = 500

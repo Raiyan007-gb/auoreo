@@ -13,9 +13,13 @@ prompt: |
 deliver: [log]                 # backends/delivery/<name>, tried in order
 enabled: true
 catch_up: true                 # fire once for a run missed while the server was down
-timeout_s: 900
+timeout_s: 900                 # hard interrupt per run (default: teams2.job_timeout_s = 180)
 ```
 
 APScheduler only fires the trigger; AUOREO records `job_runs`, runs the agent
 non-interactively (approval-needing tools are denied), and writes a `deliveries` row.
 `auoreo cron list|run|pause|resume` and `GET /api/cron` show state.
+
+Agents create reminders and jobs with the `cronjob` tool (approval required) and clients with
+`POST /api/cron` (`dry_run: true` previews the next 5 fires); both write
+`<home>/jobs/<name>.yaml`, and only those files can be removed again through them.

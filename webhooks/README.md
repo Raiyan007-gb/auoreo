@@ -22,6 +22,23 @@ challenge: false              # true: answer GET ?challenge=… and Slack url_ve
 deliver_only: false           # true: send the rendered prompt to `deliver` now, no agent run
 ```
 
+### Filters, raw body, transforms, IP allowlist
+
+```yaml
+filters:                      # every top-level filter must pass
+  - any:                      # all: [...] | any: [...] | not: {...} (nestable)
+      - {field: action, in: [opened, reopened]}
+      - {field: sender.login, in_file: allow/maintainers.txt}  # <home>/webhooks/…, one per line
+  - not: {field: pull_request.draft, equals: "true"}
+prompt: "raw payload: {{__raw__}}"   # the raw body, capped at 4000 characters
+script: normalize.py          # <home>/scripts/normalize.py: JSON in → JSON object out (null = ignore)
+script_timeout_s: 30          # default teams2.webhook_script_timeout_s
+allowed_cidrs: ["140.82.112.0/20"]   # optional; X-Forwarded-For only from teams2.webhook_trusted_proxies
+```
+
+After the signature check the payload goes through `script:` (no shell, scrubbed env, killed on
+timeout → 502) and then `transform` hooks matching `webhook:<route>`, before events/filters.
+
 ## Signatures
 
 | provider | sender attaches | replay guard |

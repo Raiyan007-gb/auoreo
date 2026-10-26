@@ -1,0 +1,16 @@
+name: resume_agent
+toolset: teams
+description: 'Give one of your finished subagents a new prompt: its session wakes with its history and runs again; returns a <task-notification>.'
+parameters:
+  type: object
+  properties:
+    task_id: {type: string, minLength: 1, maxLength: 64, description: Task id (or name) of your subagent.}
+    prompt: {type: string, minLength: 1, maxLength: 20000, description: The follow-up work; self-contained.}
+    background: {type: boolean, default: false, description: Return at once; the result arrives as a task-notification.}
+  required: [task_id, prompt]
+  additionalProperties: false
+permission: delegate
+default_action: ask
+interactive_only: false
+timeout_ms: 3600000
+search_hint: resume continue subagent child follow up task

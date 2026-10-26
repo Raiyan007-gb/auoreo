@@ -1,0 +1,16 @@
+name: kanban_attach
+description: Attach a workspace path or URL (with a short note) to a kanban task; the reference is stored, not the content.
+parameters:
+  type: object
+  properties:
+    task_id: {type: integer, minimum: 1}
+    ref: {type: string, minLength: 1, maxLength: 2000, description: Workspace-relative path or https URL.}
+    note: {type: string, maxLength: 2000}
+  required: [task_id, ref]
+  additionalProperties: false
+toolset: kanban
+exposure: deferred
+search_hint: kanban board task attach file artifact url
+default_action: allow
+interactive_only: false
+timeout_ms: 30000

@@ -5,6 +5,9 @@ allowlist gets a 6-digit pairing code (issued and stored by the host); once the 
 `auoreo plugin pair telegram <code>` the chat is allowlisted and its messages become a session.
 Outbound: `sendMessage`, chunked at 4000 characters, plain text (no `parse_mode`), with
 `message_thread_id` when replying inside a forum topic.
+Approvals: `/approve [id|all]`, `/deny [id|all] [reason]` and `/pending` from a paired chat are
+forwarded like any message; the host answers them (owner check, FIFO or by request id) in
+`auoreo.plugins.chat_approvals` instead of starting a run.
 """
 
 from __future__ import annotations

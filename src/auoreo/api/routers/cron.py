@@ -1,13 +1,15 @@
-"""Scheduled jobs: list, run now, pause/resume, run history."""
+"""Scheduled jobs: list, create (+ dry run), run now, pause/resume, run history."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
 from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
+from auoreo.automation.cron_store import CronStoreError, create
 from auoreo.automation.scheduler import JobScheduler, scheduler_of
 from auoreo.automation.views import job_infos, run_info
 from auoreo.schema.chat import CronJobInfo, CronPaused, CronRunAccepted, CronRunInfo
+from auoreo.schema.teams_h2 import CronCreate, CronPlan
 
 router = APIRouter(prefix="/api/cron", tags=["cron"], dependencies=AUTH)
 
@@ -22,6 +24,24 @@ def _job(svc: ServicesDep, name: str) -> JobScheduler:
 @router.get("", response_model=list[CronJobInfo])
 async def list_jobs(svc: ServicesDep) -> list[CronJobInfo]:
     return await job_infos(scheduler_of(svc))
+
+
+@router.post("", dependencies=[IDEMPOTENT], response_model=CronPlan, status_code=status.HTTP_201_CREATED)
+async def create_job(body: CronCreate, svc: ServicesDep) -> CronPlan:
+    """Create `<home>/jobs/<name>.yaml` (a reminder for `in 20m`); `dry_run` only previews the
+    next 5 fires. 409 when the name is taken, 422 for an invalid schedule or field."""
+    data = body.model_dump(exclude={"dry_run"}, exclude_none=True)
+    data.setdefault("description", body.prompt.strip().splitlines()[0][:120] or body.name)
+    try:
+        p = await create(svc, data, dry_run=body.dry_run, actor="api")
+    except CronStoreError as exc:
+        code = (
+            status.HTTP_409_CONFLICT
+            if "already exists" in str(exc)
+            else status.HTTP_422_UNPROCESSABLE_CONTENT
+        )
+        raise HTTPException(code, str(exc)) from exc
+    return CronPlan(**p.as_dict(), dry_run=body.dry_run, created=not body.dry_run)
 
 
 @router.post(

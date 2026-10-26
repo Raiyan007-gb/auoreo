@@ -79,7 +79,7 @@ def webhook_infos(services: Services) -> list[WebhookRouteInfo]:
                 description=m.description,
                 provider=m.provider,
                 events=list(m.events),
-                filters=[f.model_dump(exclude_none=True) for f in m.filters],
+                filters=[f.model_dump(exclude_none=True, by_alias=True) for f in m.filters],
                 agent=m.agent,
                 workflow=m.workflow,
                 deliver=list(m.deliver),
