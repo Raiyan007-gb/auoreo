@@ -8,7 +8,8 @@ task-notification. With `worktree: true` the child works in an isolated git work
 tree. `{{worktree}}` in the body is that path (or the cwd without a worktree). Untracked
 files are not copied. Worktrees stay until removed (`git worktree remove <path>`).
 
-Without the teams extension (or when spawning is refused) the body is expanded inline.
+Without the teams extension, in a non-interactive run, or when spawning is refused, the body
+is expanded inline.
 """
 
 from __future__ import annotations
@@ -112,7 +113,9 @@ async def run_subtask(inv: Invocation) -> Expanded:
     text = text.strip() or inv.text
     agent = m.agent or inv.agent
     teams = s.ext.get("teams")
-    if teams is None:
+    # A non-interactive run (CLI `--print`, jobs, webhooks) needs the result in this turn, so
+    # the body runs inline there (still in the worktree) instead of as a background child.
+    if teams is None or not rt.interactive:
         return Expanded(text, agent)
     try:
         member = await teams.spawn(
