@@ -35,11 +35,15 @@ LSP_SERVERS: dict[str, list[list[str]]] = {
     ],
     "typescript": [["typescript-language-server", "--stdio"]],
     "javascript": [["typescript-language-server", "--stdio"]],
+    "rust": [["rust-analyzer"], ["rustup", "run", "stable", "rust-analyzer"]],
+    "go": [["gopls"]],
 }
 REMEDY: dict[str, str] = {
     "python": "install a Python language server: `uv tool install ty` (or `uv tool install basedpyright`)",
     "typescript": "install it: `npm i -g typescript-language-server typescript`",
     "javascript": "install it: `npm i -g typescript-language-server typescript`",
+    "rust": "install rust-analyzer: `rustup component add rust-analyzer` (or a release binary on PATH)",
+    "go": "install gopls: `go install golang.org/x/tools/gopls@latest` (and put $GOPATH/bin on PATH)",
 }
 EXT_LANG: dict[str, tuple[str, str]] = {  # ext → (server language, LSP languageId)
     ".py": ("python", "python"),
@@ -52,6 +56,8 @@ EXT_LANG: dict[str, tuple[str, str]] = {  # ext → (server language, LSP langua
     ".mjs": ("javascript", "javascript"),
     ".cjs": ("javascript", "javascript"),
     ".jsx": ("javascript", "javascriptreact"),
+    ".rs": ("rust", "rust"),
+    ".go": ("go", "go"),
 }
 _PY_MARKERS = ["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "Pipfile", "pyrightconfig.json"]
 _TS_LOCKS = ["package-lock.json", "bun.lockb", "bun.lock", "pnpm-lock.yaml", "yarn.lock"]
@@ -59,6 +65,8 @@ ROOT_MARKERS: dict[str, tuple[list[str], list[str]]] = {  # language → (includ
     "python": (_PY_MARKERS, []),
     "typescript": (_TS_LOCKS, ["deno.json", "deno.jsonc"]),
     "javascript": (_TS_LOCKS, ["deno.json", "deno.jsonc"]),
+    "rust": (["Cargo.toml", "rust-project.json"], []),
+    "go": (["go.work", "go.mod"], []),
 }
 
 

@@ -42,6 +42,7 @@ from auoreo.schema.ws import (
     ClientFrame,
     WsAck,
     WsConnected,
+    WsControlError,
     WsControlRequest,
     WsControlResponse,
     WsError,
@@ -363,8 +364,14 @@ class WsConnection:
         rid = obj.get("request_id") if isinstance(obj.get("request_id"), str) else None
         kind = obj.get("type")
         handler = self._frames.get(kind) if isinstance(kind, str) else None
-        if handler is None:
-            await self.error("unknown_type", f"unknown frame type {kind!r}", rid)
+        if handler is None:  # spec §9.3: unknown `type` → control_response{subtype:error}
+            ftype = kind[:64] if isinstance(kind, str) else None
+            msg = f"unknown frame type {kind!r}"
+            await self.send(
+                WsControlError(
+                    type="control_response", subtype="error", error=msg, request_id=rid, frame_type=ftype
+                )
+            )
             return
         try:
             frame = _CLIENT_FRAME.validate_python(obj)

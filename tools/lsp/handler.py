@@ -53,6 +53,8 @@ _PROJECT_HINTS = {
     "setup.py": "python",
     "tsconfig.json": "typescript",
     "package.json": "javascript",
+    "Cargo.toml": "rust",
+    "go.mod": "go",
 }
 
 

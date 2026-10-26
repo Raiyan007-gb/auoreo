@@ -236,7 +236,8 @@ async def test_unknown_invalid_and_binary_frames_get_errors(url: str, services: 
         await hello(ws)
         await ws.send(json.dumps({"type": "launch_missiles", "request_id": "x"}))
         err = await recv(ws)
-        assert err["type"] == "error" and err["subtype"] == "unknown_type" and err["request_id"] == "x"
+        assert err["type"] == "control_response" and err["subtype"] == "error" and err["request_id"] == "x"
+        assert err["code"] == "unknown_type" and err["frame_type"] == "launch_missiles"
         await ws.send("{not json")
         assert (await recv(ws))["subtype"] == "invalid_frame"
         await ws.send(
@@ -249,7 +250,7 @@ async def test_unknown_invalid_and_binary_frames_get_errors(url: str, services: 
         # `\n`-joined batches are tolerated: two frames, two answers
         batch = json.dumps({"type": "nope1"}) + "\n" + json.dumps({"type": "nope2"})
         await ws.send(batch)
-        msgs = [(await recv(ws))["message"] for _ in range(2)]
+        msgs = [(await recv(ws))["error"] for _ in range(2)]
         assert "nope1" in msgs[0] and "nope2" in msgs[1]
     assert services.connections.binary_dropped == 1
 

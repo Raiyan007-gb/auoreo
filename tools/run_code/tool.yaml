@@ -1,0 +1,26 @@
+name: run_code
+toolset: coding
+description: >-
+  Run a short Python, JavaScript (node) or bash snippet in the sandbox backend (read-only
+  filesystem, no network by default) and return its stdout/stderr and exit code. For quick
+  calculations, data checks and API experiments; use bash or exec_command for project
+  commands. The snippet is passed on stdin; output is capped.
+parameters:
+  type: object
+  properties:
+    language: {type: string, enum: [python, javascript, bash]}
+    code: {type: string, minLength: 1, maxLength: 100000}
+    timeout_s: {type: integer, minimum: 1, maximum: 600, description: "Seconds before the snippet is killed (default from settings: 30)."}
+  required: [language, code]
+  additionalProperties: false
+permission: run_code
+pattern_arg: language
+default_action: ask
+is_destructive: false
+interrupt: cancel
+exposure: deferred
+timeout_ms: 610000
+search_hint: execute run code snippet python javascript node bash sandbox calculate evaluate
+max_result_size_chars: 64000
+net: none
+sandbox_mode: read-only

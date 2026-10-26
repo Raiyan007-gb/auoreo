@@ -19,7 +19,9 @@ from pathlib import Path
 from lark import Lark, Token, Tree
 from lark.exceptions import LarkError
 
+from auoreo.core.settings_h5 import h5_of
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
+from auoreo.tools.formatters import FormatReport, format_files
 from auoreo.tools.lsp_diagnostics import diagnostics_for
 from auoreo.tools.writeguard import check_write
 
@@ -240,7 +242,39 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
         path.write_text(content, encoding="utf-8")
         ctx.state.read_files[str(path)] = path.stat().st_mtime
     text = "applied:\n" + "\n".join(summary) + note
-    diags = await diagnostics_for(ctx, [p for p, c in writes.items() if c is not None])
+    touched = [p for p, c in writes.items() if c is not None]
+    fmt = await _format(ctx, touched)
+    if fmt.formatted:
+        text += "\n\nformatted: " + ", ".join(_rel(ctx, p) for p in fmt.formatted)
+    if fmt.notes:
+        text += "\n(format step: " + "; ".join(fmt.notes) + ")"
+    diags = await diagnostics_for(ctx, touched)
     if diags:
         text += "\n\nLSP diagnostics after the patch:\n" + "\n".join(diags)
-    return ToolResult(text, meta={"files": len(writes), "diagnostics": len(diags)})
+    meta = {
+        "files": len(writes),
+        "diagnostics": len(diags),
+        "formatted": [_rel(ctx, p) for p in fmt.formatted],
+    }
+    return ToolResult(text, meta=meta)
+
+
+def _rel(ctx: ToolContext, path: Path) -> str:
+    cwd = ctx.cwd.resolve()
+    return str(path.relative_to(cwd)) if path.is_relative_to(cwd) else str(path)
+
+
+async def _format(ctx: ToolContext, paths: list[Path]) -> FormatReport:
+    """Format step (fail-open, opt-out `h5.apply_patch.format`); refreshes read stamps."""
+    cfg = h5_of(ctx).apply_patch
+    if not cfg.format or not paths:
+        return FormatReport()
+    from auoreo.core.secrets import child_env
+
+    try:
+        report = await format_files(paths, ctx.env or child_env([], None), cfg.format_timeout_s)
+    except Exception as exc:  # never fail an applied patch on the formatter
+        return FormatReport(notes=[f"skipped ({type(exc).__name__}: {exc})"])
+    for path in report.formatted:
+        ctx.state.read_files[str(path)] = path.stat().st_mtime
+    return report

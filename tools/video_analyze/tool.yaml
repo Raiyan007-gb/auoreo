@@ -1,0 +1,23 @@
+name: video_analyze
+toolset: vision
+description: >-
+  Answer a question about a local video file (mp4, webm, mov, avi, mkv, mpeg): evenly spaced
+  frames are sampled with ffmpeg and sent, with their timestamps, to a vision model in one
+  call. Needs ffmpeg on PATH. Files over 50 MB are refused.
+parameters:
+  type: object
+  properties:
+    path: {type: string, description: Local video path.}
+    question: {type: string, minLength: 1, maxLength: 4000}
+    frames: {type: integer, minimum: 1, maximum: 32, description: "Frames to sample (default 8, capped by settings)."}
+  required: [path, question]
+  additionalProperties: false
+permission: read
+pattern_arg: path
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+exposure: deferred
+timeout_ms: 200000
+search_hint: video clip movie frames analyze describe watch mp4 vision

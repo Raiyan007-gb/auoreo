@@ -100,7 +100,9 @@ async def _start(
 
 @app.command("start")
 def start(
-    language: Annotated[str, typer.Argument(help="python | typescript | javascript | <lsp_servers key>")],
+    language: Annotated[
+        str, typer.Argument(help="python | typescript | javascript | rust | go | <lsp_servers key>")
+    ],
     root: Annotated[
         Path | None, typer.Option("--root", help="Workspace root (default: nearest marker).")
     ] = None,

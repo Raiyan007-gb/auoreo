@@ -26,6 +26,7 @@ from auoreo.core.settings_compaction import CompactionSettings  # --- G2b
 from auoreo.core.settings_engine import ToolEngineSettings  # --- G4a
 from auoreo.core.settings_g6 import G6Settings  # --- G6
 from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
+from auoreo.core.settings_h5 import H5Settings  # --- H5
 from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # --- G1a
 from auoreo.core.settings_models import (
     LiveKitSettings,
@@ -406,6 +407,7 @@ class Settings(BaseSettings):
     cli: CliSettings = Field(default_factory=CliSettings)  # --- G5a
     g6: G6Settings = Field(default_factory=G6Settings)  # --- G6
     cli2: Cli2Settings = Field(default_factory=Cli2Settings)  # --- H4
+    h5: H5Settings = Field(default_factory=H5Settings)  # --- H5
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

@@ -21,6 +21,8 @@ parameters:
     direction: {type: string, enum: [up, down, left, right], description: "op=scroll direction (default down)."}
     amount: {type: integer, minimum: 1, maximum: 50, description: "Scroll steps, or seconds for op=wait (max 10)."}
     delivery_mode: {type: string, enum: [background, foreground], default: background}
+    bring_to_front: {type: boolean, default: false, description: "Raise `app` to the front before acting (needs delivery_mode=foreground)."}
+    app: {type: string, maxLength: 200, description: "App to raise for bring_to_front."}
   required: [op]
   additionalProperties: false
 permission: computer

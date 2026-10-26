@@ -16,8 +16,9 @@ description: |-
   *** End Patch
   Hunks of a file apply in order. Context and removed lines must match the file (exact,
   else ignoring whitespace); without an @@ header a hunk must match uniquely. The patch is
-  validated completely before any file is changed; language-server diagnostics for the
-  changed files are returned when a server is running.
+  validated completely before any file is changed. Afterwards the project's formatter runs
+  on the changed files when the project configures one (ruff, prettier, rustfmt; reported as
+  "formatted:"), then language-server diagnostics are returned when a server is running.
 parameters:
   type: object
   properties:

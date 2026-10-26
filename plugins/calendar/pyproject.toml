@@ -1,0 +1,6 @@
+[project]
+name = "auoreo-plugin-calendar"
+version = "0.1.0"
+description = "AUOREO calendar connector (CalDAV list/create; Google stub)"
+requires-python = ">=3.12"
+dependencies = ["httpx>=0.28.1,<0.29"]

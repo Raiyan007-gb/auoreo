@@ -5,11 +5,19 @@ and again in `run` as defence in depth): key combos that lock the screen, log ou
 shut down or kill the session, and `type` of text that pipes a download into a shell or wipes
 the filesystem. `delivery_mode=foreground` needs its own approval (`computer_foreground`,
 pattern = op), separate from the tool's `computer` permission. Every action is audited.
+
+Delivery refusals (§24.6) carry a stable code: `bad_delivery_mode` (not background/foreground),
+`bring_to_front_requires_foreground` (bring_to_front without foreground) and
+`foreground_unsupported` (the backend cannot act in the foreground). While an action runs the
+process holds `<home>/computer-use.lock` (`auoreo.tools.cu_lock`: O_EXCL, reentrant per
+session, stale-PID recovery), so two agents never drive the desktop at once.
 """
 
 import re
 
 from auoreo.backends.desktop import MUTATING, DesktopBackend
+from auoreo.core.settings_h5 import h5_of
+from auoreo.tools import cu_lock
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 from auoreo.tools.images import to_part
 
@@ -105,9 +113,27 @@ def floors(op: str, args: dict) -> None:
         raise ToolError("op=focus_app needs the app name as `target`")
 
 
+DELIVERY_MODES = frozenset({"background", "foreground"})
+
+
+def delivery_refusal(args: dict, backend: object | None = None) -> str | None:
+    """`[code] message` for a delivery-mode refusal (spec §24.6), else None."""
+    mode = args.get("delivery_mode", "background")
+    if mode not in DELIVERY_MODES:
+        return f"[bad_delivery_mode] delivery_mode must be background or foreground, not {mode!r}"
+    if args.get("bring_to_front") and mode != "foreground":
+        return "[bring_to_front_requires_foreground] bring_to_front needs delivery_mode=foreground"
+    if backend is not None and mode == "foreground" and not getattr(backend, "supports_foreground", True):
+        name = type(backend).__name__
+        return f"[foreground_unsupported] the {name} desktop backend cannot act in the foreground"
+    return None
+
+
 def pre_check(args: dict) -> str | None:
     """Executor seam (F5): the floor verdict before permission evaluation, so a blocked combo or
     typed command is refused without ever asking for approval. Shape errors are left to `run`."""
+    if why := delivery_refusal(args):
+        return why
     op = args.get("op")
     if op == "key" and args.get("key"):
         return key_floor(str(args["key"]), args.get("target"))
@@ -136,17 +162,39 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
     op = args["op"]
     mode = args.get("delivery_mode", "background")
     try:
+        if why := delivery_refusal(args):
+            raise ToolError(f"refused: {why}")
         floors(op, args)
+        backend = ctx.backend("desktop")
+        if not isinstance(backend, DesktopBackend):
+            raise ToolError(f"desktop backend {type(backend).__name__} does not implement DesktopBackend")
+        if why := delivery_refusal(args, backend):
+            raise ToolError(f"refused: {why}")
         if mode == "foreground" and op in MUTATING:
             await ctx.authorize("computer", "computer_foreground", op, "ask")
     except ToolError as exc:
         await _audit(ctx, args, "refused", {"reason": str(exc)[:300]})
         raise
-    backend = ctx.backend("desktop")
-    if not isinstance(backend, DesktopBackend):
-        raise ToolError(f"desktop backend {type(backend).__name__} does not implement DesktopBackend")
+    if not h5_of(ctx).computer_use.lock:
+        return await _act(ctx, backend, op, mode, args)
+    try:
+        cu_lock.acquire(ctx.home, ctx.session_id)
+    except cu_lock.LockBlocked as exc:
+        await _audit(ctx, args, "refused", {"reason": f"locked: {exc}"})
+        raise ToolError(f"refused: [computer_use_locked] {exc}; wait for the other agent to finish") from exc
+    try:
+        return await _act(ctx, backend, op, mode, args)
+    finally:
+        cu_lock.release(ctx.home, ctx.session_id)
+
+
+async def _act(ctx: ToolContext, backend: DesktopBackend, op: str, mode: str, args: dict) -> ToolResult:
     target = args.get("target")
     xy = parse_xy(target) if op != "focus_app" else None
+    if args.get("bring_to_front") and args.get("app") and op != "focus_app":
+        raised = await backend.act("focus_app", target=args["app"], delivery_mode="foreground")
+        if not raised.ok:
+            raise ToolError(f"bring_to_front: could not raise {args['app']!r}: {raised.detail}")
     result = await backend.act(
         op,
         target=None if xy else target,
@@ -164,7 +212,8 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
         ctx, args, "ok" if result.ok else "failed", {"verify": verify, "detail": result.detail[:300]}
     )
     where = f" at {target}" if target else ""
-    lines = [f"{op}{where} [{mode}]: {'ok' if result.ok else 'FAILED'} - {result.detail}"]
+    front = "+front" if args.get("bring_to_front") else ""
+    lines = [f"{op}{where} [{mode}{front}]: {'ok' if result.ok else 'FAILED'} - {result.detail}"]
     if verify is not None:
         verdict = "screen changed" if verify["matched"] else "no visible change (suspected no-op)"
         lines.append(f"verify: matched={verify['matched']} score={verify['score']} ({verdict})")

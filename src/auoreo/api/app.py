@@ -58,6 +58,7 @@ from auoreo.api.routers import suggestions as suggestions_router
 from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import voice as voice_router
 from auoreo.api.routers import webhooks as webhooks_router
+from auoreo.api.teardown import teardown  # --- H5
 from auoreo.automation.webhooks import enforce_secrets  # --- G1a
 from auoreo.core import logjson  # --- G5c
 from auoreo.core import observability as obs
@@ -176,9 +177,7 @@ def create_app(
                         await stack.enter_async_context(enter(svc))
                 yield
         finally:
-            await svc.connections.close_all(1001)
-            if owned:
-                await svc.close()
+            await teardown(app, svc, owned=owned)  # --- H5: spec §24.7 order
 
     app = FastAPI(title="auoreo", version=__version__, lifespan=lifespan)
     app.add_middleware(

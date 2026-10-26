@@ -4,9 +4,10 @@ import asyncio
 import os
 
 from auoreo.tools.context import ToolContext
+from auoreo.tools.opsmetrics import record_from_tool
 
 
-def _read(interval: float) -> str:
+def _read(interval: float) -> tuple[str, float]:
     import psutil
 
     per = psutil.cpu_percent(interval=interval, percpu=True)
@@ -25,8 +26,10 @@ def _read(interval: float) -> str:
         freq = None
     if freq is not None and freq.current:
         lines.append(f"- frequency: {freq.current:.0f} MHz (max {freq.max:.0f})")
-    return "\n".join(lines)
+    return "\n".join(lines), total
 
 
 async def run(args: dict, ctx: ToolContext) -> str:
-    return await asyncio.to_thread(_read, float(args.get("interval_s", 0.5)))
+    text, total = await asyncio.to_thread(_read, float(args.get("interval_s", 0.5)))
+    await record_from_tool(ctx, {"cpu.percent": total})
+    return text
