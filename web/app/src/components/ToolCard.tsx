@@ -1,6 +1,8 @@
 import { ChevronRightIcon, CopyIcon, FileTextIcon } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { DiffView } from "@/components/DiffView";
 import { Button } from "@/components/ui/button";
+import { toolDiff } from "@/lib/diff";
 import type { ToolItem, ToolStatus } from "@/lib/thread";
 import { argsPreview, prettyArgs } from "@/lib/toolPreview";
 import { cn, truncate } from "@/lib/utils";
@@ -29,6 +31,7 @@ export function ToolCard({ tool, awaitingApproval }: { tool: ToolItem; awaitingA
   const statusLabel = awaitingApproval ? "awaiting approval" : tool.status;
   const resultLine = tool.result ? truncate(tool.result.replace(/\s+/g, " ").trim(), 120) : "";
   const panelId = `tool-${tool.key}`;
+  const diff = useMemo(() => toolDiff(tool.name, tool.args), [tool.name, tool.args]); // --- I5
 
   return (
     <div
@@ -57,6 +60,7 @@ export function ToolCard({ tool, awaitingApproval }: { tool: ToolItem; awaitingA
           {statusLabel}
         </span>
       </button>
+      {diff && <DiffView diff={diff} defaultOpen={tool.status !== "completed"} />}
       {!open && resultLine && (
         <div className="truncate border-t px-3 py-1 font-mono text-xs text-muted-foreground" data-testid="tool-result-preview">
           {resultLine}

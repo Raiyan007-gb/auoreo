@@ -27,7 +27,7 @@ from pydantic import TypeAdapter, ValidationError
 from starlette.websockets import WebSocketDisconnect
 
 from auoreo.api import session_auth, ws_scope
-from auoreo.core.approvals import reply_with_grants
+from auoreo.core.approvals import reply_frame
 from auoreo.core.bus import Subscriber, invalid_channels
 from auoreo.core.event_store import REPLAY_LIMIT
 from auoreo.core.services import Services
@@ -424,15 +424,8 @@ class WsConnection:
             await self.ack(frame.request_id, False, "capability token is scoped to another session")
             return
         if isinstance(r, WsPermissionReply):
-            ok = await reply_with_grants(
-                self.svc.approvals,
-                self.svc.coordinator.engine_for,
-                frame.request_id,
-                r.reply,
-                r.message,
-                r.cascade,
-            )
-            await self.ack(frame.request_id, ok, None if ok else "no pending request with that id")
+            ok, why = await reply_frame(self.svc, frame.request_id, r)  # --- I5: + updated_input
+            await self.ack(frame.request_id, ok, why)
             return
         try:
             ok = await self.svc.questions.answer(frame.request_id, r.responses)

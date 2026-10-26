@@ -1,10 +1,11 @@
 import type { CronJobInfo } from "@sdk/client";
-import { HistoryIcon, PauseIcon, PlayIcon } from "lucide-react";
+import { HistoryIcon, MessagesSquareIcon, PauseIcon, PlayIcon } from "lucide-react";
 import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { ErrorNote, PageHeader } from "@/components/AppShell";
 import { AsyncBody, RefreshButton, SessionLink, StatusBadge } from "@/components/ops/AsyncBody";
 import { DeliveriesPanel } from "@/components/ops/Deliveries";
+import { RunTranscript } from "@/components/RunTranscript"; // --- I5
 import { WebhookRoutes } from "@/components/ops/WebhookRoutes";
 import { fmtWhen, useAction, useServerEvents } from "@/components/ops/opsUtils";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +27,7 @@ function duration(a: string | null, b: string | null): string {
 
 function RunsDrawer({ job, tick, onClose }: { job: string | null; tick: number; onClose: () => void }) {
   const runs = useAsync(() => (job ? api.cronRuns(job, 50) : Promise.resolve([])), [job, tick]);
+  const [shown, setShown] = useState<string | null>(null); // --- I5: inline transcript
   return (
     <Sheet open={job !== null} onOpenChange={(o) => !o && onClose()}>
       <SheetContent data-testid="runs-drawer">
@@ -60,7 +62,21 @@ function RunsDrawer({ job, tick, onClose }: { job: string | null; tick: number; 
                     <TableCell className="text-xs whitespace-nowrap">{fmtWhen(r.scheduled_for)}</TableCell>
                     <TableCell className="text-xs">{duration(r.started_at, r.finished_at)}</TableCell>
                     <TableCell>
-                      <SessionLink id={r.session_id} />
+                      <span className="inline-flex items-center gap-1">
+                        <SessionLink id={r.session_id} />
+                        {r.session_id && (
+                          <Button
+                            variant={shown === r.session_id ? "secondary" : "ghost"}
+                            size="icon-sm"
+                            aria-label="Show transcript"
+                            aria-pressed={shown === r.session_id}
+                            data-testid="transcript-toggle"
+                            onClick={() => setShown((s) => (s === r.session_id ? null : r.session_id))}
+                          >
+                            <MessagesSquareIcon />
+                          </Button>
+                        )}
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -68,6 +84,7 @@ function RunsDrawer({ job, tick, onClose }: { job: string | null; tick: number; 
             </Table>
           )}
         </AsyncBody>
+        {shown && <RunTranscript key={shown} sessionId={shown} title={`Run session ${shown}`} />}
       </SheetContent>
     </Sheet>
   );

@@ -1,7 +1,8 @@
 import type { PermissionReplyKind } from "@sdk/client";
 import type { PermissionRequestedData } from "@sdk/events";
-import { CheckCheckIcon, CheckIcon, ShieldAlertIcon, ShieldCheckIcon, XIcon } from "lucide-react";
+import { CheckCheckIcon, CheckIcon, PencilIcon, ShieldAlertIcon, ShieldCheckIcon, XIcon } from "lucide-react";
 import { useState } from "react";
+import { EditArgs } from "@/components/EditArgs"; // --- I5
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -31,12 +32,14 @@ export function ApprovalCard({
   const [message, setMessage] = useState("");
   const [confirmAlways, setConfirmAlways] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false); // --- I5
 
-  const send = async (reply: PermissionReplyKind, cascade = false) => {
+  const send = async (reply: PermissionReplyKind, cascade = false, updatedInput?: Record<string, unknown>) => {
     setBusy(true);
     setErr(null);
     try {
-      await control.replyPermission(request.request_id, reply, reply === "reject" ? message || undefined : undefined, cascade);
+      const msg = reply === "reject" ? message || undefined : undefined;
+      await control.replyPermission(request.request_id, reply, msg, cascade, updatedInput);
       onDone?.(reply, cascade);
     } catch (e) {
       setErr(errorText(e));
@@ -66,14 +69,26 @@ export function ApprovalCard({
               </>
             )}
           </p>
-          {request.detail && (
+          {request.justification && (
+            <p className="mt-1 text-xs" data-testid="approval-justification">
+              <span className="font-medium">Why:</span> {request.justification}
+            </p>
+          )}
+          {request.detail && !editing && (
             <pre className="mt-1 max-h-32 overflow-auto rounded-md bg-muted p-2 font-mono text-xs whitespace-pre-wrap">
               {request.detail}
             </pre>
           )}
         </div>
       </div>
-      {rejecting ? (
+      {editing && request.input ? (
+        <EditArgs
+          initial={request.input}
+          busy={busy}
+          onSubmit={(args) => void send("once", false, args)}
+          onCancel={() => setEditing(false)}
+        />
+      ) : rejecting ? (
         <form
           className="mt-2 flex gap-2"
           onSubmit={(e) => {
@@ -112,6 +127,11 @@ export function ApprovalCard({
           ) : (
             <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmAlways(true)}>
               <ShieldCheckIcon aria-hidden /> Always
+            </Button>
+          )}
+          {request.editable && request.input && (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => setEditing(true)} data-testid="approval-edit">
+              <PencilIcon aria-hidden /> Edit & approve
             </Button>
           )}
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setRejecting(true)}>

@@ -4,11 +4,13 @@ import { useState } from "react";
 import { ErrorNote, PageHeader } from "@/components/AppShell";
 import { AsyncBody } from "@/components/ops/AsyncBody";
 import { useAction } from "@/components/ops/opsUtils";
+import { SkillsHubPanel } from "@/components/SkillsHub"; // --- I5
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 
@@ -91,7 +93,17 @@ export function SkillsPage() {
           </>
         }
       />
-      <div className="space-y-3 p-4">
+      <Tabs defaultValue="installed" className="p-4">
+        <TabsList aria-label="Skills views">
+          <TabsTrigger value="installed">Installed</TabsTrigger>
+          <TabsTrigger value="hub" data-testid="skills-hub-tab">
+            Hub
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="hub">
+          <SkillsHubPanel onChanged={skills.reload} />
+        </TabsContent>
+        <TabsContent value="installed" className="space-y-3">
         <ErrorNote error={action.error} />
         {generation !== null && (
           <p role="status" className="text-xs text-muted-foreground" data-testid="skills-reloaded">
@@ -147,7 +159,8 @@ export function SkillsPage() {
             );
           }}
         </AsyncBody>
-      </div>
+        </TabsContent>
+      </Tabs>
       <SkillDialog skill={open} onClose={() => setOpen(null)} />
     </div>
   );

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
+from pydantic import ValidationError
 
 from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.core.reload_kinds import ReloadKind, scoped_reload
 from auoreo.harness.registry import HarnessError
 from auoreo.schema.chat import HarnessEntry, HarnessListing, ReloadResult
 
@@ -26,14 +28,24 @@ async def by_kind(kind: str, svc: ServicesDep) -> list[HarnessEntry]:
 
 
 @router.post("/reload", response_model=ReloadResult)
-async def reload(svc: ServicesDep) -> ReloadResult:
-    """Re-discover all definition roots. Takes effect at the next turn."""
+async def reload(svc: ServicesDep, kind: ReloadKind | None = None) -> ReloadResult:
+    """Re-discover all definition roots. Takes effect at the next turn. `?kind=` (I5) scopes
+    the side effects and the reported diff: agent|command|mcp|lsp|config|model."""
     try:
         diff = svc.harness.reload()
     except HarnessError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, [str(e) for e in exc.errors]) from exc
-    if svc.mcp is not None:
-        await svc.mcp.sync()
     gen, errors = diff.pop("generation"), diff.pop("errors")
-    await svc.emit("server", "harness.reloaded", {"generation": gen, "errors": errors, **diff})
-    return ReloadResult(generation=gen, errors=errors, changes=diff)
+    note: str | None = None
+    if kind is None:
+        if svc.mcp is not None:
+            await svc.mcp.sync()
+        changes = diff
+    else:
+        try:
+            changes, note = await scoped_reload(svc, kind, diff)
+        except ValidationError as exc:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"settings.json: {exc}") from exc
+    scope = {"kind": kind} if kind else {}
+    await svc.emit("server", "harness.reloaded", {"generation": gen, "errors": errors, **scope, **changes})
+    return ReloadResult(generation=gen, errors=errors, changes=changes, kind=kind, note=note)

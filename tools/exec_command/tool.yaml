@@ -29,6 +29,19 @@ parameters:
       maximum: 16000
       default: 4000
       description: Clip the returned output to about this many tokens (head and tail kept).
+    sandbox_permissions:
+      type: string
+      enum: [use_default, require_escalated]
+      default: use_default
+      description: >-
+        Only after a sandbox denial: `require_escalated` asks the human to run THIS call
+        outside the sandbox (one-time approval, never sticky). Needs a justification.
+    justification:
+      type: string
+      maxLength: 500
+      description: >-
+        Why escalation is needed (10-500 chars) naming the denied path or operation; shown to
+        the human on the approval card and recorded in the audit log.
   required: [cmd]
   additionalProperties: false
 permission: bash

@@ -1,4 +1,5 @@
-"""`auoreo web` — serve the API + UI and open it in a browser."""
+"""`auoreo web` — serve the API + UI and open it in a browser. On a non-loopback bind
+(`--host 0.0.0.0`, password required) it also prints the LAN address(es) (I5)."""
 
 from __future__ import annotations
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, TypeVar
@@ -40,4 +39,6 @@ def with_services[T](
 
 
 def dump_json(obj: Any) -> None:
-    print(json.dumps(obj, indent=2, default=str))
+    from auoreo.cli.output import dumps  # --- I5: `--mini` prints one line
+
+    print(dumps(obj))

@@ -7,6 +7,8 @@ from typing import Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
 T = TypeVar("T", bound="SessionInfo")
 
 
@@ -22,6 +24,7 @@ class SessionInfo:
         title (str):
         updated_at (datetime.datetime):
         workflow (str):
+        project (None | str | Unset): Working directory the session was created in (I5; list only).
     """
 
     agent: str
@@ -32,6 +35,7 @@ class SessionInfo:
     title: str
     updated_at: datetime.datetime
     workflow: str
+    project: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -52,6 +56,12 @@ class SessionInfo:
 
         workflow = self.workflow
 
+        project: None | str | Unset
+        if isinstance(self.project, Unset):
+            project = UNSET
+        else:
+            project = self.project
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -66,6 +76,8 @@ class SessionInfo:
                 "workflow": workflow,
             }
         )
+        if project is not UNSET:
+            field_dict["project"] = project
 
         return field_dict
 
@@ -93,6 +105,15 @@ class SessionInfo:
 
         workflow = d.pop("workflow")
 
+        def _parse_project(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        project = _parse_project(d.pop("project", UNSET))
+
         session_info = cls(
             agent=agent,
             created_at=created_at,
@@ -102,6 +123,7 @@ class SessionInfo:
             title=title,
             updated_at=updated_at,
             workflow=workflow,
+            project=project,
         )
 
         session_info.additional_properties = d

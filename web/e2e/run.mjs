@@ -4,6 +4,7 @@
 // repo root, wait for "server listening on …", run the suite, then stop the server.
 import { spawn } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,9 +25,38 @@ function runPlaywright(baseUrl) {
   });
 }
 
+// --- I5: a local skills-hub tap (HTTP JSON index) so the Skills → Hub tab can search/install.
+const HUB_SKILL = (name) =>
+  `---\nname: ${name}\ndescription: Use when you need to ${name} things carefully and step by step.\n---\n` +
+  `# ${name}\n\nFollow these steps exactly: read the input, plan, act, verify the outcome.\n`;
+
+function startTap() {
+  return new Promise((ok) => {
+    const srv = createServer((req, res) => {
+      const base = `http://127.0.0.1:${srv.address().port}`;
+      if (req.url === "/index.json") {
+        const skills = ["e2e-hub-skill", "e2e-other-skill"].map((name) => ({
+          name,
+          description: `${name} from the e2e tap`,
+          version: "1.0.0",
+          url: `${base}/${name}/SKILL.md`,
+        }));
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ skills }));
+        return;
+      }
+      const m = /^\/([a-z0-9-]+)\/SKILL\.md$/.exec(req.url ?? "");
+      if (m) res.writeHead(200, { "content-type": "text/markdown" }).end(HUB_SKILL(m[1]));
+      else res.writeHead(404).end();
+    });
+    srv.listen(0, "127.0.0.1", () => ok(srv));
+  });
+}
+
 async function main() {
   if (process.env.BASE_URL) process.exit(await runPlaywright(process.env.BASE_URL));
 
+  const tap = await startTap();
+  const tapUrl = `http://127.0.0.1:${tap.address().port}/index.json`;
   const home = mkdtempSync(join(tmpdir(), "auoreo-e2e-"));
   const server = spawn("uv", ["run", "auoreo", "serve", "--port", "0"], {
     cwd: repoRoot,
@@ -37,10 +67,12 @@ async function main() {
       AUOREO_GATEWAY: "fake",
       // vad:fake = energy VAD, so the RTC call e2e endpoints the fake-mic tone into utterances
       AUOREO_BACKENDS: '{"stt":"fake","tts":"fake","vad":"fake"}',
+      AUOREO_G6: JSON.stringify({ skills: { taps: [tapUrl] } }), // --- I5
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const stop = () => {
+    tap.close();
     server.kill("SIGTERM");
     rmSync(home, { recursive: true, force: true });
   };

@@ -27,7 +27,19 @@ import { lazy, Suspense } from "react";
 const WebhooksPage = lazy(() => import("@/pages/Webhooks").then((m) => ({ default: m.WebhooksPage })));
 const PlatformsPage = lazy(() => import("@/pages/Platforms").then((m) => ({ default: m.PlatformsPage })));
 
+const SharePage = lazy(() => import("@/pages/Share").then((m) => ({ default: m.SharePage }))); // --- I5
+
 export function App() {
+  // --- I5: the public read-only share view opens no WS/SSE connection and has no app shell.
+  if (window.location.pathname.startsWith("/share/")) {
+    return (
+      <BrowserRouter>
+        <Routes>
+          <Route path="share/:token" element={<Suspense><SharePage /></Suspense>} />
+        </Routes>
+      </BrowserRouter>
+    );
+  }
   return (
     <TooltipProvider>
       <ControlProvider>

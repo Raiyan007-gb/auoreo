@@ -37,6 +37,7 @@ class RunOptions:
     variant: str | None = None  # shape requests by the variants.yaml entry matching this id
     effort: str | None = None  # reasoning effort override (`--thinking low|medium|high|max`)
     exact: Any = None  # --- I3: `teams.fork.ExactSpec` — frozen spec + tool list of an exact fork
+    attachments: tuple[dict[str, Any], ...] = ()  # --- I5: `run -f` image parts for the user message
 
 
 @dataclass

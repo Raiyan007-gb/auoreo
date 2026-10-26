@@ -11,6 +11,7 @@ import { statusMethods } from "./ops2"; // --- W0-B
 import { g5bMethods } from "./ops3"; // --- G5b
 import { g6Methods } from "./ops4"; // --- G6
 import { g7Methods } from "./ops5"; // --- G7
+import { i5Methods } from "./ops6"; // --- I5
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -244,9 +245,16 @@ export function createClient(opts: ClientOptions = {}) {
       request<PendingPermission[]>("GET", "/api/permissions/pending", {
         query: { session_id: sessionId },
       }),
-    replyPermission: (requestId: string, reply: PermissionReplyKind, message?: string | null, cascade = false) =>
+    /** `updatedInput` (I5, spec §5.2 `allow{updatedInput}`): approve with edited arguments. */
+    replyPermission: (
+      requestId: string,
+      reply: PermissionReplyKind,
+      message?: string | null,
+      cascade = false,
+      updatedInput?: Record<string, unknown> | null,
+    ) =>
       request<Record<string, boolean>>("POST", `/api/permissions/${enc(requestId)}/reply`, {
-        body: { reply, message: message ?? null, cascade } satisfies PermissionReplyBody,
+        body: { reply, message: message ?? null, cascade, updated_input: updatedInput ?? null } satisfies PermissionReplyBody,
       }),
     pendingQuestions: (sessionId?: string) =>
       request<PendingQuestion[]>("GET", "/api/questions/pending", {
@@ -280,6 +288,7 @@ export function createClient(opts: ClientOptions = {}) {
     ...g5bMethods(request), // --- G5b: rtc call client + context gauge (./ops3.ts)
     ...g6Methods(request), // --- G6: PREFS.md proposals + skills hub (./ops4.ts)
     ...g7Methods(request), // --- G7: session plan/sources + usage timeseries (./ops5.ts)
+    ...i5Methods(request), // --- I5: share links, skills hub, memory usage, lsp stop (./ops6.ts)
   };
 }
 
@@ -375,6 +384,7 @@ export type * from "./ops2"; // --- W0-B
 export type * from "./ops3"; // --- G5b
 export type * from "./ops4"; // --- G6
 export type * from "./ops5"; // --- G7
+export type * from "./ops6"; // --- I5
 
 // =================================================================== --- W0-C goals + suggestions
 export type GoalInfo = S["GoalInfo"];

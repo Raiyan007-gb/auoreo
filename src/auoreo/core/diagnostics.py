@@ -471,3 +471,6 @@ EXTRA_CHECKS.append(i6_checks)
 from auoreo.core.diagnostics_i7 import i7_checks  # noqa: E402  --- I7: oauth connectors + discord intents
 
 EXTRA_CHECKS.append(i7_checks)
+from auoreo.core.diagnostics_i5 import i5_checks  # noqa: E402  --- I5: disk/settings/worktrees/TCC
+
+EXTRA_CHECKS.append(i5_checks)

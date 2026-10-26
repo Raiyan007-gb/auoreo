@@ -18,7 +18,7 @@ import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from auoreo.backends.sandbox import escalation_request
+from auoreo.backends.sandbox import escalation_request, permissions_request
 from auoreo.core import observability as obs
 from auoreo.core.guardian import guardian_verdict
 from auoreo.core.redaction import redact_tool_output
@@ -26,7 +26,7 @@ from auoreo.core.secrets import child_env, secret_scope
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import LoadError, ToolDef
 from auoreo.runtime.hooks import RESULT_PREVIEW_CHARS, hooks_of
-from auoreo.tools import gates_literal, shell_floor
+from auoreo.tools import edited_input, gates_literal, shell_floor
 from auoreo.tools.args import (
     InvalidArgumentsError,
     format_validation_error,
@@ -56,6 +56,7 @@ if TYPE_CHECKING:
     from auoreo.core.services import Services
 
 log = logging.getLogger(__name__)
+EDITED = "+edited"
 
 
 @dataclass
@@ -207,10 +208,15 @@ class ToolExecutor:
             reason = f"floor: {gates_literal.NOTE}"
         elif decision.action == "ask":
             refused, reason = await self._ask(
-                call, tool, args, ctx, engine, permission, pattern, audit, reason
+                call, tool, args, ctx, engine, permission, pattern, audit, reason, editable=True
             )
             if refused is not None:
                 return refused
+            if reason.endswith(EDITED):  # --- I5: the human approved edited arguments
+                logged, (mode, wider, why) = copy.deepcopy(args), self._sandbox_args(tool, args)
+                audit["pattern"] = self._pattern(tool, args, ctx)[:500]
+                if why is not None:
+                    return self._err(call, why)
         grant_id: str | None = None
         if wider is not None:
             refused, grant_id = await self._escalate(call, tool, args, ctx, engine, mode, wider, audit)
@@ -305,6 +311,8 @@ class ToolExecutor:
         reason: str,
         *,
         sticky: bool = True,
+        editable: bool = False,
+        justification: str | None = None,
     ) -> tuple[ToolOutcome | None, str]:
         """The `ask` path: guardian (smart mode, or a policy `review`), then
         `PermissionRequest` hooks, then the human. Returns `(error outcome or None to
@@ -359,6 +367,9 @@ class ToolExecutor:
             cwd=str(ctx.cwd),
             risk=risk_tier(tool),
             one_shot=not sticky,
+            editable=(edit := editable and sticky and edited_input.editable(self.s.settings)),
+            input=edited_input.card_input(args, self.s.settings) if edit else None,
+            justification=justification,
         )
         await self.s.audit.record(
             actor="human",
@@ -373,14 +384,21 @@ class ToolExecutor:
                 return self._err(call, f"user rejected this call with feedback: {outcome.message}"), reason
             rejected = ToolResult("user rejected this tool call", is_error=True)
             return ToolOutcome(call, rejected, halt=True), reason
+        if outcome.updated_input is not None:  # --- I5: re-validated, floors re-run, audited
+            edit_args = outcome.updated_input
+            refused = await edited_input.apply_edit(self, call, tool, args, ctx, engine, edit_args, audit)
+            return (refused, reason) if refused is not None else (None, reason + EDITED)
         if outcome.reply == "always" and sticky:
             engine.grant_always(permission, pattern)
         return None, reason
 
     @staticmethod
     def _sandbox_args(tool: ToolDef, args: dict[str, Any]) -> tuple[str, str | None, str | None]:
-        """`(mode, wider_mode_to_grant, error)`; only tools that declare `sandbox_mode`."""
-        if "sandbox_mode" not in tool.manifest.parameters.get("properties", {}):
+        """`(mode, wider_mode_to_grant, error)`; only tools that declare `sandbox_mode` (or the
+        I5 `sandbox_permissions`)."""
+        if "sandbox_permissions" in (props := tool.manifest.parameters.get("properties", {})):
+            return permissions_request(tool.manifest.sandbox_mode, args)
+        if "sandbox_mode" not in props:
             return tool.manifest.sandbox_mode, None, None
         return escalation_request(tool.manifest.sandbox_mode, args)
 
@@ -422,6 +440,7 @@ class ToolExecutor:
                 audit,
                 decision.detail,
                 sticky=False,
+                justification=justification or None,
             )
             if refused is not None:
                 return refused, None

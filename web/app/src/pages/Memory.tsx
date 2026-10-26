@@ -8,6 +8,7 @@ import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/ca
 import { Input, Label, NativeSelect } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CuratorPanel, FactsPanel, FilesPanel } from "@/components/MemoryPanels";
+import { MemoryUsageGauge } from "@/components/MemoryUsageGauge"; // --- I5
 import { api } from "@/lib/api";
 import { errorText } from "@/lib/utils";
 
@@ -52,6 +53,9 @@ export function MemoryPage() {
   return (
     <div className="flex flex-col">
       <PageHeader title="Memory" description="Hybrid keyword + semantic recall over facts, documents and past messages." />
+      <div className="px-4 pt-4">
+        <MemoryUsageGauge />
+      </div>
       <Tabs defaultValue="search" className="p-4">
         <TabsList aria-label="Memory views">
           <TabsTrigger value="search">Search</TabsTrigger>

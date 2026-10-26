@@ -240,3 +240,25 @@ def escalation_request(manifest_mode: str, args: dict[str, Any]) -> tuple[str, s
     if why is not None:
         return manifest_mode, None, f'sandbox_mode="{requested}" refused: {why}'
     return manifest_mode, str(requested), None
+
+
+# --- I5: codex-style `sandbox_permissions` (exec_command) on top of the same escalation path
+SANDBOX_PERMISSIONS = ("use_default", "require_escalated")
+
+
+def permissions_request(manifest_mode: str, args: dict[str, Any]) -> tuple[str, str | None, str | None]:
+    """`sandbox_permissions: require_escalated` + `justification` asks (once, never sticky) to
+    run this call unsandboxed (`danger-full-access`) through the `sandbox_escalate` approval;
+    `use_default` (or nothing) keeps the manifest mode. Same `(mode, wider, error)` contract
+    as `escalation_request`."""
+    wanted = args.get("sandbox_permissions", "use_default")
+    if wanted not in SANDBOX_PERMISSIONS:
+        return manifest_mode, None, f"sandbox_permissions must be one of {', '.join(SANDBOX_PERMISSIONS)}"
+    if wanted == "use_default":
+        if args.get("justification") is not None:
+            return manifest_mode, None, "justification given without sandbox_permissions=require_escalated"
+        return manifest_mode, None, None
+    if manifest_mode == "danger-full-access":
+        return manifest_mode, None, None
+    escalate = {"sandbox_mode": "danger-full-access", "justification": args.get("justification")}
+    return escalation_request(manifest_mode, escalate)

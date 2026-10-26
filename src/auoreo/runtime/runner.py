@@ -1,10 +1,9 @@
 """The agent loop: one turn = steps of (model call → tool round) until a final answer.
 
-Spec §8: freeze the request per step, persist the user batch before streaming, run
-concurrency-safe tool calls in parallel and others as barriers, commit results in model
-order, stop on doom/denial loops, and force a tool-free final step when the step cap or
-the run budget runs out. Recovery (OTK/overflow/empty), budgets, liveness, stop gates,
-loop guards and sequence repair live in their own modules next to this one.
+Spec §8: freeze the request per step, persist the user batch before streaming, run safe tool
+calls in parallel (others as barriers), commit in model order, stop on doom/denial loops, and
+force a tool-free final step at the step cap or run budget. Recovery, budgets, liveness, stop
+gates, loop guards and sequence repair live in sibling modules.
 """
 
 from __future__ import annotations
@@ -30,6 +29,7 @@ from auoreo.gateway.types import LLMRequest, ToolCall, tool_schema
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
 from auoreo.policy.bandit import BanditPolicy, Choice
+from auoreo.runtime.attachments import user_message  # --- I5
 from auoreo.runtime.budget import GRACE_NOTE, TurnBudget, all_free
 from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
 from auoreo.runtime.empty import EMPTY_SENTINEL
@@ -203,7 +203,7 @@ class AgentRunner:
             return TurnResult(run_id, "blocked", "", hook_error)
         await self.s.set_session_status(sid, "running", title=text)
 
-        user_msg = {"role": "user", "content": text}
+        user_msg = user_message(text, options.attachments)  # --- I5: `run -f` images as parts
         await self._persist(rt, user_msg)
         await self.s.emit(sid, "message.created", {"run_id": run_id, "role": "user", "content": text})
         turn_msg = rt.history[-1]  # located by identity each step: compaction moves indices

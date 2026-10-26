@@ -5,6 +5,7 @@ import { EmptyState, PageHeader } from "@/components/AppShell";
 import { AsyncBody, RefreshButton, SessionLink, StatusBadge } from "@/components/ops/AsyncBody";
 import { TeamBoard } from "@/components/ops/Board";
 import { KanbanBoard } from "@/components/ops/Kanban";
+import { RunTranscript } from "@/components/RunTranscript"; // --- I5
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
@@ -114,6 +115,10 @@ function TeamDetailPane({ teamId }: { teamId: string }) {
           </section>
         )}
       </AsyncBody>
+      {(() => {
+        const sid = team.data?.peers?.find((p) => p.name === member)?.session_id;
+        return sid ? <RunTranscript key={sid} sessionId={sid} title={`${member} — member session`} /> : null; // --- I5
+      })()}
       <Mailbox teamId={teamId} member={member} />
     </div>
   );

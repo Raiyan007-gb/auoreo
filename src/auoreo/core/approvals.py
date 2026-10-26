@@ -22,6 +22,8 @@ class ApprovalOutcome:
     timed_out: bool = False
     request_id: str | None = None
     """Links the decision to its `permission.*` events and audit row."""
+    updated_input: dict[str, Any] | None = None
+    """`allow{updated_input}` (spec §5.2): the human edited the tool arguments (I5)."""
 
 
 @dataclass
@@ -41,6 +43,17 @@ class Pending:
     risk: str = "medium"
     one_shot: bool = False
     """No `always` (sandbox escalation, single-use grants): an `always` reply counts as `once`."""
+    editable: bool = False
+    """The reply may carry `updated_input` (a tool call's arguments, I5)."""
+    input: dict[str, Any] | None = None
+    """The arguments shown in the card's editor (redacted; editable requests only)."""
+    justification: str | None = None
+    """Why the agent asks (sandbox escalation `justification`): shown on the card; the audit
+    row keeps its hash (`justificationHash`), never the text."""
+
+
+class EditRefused(ValueError):
+    """`updated_input` on a request that does not accept edits (I5)."""
 
 
 class ScopeError(ValueError):
@@ -109,6 +122,9 @@ class ApprovalBroker:
         cwd: str | None = None,
         risk: str = "medium",
         one_shot: bool = False,
+        editable: bool = False,
+        input: dict[str, Any] | None = None,
+        justification: str | None = None,
     ) -> ApprovalOutcome:
         try:
             checked, persist = validate_scope(pattern, patterns, always)
@@ -127,6 +143,9 @@ class ApprovalBroker:
             cwd,
             risk,
             one_shot,
+            editable,
+            input if editable else None,
+            justification,
         )
         self._pending[p.request_id] = p
         await self._emit(
@@ -140,6 +159,7 @@ class ApprovalBroker:
                 "detail": detail,
                 "one_shot": one_shot,
                 "risk": risk,
+                **_extras(p),
             },
         )
         try:
@@ -158,16 +178,28 @@ class ApprovalBroker:
         reply: Reply,
         message: str | None = None,
         on_always: Callable[[Pending], list[str]] | None = None,
+        updated_input: dict[str, Any] | None = None,
     ) -> bool:
         """Resolve a request. `reject` cascades to all pendings of the same session;
-        `always` auto-resolves pendings that `on_always` reports as now allowed."""
+        `always` auto-resolves pendings that `on_always` reports as now allowed.
+        `updated_input` (allow with edited arguments) needs an `editable` request, is never
+        sticky (an edited call is approved once) and raises `EditRefused` otherwise."""
         p = self._pending.get(request_id)
         if p is None or p.future.done():
             return False
-        if reply == "always" and p.one_shot:
-            reply = "once"  # single-use requests never persist a grant
-        p.future.set_result(ApprovalOutcome(reply != "reject", reply, message))
-        await self._emit(p.session_id, "permission.replied", {"request_id": request_id, "reply": reply})
+        if updated_input is not None and (reply == "reject" or not p.editable):
+            raise EditRefused(
+                "edited input needs an allow reply (once/always)"
+                if p.editable
+                else "this request does not accept edited input"
+            )
+        if reply == "always" and (p.one_shot or updated_input is not None):
+            reply = "once"  # single-use requests (and edited calls) never persist a grant
+        p.future.set_result(ApprovalOutcome(reply != "reject", reply, message, updated_input=updated_input))
+        replied: dict[str, Any] = {"request_id": request_id, "reply": reply}
+        if updated_input is not None:
+            replied["edited"] = True
+        await self._emit(p.session_id, "permission.replied", replied)
         if reply == "reject":
             for other in self.pending(p.session_id):
                 if other.request_id != request_id and not other.future.done():
@@ -220,10 +252,15 @@ async def reply_with_grants(
     reply: Reply,
     message: str | None = None,
     cascade: bool = False,
+    updated_input: dict[str, Any] | None = None,
 ) -> bool:
     """Shared by REST and WS: resolve a request; on `always`, persist the grant in the
     session's permission engine and auto-resolve pendings it now allows. `cascade` with a
-    `once` reply also approves the rest of the request's approval group."""
+    `once` reply also approves the rest of the request's approval group. `updated_input`
+    (I5) answers `allow` with edited arguments; it never cascades or persists a grant."""
+    if updated_input is not None:
+        cascade = False
+        reply = "once" if reply == "always" else reply
     if cascade and reply == "once" and any(p.request_id == request_id for p in broker.pending()):
         await broker.cascade(request_id)
 
@@ -240,8 +277,40 @@ async def reply_with_grants(
         ]
 
     return await broker.reply(
-        request_id, reply, message, on_always=grant_and_scan if reply == "always" else None
+        request_id,
+        reply,
+        message,
+        on_always=grant_and_scan if reply == "always" else None,
+        updated_input=updated_input,
     )
+
+
+async def reply_frame(services: Any, request_id: str, r: Any) -> tuple[bool, str | None]:
+    """A WS `control_response{permission}` (or REST body): `(ok, error detail)`."""
+    try:
+        ok = await reply_with_grants(
+            services.approvals,
+            services.coordinator.engine_for,
+            request_id,
+            r.reply,
+            r.message,
+            r.cascade,
+            updated_input=getattr(r, "updated_input", None),
+        )
+    except EditRefused as exc:
+        return False, str(exc)
+    return ok, None if ok else "no pending request with that id"
+
+
+def _extras(p: Pending) -> dict[str, Any]:
+    """Optional card fields (I5): only present when set, so older events keep their shape."""
+    out: dict[str, Any] = {}
+    if p.editable:
+        out["editable"] = True
+        out["input"] = p.input
+    if p.justification:
+        out["justification"] = p.justification
+    return out
 
 
 def pending_dict(p: Pending) -> dict[str, Any]:
@@ -255,6 +324,7 @@ def pending_dict(p: Pending) -> dict[str, Any]:
         "detail": p.detail,
         "one_shot": p.one_shot,
         "risk": p.risk,
+        **_extras(p),
     }
 
 

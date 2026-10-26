@@ -8,6 +8,7 @@ import type {
   CompactionCompletedData,
   CompactionFailedData,
   CompactionSkippedData,
+  ElicitationOpenData,
   PermissionRequestedData,
   PlanUpdatedData,
   QuestionAskedData,
@@ -63,6 +64,8 @@ export interface ThreadState {
   plan?: PlanUpdatedData;
   /** `plan.mode` events: true while the session is in plan mode. */
   planMode?: boolean;
+  /** I5: `mcp.elicitation.open` — consented MCP URLs, opened only by a click in the card. */
+  elicitations: Record<string, ElicitationOpenData>;
 }
 
 export const emptyThread = (): ThreadState => ({
@@ -72,6 +75,7 @@ export const emptyThread = (): ThreadState => ({
   running: false,
   permissions: {},
   questions: {},
+  elicitations: {},
 });
 
 const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : JSON.stringify(v));
@@ -112,7 +116,18 @@ const BLOCK_TEXT: Record<string, string> = {
   BUDGET: "the session's spend budget is exhausted — raise the cap in settings or start a new session",
   DOOM_LOOP: "the agent kept repeating the same tool call, so the run was stopped",
   PERMISSION_REJECTED: "a tool call was rejected, so the run stopped",
+  // --- I5: denial/guardian breakers (runtime/guards.py)
+  GUARDIAN_BREAKER:
+    "the safety reviewer (guardian) denied several calls in a row, so the run stopped — further approvals in this session come to you",
+  DENIAL_LIMIT:
+    "too many permission denials in this session, so the run stopped — further asks go to a human instead of the guardian",
+  DENIAL_LOOP: "three permission denials in a row, so the run stopped — change the request or the permission rules and retry",
 };
+
+/** Event codes that also exist as typed errors elsewhere (e.g. `error` events, run.failed). */
+export function explainCode(code: string | undefined): string | undefined {
+  return code ? BLOCK_TEXT[code] : undefined;
+}
 
 const notice = (s: ThreadState, e: ServerEvent, level: "info" | "warn" | "error", text: string, code?: string): ThreadState => ({
   ...s,
@@ -273,6 +288,12 @@ const HANDLERS: Record<string, Handler> = {
     ...s,
     questions: { ...s.questions, [str(d.request_id)]: d as unknown as QuestionAskedData },
   }),
+  "mcp.elicitation.open": (s, d) => {
+    const url = str(d.url);
+    if (!/^https?:\/\//i.test(url)) return s; // only web links are ever offered
+    const id = str(d.elicitation_id) || url;
+    return { ...s, elicitations: { ...s.elicitations, [id]: d as unknown as ElicitationOpenData } };
+  },
   "question.answered": (s, d) => {
     const { [str(d.request_id)]: _gone, ...rest } = s.questions;
     return { ...s, questions: rest };

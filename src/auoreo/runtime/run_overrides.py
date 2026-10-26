@@ -30,12 +30,20 @@ class UnknownVariant(ValueError):
 
 
 def find_variant(harness: Harness, name: str) -> object:
+    """--- I5: an entry whose `name:` equals `name` (from `variants:` or `named:`) wins; else
+    the first `variants:` entry whose provider/model_regex matches `name` as a model id."""
     from auoreo.gateway.pipeline import match_variant
 
     vf = harness.snapshot.variants
-    found = match_variant(list(vf.manifest.variants), name) if vf is not None else None
-    if found is None:
+    if vf is None:
         raise UnknownVariant(f"no prompts/variants.yaml entry matches '{name}'")
+    entries = [*vf.manifest.variants, *vf.manifest.named]
+    found = next((v for v in entries if v.name == name), None) or match_variant(
+        list(vf.manifest.variants), name
+    )
+    if found is None:
+        named = ", ".join(sorted(v.name for v in entries if v.name)) or "none"
+        raise UnknownVariant(f"no prompts/variants.yaml entry matches '{name}' (named variants: {named})")
     return found
 
 

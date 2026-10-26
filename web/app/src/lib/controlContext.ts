@@ -13,6 +13,8 @@ export interface ControlApi {
     reply: PermissionReplyKind,
     message?: string,
     cascade?: boolean,
+    /** I5: allow with edited tool arguments (`editable` requests only). */
+    updatedInput?: Record<string, unknown>,
   ) => Promise<"ws" | "rest">;
   /** WS `control_response{question}` first; falls back to `POST /api/questions/{id}/answer`. */
   answerQuestion: (requestId: string, responses: Record<string, unknown>[]) => Promise<"ws" | "rest">;

@@ -5,7 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+
+from auoreo.schema.voice_api import VoiceBackendStatus as VoiceBackendStatus  # re-export
+from auoreo.schema.voice_api import VoiceSegment as VoiceSegment  # re-export
+from auoreo.schema.voice_api import VoiceSpeakRequest as VoiceSpeakRequest  # re-export
+from auoreo.schema.voice_api import VoiceStatus as VoiceStatus  # re-export
+from auoreo.schema.voice_api import VoiceTranscription as VoiceTranscription  # re-export
 
 
 class _In(BaseModel):
@@ -44,6 +50,9 @@ class SessionInfo(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    project: str | None = Field(
+        default=None, description="Working directory the session was created in (I5; list only)."
+    )
 
 
 class MessageOut(BaseModel):
@@ -63,6 +72,12 @@ class PermissionReply(_In):
         description="With `once`: also approve every pending request in the same approval group "
         "(permission, cwd, risk tier, tool) across sessions.",
     )
+    updated_input: dict[str, Any] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("updated_input", "updatedInput"),
+        description="Allow with edited tool arguments (spec §5.2 `allow{updatedInput}`); only for "
+        "requests marked `editable`. Re-validated against the tool schema, approved once, audited.",
+    )
 
 
 class PendingPermission(BaseModel):
@@ -74,6 +89,9 @@ class PendingPermission(BaseModel):
     detail: str
     one_shot: bool = Field(default=False, description="No `always`: single-use (e.g. sandbox escalation).")
     risk: str = "medium"
+    editable: bool = Field(default=False, description="The reply may carry `updated_input`.")
+    input: dict[str, Any] | None = Field(default=None, description="Arguments for the edit form.")
+    justification: str | None = Field(default=None, description="Why the agent asks (escalation).")
 
 
 class HarnessEntry(BaseModel):
@@ -100,6 +118,8 @@ class ReloadResult(BaseModel):
     generation: int
     errors: list[str]
     changes: dict[str, dict[str, list[str]]]
+    kind: str | None = Field(default=None, description="The `?kind=` scope (I5); None = everything.")
+    note: str | None = None
 
 
 class Health(BaseModel):
@@ -447,44 +467,3 @@ class FactActionResult(BaseModel):
     id: int
     ok: bool
     trust: float | None = None
-
-
-# --- M4c voice
-class VoiceSegment(BaseModel):
-    start: float
-    end: float
-    text: str
-
-
-class VoiceTranscription(BaseModel):
-    text: str
-    segments: list[VoiceSegment]
-    language: str | None = None
-    duration_s: float = Field(description="Duration of the normalized audio")
-    backend: str = Field(description="Selected stt backend")
-    run_id: str | None = Field(default=None, description="Followup run when `session_id` was given")
-
-
-class VoiceSpeakRequest(_In):
-    text: str = Field(min_length=1, max_length=5000)
-    voice: str | None = Field(default=None, max_length=200)
-    speed: float = Field(default=1.0, ge=0.25, le=4.0)
-    format: Literal["wav", "mp3", "opus"] | None = Field(
-        default=None, description="Transcode the backend output (ffmpeg); default = backend native"
-    )
-    session_id: str | None = None
-
-
-class VoiceBackendStatus(BaseModel):
-    kind: str
-    name: str | None = None
-    ok: bool
-    detail: str = ""
-    remedy: str = ""
-    license: str = ""
-    posture: str = "ok"
-
-
-class VoiceStatus(BaseModel):
-    enabled: bool
-    backends: list[VoiceBackendStatus]

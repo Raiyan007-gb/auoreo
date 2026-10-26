@@ -32,6 +32,8 @@ export type WsPermissionReply = {
   message?: string | null;
   /** With `once`: also approve the rest of the request's approval group. */
   cascade?: boolean;
+  /** I5: allow with edited tool arguments (`editable` requests only). */
+  updated_input?: Record<string, unknown> | null;
 };
 export type WsQuestionAnswer = { kind: "question"; responses: Record<string, unknown>[] };
 export interface WsControlResponse {

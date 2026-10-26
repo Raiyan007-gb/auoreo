@@ -12,8 +12,9 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+from rich.markup import escape
 
-from auoreo.cli.common import console, err_console, settings
+from auoreo.cli.common import console, dump_json, err_console, settings
 from auoreo.core.crypto_columns import DbKeyring, parse_keys
 from auoreo.core.db import SCHEMA_VERSION, alembic_config, migrate
 
@@ -56,11 +57,40 @@ def history() -> None:
     command.history(alembic_config(_url()), verbose=False)
 
 
+def _rows(target: str, session: str | None, tail: int, as_json: bool) -> None:
+    """--- I5: the last N rows of sessions|events|audit (read-only, redacted)."""
+    from auoreo.core.db_rows import DbInspectError, inspect_rows
+
+    try:
+        rows = inspect_rows(settings(), target, session, tail)
+    except DbInspectError as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2 if "target" in str(exc) else 1) from exc
+    if as_json:
+        dump_json(rows)
+        return
+    for r in rows:
+        console.print(escape("  ".join(f"{k}={json.dumps(v, default=str)}" for k, v in r.items())))
+    if not rows:
+        console.print(f"no {target} rows" + (f" for session {session}" if session else ""))
+
+
 @app.command("inspect")  # --- G5a
-def inspect(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
-    """Read-only: schema version, Alembic head/current, row counts per table, file sizes."""
+def inspect(
+    target: Annotated[
+        str | None, typer.Argument(help="sessions | events | audit (I5); omit for the summary.")
+    ] = None,
+    session: Annotated[str | None, typer.Option("--session", "-s", help="Only this session.")] = None,
+    tail: Annotated[int, typer.Option("--tail", "-n", help="Last N rows (oldest first).", min=1)] = 20,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Read-only: schema version, Alembic head/current, row counts per table, file sizes —
+    or, with a TARGET, the last N rows of that table."""
     from auoreo.core.debuginfo import db_inspect
 
+    if target is not None:
+        _rows(target, session, tail, as_json)
+        return
     info = db_inspect(settings())
     if as_json:
         print(json.dumps(info, indent=2))

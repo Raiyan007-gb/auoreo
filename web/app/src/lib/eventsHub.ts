@@ -32,6 +32,10 @@ export const EXTRA_EVENT_TYPES = [
   "delivery.failed",
   "delivery.unknown",
   "policy.choice",
+  "mcp.elicitation.open", // --- I5
+  "skills.installed", // --- I5
+  "skills.approved",
+  "skills.removed",
   "voice.transcript",
   "voice.speaking",
   "voice.spoke",

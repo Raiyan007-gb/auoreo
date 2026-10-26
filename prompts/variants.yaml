@@ -5,7 +5,8 @@
 # Fields: omit_fields, temperature, reasoning (on|off|auto), reasoning_vocab (AUOREO effort
 # low|medium|high|max → provider value; a missing level clamps to the nearest weaker one;
 # unset = built-in: max→high except Opus-class), thinking_display (hidden|summary|full),
-# block_binding (keep|strip prior thinking blocks), interleaved_field, rename_fields.
+# block_binding (keep|strip prior thinking blocks), interleaved_field, rename_fields, and an
+# optional unique `name` so `auoreo run --variant <name>` can pick the entry explicitly.
 #
 # toolOrder (spec §12): order of the prompt's tool list and of the request's tool schemas.
 # Must contain `<unlisted-tools>` exactly once; every tool not named here takes that slot in
@@ -24,36 +25,53 @@ toolOrder:
   - tool_search
 variants:
   # OpenRouter free SKUs rarely support reasoning params: fail safe.
-  - provider: openrouter
+  - name: openrouter-free
+    provider: openrouter
     model_regex: ":free$"
     reasoning: "off"
     temperature: 0.4
   # Kimi: fixed sampling; interleaved reasoning travels as `reasoning_content`.
-  - provider: "*"
+  - name: kimi
+    provider: "*"
     model_regex: "kimi|moonshot"
     omit_fields: [temperature]
     interleaved_field: reasoning_content
   # OpenAI o-series / GPT-5: fixed temperature; reasoning_effort tops out at high.
-  - provider: "*"
+  - name: openai-reasoning
+    provider: "*"
     model_regex: "(^|/)o[0-9]|gpt-5"
     omit_fields: [temperature]
     reasoning_vocab: {low: low, medium: medium, high: high, max: high}
   # Anthropic Opus-class (4.6+ / 5.x, Fable, Mythos): adaptive thinking, `max` effort native,
   # sampling params removed.
-  - provider: "*"
+  - name: anthropic-opus
+    provider: "*"
     model_regex: "claude-(opus|fable|mythos)-(5|4[.-][6-9])"
     omit_fields: [temperature]
     reasoning_vocab: {low: low, medium: medium, high: high, max: max}
     thinking_display: summary
   # Anthropic Sonnet/Haiku 4.6+ / 5.x: adaptive thinking; max clamps to high (built-in).
-  - provider: "*"
+  - name: anthropic-sonnet
+    provider: "*"
     model_regex: "claude-(sonnet|haiku)-(5|4[.-]6)"
     omit_fields: [temperature]
     thinking_display: summary
   # Gemini: reasoning_effort maps to thinking budgets; no `max` tier.
-  - provider: "*"
+  - name: gemini
+    provider: "*"
     model_regex: "gemini"
     reasoning_vocab: {low: low, medium: medium, high: high, max: high}
-  - provider: "*"
+  - name: default
+    provider: "*"
     model_regex: ".*"
     temperature: 0.4
+# Named presets (I5): chosen only by `auoreo run --variant <name>`, never matched by model id.
+# An entry above with a `name:` can be picked the same way (exact name match wins over regex).
+named:
+  - name: deterministic
+    temperature: 0.0
+    reasoning: "off"
+  - name: deep-think
+    reasoning: "on"
+    reasoning_vocab: {low: high, medium: high, high: high, max: high}
+    thinking_display: full

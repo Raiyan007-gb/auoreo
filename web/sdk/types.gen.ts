@@ -558,7 +558,8 @@ export interface paths {
         put?: never;
         /**
          * Reload
-         * @description Re-discover all definition roots. Takes effect at the next turn.
+         * @description Re-discover all definition roots. Takes effect at the next turn. `?kind=` (I5) scopes
+         *     the side effects and the reported diff: agent|command|mcp|lsp|config|model.
          */
         post: operations["reload_api_harness_reload_post"];
         delete?: never;
@@ -613,6 +614,27 @@ export interface paths {
         put?: never;
         /** Create Task */
         post: operations["create_task_api_kanban_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/lsp/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lsp Stop
+         * @description Stop language servers spawned by the `lsp` tool inside this server process (all, or one
+         *     session's / one language's). They start again on the next `lsp` call.
+         */
+        post: operations["lsp_stop_api_lsp_stop_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -877,6 +899,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Memory Usage
+         * @description Fact/chunk/transcript counts, the memory.db size and the compaction savings so far.
+         */
+        get: operations["memory_usage_api_memory_usage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/oauth/{connector}/settled": {
         parameters: {
             query?: never;
@@ -923,7 +965,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reply */
+        /**
+         * Reply
+         * @description `once|always|reject`; `updated_input` allows an `editable` request with edited arguments.
+         */
         post: operations["reply_api_permissions__request_id__reply_post"];
         delete?: never;
         options?: never;
@@ -1638,6 +1683,69 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/hub/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install
+         * @description Download a skill into quarantine (`~/.auoreo/skills/.quarantine/<name>/`, never
+         *     discovered) and pin its sha256 in skills.lock. It stays disabled until approved.
+         */
+        post: operations["install_api_skills_hub_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/hub/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search
+         * @description Search every configured tap (name or description substring; empty = everything).
+         *     A tap that fails is listed in `errors`; the others still answer.
+         */
+        get: operations["search_api_skills_hub_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/hub/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove
+         * @description Delete a hub-managed skill (quarantined or approved) and its lock entry, then reload.
+         *     Skills not installed by the hub are never touched (404).
+         */
+        delete: operations["remove_api_skills_hub__name__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3312,6 +3420,22 @@ export interface components {
             /** Routes */
             routes: string[];
         };
+        /** HubInstallRequest */
+        HubInstallRequest: {
+            /**
+             * Force
+             * @description Reinstall (goes back to quarantine).
+             * @default false
+             */
+            force: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Tap
+             * @description Only look in this configured tap.
+             */
+            tap?: string | null;
+        };
         /** HubInstalledSkill */
         HubInstalledSkill: {
             /** Approved At */
@@ -3348,6 +3472,45 @@ export interface components {
              * @default
              */
             version: string;
+        };
+        /** HubRemoved */
+        HubRemoved: {
+            /** Name */
+            name: string;
+            /** Removed */
+            removed: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "quarantined" | "approved";
+        };
+        /** HubSearchHit */
+        HubSearchHit: {
+            /** Description */
+            description: string;
+            /** Installed */
+            installed?: ("quarantined" | "approved") | null;
+            /** Name */
+            name: string;
+            /** Tap */
+            tap: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+        };
+        /** HubSearchResult */
+        HubSearchResult: {
+            /** Errors */
+            errors?: string[];
+            /** Hits */
+            hits: components["schemas"]["HubSearchHit"][];
+            /** Query */
+            query: string;
+            /** Taps */
+            taps: string[];
         };
         /** KanbanCreate */
         KanbanCreate: {
@@ -3410,6 +3573,29 @@ export interface components {
         LoginRequest: {
             /** Password */
             password: string;
+        };
+        /** LspStopRequest */
+        LspStopRequest: {
+            /**
+             * Language
+             * @description Only this language (python, rust, …).
+             */
+            language?: string | null;
+            /**
+             * Session Id
+             * @description Only this session's servers.
+             */
+            session_id?: string | null;
+        };
+        /** LspStopped */
+        LspStopped: {
+            /** Count */
+            count: number;
+            /**
+             * Stopped
+             * @description `<session>:<language>:<root>` of every stopped server.
+             */
+            stopped: string[];
         };
         /** MailMessage */
         MailMessage: {
@@ -3735,6 +3921,69 @@ export interface components {
             /** Files */
             files: components["schemas"]["MemoryFile"][];
         };
+        /**
+         * MemoryUsage
+         * @description Long-term memory size plus how much context compaction has saved (`compaction.completed`).
+         */
+        MemoryUsage: {
+            /**
+             * Archived Facts
+             * @default 0
+             */
+            archived_facts: number;
+            /**
+             * Archived Messages
+             * @default 0
+             */
+            archived_messages: number;
+            /**
+             * Chunks
+             * @default 0
+             */
+            chunks: number;
+            /**
+             * Compactions
+             * @default 0
+             */
+            compactions: number;
+            /**
+             * Db Bytes
+             * @default 0
+             */
+            db_bytes: number;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Facts
+             * @default 0
+             */
+            facts: number;
+            /**
+             * Post Tokens
+             * @default 0
+             */
+            post_tokens: number;
+            /**
+             * Pre Tokens
+             * @default 0
+             */
+            pre_tokens: number;
+            /**
+             * Saved Ratio
+             * @default 0
+             */
+            saved_ratio: number;
+            /**
+             * Transcript
+             * @default 0
+             */
+            transcript: number;
+            /**
+             * Vector
+             * @default false
+             */
+            vector: boolean;
+        };
         /** MessageOut */
         MessageOut: {
             /** Content */
@@ -3923,6 +4172,24 @@ export interface components {
             /** Detail */
             detail: string;
             /**
+             * Editable
+             * @description The reply may carry `updated_input`.
+             * @default false
+             */
+            editable: boolean;
+            /**
+             * Input
+             * @description Arguments for the edit form.
+             */
+            input?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Justification
+             * @description Why the agent asks (escalation).
+             */
+            justification?: string | null;
+            /**
              * One Shot
              * @description No `always`: single-use (e.g. sandbox escalation).
              * @default false
@@ -3974,6 +4241,13 @@ export interface components {
              * @enum {string}
              */
             reply: "once" | "always" | "reject";
+            /**
+             * Updated Input
+             * @description Allow with edited tool arguments (spec §5.2 `allow{updatedInput}`); only for requests marked `editable`. Re-validated against the tool schema, approved once, audited.
+             */
+            updated_input?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** PlanStep */
         PlanStep: {
@@ -4170,6 +4444,13 @@ export interface components {
             errors: string[];
             /** Generation */
             generation: number;
+            /**
+             * Kind
+             * @description The `?kind=` scope (I5); None = everything.
+             */
+            kind?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /** RetryAccepted */
         RetryAccepted: {
@@ -4550,6 +4831,11 @@ export interface components {
             model: string | null;
             /** Parent Id */
             parent_id?: string | null;
+            /**
+             * Project
+             * @description Working directory the session was created in (I5; list only).
+             */
+            project?: string | null;
             /** Status */
             status: string;
             /** Title */
@@ -4575,6 +4861,11 @@ export interface components {
             id: string;
             /** Model */
             model: string | null;
+            /**
+             * Project
+             * @description Working directory the session was created in (I5; list only).
+             */
+            project?: string | null;
             /** Status */
             status: string;
             /** Title */
@@ -6461,7 +6752,9 @@ export interface operations {
     };
     reload_api_harness_reload_post: {
         parameters: {
-            query?: never;
+            query?: {
+                kind?: ("agent" | "command" | "model" | "config" | "lsp" | "mcp") | null;
+            };
             header?: {
                 authorization?: string | null;
             };
@@ -6609,6 +6902,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["KanbanTask"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lsp_stop_api_lsp_stop_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LspStopRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LspStopped"];
                 };
             };
             /** @description Validation Error */
@@ -7207,6 +7537,39 @@ export interface operations {
             };
         };
     };
+    memory_usage_api_memory_usage_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryUsage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     settled_api_oauth__connector__settled_post: {
         parameters: {
             query?: never;
@@ -7311,14 +7674,12 @@ export interface operations {
                     };
                 };
             };
-            /** @description Validation Error */
+            /** @description Edited input refused */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
+                content?: never;
             };
         };
     };
@@ -8930,6 +9291,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SharedSession"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_api_skills_hub_install_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HubInstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubInstalledSkill"];
+                };
+            };
+            /** @description Not in any tap, already installed, or refused */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_api_skills_hub_search_get: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubSearchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_api_skills_hub__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubRemoved"];
                 };
             };
             /** @description Validation Error */
