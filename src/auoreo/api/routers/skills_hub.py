@@ -1,5 +1,5 @@
-"""`/api/skills/*` (G6): skill sources (taps + MCP servers) and hub-managed skills. Installing
-stays a CLI action (`auoreo skills install`); approving a quarantined skill works here too."""
+"""`/api/skills/*` (G6, I5): skill sources (taps + MCP servers) and hub-managed skills —
+search every tap, install (lands QUARANTINED, invisible to agents), approve, remove."""
 
 from __future__ import annotations
 
@@ -8,7 +8,15 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, status
 
 from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
-from auoreo.schema.skills_hub import HubInstalledSkill, McpSkillSource, SkillSources
+from auoreo.schema.skills_hub import (
+    HubInstalledSkill,
+    HubInstallRequest,
+    HubRemoved,
+    HubSearchHit,
+    HubSearchResult,
+    McpSkillSource,
+    SkillSources,
+)
 from auoreo.skillhub import HubError, hub_for, mcp_skills
 
 router = APIRouter(prefix="/api/skills", tags=["skills"], dependencies=AUTH)
@@ -37,6 +45,58 @@ async def sources(svc: ServicesDep) -> SkillSources:
     )
 
 
+@router.get("/hub/search", response_model=HubSearchResult)
+async def search(svc: ServicesDep, q: str = "") -> HubSearchResult:
+    """Search every configured tap (name or description substring; empty = everything).
+    A tap that fails is listed in `errors`; the others still answer."""
+    hub = hub_for(svc.settings)
+    try:
+        hits, errors = await hub.search(q[:200])
+        lock = hub.lock()
+    except HubError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from None
+    return HubSearchResult(
+        query=q,
+        taps=list(hub.cfg.taps),
+        hits=[
+            HubSearchHit(
+                name=h.name,
+                description=h.description,
+                tap=h.tap,
+                version=h.version,
+                installed=lock.get(h.name, {}).get("status"),
+            )
+            for h in hits
+        ],
+        errors=errors,
+    )
+
+
+@router.post(
+    "/hub/install",
+    response_model=HubInstalledSkill,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[IDEMPOTENT],
+    responses={409: {"description": "Not in any tap, already installed, or refused"}},
+)
+async def install(body: HubInstallRequest, svc: ServicesDep) -> HubInstalledSkill:
+    """Download a skill into quarantine (`~/.auoreo/skills/.quarantine/<name>/`, never
+    discovered) and pin its sha256 in skills.lock. It stays disabled until approved."""
+    hub = hub_for(svc.settings)
+    if body.tap is not None and body.tap not in hub.cfg.taps:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "tap is not configured (g6.skills.taps)")
+    try:
+        rec = await hub.install(body.name, tap=body.tap, force=body.force)
+    except HubError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from None
+    await svc.emit(
+        "server",
+        "skills.installed",
+        {"name": body.name, "sha256": rec["sha256"], "tap": rec["tap"], "status": "quarantined"},
+    )
+    return HubInstalledSkill.model_validate({**rec, "integrity": "ok"})
+
+
 @router.post("/hub/{name}/approve", response_model=HubInstalledSkill, dependencies=[IDEMPOTENT])
 async def approve(name: str, svc: ServicesDep) -> HubInstalledSkill:
     """Enable a quarantined skill (sha256 re-checked against skills.lock), then reload."""
@@ -48,3 +108,17 @@ async def approve(name: str, svc: ServicesDep) -> HubInstalledSkill:
     svc.harness.reload()
     await svc.emit("server", "skills.approved", {"name": name, "sha256": rec["sha256"]})
     return HubInstalledSkill.model_validate({**rec, "integrity": "ok"})
+
+
+@router.delete("/hub/{name}", response_model=HubRemoved)
+async def remove(name: str, svc: ServicesDep) -> HubRemoved:
+    """Delete a hub-managed skill (quarantined or approved) and its lock entry, then reload.
+    Skills not installed by the hub are never touched (404)."""
+    try:
+        rec = hub_for(svc.settings).remove(name)
+    except HubError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from None
+    if rec.get("status") == "approved":
+        svc.harness.reload()
+    await svc.emit("server", "skills.removed", {"name": name, "sha256": rec.get("sha256")})
+    return HubRemoved(name=name, removed=True, status=rec.get("status", "quarantined"))

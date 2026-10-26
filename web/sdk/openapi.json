@@ -2486,6 +2486,40 @@
         "title": "HooksHealth",
         "type": "object"
       },
+      "HubInstallRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "default": false,
+            "description": "Reinstall (goes back to quarantine).",
+            "title": "Force",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "title": "Name",
+            "type": "string"
+          },
+          "tap": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only look in this configured tap.",
+            "title": "Tap"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "HubInstallRequest",
+        "type": "object"
+      },
       "HubInstalledSkill": {
         "properties": {
           "approved_at": {
@@ -2566,6 +2600,112 @@
           "installed_at"
         ],
         "title": "HubInstalledSkill",
+        "type": "object"
+      },
+      "HubRemoved": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "quarantined",
+              "approved"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "removed",
+          "status"
+        ],
+        "title": "HubRemoved",
+        "type": "object"
+      },
+      "HubSearchHit": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "installed": {
+            "anyOf": [
+              {
+                "enum": [
+                  "quarantined",
+                  "approved"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Installed"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tap": {
+            "title": "Tap",
+            "type": "string"
+          },
+          "version": {
+            "default": "",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "tap"
+        ],
+        "title": "HubSearchHit",
+        "type": "object"
+      },
+      "HubSearchResult": {
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/HubSearchHit"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "taps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Taps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "query",
+          "taps",
+          "hits"
+        ],
+        "title": "HubSearchResult",
         "type": "object"
       },
       "KanbanCreate": {
@@ -2712,6 +2852,59 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "LspStopRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only this language (python, rust, \u2026).",
+            "title": "Language"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only this session's servers.",
+            "title": "Session Id"
+          }
+        },
+        "title": "LspStopRequest",
+        "type": "object"
+      },
+      "LspStopped": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "stopped": {
+            "description": "`<session>:<language>:<root>` of every stopped server.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Stopped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "stopped",
+          "count"
+        ],
+        "title": "LspStopped",
         "type": "object"
       },
       "MailMessage": {
@@ -3473,6 +3666,77 @@
         "title": "MemoryFiles",
         "type": "object"
       },
+      "MemoryUsage": {
+        "description": "Long-term memory size plus how much context compaction has saved (`compaction.completed`).",
+        "properties": {
+          "archived_facts": {
+            "default": 0,
+            "title": "Archived Facts",
+            "type": "integer"
+          },
+          "archived_messages": {
+            "default": 0,
+            "title": "Archived Messages",
+            "type": "integer"
+          },
+          "chunks": {
+            "default": 0,
+            "title": "Chunks",
+            "type": "integer"
+          },
+          "compactions": {
+            "default": 0,
+            "title": "Compactions",
+            "type": "integer"
+          },
+          "db_bytes": {
+            "default": 0,
+            "title": "Db Bytes",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "facts": {
+            "default": 0,
+            "title": "Facts",
+            "type": "integer"
+          },
+          "post_tokens": {
+            "default": 0,
+            "title": "Post Tokens",
+            "type": "integer"
+          },
+          "pre_tokens": {
+            "default": 0,
+            "title": "Pre Tokens",
+            "type": "integer"
+          },
+          "saved_ratio": {
+            "default": 0.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Saved Ratio",
+            "type": "number"
+          },
+          "transcript": {
+            "default": 0,
+            "title": "Transcript",
+            "type": "integer"
+          },
+          "vector": {
+            "default": false,
+            "title": "Vector",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "MemoryUsage",
+        "type": "object"
+      },
       "MessageOut": {
         "properties": {
           "content": {
@@ -3883,6 +4147,37 @@
             "title": "Detail",
             "type": "string"
           },
+          "editable": {
+            "default": false,
+            "description": "The reply may carry `updated_input`.",
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Arguments for the edit form.",
+            "title": "Input"
+          },
+          "justification": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the agent asks (escalation).",
+            "title": "Justification"
+          },
           "one_shot": {
             "default": false,
             "description": "No `always`: single-use (e.g. sandbox escalation).",
@@ -4004,6 +4299,19 @@
             ],
             "title": "Reply",
             "type": "string"
+          },
+          "updated_input": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Allow with edited tool arguments (spec \u00a75.2 `allow{updatedInput}`); only for requests marked `editable`. Re-validated against the tool schema, approved once, audited.",
+            "title": "Updated Input"
           }
         },
         "required": [
@@ -4395,6 +4703,29 @@
           "generation": {
             "title": "Generation",
             "type": "integer"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The `?kind=` scope (I5); None = everything.",
+            "title": "Kind"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           }
         },
         "required": [
@@ -5113,6 +5444,18 @@
             ],
             "title": "Parent Id"
           },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Working directory the session was created in (I5; list only).",
+            "title": "Project"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -5169,6 +5512,18 @@
               }
             ],
             "title": "Model"
+          },
+          "project": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Working directory the session was created in (I5; list only).",
+            "title": "Project"
           },
           "status": {
             "title": "Status",
@@ -9198,9 +9553,33 @@
     },
     "/api/harness/reload": {
       "post": {
-        "description": "Re-discover all definition roots. Takes effect at the next turn.",
+        "description": "Re-discover all definition roots. Takes effect at the next turn. `?kind=` (I5) scopes\nthe side effects and the reported diff: agent|command|mcp|lsp|config|model.",
         "operationId": "reload_api_harness_reload_post",
         "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "agent",
+                    "command",
+                    "model",
+                    "config",
+                    "lsp",
+                    "mcp"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
           {
             "in": "header",
             "name": "authorization",
@@ -9556,6 +9935,89 @@
         "summary": "Create Task",
         "tags": [
           "kanban"
+        ]
+      }
+    },
+    "/api/lsp/stop": {
+      "post": {
+        "description": "Stop language servers spawned by the `lsp` tool inside this server process (all, or one\nsession's / one language's). They start again on the next `lsp` call.",
+        "operationId": "lsp_stop_api_lsp_stop_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/LspStopRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LspStopped"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lsp Stop",
+        "tags": [
+          "lsp"
         ]
       }
     },
@@ -10815,6 +11277,72 @@
         ]
       }
     },
+    "/api/memory/usage": {
+      "get": {
+        "description": "Fact/chunk/transcript counts, the memory.db size and the compaction savings so far.",
+        "operationId": "memory_usage_api_memory_usage_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryUsage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Memory Usage",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
     "/api/permissions/pending": {
       "get": {
         "operationId": "pending_api_permissions_pending_get",
@@ -10902,6 +11430,7 @@
     },
     "/api/permissions/{request_id}/reply": {
       "post": {
+        "description": "`once|always|reject`; `updated_input` allows an `editable` request with edited arguments.",
         "operationId": "reply_api_permissions__request_id__reply_post",
         "parameters": [
           {
@@ -10972,14 +11501,7 @@
             "description": "Successful Response"
           },
           "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
+            "description": "Edited input refused"
           }
         },
         "summary": "Reply",
@@ -14173,6 +14695,254 @@
         "summary": "Shared",
         "tags": [
           "sessions"
+        ]
+      }
+    },
+    "/api/skills/hub/install": {
+      "post": {
+        "description": "Download a skill into quarantine (`~/.auoreo/skills/.quarantine/<name>/`, never\ndiscovered) and pin its sha256 in skills.lock. It stays disabled until approved.",
+        "operationId": "install_api_skills_hub_install_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubInstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubInstalledSkill"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Not in any tap, already installed, or refused"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install",
+        "tags": [
+          "skills"
+        ]
+      }
+    },
+    "/api/skills/hub/search": {
+      "get": {
+        "description": "Search every configured tap (name or description substring; empty = everything).\nA tap that fails is listed in `errors`; the others still answer.",
+        "operationId": "search_api_skills_hub_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubSearchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search",
+        "tags": [
+          "skills"
+        ]
+      }
+    },
+    "/api/skills/hub/{name}": {
+      "delete": {
+        "description": "Delete a hub-managed skill (quarantined or approved) and its lock entry, then reload.\nSkills not installed by the hub are never touched (404).",
+        "operationId": "remove_api_skills_hub__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubRemoved"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove",
+        "tags": [
+          "skills"
         ]
       }
     },

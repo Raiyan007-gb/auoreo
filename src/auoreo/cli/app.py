@@ -28,7 +28,9 @@ app.add_typer(db.app, name="db", help="Migrate and inspect state.db (Alembic).")
 @app.command("version")
 def version() -> None:
     """Print the version."""
-    typer.echo(__version__)
+    from auoreo.cli.output import dumps, want_json  # --- I5: global --json
+
+    typer.echo(dumps({"version": __version__}) if want_json() else __version__)
 
 
 # M3 control plane: tunnels, web, logs
@@ -128,6 +130,7 @@ app.add_typer(
 
 # --- H4: global --profile, completion, messaging, kanban, mcp, model/agent/command/lsp,
 # loop/heartbeat, login, new-feature, worktree gc, eval memory
+from auoreo.cli import output  # noqa: E402  # --- I5
 from auoreo.cli.commands import (  # noqa: E402
     catalog,
     completion,
@@ -147,12 +150,16 @@ from auoreo.cli.profiles import apply_profile  # noqa: E402
 
 @app.callback()
 def _global(
+    ctx: typer.Context,
     profile: str | None = typer.Option(
         None, "--profile", "-p", envvar=PROFILE_ENV, help="Use ~/.auoreo/profiles/<name>/ as the home."
     ),
+    as_json: bool = typer.Option(False, "--json", help="List/get/status commands print JSON (I5)."),
+    mini: bool = typer.Option(False, "--mini", help="Compact output: one-line JSON, no colour (I5)."),
 ) -> None:
     """AUOREO — filesystem-native agent harness."""
     apply_profile(profile)
+    output.configure(ctx, as_json=as_json, compact=mini)  # --- I5
 
 
 app.command("completion")(completion.completion)
@@ -169,3 +176,8 @@ app.command("login")(login.login)
 app.command("new-feature")(worktree.new_feature)
 app.add_typer(worktree.app, name="worktree", help="Feature worktrees under .auoreo/worktrees: gc.")
 app.add_typer(evals.app, name="eval", help="Evals: memory retrieval (recall@10, nDCG, p95).")
+
+# --- I5: reload subcommands, plugin get/set/install, top-level queue + pairing
+from auoreo.cli.commands import i5 as i5_cli  # noqa: E402
+
+i5_cli.register(app)

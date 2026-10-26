@@ -6,12 +6,14 @@ import httpx
 from ... import errors
 from ...client import AuthenticatedClient, Client
 from ...models.http_validation_error import HTTPValidationError
+from ...models.reload_api_harness_reload_post_kind_type_0 import ReloadApiHarnessReloadPostKindType0
 from ...models.reload_result import ReloadResult
 from ...types import UNSET, Response, Unset
 
 
 def _get_kwargs(
     *,
+    kind: None | ReloadApiHarnessReloadPostKindType0 | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
@@ -23,9 +25,23 @@ def _get_kwargs(
     if auoreo_token is not UNSET:
         cookies["auoreo_token"] = auoreo_token
 
+    params: dict[str, Any] = {}
+
+    json_kind: None | str | Unset
+    if isinstance(kind, Unset):
+        json_kind = UNSET
+    elif isinstance(kind, ReloadApiHarnessReloadPostKindType0):
+        json_kind = kind.value
+    else:
+        json_kind = kind
+    params["kind"] = json_kind
+
+    params = {k: v for k, v in params.items() if v is not UNSET and v is not None}
+
     _kwargs: dict[str, Any] = {
         "method": "post",
         "url": "/api/harness/reload",
+        "params": params,
         "cookies": cookies,
     }
 
@@ -66,14 +82,17 @@ def _build_response(
 def sync_detailed(
     *,
     client: AuthenticatedClient | Client,
+    kind: None | ReloadApiHarnessReloadPostKindType0 | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | ReloadResult]:
     """Reload
 
-     Re-discover all definition roots. Takes effect at the next turn.
+     Re-discover all definition roots. Takes effect at the next turn. `?kind=` (I5) scopes
+    the side effects and the reported diff: agent|command|mcp|lsp|config|model.
 
     Args:
+        kind (None | ReloadApiHarnessReloadPostKindType0 | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -86,6 +105,7 @@ def sync_detailed(
     """
 
     kwargs = _get_kwargs(
+        kind=kind,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -100,14 +120,17 @@ def sync_detailed(
 def sync(
     *,
     client: AuthenticatedClient | Client,
+    kind: None | ReloadApiHarnessReloadPostKindType0 | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | ReloadResult | None:
     """Reload
 
-     Re-discover all definition roots. Takes effect at the next turn.
+     Re-discover all definition roots. Takes effect at the next turn. `?kind=` (I5) scopes
+    the side effects and the reported diff: agent|command|mcp|lsp|config|model.
 
     Args:
+        kind (None | ReloadApiHarnessReloadPostKindType0 | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -121,6 +144,7 @@ def sync(
 
     return sync_detailed(
         client=client,
+        kind=kind,
         authorization=authorization,
         auoreo_token=auoreo_token,
     ).parsed
@@ -129,14 +153,17 @@ def sync(
 async def asyncio_detailed(
     *,
     client: AuthenticatedClient | Client,
+    kind: None | ReloadApiHarnessReloadPostKindType0 | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[HTTPValidationError | ReloadResult]:
     """Reload
 
-     Re-discover all definition roots. Takes effect at the next turn.
+     Re-discover all definition roots. Takes effect at the next turn. `?kind=` (I5) scopes
+    the side effects and the reported diff: agent|command|mcp|lsp|config|model.
 
     Args:
+        kind (None | ReloadApiHarnessReloadPostKindType0 | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -149,6 +176,7 @@ async def asyncio_detailed(
     """
 
     kwargs = _get_kwargs(
+        kind=kind,
         authorization=authorization,
         auoreo_token=auoreo_token,
     )
@@ -161,14 +189,17 @@ async def asyncio_detailed(
 async def asyncio(
     *,
     client: AuthenticatedClient | Client,
+    kind: None | ReloadApiHarnessReloadPostKindType0 | Unset = UNSET,
     authorization: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> HTTPValidationError | ReloadResult | None:
     """Reload
 
-     Re-discover all definition roots. Takes effect at the next turn.
+     Re-discover all definition roots. Takes effect at the next turn. `?kind=` (I5) scopes
+    the side effects and the reported diff: agent|command|mcp|lsp|config|model.
 
     Args:
+        kind (None | ReloadApiHarnessReloadPostKindType0 | Unset):
         authorization (None | str | Unset):
         auoreo_token (None | str | Unset):
 
@@ -183,6 +214,7 @@ async def asyncio(
     return (
         await asyncio_detailed(
             client=client,
+            kind=kind,
             authorization=authorization,
             auoreo_token=auoreo_token,
         )

@@ -27,6 +27,7 @@ class SessionDetail:
         workflow (str):
         archived (bool | Unset):  Default: False.
         parent_id (None | str | Unset):
+        project (None | str | Unset): Working directory the session was created in (I5; list only).
     """
 
     agent: str
@@ -39,6 +40,7 @@ class SessionDetail:
     workflow: str
     archived: bool | Unset = False
     parent_id: None | str | Unset = UNSET
+    project: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -67,6 +69,12 @@ class SessionDetail:
         else:
             parent_id = self.parent_id
 
+        project: None | str | Unset
+        if isinstance(self.project, Unset):
+            project = UNSET
+        else:
+            project = self.project
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -85,6 +93,8 @@ class SessionDetail:
             field_dict["archived"] = archived
         if parent_id is not UNSET:
             field_dict["parent_id"] = parent_id
+        if project is not UNSET:
+            field_dict["project"] = project
 
         return field_dict
 
@@ -123,6 +133,15 @@ class SessionDetail:
 
         parent_id = _parse_parent_id(d.pop("parent_id", UNSET))
 
+        def _parse_project(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        project = _parse_project(d.pop("project", UNSET))
+
         session_detail = cls(
             agent=agent,
             created_at=created_at,
@@ -134,6 +153,7 @@ class SessionDetail:
             workflow=workflow,
             archived=archived,
             parent_id=parent_id,
+            project=project,
         )
 
         session_detail.additional_properties = d

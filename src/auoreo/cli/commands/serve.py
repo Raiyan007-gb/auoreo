@@ -46,7 +46,14 @@ def serve(
     trusted_host: Annotated[
         list[str] | None, typer.Option("--trusted-host", help="Extra allowed Host header (repeatable).")
     ] = None,
-    ws_auth: Annotated[str | None, typer.Option(help="token (default) | off (loopback only)")] = None,
+    ws_auth: Annotated[
+        str | None,
+        typer.Option(
+            help="token (default: the server password or a session JWT) | jwt | capability | off "
+            "(loopback only). The spec enum is off|capability|jwt; `token` is a deliberate "
+            "extension (AGENTS.md, spec drift)."
+        ),
+    ] = None,
     mdns: Annotated[
         bool, typer.Option("--mdns", help="Advertise on the LAN (binds 0.0.0.0; password required).")
     ] = False,
@@ -106,6 +113,8 @@ def serve(
                 print(f"server listening on {url}", flush=True)  # discovery contract
                 if line := extras.ws_line(st.host, bound):  # --- G5a
                     emit(line)
+                for lan in serve_extras.lan_lines(st.host, bound):  # --- I5: LAN address
+                    emit(lan)
                 await extras.started(st, bound, emit)
                 if open_browser:
                     webbrowser.open(url)

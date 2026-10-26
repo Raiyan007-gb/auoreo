@@ -90,9 +90,15 @@ from .hook_ack import HookAck
 from .hook_ack_status import HookAckStatus
 from .hooks_health import HooksHealth
 from .http_validation_error import HTTPValidationError
+from .hub_install_request import HubInstallRequest
 from .hub_installed_skill import HubInstalledSkill
 from .hub_installed_skill_integrity import HubInstalledSkillIntegrity
 from .hub_installed_skill_status import HubInstalledSkillStatus
+from .hub_removed import HubRemoved
+from .hub_removed_status import HubRemovedStatus
+from .hub_search_hit import HubSearchHit
+from .hub_search_hit_installed_type_0 import HubSearchHitInstalledType0
+from .hub_search_result import HubSearchResult
 from .kanban_create import KanbanCreate
 from .kanban_task import KanbanTask
 from .kanban_task_status import KanbanTaskStatus
@@ -104,6 +110,8 @@ from .list_proposals_api_memory_prefs_proposals_get_status_type_0 import (
 from .list_suggestions_api_suggestions_get_status_type_0 import ListSuggestionsApiSuggestionsGetStatusType0
 from .list_tasks_api_kanban_get_status_type_0 import ListTasksApiKanbanGetStatusType0
 from .login_request import LoginRequest
+from .lsp_stop_request import LspStopRequest
+from .lsp_stopped import LspStopped
 from .mail_message import MailMessage
 from .mcp_skill_source import McpSkillSource
 from .meeting_attach_request import MeetingAttachRequest
@@ -120,6 +128,7 @@ from .memory_fact import MemoryFact
 from .memory_fact_page import MemoryFactPage
 from .memory_file import MemoryFile
 from .memory_files import MemoryFiles
+from .memory_usage import MemoryUsage
 from .message_out import MessageOut
 from .message_out_tool_calls_type_0_item import MessageOutToolCallsType0Item
 from .open_ai_chat_completion import OpenAIChatCompletion
@@ -136,10 +145,12 @@ from .open_ai_tool_call import OpenAIToolCall
 from .open_ai_tool_call_function import OpenAIToolCallFunction
 from .open_ai_usage import OpenAIUsage
 from .pending_permission import PendingPermission
+from .pending_permission_input_type_0 import PendingPermissionInputType0
 from .pending_question_out import PendingQuestionOut
 from .pending_question_out_questions_item import PendingQuestionOutQuestionsItem
 from .permission_reply import PermissionReply
 from .permission_reply_reply import PermissionReplyReply
+from .permission_reply_updated_input_type_0 import PermissionReplyUpdatedInputType0
 from .plan_step import PlanStep
 from .plan_step_status import PlanStepStatus
 from .plugin_info import PluginInfo
@@ -154,6 +165,7 @@ from .prefs_proposal_action import PrefsProposalAction
 from .prefs_proposal_in import PrefsProposalIn
 from .prefs_proposal_in_action import PrefsProposalInAction
 from .prefs_proposal_status import PrefsProposalStatus
+from .reload_api_harness_reload_post_kind_type_0 import ReloadApiHarnessReloadPostKindType0
 from .reload_result import ReloadResult
 from .reload_result_changes import ReloadResultChanges
 from .reload_result_changes_additional_property import ReloadResultChangesAdditionalProperty
@@ -317,6 +329,12 @@ __all__ = (
     "HubInstalledSkill",
     "HubInstalledSkillIntegrity",
     "HubInstalledSkillStatus",
+    "HubInstallRequest",
+    "HubRemoved",
+    "HubRemovedStatus",
+    "HubSearchHit",
+    "HubSearchHitInstalledType0",
+    "HubSearchResult",
     "KanbanCreate",
     "KanbanTask",
     "KanbanTaskStatus",
@@ -326,6 +344,8 @@ __all__ = (
     "ListSuggestionsApiSuggestionsGetStatusType0",
     "ListTasksApiKanbanGetStatusType0",
     "LoginRequest",
+    "LspStopped",
+    "LspStopRequest",
     "MailMessage",
     "McpSkillSource",
     "MeetingAttachRequest",
@@ -342,6 +362,7 @@ __all__ = (
     "MemoryFactPage",
     "MemoryFile",
     "MemoryFiles",
+    "MemoryUsage",
     "MessageOut",
     "MessageOutToolCallsType0Item",
     "OpenAIChatCompletion",
@@ -358,10 +379,12 @@ __all__ = (
     "OpenAIToolCallFunction",
     "OpenAIUsage",
     "PendingPermission",
+    "PendingPermissionInputType0",
     "PendingQuestionOut",
     "PendingQuestionOutQuestionsItem",
     "PermissionReply",
     "PermissionReplyReply",
+    "PermissionReplyUpdatedInputType0",
     "PlanStep",
     "PlanStepStatus",
     "PluginInfo",
@@ -376,6 +399,7 @@ __all__ = (
     "PrefsProposalIn",
     "PrefsProposalInAction",
     "PrefsProposalStatus",
+    "ReloadApiHarnessReloadPostKindType0",
     "ReloadResult",
     "ReloadResultChanges",
     "ReloadResultChangesAdditionalProperty",

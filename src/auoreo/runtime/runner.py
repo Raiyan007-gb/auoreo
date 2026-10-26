@@ -30,6 +30,7 @@ from auoreo.gateway.types import LLMRequest, ToolCall, tool_schema
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
 from auoreo.policy.bandit import BanditPolicy, Choice
+from auoreo.runtime.attachments import user_message  # --- I5
 from auoreo.runtime.budget import GRACE_NOTE, TurnBudget, all_free
 from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
 from auoreo.runtime.guards import LoopGuards
@@ -199,7 +200,7 @@ class AgentRunner:
             return TurnResult(run_id, "blocked", "", hook_error)
         await self.s.set_session_status(sid, "running", title=text)
 
-        user_msg = {"role": "user", "content": text}
+        user_msg = user_message(text, options.attachments)  # --- I5: `run -f` images as parts
         await self._persist(rt, user_msg)
         await self.s.emit(sid, "message.created", {"run_id": run_id, "role": "user", "content": text})
         turn_msg = rt.history[-1]  # located by identity each step: compaction moves indices

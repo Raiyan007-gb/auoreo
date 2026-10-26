@@ -1,7 +1,8 @@
 """G5a: the machinery behind `auoreo run` flags (spec §18), kept out of `commands/run.py`.
 
-- attachments (`-f`): text files are inlined as `<attachment>` blocks, binaries are named
-  but not inlined; each file is capped at 10 MiB.
+- attachments (`-f`): text files are inlined as `<attachment>` blocks, images become image
+  parts of the user message, small binaries travel base64-encoded, larger ones are named
+  (I5); each file is capped at 10 MiB.
 - session choice: `--session`, `--continue` (most recent), `--fork <id>` (run in a fork).
 - `--allow/--deny <perm[:pattern]>`: session-layer permission rules (floors still win).
 - `--auto`: asks are approved (never floors, never explicit denies).
@@ -19,9 +20,11 @@ from pathlib import Path
 from typing import Any
 
 from auoreo.cli.common import err_console
+from auoreo.cli.stdout_guard import StdoutGuard, write_line
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings
 from auoreo.harness.manifests import Rule
+from auoreo.runtime.attachments import AttachmentError, Composed, compose
 from auoreo.runtime.inbox import RunOptions
 
 MAX_ATTACHMENT = 10 * 1024 * 1024
@@ -35,24 +38,17 @@ class RunUsageError(ValueError):
 
 
 # ------------------------------------------------------------------ inputs
+def compose_attachments(prompt: str, files: list[Path], cfg: Any = None) -> Composed:
+    """--- I5: text inlined, images as `image_url` parts, small binaries base64 (caps from
+    `settings.i5.attachments`; `runtime/attachments.py`)."""
+    try:
+        return compose(prompt, files, cfg)
+    except AttachmentError as exc:
+        raise RunUsageError(str(exc)) from exc
+
+
 def compose_prompt(prompt: str, files: list[Path]) -> str:
-    parts = [prompt] if prompt else []
-    for f in files:
-        if not f.is_file():
-            raise RunUsageError(f"attachment not found: {f}")
-        size = f.stat().st_size
-        if size > MAX_ATTACHMENT:
-            raise RunUsageError(f"attachment {f} is {size} bytes; the cap is 10 MiB per file")
-        data = f.read_bytes()
-        try:
-            text: str | None = data.decode("utf-8")
-        except UnicodeDecodeError:
-            text = None
-        if text is None or "\x00" in text:
-            parts.append(f'<attachment path="{f}" bytes="{size}">[binary file; not inlined]</attachment>')
-        else:
-            parts.append(f'<attachment path="{f}">\n{text}\n</attachment>')
-    return "\n\n".join(parts)
+    return compose_attachments(prompt, files).text
 
 
 def parse_rule(spec: str, action: str) -> Rule:
@@ -162,7 +158,7 @@ async def _one_turn(svc: Services, sid: str, text: str, plan: RunPlan, pretty: A
             ev = await sub.queue.get()
             mine = ev.aggregate_id == sid
             if plan.fmt == "stream-json":
-                print(json.dumps(ev.model_dump(mode="json")), flush=True)
+                write_line(json.dumps(ev.model_dump(mode="json")))  # --- I5: real stdout only
             elif plan.fmt == "text" and mine:
                 pretty(ev.type, ev.data)
             if mine and ev.type == "permission.requested" and plan.interactive:
@@ -195,6 +191,13 @@ def _report(plan: RunPlan, sid: str, run_id: str | None, status: str, text: str,
 
 
 async def run_in_process(st: Settings, plan: RunPlan, pretty: Any) -> int:
+    if plan.fmt != "stream-json":
+        return await _run_in_process(st, plan, pretty)
+    with StdoutGuard():  # --- I5: only JSON lines on stdout; everything else → stderr
+        return await _run_in_process(st, plan, pretty)
+
+
+async def _run_in_process(st: Settings, plan: RunPlan, pretty: Any) -> int:
     if plan.auto:  # unattended asks approve; floors and explicit denies still apply
         st.approvals.unattended.single_query = "approve"
     svc = await Services.create(st, cwd=Path.cwd(), with_mcp=True)

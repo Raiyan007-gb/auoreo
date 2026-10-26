@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 
 from auoreo.api.deps import AUTH, ServicesDep
-from auoreo.core.approvals import grouped, pending_dict, reply_with_grants
+from auoreo.core.approvals import EditRefused, grouped, pending_dict, reply_with_grants
 from auoreo.schema.chat import PendingPermission, PermissionReply
 
 router = APIRouter(prefix="/api/permissions", tags=["permissions"], dependencies=AUTH)
@@ -24,11 +24,21 @@ async def pending(request: Request, svc: ServicesDep, session_id: str | None = N
     return [PendingPermission(**pending_dict(p)) for p in items]
 
 
-@router.post("/{request_id}/reply")
+@router.post("/{request_id}/reply", responses={422: {"description": "Edited input refused"}})
 async def reply(request_id: str, body: PermissionReply, svc: ServicesDep) -> dict[str, bool]:
-    ok = await reply_with_grants(
-        svc.approvals, svc.coordinator.engine_for, request_id, body.reply, body.message, body.cascade
-    )
+    """`once|always|reject`; `updated_input` allows an `editable` request with edited arguments."""
+    try:
+        ok = await reply_with_grants(
+            svc.approvals,
+            svc.coordinator.engine_for,
+            request_id,
+            body.reply,
+            body.message,
+            body.cascade,
+            updated_input=body.updated_input,
+        )
+    except EditRefused as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from exc
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no pending request with that id")
     return {"ok": True}

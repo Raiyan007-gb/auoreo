@@ -453,3 +453,6 @@ __all__ = ["STUN_TIMEOUT_S", "stun_binding", "stun_target"]
 from auoreo.core.diagnostics_h1b import h1b_checks  # noqa: E402  --- H1b: keyring/ws/plugin quarantine
 
 EXTRA_CHECKS.append(h1b_checks)
+from auoreo.core.diagnostics_i5 import i5_checks  # noqa: E402  --- I5: disk/settings/worktrees/TCC
+
+EXTRA_CHECKS.append(i5_checks)

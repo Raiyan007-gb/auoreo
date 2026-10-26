@@ -43,6 +43,7 @@ from auoreo.api.routers import environments as environments_router  # --- W2-B
 # --- W0-C
 from auoreo.api.routers import goals as goals_router
 from auoreo.api.routers import hooks as hooks_router
+from auoreo.api.routers import i5 as i5_router  # --- I5
 from auoreo.api.routers import kanban as kanban_router
 from auoreo.api.routers import meetings as meetings_router  # --- F4
 from auoreo.api.routers import metrics as metrics_router  # --- G5c
@@ -114,6 +115,7 @@ ROUTERS = (
     prefs_router,  # --- G6: PREFS.md proposals
     session_extras_router,  # --- G7: session plan + per-session MCP/plugin toggles
     skills_hub_router,  # --- G6: skill sources + hub approve
+    i5_router,  # --- I5: POST /api/lsp/stop, GET /api/memory/usage
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

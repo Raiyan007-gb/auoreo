@@ -1,12 +1,12 @@
 import type { SessionInfo } from "@sdk/client";
-import { ArchiveIcon, ArchiveRestoreIcon, GitForkIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
+import { ArchiveIcon, ArchiveRestoreIcon, GitForkIcon, ListPlusIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
-import { Input, Label, NativeSelect } from "@/components/ui/input";
+import { Input, Label, NativeSelect, Textarea } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tip } from "@/components/ui/tooltip";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
@@ -122,6 +122,65 @@ function RowAction({
   );
 }
 
+/** I5: queue a follow-up turn on a session from the table (runs after its current turn). */
+function QueueDialog({ session, onClose, onQueued }: { session: SessionInfo | null; onClose: () => void; onQueued: (msg: string) => void }) {
+  const [text, setText] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!session || !text.trim()) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await api.chat({ session_id: session.id, message: text.trim(), mode: "followup" });
+      setText("");
+      onQueued(`Queued on “${session.title || session.id}”${r.run_id ? ` (run ${r.run_id})` : ""}`);
+      onClose();
+    } catch (e) {
+      setErr(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Dialog open={session !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent data-testid="queue-dialog">
+        <DialogTitle>Queue a message</DialogTitle>
+        <DialogDescription>Runs on “{session?.title || session?.id}” after its current turn (or right away when idle).</DialogDescription>
+        <form
+          className="grid gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
+          <Textarea aria-label="Message to queue" data-testid="queue-input" rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+          {err && <ErrorNote error={err} />}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button type="submit" disabled={busy || !text.trim()} data-testid="queue-submit">
+              Queue
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Last path segment of the session's working directory, full path in the tooltip. */
+function ProjectCell({ path }: { path: string | null | undefined }) {
+  if (!path) return <span className="text-xs text-muted-foreground">—</span>;
+  const name = path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || path;
+  return (
+    <span className="font-mono text-xs" title={path} data-testid="session-project">
+      {name}
+    </span>
+  );
+}
+
 interface Listing {
   rows: SessionInfo[];
   /** Ids of archived sessions (only computed when the archived filter is on). */
@@ -146,6 +205,8 @@ export function SessionsPage() {
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<SessionInfo | null>(null);
   const [actionErr, setActionErr] = useState<string | null>(null);
+  const [queueFor, setQueueFor] = useState<SessionInfo | null>(null); // --- I5
+  const [queued, setQueued] = useState<string | null>(null);
 
   const act = async (fn: () => Promise<unknown>) => {
     setActionErr(null);
@@ -185,6 +246,11 @@ export function SessionsPage() {
       <WelcomeBanner />
       <div className="space-y-3 p-4">
         <ErrorNote error={sessions.error ?? actionErr} />
+        {queued && (
+          <p role="status" className="text-xs text-muted-foreground" data-testid="queue-notice">
+            {queued}
+          </p>
+        )}
         {rows && rows.length === 0 ? (
           <EmptyState title="No sessions yet">Start one with “New session”.</EmptyState>
         ) : (
@@ -192,6 +258,7 @@ export function SessionsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Title</TableHead>
+                <TableHead>Project</TableHead>
                 <TableHead>Agent</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Updated</TableHead>
@@ -210,6 +277,9 @@ export function SessionsPage() {
                       {s.title || "Untitled"}
                     </button>
                     <div className="font-mono text-[11px] text-muted-foreground">{s.id}</div>
+                  </TableCell>
+                  <TableCell className="max-w-40 truncate">
+                    <ProjectCell path={s.project} />
                   </TableCell>
                   <TableCell>
                     <span className="font-mono text-xs">{s.agent}</span>
@@ -237,6 +307,7 @@ export function SessionsPage() {
                           <PlayIcon />
                         </Button>
                       </Tip>
+                      <RowAction label="Queue" icon={<ListPlusIcon />} onClick={() => setQueueFor(s)} />
                       <RowAction
                         label="Fork"
                         icon={<GitForkIcon />}
@@ -262,6 +333,11 @@ export function SessionsPage() {
         )}
       </div>
       <NewSessionDialog open={creating} onOpenChange={setCreating} />
+      <QueueDialog session={queueFor} onClose={() => setQueueFor(null)} onQueued={(m) => {
+          setQueued(m);
+          sessions.reload();
+        }}
+      />
       <Dialog open={confirmDelete !== null} onOpenChange={(o) => !o && setConfirmDelete(null)}>
         <DialogContent>
           <DialogTitle>Delete session?</DialogTitle>

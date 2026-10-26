@@ -16,6 +16,20 @@ export interface PermissionRequestedData {
   /** Single-use request (e.g. sandbox escalation): no "Always" option. */
   readonly one_shot?: boolean;
   readonly risk?: string;
+  /** I5: the reply may carry edited arguments (`updated_input`). */
+  readonly editable?: boolean;
+  /** I5: the call's arguments (redacted) for the edit form. */
+  readonly input?: Record<string, unknown> | null;
+  /** I5: why the agent asks (sandbox escalation justification). */
+  readonly justification?: string | null;
+}
+
+/** `mcp.elicitation.open` (src/auoreo/mcp/elicitation.py): the user consented in the card. */
+export interface ElicitationOpenData {
+  readonly server: string;
+  readonly url: string;
+  readonly domain: string;
+  readonly elicitation_id: string;
 }
 
 export interface QuestionItem {

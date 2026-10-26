@@ -42,13 +42,42 @@ def bundle(
     console.print(f"wrote {path} ({len(members)} files, mode 0600; nothing uploaded)")
 
 
+def _heap(top: int, as_json: bool) -> None:
+    """--- I5: tracemalloc top stats for a full service start-up (imports, DB, harness)."""
+    from auoreo.cli.common import dump_json
+    from auoreo.core.heap import heap_snapshot
+
+    async def idle(_svc: Services) -> None:
+        return None
+
+    report = heap_snapshot(lambda: with_services(idle, settings(), memory=False), top)
+    if as_json:
+        dump_json(report)
+        return
+    held, peak = report["current_bytes"], report["peak_bytes"]
+    console.print(f"heap: {held:,} bytes held, peak {peak:,} ({report['sites']} sites)")
+    for row in report["top"]:
+        console.print(f"{row['size_bytes']:>12,}  {row['count']:>7,}  {row['where']}")
+
+
 @app.command("snapshot")
 def snapshot(
-    session_id: str,
+    session_id: Annotated[str | None, typer.Argument(help="Session to export (omit with --heap).")] = None,
     fmt: Annotated[str, typer.Option("--format", "-f", help="json | md")] = "json",
     out: Annotated[Path | None, typer.Option("--out", "-o", help="File ('-' = stdout).")] = None,
+    heap: Annotated[
+        bool, typer.Option("--heap", help="tracemalloc top allocation sites of a service start-up (I5).")
+    ] = False,
+    top: Annotated[int, typer.Option("--top", help="With --heap: how many sites.", min=1)] = 25,
+    as_json: Annotated[bool, typer.Option("--json", help="With --heap: JSON report.")] = False,
 ) -> None:
-    """Export one session's transcript with secrets redacted (forced)."""
+    """Export one session's transcript with secrets redacted (forced), or `--heap` stats."""
+    if heap:
+        _heap(top, as_json)
+        return
+    if session_id is None:
+        err_console.print("[red]give a SESSION_ID (or --heap)[/red]")
+        raise typer.Exit(2)
     if fmt not in {"json", "md"}:
         err_console.print("[red]--format must be json or md[/red]")
         raise typer.Exit(2)

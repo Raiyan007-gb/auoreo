@@ -19,6 +19,7 @@ from typing import Any
 import httpx
 
 from auoreo.core.diagnostics import Check, Level
+from auoreo.core.diagnostics_i5 import sse_row  # --- I5
 from auoreo.core.redaction import redact
 from auoreo.core.settings import Settings
 
@@ -192,6 +193,7 @@ async def cli_checks(st: Settings) -> list[Check]:
         ("searxng", searxng_row(st)),
         ("gh_auth", asyncio.to_thread(gh_row)),
         ("update", update_row(st)),
+        ("sse_connections", sse_row(st, base, health)),  # --- I5
     ]
     results = await asyncio.gather(*(p for _, p in probes), return_exceptions=True)
     for (name, _), res in zip(probes, results, strict=True):

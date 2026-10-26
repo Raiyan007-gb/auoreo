@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from auoreo.harness.manifests_webhook import WebhookFilter as WebhookFilter  # re-export
 from auoreo.harness.manifests_webhook import WebhookManifest as WebhookManifest  # re-export
@@ -370,6 +370,8 @@ class PromptFamily(_Strict):
 class Variant(_Strict):
     """One `(provider, model_regex)` shaping entry from `prompts/variants.yaml`."""
 
+    name: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_-]*$")
+    """--- I5: `auoreo run --variant <name>` picks this entry by name (exact match first)."""
     provider: str = "*"
     model_regex: str = ".*"
     omit_fields: list[str] = Field(default_factory=list)
@@ -401,6 +403,8 @@ UNLISTED_TOOLS = "<unlisted-tools>"
 class VariantsFile(_Strict):
     model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
     variants: list[Variant] = Field(default_factory=list)
+    named: list[Variant] = Field(default_factory=list)
+    """--- I5: request presets chosen only by `--variant <name>` (never matched by model id)."""
     tool_order: list[str] = Field(default_factory=lambda: [UNLISTED_TOOLS], alias="toolOrder")
     """Tool order for the prompt's tool list and the request's tool schemas (spec §12). Must
     contain `<unlisted-tools>` exactly once: every tool not named here goes there, by name."""
@@ -413,6 +417,15 @@ class VariantsFile(_Strict):
         if len(set(v)) != len(v):
             raise ValueError("toolOrder lists a tool more than once")
         return v
+
+    @model_validator(mode="after")
+    def _unique_names(self) -> VariantsFile:
+        if any(v.name is None for v in self.named):
+            raise ValueError("every `named:` variant needs a `name`")
+        names = [v.name for v in [*self.variants, *self.named] if v.name]
+        if len(set(names)) != len(names):
+            raise ValueError("variant names must be unique")
+        return self
 
 
 class CommandManifest(_Strict):

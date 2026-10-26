@@ -244,4 +244,4 @@ def test_lsp_status_start_stop(home: Path) -> None:
     assert next(r for r in rows if r["language"] == "python")["source"] == "settings"  # type: ignore[union-attr, index]
     assert "cannot start /nonexistent/lsp-bin" in _ok(["lsp", "start", "python"], 1)
     _ok(["lsp", "start", "cobol"], 2)
-    assert "belong to the session" in _ok(["lsp", "stop"], 1)
+    assert "no running server" in _ok(["lsp", "stop"], 1)  # I5: POST /api/lsp/stop when one runs

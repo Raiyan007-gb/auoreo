@@ -117,6 +117,19 @@ def lan_ipv4s() -> list[str]:
     return sorted(out)
 
 
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+def lan_lines(host: str, port: int, ips: list[str] | None = None) -> list[str]:
+    """--- I5: `auoreo web`/`serve` on a non-loopback bind prints where the LAN reaches it
+    (a wildcard bind lists every non-loopback IPv4 of this host)."""
+    if host in LOOPBACK_HOSTS or host.startswith("127."):
+        return []
+    wildcard = host in {"0.0.0.0", "::", ""}
+    targets = (ips if ips is not None else lan_ipv4s()) if wildcard else [host]
+    return [f"lan http://{f'[{ip}]' if ':' in ip else ip}:{port}" for ip in targets]
+
+
 def _check_ws(st: Settings, ws_ping_interval: float | None, ws_ping_timeout: float | None) -> None:
     for flag, value in (("--ws-ping-interval", ws_ping_interval), ("--ws-ping-timeout", ws_ping_timeout)):
         if value is not None and value <= 0:

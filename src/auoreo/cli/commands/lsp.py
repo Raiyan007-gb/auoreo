@@ -9,8 +9,9 @@ minutes or when the session ends. So from the CLI:
 - `start <language>` launches that server for a root, completes the LSP `initialize`
   handshake and reports its capabilities (a readiness check); `--foreground` keeps it
   running until Ctrl-C;
-- `stop` explains that per-session servers live in the server process (no API stops them
-  from outside); they stop with their session or after the idle timeout.
+- `stop` (I5) asks the running server to stop its in-process servers (`POST /api/lsp/stop`,
+  optionally one session / language); otherwise they stop with their session or after the
+  idle timeout.
 """
 
 from __future__ import annotations
@@ -145,11 +146,30 @@ def start(
 
 
 @app.command("stop")
-def stop() -> None:
-    """Explain how per-session language servers stop (there is nothing to stop from here)."""
-    err_console.print(
-        "language servers belong to the session that started them, inside the server process; "
-        "they stop when the session is archived/deleted, after 10 idle minutes, or with the server. "
-        "No API stops them from another process. `auoreo lsp start --foreground` servers stop with Ctrl-C."
-    )
-    raise typer.Exit(1)
+def stop(
+    session: Annotated[
+        str | None, typer.Option("--session", "-s", help="Only this session's servers.")
+    ] = None,
+    language: Annotated[str | None, typer.Option("--language", "-l", help="Only this language.")] = None,
+    url: Annotated[str | None, typer.Option("--url", help="Server URL (default: discover).")] = None,
+    as_json: JsonOpt = False,
+) -> None:
+    """Stop language servers running inside the server process (`POST /api/lsp/stop`, I5).
+    They start again on the next `lsp` tool call."""
+    from auoreo.cli import target
+
+    base = target.discover(url)
+    if base is None:
+        err_console.print(
+            "no running server: per-session language servers only live inside `auoreo serve`; "
+            "`auoreo lsp start --foreground` servers stop with Ctrl-C"
+        )
+        raise typer.Exit(1)
+    body = {k: v for k, v in (("session_id", session), ("language", language)) if v}
+    res = target.call(base, "POST", "/api/lsp/stop", json=body)
+    if as_json:
+        dump_json(res)
+        return
+    for label in res["stopped"]:
+        console.print(f"stopped {escape(label)}")
+    console.print(f"{res['count']} language server(s) stopped")

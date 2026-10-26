@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class _Frame(BaseModel):
@@ -49,10 +49,16 @@ class WsClientPing(_Frame):
 
 
 class WsPermissionReply(_Frame):
+    """`allow{updated_input}` | `deny{message}` (spec §5.2): `reply` once/always allows (with
+    optional edited arguments for `editable` requests), `reject` denies."""
+
     kind: Literal["permission"]
     reply: Literal["once", "always", "reject"]
     message: str | None = None
     cascade: bool = False
+    updated_input: dict[str, Any] | None = Field(
+        default=None, validation_alias=AliasChoices("updated_input", "updatedInput")
+    )
 
 
 class WsQuestionAnswer(_Frame):

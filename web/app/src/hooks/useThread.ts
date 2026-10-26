@@ -17,6 +17,7 @@ export interface ThreadView {
   refreshSession: () => void;
   dismissPermission: (id: string) => void;
   dismissQuestion: (id: string) => void;
+  dismissElicitation: (id: string) => void;
 }
 
 /**
@@ -145,6 +146,11 @@ export function useThread(sessionId: string): ThreadView {
       setState((s) => {
         const { [id]: _gone, ...rest } = s.questions;
         return { ...s, questions: rest };
+      }),
+    dismissElicitation: (id) =>
+      setState((s) => {
+        const { [id]: _gone, ...rest } = s.elicitations;
+        return { ...s, elicitations: rest };
       }),
   };
 }

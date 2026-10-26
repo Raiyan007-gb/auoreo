@@ -1,4 +1,3 @@
-import type { UsageRecord } from "@sdk/client";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownIcon, NavigationIcon, PhoneIcon, SendIcon, SquareIcon } from "lucide-react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
@@ -7,14 +6,15 @@ import { ApprovalCard } from "@/components/ApprovalCard";
 import { ContextGauge } from "@/components/ContextGauge"; // --- G5b
 import { INSERT_COMMAND_EVENT } from "@/components/CommandPalette";
 import { ErrorNote } from "@/components/AppShell";
-import { QuestionForm } from "@/components/QuestionForm";
-import { MarkdownText } from "@/components/MarkdownLazy";
 import { PlanPanel } from "@/components/PlanPanel";
 import { PolicyChip } from "@/components/PolicyChip";
 import { SessionActions } from "@/components/SessionActions";
 import { SkillMention } from "@/components/SkillMention";
-import { ThinkingBlock, ThinkingToggle } from "@/components/ThinkingBlock";
-import { ToolCard } from "@/components/ToolCard";
+import { ThinkingToggle } from "@/components/ThinkingBlock";
+import { ElicitationCard } from "@/components/ElicitationCard"; // --- I5
+import { QuestionTabs } from "@/components/QuestionTabs"; // --- I5
+import { ThreadItem } from "@/components/ThreadItem"; // --- I5
+import { TokenBadge } from "@/components/TokenBadge"; // --- I5
 import { VoiceButton } from "@/components/VoiceButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,58 +25,10 @@ import { api } from "@/lib/api";
 import { useControl } from "@/lib/controlContext";
 import { compactSession, type OpNotice, RUN_COMPACT_EVENT } from "@/lib/sessionOps";
 import { STATUS_VARIANT } from "@/lib/status";
-import type { Item } from "@/lib/thread";
 import { useShowThinking } from "@/lib/thinking";
-import { cn, errorText, fmtTokens, fmtUsd } from "@/lib/utils";
+import { cn, errorText } from "@/lib/utils";
 
 const CallPanel = lazy(() => import("@/components/call/CallPanel").then((m) => ({ default: m.CallPanel }))); // --- G5b
-
-function ItemView({ item, awaiting }: { item: Item; awaiting: boolean }) {
-  switch (item.kind) {
-    case "user":
-      return (
-        <div className="flex justify-end" data-testid="msg-user">
-          <div className="max-w-[80%] rounded-lg bg-secondary px-3 py-2 whitespace-pre-wrap">
-            {item.steer && <span className="mr-1 text-xs text-muted-foreground">steer ·</span>}
-            {item.text}
-          </div>
-        </div>
-      );
-    case "assistant":
-      return (
-        <div className="max-w-[90%] leading-relaxed" data-testid="msg-assistant" data-streaming={item.streaming}>
-          {item.streaming ? (
-            <div className="whitespace-pre-wrap">
-              {item.text}
-              <span aria-hidden className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-foreground align-text-bottom" />
-            </div>
-          ) : (
-            <MarkdownText text={item.text} />
-          )}
-        </div>
-      );
-    case "reasoning":
-      return <ThinkingBlock text={item.text} streaming={item.streaming} />;
-    case "tool":
-      return <ToolCard tool={item} awaitingApproval={awaiting} />;
-    case "notice":
-      return (
-        <div
-          role="status"
-          data-testid="thread-notice"
-          data-code={item.code}
-          className={cn(
-            "rounded-md px-3 py-1.5 text-xs",
-            item.level === "error" && "bg-destructive/10 text-destructive",
-            item.level === "warn" && "bg-warning/15 text-warning",
-            item.level === "info" && "bg-muted text-muted-foreground",
-          )}
-        >
-          {item.text}
-        </div>
-      );
-  }
-}
 
 /** Remount per session id so all per-session state starts fresh. */
 export function SessionRoute() {
@@ -93,7 +45,6 @@ function SessionPage({ id }: { id: string }) {
   const [notice, setNoticeState] = useState<OpNotice | null>(null);
   const setNotice = (n: OpNotice | string) => setNoticeState(typeof n === "string" ? { level: "info", text: n } : n);
   const [archivedOverride, setArchivedOverride] = useState<boolean | null>(null);
-  const [ledger, setLedger] = useState<UsageRecord[] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const didInitialScroll = useRef(false);
@@ -108,19 +59,6 @@ function SessionPage({ id }: { id: string }) {
   const running = t.state.running || t.session?.status === "running";
   const title = t.state.title || t.session?.title || "";
   const archived = archivedOverride ?? t.state.archived ?? t.session?.archived ?? false;
-
-  // Per-call usage ledger for the token badge tooltip; refreshed whenever a run ends.
-  useEffect(() => {
-    if (running) return;
-    let cancelled = false;
-    api
-      .usage(id)
-      .then((rows) => !cancelled && setLedger(rows))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [id, running, t.state.usage.prompt]);
 
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual returns unmemoizable fns; no React Compiler here
   const virtualizer = useVirtualizer({
@@ -197,20 +135,6 @@ function SessionPage({ id }: { id: string }) {
       setNotice(`Interrupt sent (${via})`);
     });
 
-  const totalTokens = t.state.usage.prompt + t.state.usage.completion;
-  const ledgerTotals = ledger?.reduce(
-    (acc, r) => ({
-      calls: acc.calls + 1,
-      prompt: acc.prompt + r.prompt_tokens,
-      completion: acc.completion + r.completion_tokens,
-      cached: acc.cached + r.cached_tokens,
-      cost: acc.cost + (r.cost_usd ?? 0),
-      estimated: acc.estimated || r.estimated,
-    }),
-    { calls: 0, prompt: 0, completion: 0, cached: 0, cost: 0, estimated: false },
-  );
-  const models = [...new Set(ledger?.map((r) => r.model) ?? [])];
-
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
@@ -244,25 +168,7 @@ function SessionPage({ id }: { id: string }) {
           <Badge variant={running ? "info" : (STATUS_VARIANT[t.session?.status ?? ""] ?? "secondary")} data-testid="session-status">
             {running ? "running" : (t.session?.status ?? "…")}
           </Badge>
-          <Tip
-            label={
-              ledgerTotals && ledgerTotals.calls > 0 ? (
-                <span data-testid="usage-tooltip">
-                  Usage ledger: {ledgerTotals.calls} call{ledgerTotals.calls === 1 ? "" : "s"} ·{" "}
-                  {ledgerTotals.prompt.toLocaleString()} prompt + {ledgerTotals.completion.toLocaleString()} completion
-                  {ledgerTotals.cached > 0 && ` (${ledgerTotals.cached.toLocaleString()} cached)`} · {fmtUsd(ledgerTotals.cost)}
-                  {ledgerTotals.estimated && " (estimated)"}
-                  {models.length > 0 && <> · {models.join(", ")}</>}
-                </span>
-              ) : (
-                `${t.state.usage.prompt.toLocaleString()} prompt + ${t.state.usage.completion.toLocaleString()} completion · ${fmtUsd(t.state.usage.cost)}`
-              )
-            }
-          >
-            <Badge variant="secondary" data-testid="token-badge" tabIndex={0}>
-              {fmtTokens(totalTokens)} tok · {fmtUsd(t.state.usage.cost)}
-            </Badge>
-          </Tip>
+          <TokenBadge sessionId={id} usage={t.state.usage} running={running} />
           <ContextGauge sessionId={id} refreshKey={`${running}:${t.state.usage.prompt}:${items.length}`} />
           {!t.streamOk && <Badge variant="warning">stream reconnecting</Badge>}
           <ThinkingToggle on={showThinking} onChange={setShowThinking} />
@@ -318,7 +224,7 @@ function SessionPage({ id }: { id: string }) {
                   className="absolute left-0 w-full py-1.5"
                   style={{ transform: `translateY(${v.start}px)` }}
                 >
-                  <ItemView item={item} awaiting={item.kind === "tool" && item.status === "running" && waitingTools.has(item.name)} />
+                  <ThreadItem item={item} awaiting={item.kind === "tool" && item.status === "running" && waitingTools.has(item.name)} />
                 </div>
               );
             })}
@@ -343,9 +249,10 @@ function SessionPage({ id }: { id: string }) {
           {pendingPerms.map((p) => (
             <ApprovalCard key={p.request_id} request={p} onDone={() => t.dismissPermission(p.request_id)} />
           ))}
-          {pendingQs.map((q) => (
-            <QuestionForm key={q.request_id} request={q} onDone={() => t.dismissQuestion(q.request_id)} />
+          {Object.entries(t.state.elicitations).map(([eid, e]) => (
+            <ElicitationCard key={eid} data={e} onDone={() => t.dismissElicitation(eid)} />
           ))}
+          <QuestionTabs pending={pendingQs} onDone={t.dismissQuestion} />
           <SkillMention text={text} onPick={(next) => {
               setText(next);
               inputRef.current?.focus();

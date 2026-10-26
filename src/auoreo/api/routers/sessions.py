@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, Response, status
 from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
 from auoreo.core import sessions_ops as ops
 from auoreo.core.db import SessionRow
+from auoreo.core.usage_projects import session_projects
+from auoreo.runtime.attachments import flatten
 from auoreo.schema.chat import MessageOut, SessionCreate, SessionDeleted, SessionDetail, SessionInfo
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"], dependencies=AUTH)
@@ -53,7 +55,8 @@ async def create_session(body: SessionCreate, svc: ServicesDep) -> SessionInfo:
 async def list_sessions(svc: ServicesDep, limit: int = 100, archived: bool = False) -> list[SessionInfo]:
     """Archived sessions are hidden unless `?archived=true`."""
     rows = await svc.list_sessions(min(max(limit, 1), 1000), include_archived=archived)
-    return [_info(r) for r in rows]
+    projects = await session_projects(svc.db)  # --- I5: the Sessions table's project column
+    return [_info(r).model_copy(update={"project": projects.get(r.id)}) for r in rows]
 
 
 @router.get("/{session_id}", response_model=SessionDetail)
@@ -73,7 +76,7 @@ async def get_messages(session_id: str, svc: ServicesDep) -> list[MessageOut]:
         MessageOut(
             idx=i,
             role=m["role"],
-            content=m.get("content"),
+            content=flatten(m.get("content")),  # --- I5: image parts (run -f, tool images) as text
             tool_calls=m.get("tool_calls"),
             tool_call_id=m.get("tool_call_id"),
             name=m.get("name"),

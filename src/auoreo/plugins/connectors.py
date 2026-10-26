@@ -98,6 +98,17 @@ class PairingStore:
         _write_json(self.path, {"codes": codes})
         return chat_id
 
+    def revoke(self, chat_id: str) -> bool:
+        """--- I5: drop `chat_id` from the settings allowlist (`auoreo pairing revoke`)."""
+        listed = file_config(self.home, self.plugin).get("allowlist", [])
+        allow = [str(x) for x in listed] if isinstance(listed, list) else []
+        if chat_id not in allow:
+            return False
+        write_settings_value(
+            self.home, f"plugins.{self.plugin}.allowlist", [c for c in allow if c != chat_id]
+        )
+        return True
+
 
 class InboundRouter:
     """`connector.message` → session (created on first contact) → reply via delivery."""

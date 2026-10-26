@@ -37,7 +37,8 @@ def test_compose_prompt_inlines_text_and_names_binaries(tmp_path: Path) -> None:
     (tmp_path / "b.bin").write_bytes(b"\x00\x01\x02")
     text = compose_prompt("look", [tmp_path / "a.txt", tmp_path / "b.bin"])
     assert text.startswith("look\n\n<attachment path=")
-    assert "hello attachment" in text and "[binary file; not inlined]" in text
+    # I5: small binaries now travel base64-encoded (within `i5.attachments` caps)
+    assert "hello attachment" in text and 'encoding="base64">\nAAEC\n' in text
 
 
 def test_compose_prompt_caps_each_file(tmp_path: Path) -> None:

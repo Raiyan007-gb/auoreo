@@ -12,7 +12,7 @@ from auoreo.cli.common import err_console, settings
 from auoreo.cli.run_support import (
     RunPlan,
     RunUsageError,
-    compose_prompt,
+    compose_attachments,
     parse_rule,
     run_attached,
     run_in_process,
@@ -176,9 +176,11 @@ def build_plan(
     if not (prompt or "").strip() and not f.interactive:
         raise RunUsageError("a prompt is required (or use --interactive)")
     rules = [parse_rule(r, "allow") for r in allow or []] + [parse_rule(r, "deny") for r in deny or []]
-    wants_options = f.bare or f.variant or f.thinking
+    composed = compose_attachments(prompt or "", f.files, settings().i5.attachments)  # --- I5
+    images = tuple(composed.parts)
+    wants_options = f.bare or f.variant or f.thinking or images
     plan = RunPlan(
-        prompt=compose_prompt(prompt or "", f.files),
+        prompt=composed.text,
         agent=agent,
         workflow=workflow,
         model=model,
@@ -190,12 +192,16 @@ def build_plan(
         interactive=f.interactive,
         auto=auto,
         rules=rules,
-        options=RunOptions(bare=f.bare, variant=f.variant, effort=f.thinking) if wants_options else None,
+        options=(
+            RunOptions(bare=f.bare, variant=f.variant, effort=f.thinking, attachments=images)
+            if wants_options
+            else None
+        ),
     )
     if attach and (plan.rules or plan.auto or plan.options):
         raise RunUsageError(
-            "--allow/--deny/--auto/--bare/--variant/--thinking need an in-process run; "
-            "set them on the server (settings.json / agent frontmatter) when using --attach"
+            "--allow/--deny/--auto/--bare/--variant/--thinking and image attachments (-f) need an "
+            "in-process run; set them on the server (settings.json / agent frontmatter) when using --attach"
         )
     return plan
 

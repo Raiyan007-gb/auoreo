@@ -2,6 +2,7 @@ import type { ExportFormat } from "@sdk/client";
 import { ArchiveIcon, ArchiveRestoreIcon, DownloadIcon, GitForkIcon, MinimizeIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { ShareButton } from "@/components/ShareButton"; // --- I5
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Tip } from "@/components/ui/tooltip";
@@ -77,6 +78,7 @@ export function SessionActions({
       <Button variant="outline" size="sm" onClick={() => void compact()} disabled={busy || running}>
         <MinimizeIcon aria-hidden /> Compact
       </Button>
+      <ShareButton sessionId={id} />
       <Button variant="outline" size="sm" onClick={() => void exportAs("md")} aria-label="Export as Markdown">
         <DownloadIcon aria-hidden /> MD
       </Button>

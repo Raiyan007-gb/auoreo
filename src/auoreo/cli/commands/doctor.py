@@ -1,4 +1,5 @@
-"""`auoreo doctor`: report problems with a cause and remedy. Never repairs anything.
+"""`auoreo doctor`: report problems with a cause and remedy. Never repairs anything on its own;
+`--fix` (I5) is a separate, confirmed step over `core/doctor_fix.py`'s safe fixes.
 
 The checks live in `auoreo.core.diagnostics` (shared with `GET /api/doctor`); this module prints."""
 
@@ -31,9 +32,42 @@ async def _all_checks(st: Settings) -> list[diagnostics.Check]:
     return [*await diagnostics.run_checks(st), *await cli_checks(st)]
 
 
-def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
-    """Check the environment, definitions, database and credentials."""
+def _fix(st: Settings, yes: bool, as_json: bool) -> None:
+    """--- I5: list the safe fixes, confirm each (or --yes), apply the accepted ones."""
+    from auoreo.core import doctor_fix
+
+    fixes = asyncio.run(doctor_fix.plan(st))
+    done: list[dict[str, str]] = []
+    if not fixes and not as_json:
+        console.print("[green]✓[/green] nothing to fix")
+    for f in fixes:
+        line = f"{f.kind:8} {escape(f.target)} — {escape(f.detail)}"
+        if as_json and not yes:
+            continue  # JSON without --yes only lists the plan
+        if not yes and not typer.confirm(f"fix: {f.kind} {f.target} ({f.detail})?", default=False):
+            console.print(f"[dim]skipped[/dim] {line}")
+            continue
+        f.apply()
+        done.append(f.as_dict())
+        if not as_json:
+            console.print(f"[green]fixed[/green] {line}")
+    if as_json:
+        dump_json({"planned": [f.as_dict() for f in fixes], "applied": done})
+
+
+def doctor(
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+    fix: Annotated[
+        bool,
+        typer.Option("--fix", help="Offer safe fixes (dirs, 0600 modes, stale worktrees), each confirmed."),
+    ] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="With --fix: apply every listed fix.")] = False,
+) -> None:
+    """Check the environment, definitions, database and credentials (`--fix`: safe repairs)."""
     st = settings()
+    if fix:
+        _fix(st, yes, as_json)
+        return
     out = [c.as_dict() for c in asyncio.run(_all_checks(st))]
     if as_json:
         dump_json(out)
