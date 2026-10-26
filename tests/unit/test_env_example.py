@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from unittest import mock
 
 import pytest
 import yaml
@@ -107,13 +108,18 @@ def test_copying_the_example_as_a_project_env_is_quiet(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     (tmp_path / ".env").write_text(EXAMPLE.read_text(encoding="utf-8"), encoding="utf-8")
-    monkeypatch.setenv("AUOREO_HOME", str(tmp_path / "home"))
-    names = {n for n, _ in _assignments()}
-    for name in names:
-        if name != "AUOREO_HOME":
-            monkeypatch.delenv(name, raising=False)
-    with caplog.at_level(logging.WARNING, logger="auoreo.core.dotenv"):
-        loaded = dotenv.load_env_files(tmp_path)
-    assert not [r for r in caplog.records if r.levelno >= logging.WARNING], caplog.text
-    assert set(loaded) == {n for n, v in dotenv_values(tmp_path / ".env").items() if v}
-    assert os.environ.get("AUOREO_YOLO") is None and os.environ.get("AUOREO_PERMISSION_MODE") is None
+    monkeypatch.setattr(dotenv, "_ORIGIN", {})
+    start = dict(os.environ)
+    # load_env_files writes os.environ directly: restore the whole environment afterwards, or
+    # the example's AUOREO_PORT/AUOREO_MODEL would leak into every later test.
+    with mock.patch.dict(os.environ, {"AUOREO_HOME": str(tmp_path / "home")}):
+        for name, _ in _assignments():
+            if name != "AUOREO_HOME":
+                os.environ.pop(name, None)
+        with caplog.at_level(logging.WARNING, logger="auoreo.core.dotenv"):
+            loaded = dotenv.load_env_files(tmp_path)
+        assert not [r for r in caplog.records if r.levelno >= logging.WARNING], caplog.text
+        assert set(loaded) == {n for n, v in dotenv_values(tmp_path / ".env").items() if v}
+        assert os.environ.get("AUOREO_YOLO") is None and os.environ.get("AUOREO_PERMISSION_MODE") is None
+    leaked = sorted(n for n, _ in _assignments() if os.environ.get(n) != start.get(n))
+    assert not leaked, f"the test leaked {leaked} into the process environment"
