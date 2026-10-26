@@ -42,8 +42,9 @@ from auoreo.core.db_migrate import (  # re-exported: older imports use auoreo.co
 if TYPE_CHECKING:
     from auoreo.core.crypto_columns import ColumnCipher
 
-SCHEMA_VERSION = 5  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
+SCHEMA_VERSION = 6  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
 # 4: goals, suggestions (M3–M5 gaps); 5: blackboard, bandit, usage latency, audit triggers (M6)
+# 6: usage cache_write/reasoning tokens, generation id, deployment, tags (I2)
 
 
 def utcnow() -> datetime:
@@ -141,6 +142,11 @@ class UsageRow(Base):
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)  # v5
     outcome: Mapped[str | None] = mapped_column(String(32), nullable=True)  # v5: ok|error code
+    cache_write_tokens: Mapped[int] = mapped_column(Integer, default=0)  # v6 (I2)
+    reasoning_tokens: Mapped[int] = mapped_column(Integer, default=0)  # v6
+    generation_id: Mapped[str | None] = mapped_column(String(128), nullable=True)  # v6
+    deployment: Mapped[str | None] = mapped_column(String(255), nullable=True)  # v6: budgets
+    tags: Mapped[str | None] = mapped_column(String(512), nullable=True)  # v6: comma-joined
 
 
 class AuditRow(Base):

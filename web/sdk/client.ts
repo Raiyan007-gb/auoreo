@@ -79,6 +79,8 @@ export const EVENT_TYPES = [
   "message.delta",
   "message.reasoning",
   "message.completed",
+  "tool.partial",
+  "tool.partial_drop",
   "tool.started",
   "tool.progress",
   "tool.completed",

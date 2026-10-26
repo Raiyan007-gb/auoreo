@@ -34,3 +34,22 @@ class ToolProgress(BaseModel):
     message: str = Field(default="", max_length=500)
     percent: float | None = Field(default=None, ge=0, le=100)
     cancellable: bool = False
+
+
+class ToolPartial(BaseModel):
+    """`data` of a `tool.partial` event (spec §25.6): one streamed fragment of a tool call's
+    arguments. Render-only — nothing executes until the call is committed (`tool.started`)."""
+
+    run_id: str | None = None
+    call_id: str
+    name: str = ""
+    arg_delta: str
+    seq: int = Field(ge=0)
+
+
+class ToolPartialDrop(BaseModel):
+    """`data` of a `tool.partial_drop` event: partial calls abandoned (stream failed, fallback,
+    malformed call) — clients tear their drafts down."""
+
+    run_id: str | None = None
+    call_ids: list[str]

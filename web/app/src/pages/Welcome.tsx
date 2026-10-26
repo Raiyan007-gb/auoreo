@@ -68,7 +68,7 @@ function CredentialsStep({ report }: { report: DoctorReport | undefined }) {
       </ul>
       <p>
         Keys are read from the environment, a <Mono>.env</Mono> file next to the server, the OS keyring or{" "}
-        <Mono>auoreo secrets set OPENROUTER_API_KEY</Mono>. Never paste a key into a chat or into code; restart the server after adding one.
+        <Mono>auoreo secrets set OPENROUTER_API_KEY</Mono>. Never paste a key into a chat or into code. A key added or rotated with <Mono>auoreo secrets</Mono> is picked up on the next model call, no restart needed (a key in the environment or <Mono>.env</Mono> still needs one).
       </p>
     </div>
   );

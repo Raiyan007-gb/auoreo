@@ -16,6 +16,10 @@ answer `$AUOREO_FAKE_GUARDIAN` (default `ESCALATE`).
 `Scripted.delay_s` stalls before streaming. `Scripted.reasoning` streams `ReasoningDelta`s
 before the text; a user message `/think <text>` answers `echo: <text>` after a deterministic
 thought (keyless demo of the UI's Thinking block).
+`response_format` (I2): a json_schema request answers with a deterministic JSON object built
+from the schema (or FORMAT when `structured = False`). `stream_partials = True` streams each
+scripted tool call as `ToolCallDelta` fragments first; a scripted `error` with tool calls then
+yields `ToolCallDrop` before raising (abandoned partial calls).
 Every request is kept in `requests` (with its `reasoning_effort`); `efforts` lists the effort
 of each main-turn call (no `metadata.purpose`) in order.
 """
@@ -33,6 +37,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from auoreo.gateway.errors import GatewayError
+from auoreo.gateway.structured import needs_schema, normalize_response_format
 from auoreo.gateway.types import (
     Finish,
     LLMRequest,
@@ -40,6 +45,8 @@ from auoreo.gateway.types import (
     StreamItem,
     TextDelta,
     ToolCall,
+    ToolCallDelta,
+    ToolCallDrop,
     Usage,
     count_images,
     prompt_chars,
@@ -72,6 +79,8 @@ class FakeGateway:
         self.context_window_tokens = context_window_tokens
         self.vision = True
         self.missing_credentials: set[str] = set()  # models `has_credentials` reports as keyless
+        self.structured = True  # --- I2: what `supports_response_schema` reports
+        self.stream_partials = False
         self._n = 0
 
     def has_credentials(self, model: str) -> bool:
@@ -84,6 +93,7 @@ class FakeGateway:
         self.requests.append(request)
         if "purpose" not in request.metadata:
             self.efforts.append(request.reasoning_effort)
+        item: Scripted | None
         if request.metadata.get("purpose") == "compaction":  # aux call never eats the main script
             item = self.compaction_script.popleft() if self.compaction_script else _summary(request)
         elif request.metadata.get("purpose") == "guardian":  # nor does the smart-mode guardian
@@ -92,10 +102,23 @@ class FakeGateway:
         elif request.metadata.get("purpose") in AUTO_PURPOSES:  # nor do these aux calls
             item = self._auto(request)
         else:
-            item = self.script.popleft() if self.script else self._auto(request)
+            item = self.script.popleft() if self.script else None
+        fmt = normalize_response_format(request.response_format)
+        if item is None and needs_schema(fmt) and fmt is not None:  # unscripted: schema-shaped JSON
+            item = Scripted(text=json.dumps(example_of(fmt["json_schema"]["schema"])))
+        item = item if item is not None else self._auto(request)
+        if needs_schema(fmt) and not self.structured:
+            raise GatewayError("FORMAT", f"{request.model} cannot honour response_format json_schema")
         if item.delay_s:
             await asyncio.sleep(item.delay_s)
         if item.error:
+            if self.stream_partials and item.tool_calls:
+                ids = []
+                for name, args in item.tool_calls:
+                    self._n += 1
+                    ids.append(f"call_{self._n}")
+                    yield ToolCallDelta(ids[-1], name, json.dumps(args)[:8], 1)
+                yield ToolCallDrop(tuple(ids))
             raise item.error
         for thought in _chunks(item.reasoning):
             yield ReasoningDelta(thought)
@@ -103,7 +126,11 @@ class FakeGateway:
             yield TextDelta(word)
         for name, args in item.tool_calls:
             self._n += 1
-            yield ToolCall(id=f"call_{self._n}", name=name, arguments=json.dumps(args))
+            raw = json.dumps(args)
+            if self.stream_partials:
+                for seq, frag in enumerate(_chunks(raw, 8), start=1):
+                    yield ToolCallDelta(f"call_{self._n}", name, frag, seq)
+            yield ToolCall(id=f"call_{self._n}", name=name, arguments=raw)
         prompt = prompt_chars(request.messages) // 4
         yield Usage(prompt_tokens=prompt, completion_tokens=max(1, len(item.text) // 4), cost_usd=0.0)
         yield Finish(item.finish or ("tool_calls" if item.tool_calls else "stop"))
@@ -160,6 +187,31 @@ class FakeGateway:
 
     def supports_vision(self, model: str) -> bool:
         return self.vision
+
+    def supports_response_schema(self, model: str) -> bool:
+        return self.structured
+
+
+_EXAMPLES: dict[str, Any] = {"string": "", "integer": 0, "number": 0, "boolean": False, "null": None}
+
+
+def example_of(schema: Any) -> Any:
+    """A deterministic value that validates against a simple JSON Schema (fake structured output)."""
+    if not isinstance(schema, dict):
+        return None
+    if "enum" in schema and schema["enum"]:
+        return schema["enum"][0]
+    for key in ("anyOf", "oneOf"):
+        if schema.get(key):
+            return example_of(schema[key][0])
+    kind = schema.get("type")
+    if isinstance(kind, list):
+        kind = next((k for k in kind if k != "null"), "null")
+    if kind == "object" or "properties" in schema:
+        return {k: example_of(v) for k, v in (schema.get("properties") or {}).items()}
+    if kind == "array":
+        return []
+    return _EXAMPLES.get(str(kind), "")
 
 
 def _summary(request: LLMRequest) -> Scripted:

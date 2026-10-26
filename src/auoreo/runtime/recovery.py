@@ -9,8 +9,12 @@
   the same assistant message, each with a 2/4/8/16× max_tokens boost capped at
   `length_boost_cap` and never below the original floor. Success emits
   `run.length_recovered`; giving up returns the joined text with `truncated=True`.
-* Empty response (no text, no tool calls, not a length cut): `EMPTY_RESPONSE`, retried
-  once with a nudge; a second empty reply is returned with `empty=True`.
+* Empty response (no usable text, no valid tool calls, not a length cut): classified by
+  `runtime.empty` (truly-empty / whitespace / thinking-only / invalid-tool-call / refusal)
+  and recovered per class (thinking-only gets ×2 answer-prefill retries, refusals none);
+  still empty → returned with `empty=True` and persisted as the `(empty)` sentinel.
+* Streamed tool-call fragments become `tool.partial{call_id, arg_delta, seq}` events
+  (render-only; never executed) and abandoned ones `tool.partial_drop{call_ids}` (spec §25.6).
 """
 
 from __future__ import annotations
@@ -22,8 +26,18 @@ from typing import TYPE_CHECKING, Any
 from auoreo.core import observability as obs
 from auoreo.core.redaction import StreamRedactor
 from auoreo.gateway.errors import GatewayError
-from auoreo.gateway.types import Finish, LLMRequest, ReasoningDelta, TextDelta, ToolCall, Usage
+from auoreo.gateway.types import (
+    Finish,
+    LLMRequest,
+    ReasoningDelta,
+    TextDelta,
+    ToolCall,
+    ToolCallDelta,
+    ToolCallDrop,
+    Usage,
+)
 from auoreo.runtime.budget import OUT_OF_BAND
+from auoreo.runtime.empty import NOTES, attempts, classify, valid_call
 
 if TYPE_CHECKING:
     from auoreo.runtime.budget import TurnBudget
@@ -35,7 +49,7 @@ RESUME_NOTE = (
     f"{OUT_OF_BAND} Output token limit hit. Resume directly — no apology, no recap. Pick up "
     "mid-thought exactly where you stopped, and break any remaining work into smaller pieces."
 )
-EMPTY_NOTE = f"{OUT_OF_BAND} Your previous reply was empty. Reply now: call a tool or give your answer."
+EMPTY_NOTE = NOTES["truly_empty"]
 
 
 @dataclass
@@ -50,9 +64,72 @@ class StepOutput:
     continuations: int = 0
     escalated: bool = False
     model_calls: int = 1
+    reasoning: str = ""
+    empty_class: str | None = None
 
 
 Touch = Callable[..., Any]
+
+
+class _Collect:
+    """Per-call stream state: redacted deltas out, tool calls + usage + finish reason in."""
+
+    def __init__(self, s: Any, sid: str, run_id: str, request: LLMRequest, meter: Any) -> None:
+        self.s, self.sid, self.run_id, self.request, self.meter = s, sid, run_id, request, meter
+        self.out = StepOutput()
+        self.parts: list[str] = []
+        self.thoughts: list[str] = []
+        self.partial: dict[str, None] = {}  # call ids with streamed fragments
+        self.scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
+        self.think = StreamRedactor()  # thinking is its own stream (`message.reasoning`, spec §17)
+
+    async def emit(self, type_: str, data: dict[str, Any]) -> None:
+        await self.s.emit(self.sid, type_, {"run_id": self.run_id, **data})
+
+    async def feed(self, item: Any) -> None:
+        out = self.out
+        match item:
+            case TextDelta(text=t):
+                self.parts.append(t)
+                if safe := self.scrub.feed(t):
+                    await self.emit("message.delta", {"text": safe})
+            case ReasoningDelta(text=t):
+                self.thoughts.append(t)
+                if safe := self.think.feed(t):
+                    await self.emit("message.reasoning", {"text": safe})
+            case ToolCallDelta(call_id=cid, name=name, arg_delta=delta, seq=seq):
+                self.partial[cid] = None  # render-only; partial args are never logged
+                await self.emit(
+                    "tool.partial", {"call_id": cid, "name": name, "arg_delta": delta, "seq": seq}
+                )
+            case ToolCallDrop(call_ids=ids):
+                await self.drop([c for c in ids if c in self.partial] or list(ids))
+            case ToolCall():
+                out.calls.append(item)
+            case Usage():
+                await self.meter.record(item)
+                out.prompt_tokens += item.prompt_tokens
+                out.completion_tokens += item.completion_tokens
+                await self.emit("usage", {"model": self.request.model, **item.event_data()})
+            case Finish(reason=reason):
+                out.finish = reason
+
+    async def drop(self, ids: list[str]) -> None:
+        for cid in ids:
+            self.partial.pop(cid, None)
+        if ids:
+            await self.emit("tool.partial_drop", {"call_ids": ids})
+
+    async def close(self) -> StepOutput:
+        committed = {c.id for c in self.out.calls if valid_call(c)}
+        await self.drop([c for c in self.partial if c not in committed])
+        if thought := self.think.flush():
+            await self.emit("message.reasoning", {"text": thought})
+        if tail := self.scrub.flush():
+            await self.emit("message.delta", {"text": tail})
+        self.out.text = "".join(self.parts)
+        self.out.reasoning = "".join(self.thoughts)
+        return self.out
 
 
 async def stream(
@@ -60,44 +137,20 @@ async def stream(
 ) -> StepOutput:
     """Stream one call: redacted deltas out, tool calls + usage + finish reason in."""
     s = runner.s
-    out = StepOutput()
-    parts: list[str] = []
-    scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
-    think = StreamRedactor()  # thinking is its own stream (`message.reasoning`, spec §17)
     purpose = str(request.metadata.get("purpose", "turn"))
     meter = runner.usage.meter(sid, run_id, request.model)  # latency + outcome per call
-    async for item in meter.wrap(
-        obs.traced_stream(s.gateway.stream(request), model=request.model, purpose=purpose)
-    ):
-        if touch is not None:
-            touch()
-        match item:
-            case TextDelta(text=t):
-                parts.append(t)
-                if safe := scrub.feed(t):
-                    await s.emit(sid, "message.delta", {"run_id": run_id, "text": safe})
-            case ReasoningDelta(text=t):
-                if safe := think.feed(t):
-                    await s.emit(sid, "message.reasoning", {"run_id": run_id, "text": safe})
-            case ToolCall():
-                out.calls.append(item)
-            case Usage():
-                await meter.record(item)
-                out.prompt_tokens += item.prompt_tokens
-                out.completion_tokens += item.completion_tokens
-                await s.emit(
-                    sid,
-                    "usage",
-                    {"run_id": run_id, "model": request.model, **item.event_data()},
-                )
-            case Finish(reason=reason):
-                out.finish = reason
-    if thought := think.flush():
-        await s.emit(sid, "message.reasoning", {"run_id": run_id, "text": thought})
-    if tail := scrub.flush():
-        await s.emit(sid, "message.delta", {"run_id": run_id, "text": tail})
-    out.text = "".join(parts)
-    return out
+    col = _Collect(s, sid, run_id, request, meter)
+    try:
+        async for item in meter.wrap(
+            obs.traced_stream(s.gateway.stream(request), model=request.model, purpose=purpose)
+        ):
+            if touch is not None:
+                touch()
+            await col.feed(item)
+    except GatewayError:
+        await col.drop(list(col.partial))  # the gateway failed without its own drop
+        raise
+    return await col.close()
 
 
 async def model_step(
@@ -116,14 +169,37 @@ async def model_step(
         await runner.compaction.recover_overflow(rt, exc, request.model)  # or re-raises
         request = build()
         out = await stream(runner, sid, run_id, request, touch)
-    if not out.text and not out.calls and out.finish != "length":
-        await runner.s.emit(sid, "run.empty_response", {"run_id": run_id, "code": "EMPTY_RESPONSE"})
-        retry = await stream(runner, sid, run_id, _with(request, {"role": "user", "content": EMPTY_NOTE}))
-        out = _merge(out, retry, joined=False)
-        out.empty = not out.text and not out.calls
+    if (kind := classify(out.text, out.calls, out.reasoning, out.finish)) is not None:
+        out = await _recover_empty(runner, sid, run_id, request, out, kind)
     if out.finish == "length" and not out.calls:
         out = await _recover_length(runner, sid, run_id, request, out, touch)
     budget.record(out.prompt_tokens, out.completion_tokens, out.model_calls)
+    return out
+
+
+async def _recover_empty(
+    runner: AgentRunner, sid: str, run_id: str, request: LLMRequest, out: StepOutput, kind: str
+) -> StepOutput:
+    """Per-class recovery (spec §25.6 L969); still empty → `empty=True` + `empty_class`."""
+    first = kind
+    tries = attempts(kind, runner.s.settings.i2.thinking_prefill_retries)  # type: ignore[arg-type]
+    for i in range(tries):
+        await runner.s.emit(
+            sid,
+            "run.empty_response",
+            {"run_id": run_id, "code": "EMPTY_RESPONSE", "class": kind, "attempt": i + 1},
+        )
+        retry = await stream(runner, sid, run_id, _with(request, {"role": "user", "content": NOTES[kind]}))
+        out = _merge(out, retry, joined=False)
+        if (nxt := classify(out.text, out.calls, out.reasoning, out.finish)) is None:
+            return out
+        kind = nxt
+    if not tries:
+        await runner.s.emit(
+            sid, "run.empty_response", {"run_id": run_id, "code": "EMPTY_RESPONSE", "class": kind}
+        )
+    out.calls = [c for c in out.calls if valid_call(c)]
+    out.empty, out.empty_class = True, kind or first
     return out
 
 

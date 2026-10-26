@@ -74,7 +74,12 @@ def resolve_aux_model(
     if pinned:
         return expand_alias(settings, pinned)
     main_model = resolve_model(settings, session_override=main)
-    for raw in aux.vision_chain if vision else aux.text_chain:
+    chain = list(aux.vision_chain if vision else aux.text_chain)
+    if (ort := settings.i2.openrouter).prefer_fast_model:  # --- I2: live-catalog recency sort
+        from auoreo.gateway.openrouter import prefer_fast
+
+        chain = prefer_fast(chain, ort.catalog_ttl_s)
+    for raw in chain:
         entry = main_model if raw == "main" else expand_alias(settings, raw)
         if aux.free_only:
             entry = _free(entry)

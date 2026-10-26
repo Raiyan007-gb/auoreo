@@ -3,8 +3,10 @@
 Routing groups from `settings.models` become Router `model_list` entries (one deployment
 per model in the group). The Router does fallbacks; this module owns retry/backoff for
 retryable errors that happen before the first streamed token (`num_retries=0` in the SDK),
-the 529 streak → fallback rule, auth recovery and the stream-idle timeout. Request shaping
-lives in `pipeline.py`, usage parsing in `usage_parse.py`, aux routing in `aux.py`.
+the 529 streak → fallback rule and auth recovery. Request shaping lives in `pipeline.py`
+(+ `shaper.py` tool schemas, `structured.py` response_format), the model list in
+`deploy.py`, stream assembly in `streaming.py`, auth/key-pool recovery in `authflow.py`,
+budgets in `budgets.py`, context-window tiers in `ctxprobe.py`, aux routing in `aux.py`.
 """
 
 from __future__ import annotations
@@ -22,13 +24,15 @@ from litellm import exceptions as lx
 
 from auoreo.core.redaction import redact
 from auoreo.core.settings import Settings
-from auoreo.gateway import aux
+from auoreo.gateway import aux, deploy, openrouter
+from auoreo.gateway.authflow import SLOT_KEY, AuthFlow
+from auoreo.gateway.budgets import BudgetTracker
+from auoreo.gateway.ctxprobe import Window, guard_min_context, resolve_window
 from auoreo.gateway.errors import MAX_CAUSE_CHARS, ErrorCode, FallbackTriggeredError, GatewayError
 from auoreo.gateway.pipeline import (
     ShapeContext,
     clamp_max_tokens,
     effort_param,
-    idle_chunks,
     literal_values,
     load_variants,
     lookup_names,
@@ -41,18 +45,10 @@ from auoreo.gateway.pipeline import (
     shape,
 )
 from auoreo.gateway.resolve import expand_alias, primary_deployment
-from auoreo.gateway.types import (
-    Finish,
-    LLMRequest,
-    ReasoningDelta,
-    StreamItem,
-    TextDelta,
-    ToolCall,
-    Usage,
-    prompt_chars,
-    shrink_data_urls,
-)
-from auoreo.gateway.usage_parse import parse_usage, reasoning_of
+from auoreo.gateway.shaper import shape_for_model
+from auoreo.gateway.streaming import assemble
+from auoreo.gateway.structured import check_support, downgrade, normalize_response_format
+from auoreo.gateway.types import LLMRequest, StreamItem, Usage, prompt_chars, shrink_data_urls
 
 log = logging.getLogger(__name__)
 litellm.suppress_debug_info = True
@@ -175,23 +171,7 @@ def credential_status(model: str, secret: Callable[[str], str | None]) -> tuple[
 
 
 def build_model_list(settings: Settings, secret: Callable[[str], str | None]) -> list[dict[str, Any]]:
-    model_list: list[dict[str, Any]] = []
-    for group, cfg in settings.models.items():
-        weights = settings.gateway_tuning.weights.get(group, [])
-        for order, model in enumerate(cfg.models, start=1):
-            params: dict[str, Any] = {**credential_params(model, secret)}
-            params.update(model=model, order=order)
-            if cfg.api_base:
-                params["api_base"] = cfg.api_base
-            if order <= len(weights):
-                params["weight"] = weights[order - 1]
-            if headers := provider_headers(settings, model):
-                params["extra_headers"] = headers
-            entry: dict[str, Any] = {"model_name": group, "litellm_params": params}
-            if cfg.max_input_tokens:
-                entry["model_info"] = {"max_input_tokens": cfg.max_input_tokens}
-            model_list.append(entry)
-    return model_list
+    return deploy.build_model_list(settings, lambda m: credential_params(m, secret))
 
 
 @functools.cache
@@ -209,49 +189,40 @@ class LiteLLMGateway:
         self.settings = settings
         self.secret = secret
         self.variants: list[Any] | None = None  # lazily loaded prompts/variants.yaml
+        self.auth = AuthFlow(self)  # --- I2: key pools, #prev grace fallback, hot reload
+        self.budgets = BudgetTracker(settings.i2.budgets)
         self._model_list = build_model_list(settings, secret)
         self._router = self._make_router()
 
     def _make_router(self) -> Any:
-        tuning = self.settings.gateway_tuning
-        groups = {e["model_name"] for e in self._model_list}
-        fallbacks = [{g: fb} for g, fb in self.settings.fallbacks.items() if g in groups]
-        policy = [{g: fb} for g, fb in tuning.content_policy_fallbacks.items() if g in groups]
-        extra: dict[str, Any] = {}
-        if any(tuning.weights.values()):
-            extra["enable_weighted_failover"] = True
-        if tuning.session_affinity:
-            if "session_affinity" in supported_pre_call_checks():
-                extra["optional_pre_call_checks"] = ["session_affinity"]
-            else:
-                log.info("litellm Router has no session_affinity pre-call check; skipping")
-        return litellm.Router(  # type: ignore[attr-defined]
-            model_list=self._model_list,
-            routing_strategy="simple-shuffle",
-            fallbacks=fallbacks,
-            context_window_fallbacks=fallbacks,
-            content_policy_fallbacks=policy,
-            enable_pre_call_checks=True,
-            num_retries=0,
-            allowed_fails=3,
-            cooldown_time=5,
-            max_fallbacks=5,
-            **extra,
-        )
+        kw = deploy.router_kwargs(self.settings, self._model_list, supported_pre_call_checks())
+        if self.settings.gateway_tuning.session_affinity and "optional_pre_call_checks" not in kw:
+            log.info("litellm Router has no session_affinity pre-call check; skipping")
+        return litellm.Router(**kw)  # type: ignore[attr-defined]
+
+    def _creds(self, model: str) -> dict[str, str]:
+        return credential_params(model, self.secret)
 
     def _ensure(self, model: str) -> None:
         """Raw provider ids (not a group) get their own one-deployment group."""
         if any(e["model_name"] == model for e in self._model_list):
             return
-        params: dict[str, Any] = {**credential_params(model, self.secret), "model": model}
-        if headers := provider_headers(self.settings, model):
-            params["extra_headers"] = headers
-        self._model_list.append({"model_name": model, "litellm_params": params})
+        self._model_list.append(deploy.deployment_entry(self.settings, model, model, self._creds))
+        self._router = self._make_router()
+
+    def reload_credentials(self) -> None:
+        """Hot reload after a secrets write/rotate: rebuild every deployment's credentials and
+        the Router (its client/key cache goes with it) without a restart (spec §25.14)."""
+        raw = [e["model_name"] for e in self._model_list if e["model_name"] not in self.settings.models]
+        self._model_list = build_model_list(self.settings, self.secret)
+        for model in dict.fromkeys(raw):
+            self._model_list.append(deploy.deployment_entry(self.settings, model, model, self._creds))
+        self.auth.reload_pools()
         self._router = self._make_router()
 
     def has_credentials(self, model: str) -> bool:
         """Aux-chain probe (no client construction): are `model`'s credentials present?"""
-        return credential_status(model, self.secret)[0]
+        return self.auth.pooled(model) or credential_status(model, self.secret)[0]
 
     def _variant_for(self, deployment: str) -> Any:
         if self.variants is None:
@@ -260,21 +231,32 @@ class LiteLLMGateway:
 
     def _kwargs(self, request: LLMRequest, model: str) -> dict[str, Any]:
         """LiteLLM kwargs for one attempt on `model`, shaped by the request pipeline."""
-        tuning = self.settings.gateway_tuning
+        tuning, i2 = self.settings.gateway_tuning, self.settings.i2
         deployment = primary_deployment(self.settings, model)
         variant = request.variant or self._variant_for(deployment)
         metadata = dict(request.metadata)
+        messages = list(request.messages)
         kwargs: dict[str, Any] = {
             "model": model,
-            "messages": list(request.messages),
+            "messages": messages,
             "stream": True,
             "stream_options": {"include_usage": True},
             "num_retries": 0,
             "metadata": metadata,
         }
         if request.tools:
-            kwargs["tools"] = list(request.tools)
+            shaping = i2.tool_shaping
+            kwargs["tools"] = shape_for_model(
+                deployment, request.tools, strict=shaping.strict, max_enum=shaping.max_enum
+            )
             kwargs["tool_choice"] = request.tool_choice
+        fmt = normalize_response_format(request.response_format)
+        if fmt is not None:
+            deps = [deploy.provider_id(self.settings, d) for d in self._deployments(model)]
+            fallback = i2.fallback_structured
+            if not check_support(fmt, deps, self.supports_response_schema, fallback_structured=fallback):
+                fmt, kwargs["messages"] = downgrade(fmt, messages)
+            kwargs["response_format"] = fmt
         if request.temperature is not None:
             kwargs["temperature"] = request.temperature
         if request.max_tokens:
@@ -288,8 +270,13 @@ class LiteLLMGateway:
             metadata[TURN_STATE_HEADER] = str(turn)
             kwargs["extra_headers"] = {
                 **provider_headers(self.settings, deployment),
+                **deploy.split_1m(deployment)[1],
                 TURN_STATE_HEADER: str(turn),
             }
+        if all(openrouter.is_openrouter(d) for d in self._deployments(model)):
+            prefs = openrouter.provider_prefs(i2.openrouter, structured=bool(request.tools or fmt))
+            kwargs["extra_body"] = {"usage": {"include": True}, **({"provider": prefs} if prefs else {})}
+        self.auth.apply_pool(kwargs, self._deployments(model))
         ctx = ShapeContext(
             model=deployment,
             variant=variant,
@@ -300,81 +287,81 @@ class LiteLLMGateway:
         )
         return shape(kwargs, ctx)
 
+    def _pick(self, model: str, tags: list[str]) -> str | None:
+        """Budget pre-pick: `model` when no deployment is over budget, else the first
+        deployment still under every ceiling (called directly), None when all are spent."""
+        if not self.budgets.active:
+            return model
+        deps = self._deployments(model)
+        ok = [d for d in deps if self.budgets.exhausted(deploy.provider_id(self.settings, d), tags) is None]
+        if len(ok) == len(deps):
+            return model
+        if ok:
+            self._ensure(ok[0])
+        return ok[0] if ok else None
+
     async def stream(self, request: LLMRequest) -> AsyncIterator[StreamItem]:
+        self.auth.maybe_reload()
         self._ensure(request.model)
         background = request.metadata.get("purpose") in aux.BACKGROUND_PURPOSES
+        if not background:
+            guard_min_context(request.model, self._window(request.model), self.settings.i2.min_context)
         chain = (
             [request.model]
             if background
             else [request.model, *self.settings.fallbacks.get(request.model, [])]
         )
+        tags = [str(t) for t in request.metadata.get("tags") or []]
+        targets = [(m, t) for m in chain if (t := self._pick(m, tags)) is not None]
+        if not targets:
+            raise GatewayError(
+                "BUDGET", f"every deployment of {request.model} is over its daily budget", status=429
+            )
         resp: Any = None
-        for i, model in enumerate(chain):  # turn-scoped: the primary is tried again next turn
-            self._ensure(model)
+        served, kwargs = request.model, {}
+        for i, (model, target) in enumerate(targets):  # turn-scoped: primary retried next turn
+            self._ensure(target)
             try:
-                resp = await self._open(self._kwargs(request, model))
+                kwargs = self._kwargs(request, target)
+                resp = await self._open(kwargs)
+                served = target
                 break
             except FallbackTriggeredError:
-                if i == len(chain) - 1:
+                if i == len(targets) - 1:
                     raise
-                log.warning("%s overloaded; falling back to %s for this turn", model, chain[i + 1])
-        calls: dict[int, dict[str, str]] = {}
-        seen_usage: Usage | None = None
-        text_len = 0
-        finish = "stop"
-        got_any = False
+                log.warning("%s overloaded; falling back to %s for this turn", model, targets[i + 1][0])
+        deps = [deploy.provider_id(self.settings, d) for d in self._deployments(served)]
         idle = self.settings.gateway_tuning.stream_idle_timeout_s
-        try:
-            async for chunk in idle_chunks(resp, idle):
-                if parsed := parse_usage(getattr(chunk, "usage", None)):
-                    seen_usage = parsed
-                if not chunk.choices:
-                    continue
-                choice = chunk.choices[0]
-                delta = choice.delta
-                for thought in reasoning_of(delta):
-                    yield ReasoningDelta(thought)
-                if delta is not None and delta.content:
-                    got_any = True
-                    text_len += len(delta.content)
-                    yield TextDelta(delta.content)
-                for tc in getattr(delta, "tool_calls", None) or []:
-                    got_any = True
-                    slot = calls.setdefault(tc.index or 0, {"id": "", "name": "", "args": ""})
-                    slot["id"] = tc.id or slot["id"]
-                    if tc.function is not None:
-                        slot["name"] += tc.function.name or ""
-                        slot["args"] += tc.function.arguments or ""
-                if choice.finish_reason:
-                    finish = choice.finish_reason
-        except Exception as exc:  # mid-stream failures surface as typed errors
-            raise map_error(exc) from exc
-        if not got_any:
-            raise GatewayError("EMPTY_RESPONSE", "model returned no content")
-        for idx in sorted(calls):
-            c = calls[idx]
-            yield ToolCall(id=c["id"] or f"call_{idx}", name=c["name"], arguments=c["args"] or "{}")
-        if seen_usage is None:  # stream ended without usage: estimate, and say so (§10.8)
-            prompt = prompt_chars(request.messages)
-            seen_usage = Usage(prompt // 4, max(1, text_len // 4), estimated=True)
-        yield seen_usage
-        yield Finish(finish)
+        async for item in assemble(resp, request, idle_s=idle, deployments=deps, map_error=map_error):
+            if isinstance(item, Usage):
+                self._spend(item, served, kwargs)
+            yield item
+
+    def _spend(self, usage: Usage, model: str, kwargs: dict[str, Any]) -> None:
+        dep = usage.deployment or deploy.provider_id(self.settings, primary_deployment(self.settings, model))
+        cost = usage.cost_usd
+        if cost is None:
+            cost = self.price(dep, usage.prompt_tokens, usage.completion_tokens)
+        slot = (kwargs.get("metadata") or {}).get(SLOT_KEY)
+        self.budgets.add(dep, cost, usage.tags, slot)
+        if slot:
+            self.auth.succeeded(slot)
 
     async def _open(self, kwargs: dict[str, Any]) -> Any:
         """Open the stream. Foreground: backoff on retryable codes, N consecutive overloaded
-        errors → `FallbackTriggeredError`. Background purposes fail fast (no retry). A 401
-        re-reads the secret store once (key rotated while running) before giving up."""
+        errors → `FallbackTriggeredError`. Background purposes fail fast (no retry). Auth /
+        rate errors go through `AuthFlow` first (pool rotation, store re-read, `#prev`)."""
         model = str(kwargs["model"])
         background = (kwargs.get("metadata") or {}).get("purpose") in aux.BACKGROUND_PURPOSES
         limit = self.settings.gateway_tuning.overload_fallback_after
-        delay, streak, auth_retried = INITIAL_DELAY_MS, 0, False
+        delay, streak = INITIAL_DELAY_MS, 0
+        recovery = self.auth.attempt()
         for attempt in range(MAX_RETRIES + 1):
             try:
                 return await self._router.acompletion(**kwargs)
             except Exception as exc:
                 err = map_error(exc)
-                if err.code == "AUTH" and not auth_retried and self._recover_auth(model):
-                    auth_retried = True
+                if recovery.recover(err, model, kwargs):
                     continue
                 if background:
                     aux.note_failure(model)
@@ -389,23 +376,14 @@ class LiteLLMGateway:
                 delay = min(delay * 2, MAX_DELAY_MS)
         raise GatewayError("SERVER", "unreachable")
 
-    def _recover_auth(self, model: str) -> bool:
-        """Drop the cached credentials of `model`'s deployments and re-read the secret store;
-        True when anything changed (worth exactly one retry)."""
-        changed = False
-        for entry in self._model_list:
-            if entry["model_name"] != model:
-                continue
-            params = entry["litellm_params"]
-            fresh = credential_params(params["model"], self.secret)
-            stale = {k: params.get(k) for k in fresh}
-            if fresh and fresh != stale:
-                params.update(fresh)
-                changed = True
-        if changed:
-            log.warning("credentials for %s changed in the secret store; retrying once", model)
-            self._router = self._make_router()
-        return changed
+    def key_names(self, model: str) -> list[str]:
+        """`*_API_KEY` secret names `model`'s deployments authenticate with (for `#prev`)."""
+        names: list[str] = []
+        for dep in self._deployments(model):
+            real = deploy.provider_id(self.settings, dep)
+            names += [n for n in env_names(real) if n.endswith("_API_KEY")]
+            names.append(f"{provider_of(real).upper().replace('-', '_')}_API_KEY")
+        return list(dict.fromkeys(n for n in names if n != "_API_KEY"))
 
     async def embed(self, model: str, texts: list[str], dims: int) -> list[list[float]]:
         try:
@@ -427,27 +405,37 @@ class LiteLLMGateway:
         group = self.settings.models.get(model)
         return list(group.models) if group and group.models else [model]
 
-    def context_window(self, model: str) -> int:
+    def _window(self, model: str) -> Window:
         group = self.settings.models.get(expand_alias(self.settings, model))
-        if group is not None and group.max_input_tokens:
-            return group.max_input_tokens
-        deployments = self._deployments(model)
-        if any("[1m]" in m for m in [model, *deployments]):
-            return ONE_MILLION
-        for dep in deployments:
-            for candidate in lookup_names(dep):
-                try:
-                    info = litellm.get_model_info(candidate)
-                except Exception:
-                    continue
-                window = info.get("max_input_tokens") or info.get("max_tokens")
-                if window:
-                    return int(window)
-        return DEFAULT_CONTEXT_WINDOW
+        tuned = self.settings.i2.deployments
+        return resolve_window(
+            model,
+            self._deployments(model),
+            pinned=group.max_input_tokens if group is not None else None,
+            per_deployment=lambda d: t.max_input_tokens if (t := tuned.get(d)) else None,
+            info=self._info_window,
+            tiers=self.settings.i2.probe_tiers,
+            default=self.settings.i2.probe_default,
+        )
+
+    def context_window(self, model: str) -> int:
+        return self._window(model).tokens
+
+    def _info_window(self, dep: str) -> int | None:
+        tuned = self.settings.i2.deployments.get(dep)
+        names = [tuned.base_model] if tuned and tuned.base_model else []
+        for candidate in [*names, *lookup_names(deploy.provider_id(self.settings, dep))]:
+            try:
+                info = litellm.get_model_info(candidate)
+            except Exception:
+                continue
+            if window := info.get("max_input_tokens") or info.get("max_tokens"):
+                return int(window)
+        return None
 
     def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
         for dep in self._deployments(model)[:1]:
-            for candidate in lookup_names(dep):
+            for candidate in lookup_names(deploy.provider_id(self.settings, dep)):
                 try:
                     p, c = litellm.cost_per_token(
                         model=candidate, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
@@ -458,24 +446,28 @@ class LiteLLMGateway:
                     return float(p + c)
         return None
 
+    def supports_response_schema(self, model: str) -> bool:
+        return _any_candidate(model, lambda c: bool(litellm.supports_response_schema(model=c)))
+
     def supports_vision(self, model: str) -> bool:
         """True only when every deployment of the group accepts images: a fallback to a
         text-only deployment must not receive `image_url` parts."""
-        return all(self._deployment_vision(dep) for dep in self._deployments(model))
-
-    @staticmethod
-    def _deployment_vision(model: str) -> bool:
-        for candidate in lookup_names(model):
-            try:
-                if litellm.supports_vision(model=candidate):
-                    return True
-            except Exception:
-                continue
-        return False
+        return all(
+            _any_candidate(
+                deploy.provider_id(self.settings, d), lambda c: bool(litellm.supports_vision(model=c))
+            )
+            for d in self._deployments(model)
+        )
 
 
-DEFAULT_CONTEXT_WINDOW = 128_000
-ONE_MILLION = 1_000_000
+def _any_candidate(model: str, test: Callable[[str], bool]) -> bool:
+    for candidate in lookup_names(model):
+        try:
+            if test(candidate):
+                return True
+        except Exception:
+            continue
+    return False
 
 
 __all__ = [

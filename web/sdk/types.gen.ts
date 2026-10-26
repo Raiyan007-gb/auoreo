@@ -1213,6 +1213,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/secrets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Secrets */
+        get: operations["list_secrets_api_secrets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Secret
+         * @description Store `value` under `name` (overwrites; use `/rotate` to keep a grace window).
+         */
+        put: operations["put_secret_api_secrets__name__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/secrets/{name}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate Secret
+         * @description New value into `name`; the old one resolves as `<name>#prev` for `grace_s` seconds and
+         *     the gateway tries it once (audited `secret.rotated_fallback`) if the new key is rejected.
+         */
+        post: operations["rotate_secret_api_secrets__name__rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sessions": {
         parameters: {
             query?: never;
@@ -4196,6 +4254,42 @@ export interface components {
             /** Text */
             text: string;
         };
+        /** SecretNames */
+        SecretNames: {
+            /** Names */
+            names: string[];
+        };
+        /** SecretRotate */
+        SecretRotate: {
+            /** Grace S */
+            grace_s?: number | null;
+            /** Value */
+            value: string;
+        };
+        /** SecretWrite */
+        SecretWrite: {
+            /** Value */
+            value: string;
+        };
+        /** SecretWriteResult */
+        SecretWriteResult: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "set" | "rotate";
+            /**
+             * Kept Previous
+             * @default false
+             */
+            kept_previous: boolean;
+            /** Name */
+            name: string;
+            /** Prev Expires At */
+            prev_expires_at?: string | null;
+            /** Reloaded */
+            reloaded: boolean;
+        };
         /** ServerEvent */
         ServerEvent: {
             /**
@@ -4734,6 +4828,11 @@ export interface components {
         };
         /** UsageRecord */
         UsageRecord: {
+            /**
+             * Cache Write Tokens
+             * @default 0
+             */
+            cache_write_tokens: number;
             /** Cached Tokens */
             cached_tokens: number;
             /** Completion Tokens */
@@ -4745,14 +4844,23 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Deployment */
+            deployment?: string | null;
             /** Estimated */
             estimated: boolean;
+            /** Generation Id */
+            generation_id?: string | null;
             /** Id */
             id: number;
             /** Model */
             model: string;
             /** Prompt Tokens */
             prompt_tokens: number;
+            /**
+             * Reasoning Tokens
+             * @default 0
+             */
+            reasoning_tokens: number;
             /** Run Id */
             run_id: string;
             /** Session Id */
@@ -7572,6 +7680,117 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RtcClosed"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_secrets_api_secrets_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretNames"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_secret_api_secrets__name__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretWriteResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_secret_api_secrets__name__rotate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretRotate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretWriteResult"];
                 };
             };
             /** @description Validation Error */
