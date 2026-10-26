@@ -303,7 +303,7 @@ async def build_bundle(st: Settings, out: Path) -> list[str]:
         "events.json": event_stats(st),
     }
     logs = log_tails(st.home)
-    manifest = {
+    manifest: dict[str, Any] = {
         "created_at": datetime.now(UTC).isoformat(),
         "chain_head": chain_head(st),
         "redaction": {
