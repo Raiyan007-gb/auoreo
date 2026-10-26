@@ -13,6 +13,7 @@ parameters:                    # JSON Schema (type: object); validated before th
 handler: handler.py:run        # async def run(args: dict, ctx: ToolContext) -> str | ToolResult
 permission: hello              # permission name for rules (default: tool name)
 pattern_arg: who               # argument used as the rule pattern
+pattern_flags: [dry_run]       # a boolean arg that, when true, becomes the pattern itself
 default_action: allow          # when no rule matches: allow | ask | deny
 is_read_only: true
 is_concurrency_safe: true      # may run in parallel with other safe calls
