@@ -10581,24 +10581,6 @@
             }
           },
           {
-            "description": "UUID; a retry with the same key replays the first response",
-            "in": "header",
-            "name": "idempotency-key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "UUID; a retry with the same key replays the first response",
-              "title": "Idempotency-Key"
-            }
-          },
-          {
             "in": "cookie",
             "name": "auoreo_token",
             "required": false,
@@ -13469,24 +13451,6 @@
                 }
               ],
               "title": "Authorization"
-            }
-          },
-          {
-            "description": "UUID; a retry with the same key replays the first response",
-            "in": "header",
-            "name": "idempotency-key",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "UUID; a retry with the same key replays the first response",
-              "title": "Idempotency-Key"
             }
           },
           {

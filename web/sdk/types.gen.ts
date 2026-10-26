@@ -7055,8 +7055,6 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                /** @description UUID; a retry with the same key replays the first response */
-                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {
@@ -8356,8 +8354,6 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
-                /** @description UUID; a retry with the same key replays the first response */
-                "idempotency-key"?: string | null;
             };
             path?: never;
             cookie?: {

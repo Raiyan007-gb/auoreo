@@ -27,7 +27,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 
-from auoreo.api.deps import AUTH, IDEMPOTENT, ServicesDep
+from auoreo.api.deps import AUTH, ServicesDep
 from auoreo.core.services import Services
 from auoreo.core.settings_i8 import i8_of
 from auoreo.schema.livekit import LiveKitToken, LiveKitTokenRequest, LiveKitWebhookAck
@@ -69,8 +69,8 @@ def _check_extras(body: LiveKitTokenRequest, svc: Services) -> list[str]:
 
 
 @router.post(
-    "/api/livekit/token",
-    dependencies=[*AUTH, IDEMPOTENT],
+    "/api/livekit/token",  # mints a credential: never idempotency-cached (spec L744/L1245)
+    dependencies=[*AUTH],
     response_model=LiveKitToken,
     status_code=status.HTTP_201_CREATED,
     responses={
@@ -160,7 +160,7 @@ class WebhookState:
 def verify(raw: bytes, auth: str | None, key: str, secret: str) -> Any:
     """Verify the webhook JWT and its `sha256` body claim; returns the parsed `WebhookEvent`."""
     from google.protobuf.json_format import Parse
-    from livekit import api
+    from livekit import api  # type: ignore[import-untyped,unused-ignore]
 
     if not auth:
         raise PermissionError("missing Authorization")

@@ -15,15 +15,11 @@ def _get_kwargs(
     *,
     body: LiveKitTokenRequest,
     authorization: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> dict[str, Any]:
     headers: dict[str, Any] = {}
     if not isinstance(authorization, Unset):
         headers["authorization"] = authorization
-
-    if not isinstance(idempotency_key, Unset):
-        headers["idempotency-key"] = idempotency_key
 
     cookies = {}
     if auoreo_token is not UNSET:
@@ -98,7 +94,6 @@ def sync_detailed(
     client: AuthenticatedClient | Client,
     body: LiveKitTokenRequest,
     authorization: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | LiveKitToken]:
     """Token
@@ -107,8 +102,6 @@ def sync_detailed(
 
     Args:
         authorization (None | str | Unset):
-        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
-            response
         auoreo_token (None | str | Unset):
         body (LiveKitTokenRequest):
 
@@ -123,7 +116,6 @@ def sync_detailed(
     kwargs = _get_kwargs(
         body=body,
         authorization=authorization,
-        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -139,7 +131,6 @@ def sync(
     client: AuthenticatedClient | Client,
     body: LiveKitTokenRequest,
     authorization: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | LiveKitToken | None:
     """Token
@@ -148,8 +139,6 @@ def sync(
 
     Args:
         authorization (None | str | Unset):
-        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
-            response
         auoreo_token (None | str | Unset):
         body (LiveKitTokenRequest):
 
@@ -165,7 +154,6 @@ def sync(
         client=client,
         body=body,
         authorization=authorization,
-        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     ).parsed
 
@@ -175,7 +163,6 @@ async def asyncio_detailed(
     client: AuthenticatedClient | Client,
     body: LiveKitTokenRequest,
     authorization: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Response[Any | HTTPValidationError | LiveKitToken]:
     """Token
@@ -184,8 +171,6 @@ async def asyncio_detailed(
 
     Args:
         authorization (None | str | Unset):
-        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
-            response
         auoreo_token (None | str | Unset):
         body (LiveKitTokenRequest):
 
@@ -200,7 +185,6 @@ async def asyncio_detailed(
     kwargs = _get_kwargs(
         body=body,
         authorization=authorization,
-        idempotency_key=idempotency_key,
         auoreo_token=auoreo_token,
     )
 
@@ -214,7 +198,6 @@ async def asyncio(
     client: AuthenticatedClient | Client,
     body: LiveKitTokenRequest,
     authorization: None | str | Unset = UNSET,
-    idempotency_key: None | str | Unset = UNSET,
     auoreo_token: None | str | Unset = UNSET,
 ) -> Any | HTTPValidationError | LiveKitToken | None:
     """Token
@@ -223,8 +206,6 @@ async def asyncio(
 
     Args:
         authorization (None | str | Unset):
-        idempotency_key (None | str | Unset): UUID; a retry with the same key replays the first
-            response
         auoreo_token (None | str | Unset):
         body (LiveKitTokenRequest):
 
@@ -241,7 +222,6 @@ async def asyncio(
             client=client,
             body=body,
             authorization=authorization,
-            idempotency_key=idempotency_key,
             auoreo_token=auoreo_token,
         )
     ).parsed

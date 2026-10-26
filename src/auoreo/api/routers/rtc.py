@@ -140,8 +140,7 @@ def transport(svc: Services) -> Any:
 
 
 @router.post(
-    "/join",
-    dependencies=[IDEMPOTENT],
+    "/join",  # mints a LiveKit/Realtime credential: never idempotency-cached (spec L744/L1245)
     response_model=RtcJoinInfo,
     status_code=status.HTTP_201_CREATED,
     responses={

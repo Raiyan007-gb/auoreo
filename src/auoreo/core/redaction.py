@@ -277,13 +277,13 @@ def contains_redaction_marker(text: str) -> str | None:
     return m.group(0) if m else None
 
 
-def redact_obj(obj: Any, mode: RedactMode = "mask") -> Any:
+def redact_obj(obj: Any, mode: RedactMode = "mask", *, force: bool = False) -> Any:
     if isinstance(obj, str):
-        return redact(obj, mode)
+        return redact(obj, mode, force=force)
     if isinstance(obj, dict):
-        return {k: redact_obj(v, mode) for k, v in obj.items()}
+        return {k: redact_obj(v, mode, force=force) for k, v in obj.items()}
     if isinstance(obj, list):
-        return [redact_obj(v, mode) for v in obj]
+        return [redact_obj(v, mode, force=force) for v in obj]
     return obj
 
 

@@ -6,7 +6,7 @@ payload transform.
 - `run_script`: `<home>/scripts/<script>` (path traversal and symlink escapes refused) runs
   without a shell, cwd = the scripts dir, a scrubbed env, the payload as JSON on stdin; stdout
   must be one JSON object (the new payload) or `null` (ignore this delivery). Timeout →
-  killed. stdout is capped at 1 MiB; stderr is only logged (redacted).
+  killed. stdout is capped at 16 KiB; stderr is only logged (redacted).
 """
 
 from __future__ import annotations

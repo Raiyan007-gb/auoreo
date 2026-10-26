@@ -67,6 +67,9 @@ SENSITIVE_WRITE_GLOBS: tuple[str, ...] = (
     "*/.git/hooks/*",
     "$AUOREO_HOME/settings.json",
     "$AUOREO_HOME/.env",
+    "$AUOREO_HOME/trusted_workspaces.json",  # an agent must never trust a workspace itself
+    "$AUOREO_HOME/.db.key",
+    "$AUOREO_HOME/.secrets.key",
 )
 
 

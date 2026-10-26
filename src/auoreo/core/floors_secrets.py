@@ -49,7 +49,7 @@ def _secret_piece(piece: str) -> bool:
     name = _base(piece)
     if any(c in name for c in "*?["):
         return _secret_glob(name)
-    if name.startswith("secrets.db") or name == ".secrets.key":
+    if name.startswith("secrets.db") or name in (".secrets.key", ".db.key"):
         return True
     if name == ".env" or name.endswith(".env"):
         return True

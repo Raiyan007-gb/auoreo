@@ -8,6 +8,8 @@ rules:
   - {permission: read, pattern: "*.env.*", action: deny}
   - {permission: read, pattern: "*.env.example", action: allow}
   - {permission: read, pattern: "*secrets.db", action: deny}
+  - {permission: read, pattern: "*/.db.key", action: deny}
+  - {permission: read, pattern: "*/.secrets.key", action: deny}
   - {permission: edit, pattern: "*", action: ask}
   # Sensitive write targets (spec §19.7). The engine additionally forces `ask` for these
   # even under yolo / acceptEdits / allow rules (core/permissions.SENSITIVE_WRITE_GLOBS).
@@ -24,6 +26,8 @@ rules:
   - {permission: edit, pattern: "*/.git/hooks/*", action: ask}
   - {permission: edit, pattern: "*.env", action: deny}
   - {permission: edit, pattern: "*secrets.db", action: deny}
+  - {permission: edit, pattern: "*/.db.key", action: deny}
+  - {permission: edit, pattern: "*/.secrets.key", action: deny}
   - {permission: bash, pattern: "*", action: ask}
   - {permission: bash, pattern: "ls", action: allow}
   - {permission: bash, pattern: "ls *", action: allow}

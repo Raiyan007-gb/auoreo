@@ -104,7 +104,7 @@ async def shared_view(svc: Services, token: str) -> dict[str, Any] | None:
         return None
     row = await _require(svc, session_id)
     messages = await svc.coordinator.runner.load_history(session_id)
-    return {"session": session_info(row), "messages": redact_obj(messages)}
+    return {"session": session_info(row), "messages": redact_obj(messages, force=True)}
 
 
 # ------------------------------------------------------------------ revert / retry

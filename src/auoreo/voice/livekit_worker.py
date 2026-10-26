@@ -48,7 +48,7 @@ class WorkerUnavailable(RuntimeError):
 
 def load_agents() -> tuple[Any, Any]:
     try:
-        from livekit import agents, rtc  # type: ignore[attr-defined,unused-ignore]
+        from livekit import agents, rtc  # type: ignore[import-not-found,attr-defined,unused-ignore]
     except ImportError as exc:
         raise WorkerUnavailable(f"livekit-agents is not installed; {INSTALL}") from exc
     return agents, rtc
