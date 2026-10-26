@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -80,9 +79,11 @@ class WebhookManifest(_Strict):
 
     name: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
     description: str = Field(min_length=1)
-    provider: Literal["github", "generic", "gitlab", "svix"] = "generic"
+    provider: str = Field(default="generic", pattern=r"^[a-z][a-z0-9_-]*$")
     """github: `X-Hub-Signature-256` body HMAC · generic: V2 `HMAC("<unix-sec>.<body>")` +
-    `X-Timestamp` ±300 s · gitlab: `X-Gitlab-Token` · svix: `svix-*` triple (`whsec_` secret)."""
+    `X-Timestamp` ±300 s · gitlab: `X-Gitlab-Token` · svix: `svix-*` triple (`whsec_` secret) ·
+    telegram-callback: `X-Telegram-Bot-Api-Secret-Token` · any other kind must be provided by a
+    running plugin (`provides: [webhook_provider]`), else the route answers 503."""
     secret: str = Field(min_length=1)
     """`secret:<name>` reference resolved through the secret store (never the value);
     `<name>#prev` keeps verifying for 24 h after `auoreo webhook rotate`."""
@@ -112,7 +113,8 @@ class WebhookManifest(_Strict):
     timeout `script_timeout_s` (default `teams2.webhook_script_timeout_s`)."""
     script_timeout_s: float | None = Field(default=None, gt=0, le=300)
     allowed_cidrs: list[str] = Field(default_factory=list)
-    """Optional IP allowlist (CIDRs); the client IP honours `teams2.webhook_trusted_proxies`.
+    """Optional IP allowlist (CIDRs, or the `github` preset = GitHub `/meta` hook ranges,
+    refreshed daily); the client IP honours `teams2.webhook_trusted_proxies`.
     Empty = off (HMAC stays the primary control)."""
 
     @model_validator(mode="after")
@@ -120,6 +122,8 @@ class WebhookManifest(_Strict):
         import ipaddress
 
         for cidr in self.allowed_cidrs:
+            if cidr == "github":  # I6 preset (automation/github_meta.py)
+                continue
             try:
                 ipaddress.ip_network(cidr, strict=False)
             except ValueError as exc:

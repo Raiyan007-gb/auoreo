@@ -27,6 +27,8 @@ class PluginInfo:
         connectors (list[str] | Unset):
         deliveries (list[str] | Unset):
         error (None | str | Unset):
+        signed_by (None | str | Unset): ed25519 key id that signed it (I6)
+        tier (None | str | Unset): bundled | allow-listed | local-path (I6)
     """
 
     description: str
@@ -39,6 +41,8 @@ class PluginInfo:
     connectors: list[str] | Unset = UNSET
     deliveries: list[str] | Unset = UNSET
     error: None | str | Unset = UNSET
+    signed_by: None | str | Unset = UNSET
+    tier: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -70,6 +74,18 @@ class PluginInfo:
         else:
             error = self.error
 
+        signed_by: None | str | Unset
+        if isinstance(self.signed_by, Unset):
+            signed_by = UNSET
+        else:
+            signed_by = self.signed_by
+
+        tier: None | str | Unset
+        if isinstance(self.tier, Unset):
+            tier = UNSET
+        else:
+            tier = self.tier
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -89,6 +105,10 @@ class PluginInfo:
             field_dict["deliveries"] = deliveries
         if error is not UNSET:
             field_dict["error"] = error
+        if signed_by is not UNSET:
+            field_dict["signed_by"] = signed_by
+        if tier is not UNSET:
+            field_dict["tier"] = tier
 
         return field_dict
 
@@ -122,6 +142,24 @@ class PluginInfo:
 
         error = _parse_error(d.pop("error", UNSET))
 
+        def _parse_signed_by(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        signed_by = _parse_signed_by(d.pop("signed_by", UNSET))
+
+        def _parse_tier(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        tier = _parse_tier(d.pop("tier", UNSET))
+
         plugin_info = cls(
             description=description,
             name=name,
@@ -133,6 +171,8 @@ class PluginInfo:
             connectors=connectors,
             deliveries=deliveries,
             error=error,
+            signed_by=signed_by,
+            tier=tier,
         )
 
         plugin_info.additional_properties = d

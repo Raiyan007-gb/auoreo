@@ -6,6 +6,9 @@
 | generic | `X-Signature-256: sha256=<hex HMAC("<ts>.<body>")>` + `X-Timestamp` | ±300 s + id cache |
 | gitlab  | `X-Gitlab-Token: <secret>` (constant-time compare) | delivery-id cache |
 | svix    | `svix-signature: v1,<b64 HMAC("<id>.<ts>.<body>")> …` (`whsec_` key) | ±300 s + id cache |
+| telegram-callback | `X-Telegram-Bot-Api-Secret-Token: <secret>` (constant-time) | `update_id` cache |
+
+Providers (built in or from plugins) sit behind `webhook_providers.WebhookProvider`.
 
 Every comparison is `hmac.compare_digest` on bytes. Rotation: `secret:webhook/<route>` is
 current; `…#prev` still verifies for `webhooks.rotation_grace_s` (24 h) after
@@ -36,15 +39,23 @@ SIGNATURE_HEADER = {
     "generic": "x-signature-256",
     "gitlab": "x-gitlab-token",
     "svix": "svix-signature",
+    "telegram-callback": "x-telegram-bot-api-secret-token",
 }
 DELIVERY_HEADERS: dict[str, tuple[str, ...]] = {
     "github": ("x-github-delivery",),
     "generic": ("x-delivery-id",),
     "gitlab": ("webhook-id", "idempotency-key", "x-gitlab-event-uuid"),
     "svix": ("svix-id",),
+    "telegram-callback": (),  # the payload's `update_id`
 }
-DELIVERY_HEADER = {p: h[0] for p, h in DELIVERY_HEADERS.items()}
-EVENT_HEADER = {"github": "x-github-event", "generic": "x-event", "gitlab": "x-gitlab-event", "svix": ""}
+DELIVERY_HEADER = {p: h[0] for p, h in DELIVERY_HEADERS.items() if h}
+EVENT_HEADER = {
+    "github": "x-github-event",
+    "generic": "x-event",
+    "gitlab": "x-gitlab-event",
+    "svix": "",
+    "telegram-callback": "",
+}
 
 DoctorRow = tuple[str, Literal["ok", "warn", "error"], str, str]
 Verifier = Callable[[str, Mapping[str, str], bytes, float], str | None]
@@ -83,8 +94,10 @@ def signed_headers(
 ) -> dict[str, str]:
     """Everything a sender attaches for `provider` (used by `auoreo webhook test` and tests)."""
     ts = int(time.time() if now is None else now)
-    headers = {"Content-Type": "application/json", DELIVERY_HEADER[provider]: delivery_id}
-    if EVENT_HEADER[provider]:
+    headers = {"Content-Type": "application/json"}
+    if provider in DELIVERY_HEADER:
+        headers[DELIVERY_HEADER[provider]] = delivery_id
+    if EVENT_HEADER.get(provider):
         headers[EVENT_HEADER[provider]] = event
     signer: dict[str, Callable[[], dict[str, str]]] = {
         "github": lambda: {"X-Hub-Signature-256": sign(secret, body)},
@@ -94,6 +107,7 @@ def signed_headers(
             "svix-timestamp": str(ts),
             "svix-signature": sign_svix(secret, delivery_id, ts, body),
         },
+        "telegram-callback": lambda: {"X-Telegram-Bot-Api-Secret-Token": secret},
     }
     return headers | signer[provider]()
 

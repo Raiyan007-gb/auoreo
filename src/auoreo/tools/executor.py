@@ -224,7 +224,12 @@ class ToolExecutor:
         ctx.services.setdefault("executor", self)  # `tool_call` re-enters the pipeline
         policy = ExecPolicy(mode=mode, net=tool.manifest.net, grant_id=grant_id)
         engine_cfg = self.s.settings.tool_engine
-        info = CallInfo(call.id, tool.name, engine_cfg.progress_interval_ms / 1000)
+        info = CallInfo(
+            call.id,
+            tool.name,
+            engine_cfg.progress_interval_ms / 1000,
+            progress_schema=tool.manifest.progress_schema,
+        )
         try:
             handler = tool.handler()
             session_token = CURRENT_SESSION.set(ctx.session_id)

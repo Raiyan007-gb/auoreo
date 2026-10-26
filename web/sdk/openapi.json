@@ -2358,6 +2358,17 @@
       },
       "HarnessEntry": {
         "properties": {
+          "activity_hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activity Hint"
+          },
           "available": {
             "anyOf": [
               {
@@ -4173,16 +4184,42 @@
             "title": "Provides",
             "type": "array"
           },
+          "signed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ed25519 key id that signed it (I6)",
+            "title": "Signed By"
+          },
           "status": {
             "enum": [
               "running",
               "stopped",
               "crashed",
               "disabled",
-              "invalid_config"
+              "invalid_config",
+              "unverified",
+              "quarantined"
             ],
             "title": "Status",
             "type": "string"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "bundled | allow-listed | local-path (I6)",
+            "title": "Tier"
           },
           "tools": {
             "description": "Registered dynamic tools (`plugin__<name>__<tool>`)",
@@ -6777,10 +6814,7 @@
             "type": "string"
           },
           "provider": {
-            "enum": [
-              "github",
-              "generic"
-            ],
+            "description": "github | generic | gitlab | svix | telegram-callback | <plugin kind>",
             "title": "Provider",
             "type": "string"
           },

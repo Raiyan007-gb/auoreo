@@ -86,6 +86,8 @@ class HarnessEntry(BaseModel):
     """Tools only: false when hidden by `is_enabled`, `env_gate` or `check_fn`."""
     unavailable_reason: str | None = None
     emoji: str | None = None
+    activity_hint: str | None = None
+    """Tools only: short UI label template shown while the tool runs (I6)."""
 
 
 class HarnessListing(BaseModel):
@@ -262,7 +264,7 @@ class WebhookRouteInfo(BaseModel):
     name: str
     path: str
     description: str
-    provider: Literal["github", "generic"]
+    provider: str = Field(description="github | generic | gitlab | svix | telegram-callback | <plugin kind>")
     events: list[str]
     filters: list[dict[str, Any]]
     agent: str
@@ -363,7 +365,9 @@ class KanbanCreate(_In):
 
 
 # --- M5e plugins
-PluginStatus = Literal["running", "stopped", "crashed", "disabled", "invalid_config"]
+PluginStatus = Literal[
+    "running", "stopped", "crashed", "disabled", "invalid_config", "unverified", "quarantined"
+]
 
 
 class PluginInfo(BaseModel):
@@ -377,6 +381,8 @@ class PluginInfo(BaseModel):
     connectors: list[str] = Field(default_factory=list)
     error: str | None = None
     verify: Literal["ok", "mismatch", "missing"] = Field(description="lock.json hash vs the plugin folder")
+    tier: str | None = Field(default=None, description="bundled | allow-listed | local-path (I6)")
+    signed_by: str | None = Field(default=None, description="ed25519 key id that signed it (I6)")
 
 
 class PluginSkillInfo(BaseModel):

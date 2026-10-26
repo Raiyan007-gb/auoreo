@@ -1,0 +1,14 @@
+# MCP bundle (spec §25.15 L1072): the official filesystem server, scoped by roots.
+# Off by default. Enable with `auoreo mcp add --bundle filesystem` (copies this file into
+# ~/.auoreo/mcp/ with enabled: true). The session cwd is offered as an MCP root; extra
+# directories go in `roots.paths` (the server only touches allowed directories).
+name: filesystem
+transport: stdio
+command: npx
+args: ["-y", "@modelcontextprotocol/server-filesystem"]
+timeout_ms: 30000
+enabled: false
+exposure: deferred
+roots:
+  enabled: true
+  paths: []

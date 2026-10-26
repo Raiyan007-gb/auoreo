@@ -33,6 +33,7 @@ from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # -
 from auoreo.core.settings_i2 import I2Settings  # --- I2
 from auoreo.core.settings_i3 import I3Settings  # --- I3
 from auoreo.core.settings_i4 import I4Settings  # --- I4
+from auoreo.core.settings_i6 import I6Settings  # --- I6
 from auoreo.core.settings_models import (
     LiveKitSettings,
     LiveKitSipSettings,
@@ -420,6 +421,7 @@ class Settings(BaseSettings):
     h1b: H1bSettings = Field(default_factory=H1bSettings)  # --- H1b
     i2: I2Settings = Field(default_factory=I2Settings)  # --- I2
     i3: I3Settings = Field(default_factory=I3Settings)  # --- I3
+    i6: I6Settings = Field(default_factory=I6Settings)  # --- I6
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

@@ -102,6 +102,10 @@ def verify(home: Path, name: str, settings: Any) -> Report:
         report.problems.append("folder changed since `plugin add` (hash mismatch); re-add it")
     if m.sha256 and m.sha256 != sha:
         report.problems.append("plugin.yaml sha256 pin does not match the folder")
+    from auoreo.plugins.trust import installed_problem  # --- I6: venv re-hash vs lock
+
+    if (venv_problem := installed_problem(home, name)) is not None:
+        report.problems.append(venv_problem)
     try:
         validate_config(m, {**getattr(settings, "plugins", {}).get(name, {}), **file_config(home, name)})
     except Exception as exc:

@@ -465,3 +465,6 @@ async def _i4_checks(st: Settings) -> list[Check]:  # --- I4: workspace trust, r
 
 
 EXTRA_CHECKS.append(_i4_checks)
+from auoreo.core.diagnostics_i6 import i6_checks  # noqa: E402  --- I6: plugin trust + GitHub /meta cache
+
+EXTRA_CHECKS.append(i6_checks)

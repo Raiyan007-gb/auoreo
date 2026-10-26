@@ -5,6 +5,8 @@ home). Bundled and project servers are listed but never edited here. `add` valid
 file with the harness loader and runs a live connection check (initialize + tools/list)
 through the same `McpBridge` the server uses; a failed check writes nothing unless
 `--no-check`. Header/env values that look like secrets must be `secret:<name>` references.
+`add --bundle <name>` (I6) copies a bundled definition (`mcp/{filesystem,fetch,time,memory}.yaml`,
+all off by default) into the runtime root with `enabled: true`.
 A running server is asked to reload its definitions afterwards.
 """
 
@@ -97,7 +99,7 @@ def list_(as_json: JsonOpt = False) -> None:
             {
                 "name": name,
                 "transport": m.transport,
-                "target": m.url if m.transport == "streamable-http" else " ".join([m.command or "", *m.args]),
+                "target": m.url if m.transport != "stdio" else " ".join([m.command or "", *m.args]),
                 "enabled": m.enabled,
                 "source": d.source,
                 "path": str(d.path),
@@ -116,7 +118,9 @@ def list_(as_json: JsonOpt = False) -> None:
 
 @app.command("add")
 def add(
-    name: Annotated[str, typer.Argument(help="Server name ([a-z][a-z0-9_]*); tools become mcp__<name>__*.")],
+    name: Annotated[
+        str | None, typer.Argument(help="Server name ([a-z][a-z0-9_]*); tools become mcp__<name>__*.")
+    ] = None,
     command: Annotated[list[str] | None, typer.Argument(help="stdio: command and args (after --).")] = None,
     url: Annotated[
         str | None, typer.Option("--url", help="streamable-http endpoint instead of stdio.")
@@ -130,16 +134,27 @@ def add(
     ] = False,
     no_check: Annotated[bool, typer.Option("--no-check", help="Skip the live connection check.")] = False,
     timeout: TimeoutOpt = 20.0,
+    bundle: Annotated[
+        str | None,
+        typer.Option("--bundle", help="Enable a bundled server: filesystem | fetch | time | memory."),
+    ] = None,
 ) -> None:
-    """Add an MCP server: `auoreo mcp add fs -- npx -y @modelcontextprotocol/server-filesystem .`"""
-    if bool(url) == bool(command):
-        raise typer.BadParameter("give either a stdio command (after --) or --url")
-    doc: dict[str, Any] = {"name": name, "exposure": exposure, "enabled": not disabled}
-    if url:
-        doc.update(transport="streamable-http", url=url)
+    """Add an MCP server: `auoreo mcp add fs -- npx -y @modelcontextprotocol/server-filesystem .`
+    or a bundled one: `auoreo mcp add --bundle time`."""
+    if bundle:
+        if url or command:
+            raise typer.BadParameter("--bundle takes no command or --url")
+        doc = bundled_doc(bundle, name, disabled)
+        name = str(doc["name"])
     else:
-        assert command is not None
-        doc.update(transport="stdio", command=command[0], args=command[1:])
+        if bool(url) == bool(command) or not name:
+            raise typer.BadParameter("give a name and either a stdio command (after --) or --url")
+        doc = {"name": name, "exposure": exposure, "enabled": not disabled}
+        if url:
+            doc.update(transport="streamable-http", url=url)
+        else:
+            assert command is not None
+            doc.update(transport="stdio", command=command[0], args=command[1:])
     if env_map := _pairs(env, "--env"):
         doc["env"] = env_map
     if headers := _pairs(header, "--header"):
@@ -169,6 +184,17 @@ def add(
         shutil.move(str(staged), dest)
     console.print(f"wrote {dest}")
     _reload()
+
+
+def bundled_doc(bundle: str, name: str | None, disabled: bool) -> dict[str, Any]:
+    """The bundled `mcp/<bundle>.yaml` as a runtime definition (enabled unless --disabled)."""
+    folder = bundled_root() / "mcp"
+    src = folder / f"{bundle}.yaml"
+    if not src.is_file() or bundle.startswith((".", "_")) or "/" in bundle:
+        known = ", ".join(sorted(p.stem for p in folder.glob("*.yaml"))) or "none"
+        raise typer.BadParameter(f"no bundled MCP server '{bundle}' (bundled: {known})")
+    doc = yaml.safe_load(src.read_text(encoding="utf-8")) or {}
+    return {**doc, "name": name or doc.get("name", bundle), "enabled": not disabled}
 
 
 @app.command("rm")

@@ -34,3 +34,4 @@ search_hint: run shell command terminal
 max_result_size_chars: 64000
 net: none
 sandbox_mode: workspace-write
+activity_hint: "Running {command}"

@@ -316,8 +316,8 @@ def load_mcp(c: Candidate) -> Loaded:
     _check_name(c, manifest.name, text)
     if manifest.transport == "stdio" and not manifest.command:
         raise LoadError(c.path, "stdio transport requires 'command'")
-    if manifest.transport == "streamable-http" and not manifest.url:
-        raise LoadError(c.path, "streamable-http transport requires 'url'")
+    if manifest.transport != "stdio" and not manifest.url:
+        raise LoadError(c.path, f"{manifest.transport} transport requires 'url'")
     return Loaded(manifest, c.root.source, c.path)
 
 
@@ -438,7 +438,7 @@ def load_plugin(c: Candidate) -> Loaded:
     _check_name(c, manifest.name, text)
     folder = c.path.parent
     entry_file = folder / manifest.entry.split(":")[0]
-    if ".." in manifest.entry or not entry_file.is_file():
+    if ".." in manifest.entry or not (entry_file.is_file() or manifest.is_module_entry(folder)):
         raise LoadError(
             c.path,
             f"entry file '{manifest.entry.split(':')[0]}' not found in plugin folder",

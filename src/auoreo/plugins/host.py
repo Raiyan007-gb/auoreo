@@ -1,10 +1,9 @@
 """PluginHost: installs, spawns and supervises every enabled `plugins/<name>/` (spec §15).
 
 Each plugin runs as `<venv>/bin/python -m auoreo_plugin_rt <entry> --dir <folder>` with a
-scrubbed env (`child_env([])` + `AUOREO_PLUGIN`). What it advertises at `initialize` is
-registered dynamically: tools as `plugin__<name>__<tool>`, deliveries in the delivery
-registry, skills on the host. A crash never reaches the server: tools answer with an error
-and the host restarts the plugin with backoff (1 s → 30 s, at most 5 per hour).
+scrubbed env. What it advertises at `initialize` (tools `plugin__<name>__<tool>`, deliveries,
+skills, webhook providers) is registered dynamically. A crash never reaches the server: tools
+answer with an error and the host restarts it with backoff (1 s → 30 s, ≤ 5 per hour).
 """
 
 from __future__ import annotations
@@ -38,6 +37,8 @@ from auoreo.plugins.connectors import InboundRouter, PairingStore, file_config
 from auoreo.plugins.protocol import RpcError, RpcPeer
 from auoreo.plugins.quarantine import is_quarantined  # --- H1b
 from auoreo.plugins.requests import HOST_REQUESTS
+from auoreo.plugins.trust import post_install, pre_start, row_extra  # --- I6
+from auoreo.plugins.webhook_bridge import register_providers, unregister_providers  # --- I6
 from auoreo.tools.context import ToolResult
 
 if TYPE_CHECKING:
@@ -80,6 +81,7 @@ class PluginState:
     restarts: deque[float] = field(default_factory=deque)
     restart_task: asyncio.Task[None] | None = None
     wanted: bool = True
+    trust: dict[str, Any] = field(default_factory=dict)  # --- I6: {tier, registry, signed_by}
 
 
 class PluginHost:
@@ -172,6 +174,8 @@ class PluginHost:
             log.error("plugin %s disabled: %s", st.name, exc)
             await self.s.emit("server", "plugin.invalid_config", {"name": st.name, "error": str(exc)})
             return
+        if (prov := await pre_start(self, st)) is None:  # --- I6: trust tier / signature gate
+            return
         try:
             installed = await inst.install(
                 st.name,
@@ -179,8 +183,11 @@ class PluginHost:
                 self.home,
                 python=self.s.settings.plugins_python,
                 seed=self.s.settings.plugins_seed,
+                provenance=prov,
             )
             st.sha = installed.lock["sha256"]
+            if not await post_install(self, st):  # --- I6: venv re-hash vs lock
+                return
             await self._spawn(st, installed.python)
         except (inst.InstallError, RpcError, OSError) as exc:
             st.status, st.error = "crashed", str(exc)
@@ -250,6 +257,7 @@ class PluginHost:
             if register_delivery(adapter):
                 st.registered.append(dname)
                 self.delivery_registry = True
+        register_providers(self, st, info)  # --- I6: `provides: [webhook_provider]`
 
     async def _cleanup(self, st: PluginState) -> None:
         if st.peer is not None:
@@ -273,6 +281,7 @@ class PluginHost:
                 del self.deliveries[dname]
         for dname in st.registered:
             unregister_delivery(dname)
+        unregister_providers(st)  # --- I6
         st.tools, st.deliveries, st.connectors, st.skills, st.registered = [], [], [], [], []
         if st.status != status:
             await self.s.emit("server", "plugin.stopped", {"name": st.name, "status": status})
@@ -408,12 +417,8 @@ class PluginHost:
     async def _on_notify(self, st: PluginState, method: str, params: dict[str, Any]) -> None:
         if method == "log":
             level = getattr(logging, str(params.get("level", "info")).upper(), logging.INFO)
-            log.log(
-                level if isinstance(level, int) else logging.INFO,
-                "plugin %s: %s",
-                st.name,
-                params.get("message"),
-            )
+            lvl = level if isinstance(level, int) else logging.INFO
+            log.log(lvl, "plugin %s: %s", st.name, params.get("message"))
         elif method == "connector.message":
             task = asyncio.create_task(self._inbound(st, params), name=f"plugin:{st.name}:inbound")
             self._tasks.add(task)
@@ -466,6 +471,7 @@ class PluginHost:
                     "connectors": list(st.connectors),
                     "error": st.error,
                     "verify": inst.verify(self.home, name, st.src),
+                    **row_extra(st),
                 }
             )
         return out

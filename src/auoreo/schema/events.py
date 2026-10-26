@@ -34,6 +34,8 @@ class ToolProgress(BaseModel):
     message: str = Field(default="", max_length=500)
     percent: float | None = Field(default=None, ge=0, le=100)
     cancellable: bool = False
+    data: dict[str, Any] | None = None
+    """Tool-specific payload, validated against the tool's `progressSchema` (I6)."""
 
 
 class ToolPartial(BaseModel):
