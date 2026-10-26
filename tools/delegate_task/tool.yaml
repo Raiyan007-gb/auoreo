@@ -59,6 +59,11 @@ parameters:
         max_usd: {type: number, exclusiveMinimum: 0}
         timeout_ms: {type: integer, minimum: 1000, maximum: 86400000}
       additionalProperties: false
+    task_schemas:
+      type: array
+      maxItems: 10
+      items: {type: object}
+      description: Batch only - output schemas aligned with tasks[] by index (a task's own output_schema wins).
     tasks:
       type: array
       minItems: 1

@@ -132,18 +132,13 @@ async def expand_deliver(services: Services, specs: list[str], origin: str | Non
     """Resolve `origin|home|all` (spec §16.7). Returns (targets, fan_out): `all` delivers to
     every healthy provider instead of stopping at the first success."""
     out: list[str] = []
-    fan_out = False
     for spec in specs:
-        if spec == "origin":
-            out.extend([origin] if origin else [])
-        elif spec == "home":
-            out.append(services.settings.suggestions_home)
-        elif spec == "all":
-            fan_out = True
+        if spec == "all":
             out.extend(await healthy_providers(services))
-        else:
-            out.append(spec)
-    return list(dict.fromkeys(out)) or ["log"], fan_out
+            continue
+        alias = {"origin": [origin] if origin else [], "home": [services.settings.suggestions_home]}
+        out.extend(alias.get(spec, [spec]))
+    return list(dict.fromkeys(out)) or ["log"], "all" in specs
 
 
 async def healthy_providers(services: Services) -> list[str]:

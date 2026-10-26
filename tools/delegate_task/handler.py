@@ -100,6 +100,13 @@ def _names(tasks: list[dict[str, Any]]) -> list[str]:
 
 async def _batch(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     tasks: list[dict[str, Any]] = list(args["tasks"])
+    schemas = list(args.get("task_schemas") or [])  # spec §24.10: coerced per task (index-aligned)
+    if len(schemas) > len(tasks):
+        raise ToolError(f"task_schemas has {len(schemas)} entries for {len(tasks)} tasks")
+    tasks = [
+        {**t, "output_schema": schemas[i]} if i < len(schemas) and not t.get("output_schema") else t
+        for i, t in enumerate(tasks)
+    ]
     if len(tasks) > MAX_BATCH:
         raise ToolError(f"at most {MAX_BATCH} tasks per batch (got {len(tasks)})")
     names = _names(tasks)

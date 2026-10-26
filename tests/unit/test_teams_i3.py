@@ -320,3 +320,15 @@ def test_stats_by_subagent_cli() -> None:
     r = CliRunner().invoke(cli, ["stats", "--by-subagent", "--json"])
     assert r.exit_code == 0, r.output
     assert json.loads(r.output)["by_subagent"] == []
+
+
+async def test_task_schemas_are_coerced_per_task(services: Services, gateway: RoutedGateway) -> None:
+    gateway.route("TS-ONE", Scripted(text='{"n": 1}'))
+    gateway.route("TS-TWO", Scripted(text="free text"))
+    parent = await new_parent(services)
+    schema = {"type": "object", "required": ["n"]}
+    args = {"tasks": [{"goal": "TS-ONE go"}, {"goal": "TS-TWO go"}], "task_schemas": [schema]}
+    text, err = await call_tool(services, tool_ctx(services, parent), "delegate_task", args)
+    assert not err and "2 completed" in text, text
+    assert "JSON Schema" in str(gateway.requests_for("TS-ONE")[0].messages[-1]["content"])
+    assert "JSON Schema" not in str(gateway.requests_for("TS-TWO")[0].messages[-1]["content"])
