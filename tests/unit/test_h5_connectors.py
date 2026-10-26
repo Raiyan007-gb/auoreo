@@ -309,7 +309,7 @@ async def test_calendar_errors_and_google_stub() -> None:
     assert out["is_error"] and "calendar/password is not set" in out["content"]
     plugin.initialize(CAL_CFG | {"provider": "google"}, [])
     out = await plugin.call_tool("calendar_list_events", {}, "ses")
-    assert out["is_error"] and "Google provider is not implemented" in out["content"]
+    assert out["is_error"] and "OAuth token for google unavailable" in out["content"]  # I7: real API now
     plugin.initialize(CAL_CFG | {"password": "plain"}, [])
     out = await plugin.call_tool(
         "calendar_create_event", {"summary": "x", "start": "2026-01-01T10:00"}, "ses"

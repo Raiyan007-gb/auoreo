@@ -15,7 +15,9 @@ from auoreo.core.settings import Settings
 
 async def test_run_checks_without_services(home: Path) -> None:
     rows = await diagnostics.run_checks(Settings(home=home, gateway="fake"))
-    names = [c.check for c in rows]
+    i7 = [c.check for c in rows if c.check.startswith(("oauth:", "discord:"))]  # I7 rows (EXTRA_CHECKS, last)
+    assert i7 == ["oauth:github", "oauth:google"]
+    names = [c.check for c in rows if c.check not in i7]
     assert names[:4] == ["python", "sqlite", "sqlite-vec", "home"]
     h1b = {"keyring", "ws_auth"}  # H1b rows come via EXTRA_CHECKS (after the W2-D ones)
     builtin = [n for n in names if not n.startswith("rtc:") and n not in h1b]  # W2-D: EXTRA_CHECKS

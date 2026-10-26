@@ -1,0 +1,26 @@
+# Google OAuth connector (spec §25.14): `auoreo login google` → loopback PKCE (S256).
+#
+# 1. Google Cloud console → APIs & Services → Credentials → "OAuth client ID" of type
+#    "Desktop app"; enable the Google Calendar API (and Gmail API for IMAP/SMTP XOAUTH2).
+# 2. Copy this file to ~/.auoreo/connectors/google/oauth.yaml and put the PUBLIC client id
+#    below. Google's desktop clients still send a client secret on the token endpoint; store
+#    it with `auoreo secrets set oauth/google_client_secret` (never in this file).
+# 3. `auoreo login google`. The refresh token is stored as secret `oauth/google`.
+#
+# Scopes:
+#   calendar.events   — plugins/calendar `provider: google` (list + create events)
+#   https://mail.google.com/ — plugins/email `auth: xoauth2` (IMAP + SMTP need the full scope)
+# Drop the mail scope if you only use the calendar.
+# `access_type: offline` + `prompt: consent` make Google issue a refresh token.
+auth_url: https://accounts.google.com/o/oauth2/v2/auth
+token_url: https://oauth2.googleapis.com/token
+client_id: REPLACE_WITH_YOUR_GOOGLE_DESKTOP_CLIENT_ID
+client_secret: secret:oauth/google_client_secret
+scopes:
+  - https://www.googleapis.com/auth/calendar.events
+  - https://mail.google.com/
+auth_params:
+  access_type: offline
+  prompt: consent
+flow_order: [loopback, manual]
+loopback_port: auto

@@ -3,16 +3,18 @@ version: 0.1.0
 description: >-
   Email connector: IMAP IDLE inbox watch (allowlisted senders become connector messages, body
   marked UNTRUSTED) and SMTP delivery provider + send_email tool (approval by default).
-  Credentials are secret-store references (`secret:email/...`), never plain values.
+  Credentials are secret-store references (`secret:email/...`) or OAuth XOAUTH2 (`auoreo login
+  google`), never plain values. IMAP over TLS or STARTTLS; SMTP STARTTLS / TLS.
 provides: [connector, delivery, tools]
-consumes: [sessions, "secrets:email/*"]
+consumes: [sessions, "secrets:email/*", "oauth:google"]
 permissions: [plugin__email__send_email]
 config_schema:
   type: object
   properties:
     imap_host: {type: string, minLength: 1}
     imap_port: {type: integer, minimum: 1, maximum: 65535, default: 993}
-    imap_tls: {type: boolean, default: true, description: Implicit TLS (IMAPS); false only for local test servers.}
+    imap_tls: {type: boolean, default: true, description: Implicit TLS (IMAPS); false only for local test servers. Superseded by imap_security.}
+    imap_security: {type: string, enum: [tls, starttls, none], description: "tls = IMAPS (993), starttls = upgrade a plain connection (143); default from imap_tls."}
     mailbox: {type: string, default: INBOX}
     smtp_host: {type: string, minLength: 1}
     smtp_port: {type: integer, minimum: 1, maximum: 65535, default: 587}
@@ -20,6 +22,9 @@ config_schema:
     username: {type: string, minLength: 1}
     password: {type: string, pattern: "^secret:email/[A-Za-z0-9_./-]+$", default: "secret:email/password",
                description: Secret-store reference to the password / app password.}
+    auth: {type: string, enum: [password, xoauth2], default: password,
+           description: "xoauth2 = IMAP/SMTP XOAUTH2 with an access token from `auoreo login <oauth_connector>`."}
+    oauth_connector: {type: string, default: google, description: "OAuth connector for xoauth2 (must be in consumes as oauth:<name>)."}
     from_address: {type: string, minLength: 3}
     allowed_senders:
       type: array

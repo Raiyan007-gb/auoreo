@@ -11,6 +11,7 @@ pending approvals instead of starting a run (`plugins.chat_approvals`, spec §19
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import secrets
@@ -108,6 +109,12 @@ class InboundRouter:
         self.timeout_s = timeout_s
         self.path = services.settings.home / "plugins" / plugin / "sessions.json"
 
+    def _config(self) -> dict[str, Any]:
+        return {
+            **self.s.settings.plugins.get(self.plugin, {}),
+            **file_config(self.s.settings.home, self.plugin),
+        }
+
     async def session_for(self, chat_id: str, user: str, agent: str | None) -> str:
         mapping = _read_json(self.path)
         sid = mapping.get(chat_id)
@@ -139,10 +146,14 @@ class InboundRouter:
         run_id = await self.s.coordinator.submit(sid, text, interactive=interactive)
         reply = "(done)"
         if run_id is not None:
-            if interactive:
-                async with ApprovalNotifier(self.s, sid, chat_id, send):
-                    await self.s.coordinator.wait(sid, self.timeout_s)
-            else:
+            async with contextlib.AsyncExitStack() as stack:
+                if interactive:
+                    await stack.enter_async_context(ApprovalNotifier(self.s, sid, chat_id, send))
+                if self._config().get("stream"):  # --- I7: partial replies (drafts / edits)
+                    from auoreo.plugins.streaming import StreamRelay
+
+                    relay = StreamRelay(self.s, sid, chat_id, send, {**meta, "session_id": sid})
+                    await stack.enter_async_context(relay)
                 await self.s.coordinator.wait(sid, self.timeout_s)
             result = self.s.coordinator.result(run_id)
             if result is None:
@@ -151,7 +162,10 @@ class InboundRouter:
                 reply = result.text or "(empty answer)"
             else:
                 reply = f"(run {result.status}: {(result.error or {}).get('message', '')})".strip()
-        receipt = await send(chat_id, reply, {**meta, "session_id": sid})
+        from auoreo.automation.deliveries import voice_notes  # --- I7: MEDIA: envelope
+
+        reply, extra = await voice_notes(self.s, self.plugin, reply)
+        receipt = await send(chat_id, reply, {**meta, "session_id": sid, **extra})
         return {
             "ok": bool(receipt.get("ok")),
             "session_id": sid,

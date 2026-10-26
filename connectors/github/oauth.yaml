@@ -1,0 +1,20 @@
+# GitHub OAuth connector (spec §25.14): `auoreo login github` → device flow (RFC 8628).
+#
+# 1. Create a GitHub App (Settings → Developer settings → GitHub Apps), tick
+#    "Enable Device Flow", keep "Expire user authorization tokens" ON (GitHub then issues an
+#    8-hour access token + a 6-month refresh token, rotated on every refresh).
+# 2. Copy this file to ~/.auoreo/connectors/github/oauth.yaml and put the app's PUBLIC client
+#    id below. No client secret is needed: device-flow tokens refresh without one.
+# 3. `auoreo login github`. The refresh token is stored as secret `oauth/github`; access
+#    tokens are minted on demand and kept in memory only.
+#
+# Scopes: a GitHub App ignores `scopes` (its permissions are set on the app: e.g. Contents,
+# Issues, Pull requests: read/write). For a classic OAuth App (no refresh tokens unless
+# token expiration is enabled) the scopes below are requested.
+auth_url: https://github.com/login/oauth/authorize
+token_url: https://github.com/login/oauth/access_token
+device_code_url: https://github.com/login/device/code
+client_id: REPLACE_WITH_YOUR_GITHUB_APP_CLIENT_ID
+scopes: [repo, read:org]
+flow_order: [device, loopback, manual]
+loopback_port: auto

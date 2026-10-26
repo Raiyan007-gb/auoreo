@@ -48,9 +48,10 @@ PLATFORMS: dict[str, Platform] = {
     ),
     "discord": Platform(
         "discord",
-        ("discord/webhook_url", "discord/bot_token"),
-        False,
-        "outbound only: use it as a delivery target (`delivery: discord:<channel>` in jobs/webhooks)",
+        ("discord/bot_token", "discord/webhook_url"),
+        True,  # --- I7: Gateway connector (DMs + allowlisted channels, pairing codes)
+        "DM the bot (or post in a channel listed in plugins.discord.channels); it answers unknown "
+        "chats with a pairing code → `auoreo messaging discord pair <code>` (webhook-only = outbound)",
     ),
 }
 ACTIONS = ("setup", "start", "stop", "status", "pair")
@@ -194,7 +195,7 @@ def _pair(st: Settings, p: Platform, url: str | None, as_json: bool, code: str |
         err_console.print(f"[red]{p.plugin} has no inbound connector; nothing to pair[/red]")
         raise typer.Exit(2)
     if not code:
-        err_console.print("[red]usage: auoreo messaging telegram pair <code>[/red]")
+        err_console.print(f"[red]usage: auoreo messaging {p.plugin} pair <code>[/red]")
         raise typer.Exit(2)
     res = _api(st, url, "POST", f"/api/plugins/{p.plugin}/pair", {"code": code})
     chat_id = (

@@ -42,7 +42,7 @@ def make(config: dict[str, Any] | None = None, secrets: dict[str, str] | None = 
         FakeHost(SECRETS if secrets is None else secrets), transport=httpx.MockTransport(handler)
     )
     info = p.initialize(config or {}, [])
-    assert info == {"tools": [], "deliveries": ["discord"], "connectors": [], "skills": []}
+    assert info == {"tools": [], "deliveries": ["discord"], "connectors": ["discord"], "skills": []}
     return p, seen
 
 

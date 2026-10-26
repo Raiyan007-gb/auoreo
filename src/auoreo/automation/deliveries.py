@@ -287,7 +287,8 @@ class DeliveryWorker:
             name, target = providers.split_spec(str(spec))
             target = target or str(row.payload.get("delivery_target") or "")
             try:
-                receipt = await providers.resolve(self.s, name).send(target, text, meta=meta)
+                body, extra = await voice_notes(self.s, name, text)  # --- I7: MEDIA: envelope
+                receipt = await providers.resolve(self.s, name).send(target, body, meta=meta | extra)
             except Exception as exc:  # a broken provider counts as a failed attempt
                 receipt = providers.DeliveryReceipt(False, f"{exc.__class__.__name__}: {exc}"[:500])
             attempts.append(
@@ -327,6 +328,17 @@ async def start(services: Services) -> DeliveryWorker:
 def outbox_of(services: Services) -> Outbox:
     worker = services.ext.get("deliveries")
     return worker.outbox if isinstance(worker, DeliveryWorker) else Outbox(services)
+
+
+async def voice_notes(services: Any, provider: str, text: str) -> tuple[str, dict[str, Any]]:
+    """I7 (spec §13.4): `MEDIA:` lines → `meta["media"]` (Opus/MP3 per provider, 16 MiB cap);
+    a note that cannot be encoded is reported in the text instead of silently dropped."""
+    from auoreo.voice import notes
+
+    body, media, errors = await notes.attach(text, provider, services.settings.home)
+    if not media and not errors:
+        return body, {}
+    return notes.with_errors(body, errors), {"media": media}
 
 
 UNATTENDED_DENY: tuple[str, ...] = ("memory", "delegate_task", "plugin_*", "cronjob")

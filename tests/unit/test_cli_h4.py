@@ -124,7 +124,9 @@ def test_messaging_pair_and_errors(home: Path) -> None:
     assert "paired chat 777" in _ok(["messaging", "telegram", "pair", code])
     assert json.loads((home / "settings.json").read_text())["plugins"]["telegram"]["allowlist"] == ["777"]
     assert "unknown or expired" in _ok(["messaging", "telegram", "pair", "000000"], 1)
-    assert "nothing to pair" in _ok(["messaging", "discord", "pair", "1"], 2)
+    dcode = PairingStore(home, "discord").request("4242", "bob")  # I7: discord pairs like telegram
+    assert "paired chat 4242" in _ok(["messaging", "discord", "pair", dcode])
+    assert "usage: auoreo messaging discord pair" in _ok(["messaging", "discord", "pair"], 2)
     assert "unknown platform" in _ok(["messaging", "irc", "status"], 2)
     assert "unknown action" in _ok(["messaging", "discord", "launch"], 2)
 

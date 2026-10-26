@@ -57,7 +57,10 @@ async def test_list_stop_start_reload(client: httpx.AsyncClient) -> None:
     rows = {p["name"]: p for p in r.json()}
     assert rows["echo"]["status"] == "running" and rows["echo"]["verify"] == "ok"
     assert "plugin__echo__echo" in rows["echo"]["tools"]
-    assert rows["telegram"]["status"] == "disabled" and rows["discord"]["provides"] == ["delivery"]
+    assert rows["telegram"]["status"] == "disabled" and rows["discord"]["provides"] == [
+        "connector",
+        "delivery",
+    ]
 
     tools = {t["name"] for t in (await client.get("/api/harness/tools")).json()}
     assert "plugin__echo__echo" in tools

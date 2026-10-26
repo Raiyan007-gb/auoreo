@@ -314,7 +314,8 @@ class PluginManifest(_Strict):
     description: str = Field(min_length=1)
     provides: list[Literal["tools", "delivery", "connector", "backend", "skills"]] = Field(min_length=1)
     consumes: list[str] = Field(default_factory=list)
-    """Capabilities the plugin needs from the host (`sessions`, `memory`, `secrets:<name>`)."""
+    """Capabilities the plugin needs from the host (`sessions`, `memory`, `usage`, `secrets:<name>`,
+    `oauth:<connector>` for an access token minted from `oauth/<connector>`)."""
     permissions: list[str] = Field(default_factory=list)
     """Permission names the plugin's tools use (shown at install time)."""
     config_schema: dict[str, Any] = Field(

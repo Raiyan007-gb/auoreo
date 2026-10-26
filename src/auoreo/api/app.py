@@ -46,6 +46,7 @@ from auoreo.api.routers import hooks as hooks_router
 from auoreo.api.routers import kanban as kanban_router
 from auoreo.api.routers import meetings as meetings_router  # --- F4
 from auoreo.api.routers import metrics as metrics_router  # --- G5c
+from auoreo.api.routers import oauth as oauth_router  # --- I7
 from auoreo.api.routers import openai_compat as openai_compat_router
 from auoreo.api.routers import ops as ops_router  # --- W0-B
 from auoreo.api.routers import plugins as plugins_router
@@ -116,6 +117,7 @@ ROUTERS = (
     session_extras_router,  # --- G7: session plan + per-session MCP/plugin toggles
     skills_hub_router,  # --- G6: skill sources + hub approve
     secrets_router,  # --- I2: names-only list, write-through + rotate (hot reload)
+    oauth_router,  # --- I7: authorization/settled after `auoreo login`
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

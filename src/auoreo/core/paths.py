@@ -25,7 +25,7 @@ KINDS: tuple[str, ...] = (
 
 # --- W3-A: top-level folders shipped as bundled definitions (wheel `auoreo/_bundled/`,
 # PyInstaller `sys._MEIPASS/`). `web/dist` travels with them as `<root>/web/dist`.
-BUNDLED_DIRS: tuple[str, ...] = (*KINDS, "policies", "memory")
+BUNDLED_DIRS: tuple[str, ...] = (*KINDS, "policies", "memory", "connectors")  # I7: oauth.yaml
 
 
 def home_dir() -> Path:

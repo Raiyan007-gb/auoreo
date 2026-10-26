@@ -1,10 +1,11 @@
 name: discord
-version: 0.1.0
+version: 0.2.0
 description: >-
-  Discord delivery provider (outbound only in this wave; no connector): incoming webhook
+  Discord connector (Gateway WebSocket: DMs + allowlisted channels, pairing codes, /approve
+  /deny /pending slash commands, thread replies) and delivery provider: incoming webhook
   (`secrets:discord/webhook_url`) or bot token + channel id (`secrets:discord/bot_token`).
-provides: [delivery]
-consumes: ["secrets:discord/webhook_url", "secrets:discord/bot_token"]
+provides: [connector, delivery]
+consumes: [sessions, "secrets:discord/webhook_url", "secrets:discord/bot_token"]
 permissions: [messaging]
 config_schema:
   type: object
@@ -17,6 +18,41 @@ config_schema:
       type: string
       maxLength: 80
       description: Display name override for webhook messages.
+    connector:
+      type: boolean
+      default: true
+      description: Run the inbound Gateway connector (needs the bot token); false = delivery only.
+    allowlist:
+      type: array
+      items: {type: string}
+      description: Paired chat ids (DM / channel ids), added by `auoreo messaging discord pair <code>`.
+    channels:
+      type: array
+      items: {type: string, pattern: "^[0-9]+$"}
+      description: Guild channels the bot listens in (threads under them too); DMs always listen.
+    owners:
+      type: array
+      items: {type: string}
+      description: Paired chat ids allowed to /approve and /deny (default = every paired chat).
+    owner_user_ids:
+      type: array
+      items: {type: string, pattern: "^[0-9]+$"}
+      description: Discord user ids allowed to answer approvals inside guild channels.
+    reply_in_thread:
+      type: boolean
+      default: false
+      description: Open a thread on each guild-channel message and answer there.
+    register_commands:
+      type: boolean
+      default: true
+      description: Register the /approve /deny /pending slash commands on READY (global bulk overwrite).
+    gateway_url:
+      type: string
+      pattern: "^wss?://"
+      description: Override the Gateway URL (default from GET /gateway/bot).
+    agent:
+      type: string
+      description: Agent for Discord sessions (default agent when unset).
   additionalProperties: false
 entry: plugin.py:Plugin
 enabled: false

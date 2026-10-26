@@ -1,4 +1,4 @@
-"""Calendar connector for AUOREO: CalDAV (RFC 4791) over httpx; Google is a stub.
+"""Calendar connector for AUOREO: CalDAV (RFC 4791) and Google Calendar v3, over httpx.
 
 `calendar_list_events`: `REPORT` calendar-query with a `time-range` filter on VEVENTs; the
 multistatus answer is parsed with `xml.etree` and each `calendar-data` with a small iCalendar
@@ -6,6 +6,12 @@ reader (line unfolding, SUMMARY/DTSTART/DTEND/UID/LOCATION/DESCRIPTION). Recurri
 returned as their master (RRULE shown), not expanded.
 `calendar_create_event`: `PUT <collection>/<uid>.ics` with `If-None-Match: *` (never
 overwrites). Times are ISO 8601; naive times use the configured `timezone`.
+
+I7 `provider: google`: Calendar API v3 REST with an OAuth access token from the host
+(`HostAPI.oauth_token("google")`, minted from `auoreo login google`; refreshed + cached host
+side). List = `GET /calendars/{id}/events?timeMin&timeMax&singleEvents=true&orderBy=startTime`;
+create = `POST /calendars/{id}/events` with a fresh client-chosen event id — an insert never
+replaces an existing event, and a 409 (id taken) is reported, not retried as an update.
 """
 
 from __future__ import annotations
@@ -15,17 +21,14 @@ import uuid
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import quote
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
 NAME = "calendar"
 NS = {"d": "DAV:", "c": "urn:ietf:params:xml:ns:caldav"}
-GOOGLE_STUB = (
-    "the Google provider is not implemented yet: use provider=caldav with Google's CalDAV "
-    "endpoint (https://apidata.googleusercontent.com/caldav/v2/<calendar-id>/events/) and an "
-    "OAuth/app credential stored as secret:calendar/password"
-)
+GOOGLE_API = "https://www.googleapis.com/calendar/v3"
 TOOLS: list[dict[str, Any]] = [
     {
         "name": "calendar_list_events",
@@ -163,9 +166,72 @@ class Plugin:
         self.config = dict(config)
         return {}
 
+    def google(self) -> bool:
+        return self.config.get("provider", "caldav") == "google"
+
+    async def _google_client(self) -> httpx.AsyncClient:
+        connector = str(self.config.get("oauth_connector") or "google")
+        try:
+            token = await self.host.oauth_token(connector)
+        except Exception as exc:  # RpcError from the host: not signed in / not declared
+            raise CalendarError(f"OAuth token for {connector} unavailable: {exc}") from exc
+        if not token:
+            raise CalendarError(f"OAuth token for {connector} unavailable (run `auoreo login {connector}`)")
+        headers = {"Authorization": f"Bearer {token}"}
+        return httpx.AsyncClient(headers=headers, transport=self.transport, timeout=30)
+
+    def _events_url(self) -> str:
+        cal = quote(str(self.config.get("calendar_id") or "primary"), safe="")
+        return f"{GOOGLE_API}/calendars/{cal}/events"
+
+    async def google_list(self, t0: datetime, t1: datetime) -> list[dict[str, str]]:
+        params = {
+            "timeMin": t0.isoformat(),
+            "timeMax": t1.isoformat(),
+            "singleEvents": "true",
+            "orderBy": "startTime",
+            "maxResults": str(int(self.config.get("max_events", 100))),
+        }
+        async with await self._google_client() as client:
+            resp = await client.get(self._events_url(), params=params)
+        if resp.status_code != 200:
+            raise CalendarError(f"Google events.list answered HTTP {resp.status_code}: {resp.text[:200]}")
+        out: list[dict[str, str]] = []
+        for item in resp.json().get("items", []):
+            start, end = item.get("start") or {}, item.get("end") or {}
+            row = {
+                "uid": str(item.get("id", "")),
+                "summary": str(item.get("summary", "")),
+                "dtstart": str(start.get("dateTime") or start.get("date") or ""),
+                "dtend": str(end.get("dateTime") or end.get("date") or ""),
+            }
+            for key in ("location", "description"):
+                if item.get(key):
+                    row[key] = str(item[key])
+            out.append(row)
+        return out
+
+    async def google_create(self, args: dict[str, Any], start: datetime, end: datetime) -> str:
+        tz = str(self.config.get("timezone") or "UTC")
+        event_id = uuid.uuid4().hex  # base32hex alphabet ⊇ [0-9a-f]; 32 chars
+        body: dict[str, Any] = {
+            "id": event_id,
+            "summary": str(args["summary"]),
+            "start": {"dateTime": start.isoformat(), "timeZone": tz},
+            "end": {"dateTime": end.isoformat(), "timeZone": tz},
+        }
+        for key in ("description", "location"):
+            if args.get(key):
+                body[key] = str(args[key])
+        async with await self._google_client() as client:
+            resp = await client.post(self._events_url(), json=body)
+        if resp.status_code == 409:
+            raise CalendarError("an event with that id already exists; nothing was overwritten")
+        if resp.status_code not in (200, 201):
+            raise CalendarError(f"Google events.insert answered HTTP {resp.status_code}: {resp.text[:200]}")
+        return str(resp.json().get("id") or event_id)
+
     async def _client(self) -> httpx.AsyncClient:
-        if self.config.get("provider", "caldav") == "google":
-            raise CalendarError(GOOGLE_STUB)
         if not self.config.get("url"):
             raise CalendarError("calendar url is not configured")
         auth = None
@@ -189,6 +255,8 @@ class Plugin:
         t1 = parse_time(end, tz) if end else t0 + timedelta(days=7)
         if t1 <= t0:
             raise CalendarError("end must be after start")
+        if self.google():
+            return await self.google_list(t0, t1)
         async with await self._client() as client:
             resp = await client.request(
                 "REPORT",
@@ -214,6 +282,8 @@ class Plugin:
         end = parse_time(str(args["end"]), tz) if args.get("end") else start + timedelta(hours=1)
         if end <= start:
             raise CalendarError("end must be after start")
+        if self.google():
+            return await self.google_create(args, start, end)
         uid = f"{uuid.uuid4()}@auoreo"
         body = build_event(
             uid,

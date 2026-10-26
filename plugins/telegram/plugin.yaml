@@ -22,6 +22,24 @@ config_schema:
       type: integer
       minimum: 1
       maximum: 50
+    stream:
+      type: boolean
+      default: false
+      description: Stream replies while they are written (drafts in private chats, message edits elsewhere).
+    stream_mode:
+      type: string
+      enum: [auto, draft, edit]
+      default: auto
+      description: auto = sendMessageDraft in private chats, editMessageText in groups.
+    stream_interval_s:
+      type: number
+      minimum: 0.3
+      maximum: 30
+      default: 1.0
+      description: Minimum seconds between two streamed updates of one chat (rate limit).
+    lock_dir:
+      type: string
+      description: Folder for the one-poller-per-token lock file (default = the system temp dir).
   additionalProperties: false
 entry: plugin.py:Plugin
 enabled: false

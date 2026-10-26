@@ -8,23 +8,128 @@ Outbound: `sendMessage`, chunked at 4000 characters, plain text (no `parse_mode`
 Approvals: `/approve [id|all]`, `/deny [id|all] [reason]` and `/pending` from a paired chat are
 forwarded like any message; the host answers them (owner check, FIFO or by request id) in
 `auoreo.plugins.chat_approvals` instead of starting a run.
+
+I7 (spec §25.15 "Telegram 10.x"):
+- Streaming: with `stream: true` the host sends partial replies (`meta.stream = "partial"`).
+  Private chats get `sendMessageDraft` (an animated, ephemeral draft); other chats get one
+  message edited in place (`editMessageText`). Both are rate-limited per chat
+  (`stream_interval_s`, default 1 s); the final reply persists with `sendMessage` (or a last edit).
+- Voice notes: `meta.media` entries (from the host's `MEDIA:` envelope, Opus `.ogg`) go out with
+  `sendVoice` (multipart upload, `duration`, caption when the text fits in 1024 characters).
+- Token lock: one poller per bot token (`O_EXCL` lock file + PID liveness) so two profiles or
+  processes never fight over `getUpdates` (Telegram answers the loser with 409 Conflict).
+- `verify_init_data()`: Mini-App `initData` HMAC-SHA256 check (`WebAppData` key derivation).
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import hmac
+import json
+import os
+import tempfile
+import time
+from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl
 
 import httpx
 
 API = "https://api.telegram.org"
 CHUNK = 4000
+CAPTION_MAX = 1024
+VOICE_MAX_BYTES = 16 * 2**20
 NAME = "telegram"
 
 
 class TelegramError(RuntimeError):
     pass
+
+
+def verify_init_data(
+    init_data: str, bot_token: str, *, max_age_s: float = 86400, now: float | None = None
+) -> dict[str, Any]:
+    """Validate a Mini-App `initData` query string; returns its fields (`user` JSON-decoded).
+
+    secret = HMAC_SHA256(key="WebAppData", msg=bot_token); the `hash` field must equal
+    hex(HMAC_SHA256(key=secret, msg=data_check_string)) where data_check_string is every other
+    `key=value` pair sorted by key and joined with newlines. An `auth_date` older than
+    `max_age_s` is rejected (replay)."""
+    pairs = dict(parse_qsl(init_data, keep_blank_values=True))
+    given = pairs.pop("hash", "")
+    if not given:
+        raise TelegramError("initData has no hash")
+    check = "\n".join(f"{k}={pairs[k]}" for k in sorted(pairs))
+    secret = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+    expected = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, given.lower()):
+        raise TelegramError("initData hash mismatch")
+    try:
+        auth_date = float(pairs.get("auth_date", "0"))
+    except ValueError as exc:
+        raise TelegramError("initData auth_date is not a number") from exc
+    if max_age_s and (now if now is not None else time.time()) - auth_date > max_age_s:
+        raise TelegramError("initData is too old")
+    out: dict[str, Any] = dict(pairs)
+    if "user" in out:
+        with contextlib.suppress(ValueError):
+            out["user"] = json.loads(out["user"])
+    return out
+
+
+class TokenLock:
+    """One process per bot token: `<dir>/auoreo-telegram-<sha256(token)[:16]>.lock` created with
+    O_EXCL; a lock whose PID is gone is stale and taken over."""
+
+    def __init__(self, token: str, directory: str | None = None) -> None:
+        digest = hashlib.sha256(token.encode()).hexdigest()[:16]
+        self.path = Path(directory or tempfile.gettempdir()) / f"auoreo-telegram-{digest}.lock"
+        self.held = False
+
+    @staticmethod
+    def alive(pid: int) -> bool:
+        if pid <= 0:
+            return False
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+
+    def holder(self) -> int | None:
+        try:
+            return int(self.path.read_text().strip() or 0)
+        except (OSError, ValueError):
+            return None
+
+    def acquire(self) -> bool:
+        if self.held:
+            return True
+        for _ in range(2):
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+            except FileExistsError:
+                pid = self.holder()
+                if pid is not None and pid != os.getpid() and self.alive(pid):
+                    return False
+                with contextlib.suppress(FileNotFoundError):
+                    self.path.unlink()  # stale (dead PID) or our own leftover
+                continue
+            with os.fdopen(fd, "w") as fh:
+                fh.write(str(os.getpid()))
+            self.held = True
+            return True
+        return False
+
+    def release(self) -> None:
+        if self.held and self.holder() == os.getpid():
+            with contextlib.suppress(FileNotFoundError):
+                self.path.unlink()
+        self.held = False
 
 
 def chunk(text: str, size: int = CHUNK) -> list[str]:
@@ -54,6 +159,9 @@ class Plugin:
         self._token: str | None = None
         self._client: httpx.AsyncClient | None = None
         self._poll: asyncio.Task[None] | None = None
+        self.lock: TokenLock | None = None
+        self.streams: dict[str, dict[str, Any]] = {}  # chat_id → {mode, draft_id, message_id, at, text}
+        self._draft_ids = 0
 
     # ------------------------------------------------------------- protocol
     def initialize(self, config: dict[str, Any], consumes_granted: list[str]) -> dict[str, Any]:
@@ -67,6 +175,17 @@ class Plugin:
 
     async def connector_start(self, name: str) -> dict[str, Any]:
         if self._poll is None or self._poll.done():
+            token = await self._bot_token()
+            self.lock = self.lock or TokenLock(token, self.config.get("lock_dir"))
+            if not self.lock.acquire():
+                msg = (
+                    f"telegram: another process (pid {self.lock.holder()}) already polls this bot "
+                    "token; not polling here (one poller per token)"
+                )
+                self.host.log("error", msg)
+                with contextlib.suppress(Exception):
+                    await self.host.audit("token_locked", {"holder_pid": self.lock.holder()})
+                return {"ok": False, "detail": msg}
             self._poll = asyncio.create_task(self._poll_loop())
         return {}
 
@@ -76,6 +195,8 @@ class Plugin:
             with contextlib.suppress(asyncio.CancelledError):
                 await self._poll
             self._poll = None
+        if self.lock is not None:
+            self.lock.release()
         return {}
 
     async def shutdown(self) -> None:
@@ -85,15 +206,23 @@ class Plugin:
             self._client = None
 
     # ------------------------------------------------------------------ API
-    async def _api(self, method: str, payload: dict[str, Any]) -> Any:
+    async def _bot_token(self) -> str:
         if self._token is None:
             self._token = await self.host.secret("telegram/bot_token")
             if not self._token:
                 raise TelegramError("secret telegram/bot_token is not set")
+        return self._token
+
+    async def _api(self, method: str, payload: dict[str, Any], files: dict[str, Any] | None = None) -> Any:
+        token = await self._bot_token()
         if self._client is None:
             timeout = httpx.Timeout(10.0, read=float(self.config.get("poll_timeout_s", 25)) + 15)
             self._client = httpx.AsyncClient(transport=self.transport, timeout=timeout)
-        resp = await self._client.post(f"{API}/bot{self._token}/{method}", json=payload)
+        url = f"{API}/bot{token}/{method}"
+        if files:
+            resp = await self._client.post(url, data={k: str(v) for k, v in payload.items()}, files=files)
+        else:
+            resp = await self._client.post(url, json=payload)
         try:
             data = resp.json()
         except ValueError as exc:
@@ -105,18 +234,92 @@ class Plugin:
     async def send(self, name: str, target: str, text: str, meta: dict[str, Any]) -> dict[str, Any]:
         reply_to = meta.get("reply_to") if isinstance(meta.get("reply_to"), dict) else {}
         thread_id = reply_to.get("thread_id") if reply_to else None
-        last: Any = None
-        parts = chunk(text or "(empty)")
         try:
-            for part in parts:
-                payload: dict[str, Any] = {"chat_id": target, "text": part}
-                if thread_id is not None:
-                    payload["message_thread_id"] = int(thread_id)
-                last = await self._api("sendMessage", payload)
-        except (TelegramError, httpx.HTTPError) as exc:
+            if meta.get("stream") == "partial":
+                return await self.stream_partial(str(target), text, thread_id)
+            return await self._send_final(str(target), text, meta, thread_id)
+        except (TelegramError, httpx.HTTPError, OSError) as exc:
             return {"ok": False, "detail": str(exc), "external_id": None}
+
+    async def _send_final(
+        self, target: str, text: str, meta: dict[str, Any], thread_id: Any
+    ) -> dict[str, Any]:
+        media = [m for m in meta.get("media") or [] if isinstance(m, dict) and m.get("path")]
+        last: Any = None
+        sent = 0
+        caption = text if media and 0 < len(text) <= CAPTION_MAX else ""
+        for i, item in enumerate(media):
+            last = await self.send_voice(target, item, caption if i == len(media) - 1 else "", thread_id)
+            sent += 1
+        stream = self.streams.pop(target, None)
+        if not media or (text and not caption):
+            parts = chunk(text or "(empty)")
+            if stream and stream["mode"] == "edit" and stream.get("message_id") is not None:
+                payload = {"chat_id": target, "message_id": stream["message_id"], "text": parts.pop(0)}
+                last = await self._api("editMessageText", payload)
+                sent += 1
+            for part in parts:
+                body: dict[str, Any] = {"chat_id": target, "text": part}
+                if thread_id is not None:
+                    body["message_thread_id"] = int(thread_id)
+                last = await self._api("sendMessage", body)
+                sent += 1
         msg_id = last.get("message_id") if isinstance(last, dict) else None
-        return {"ok": True, "detail": f"{len(parts)} message(s)", "external_id": msg_id}
+        return {"ok": True, "detail": f"{sent} message(s)", "external_id": msg_id}
+
+    async def send_voice(
+        self, chat_id: str, item: dict[str, Any], caption: str, thread_id: Any = None
+    ) -> Any:
+        """`sendVoice` multipart upload of an Opus `.ogg` voice note (16 MiB cap)."""
+        path = Path(str(item["path"]))
+        size = (await asyncio.to_thread(path.stat)).st_size
+        if size > VOICE_MAX_BYTES:
+            raise TelegramError(f"voice note is {size} bytes; the cap is {VOICE_MAX_BYTES}")
+        payload: dict[str, Any] = {"chat_id": chat_id}
+        if item.get("duration_s") is not None:
+            payload["duration"] = max(1, round(float(item["duration_s"])))
+        if caption:
+            payload["caption"] = caption
+        if thread_id is not None:
+            payload["message_thread_id"] = int(thread_id)
+        data = await asyncio.to_thread(path.read_bytes)
+        files = {"voice": (path.name, data, str(item.get("mime") or "audio/ogg"))}
+        return await self._api("sendVoice", payload, files=files)
+
+    # ----------------------------------------------------------- streaming
+    def _stream_mode(self, chat_id: str) -> str:
+        mode = str(self.config.get("stream_mode", "auto"))
+        if mode != "auto":
+            return mode
+        return "draft" if chat_id.isdigit() else "edit"  # private chats have positive ids
+
+    async def stream_partial(self, chat_id: str, text: str, thread_id: Any = None) -> dict[str, Any]:
+        """Show the reply so far: a draft (private chats) or one message edited in place."""
+        now = time.monotonic()
+        st = self.streams.get(chat_id)
+        if st is None:
+            self._draft_ids += 1
+            st = {"mode": self._stream_mode(chat_id), "draft_id": self._draft_ids, "message_id": None}
+            st.update(at=-1e9, text="")
+            self.streams[chat_id] = st
+        if now - st["at"] < float(self.config.get("stream_interval_s", 1.0)):
+            return {"ok": True, "detail": "rate-limited", "external_id": None}
+        view = text if len(text) <= CHUNK else text[: CHUNK - 1] + "…"
+        if not view.strip() or view == st["text"]:
+            return {"ok": True, "detail": "unchanged", "external_id": None}
+        payload: dict[str, Any] = {"chat_id": chat_id, "text": view}
+        if thread_id is not None:
+            payload["message_thread_id"] = int(thread_id)
+        if st["mode"] == "draft":
+            await self._api("sendMessageDraft", payload | {"draft_id": st["draft_id"]})
+        elif st["message_id"] is None:
+            res = await self._api("sendMessage", payload)
+            st["message_id"] = res.get("message_id") if isinstance(res, dict) else None
+        else:
+            edit = {"chat_id": chat_id, "message_id": st["message_id"], "text": view}
+            await self._api("editMessageText", edit)
+        st["at"], st["text"] = now, view
+        return {"ok": True, "detail": f"stream {st['mode']}", "external_id": st["message_id"]}
 
     # ------------------------------------------------------------- inbound
     async def poll_once(self) -> int:
