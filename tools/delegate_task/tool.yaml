@@ -29,9 +29,28 @@ parameters:
     message: {type: string, minLength: 1, maxLength: 20000, description: "steer: what to tell the running subagent."}
     mode:
       type: string
-      enum: [spawn, fork]
+      enum: [spawn, fork, exact]
       default: spawn
-      description: spawn = fresh context; fork = the child starts with a summary of this conversation.
+      description: >-
+        spawn = fresh context; fork = the child starts with a summary of this conversation;
+        exact = the child inherits this whole conversation, system prompt and tool list
+        byte-for-byte (model=inherit; cheapest with provider prompt caching).
+    allowedTools:
+      type: array
+      items: {type: string, minLength: 1, maxLength: 200}
+      maxItems: 100
+      description: Replace the child's tools with exactly these names/globs (unknown names fail the spawn).
+    inherit_mcp_toolsets:
+      description: MCP tools reach the child only when true (all servers) or for the listed server names.
+      anyOf:
+        - {type: boolean}
+        - {type: array, items: {type: string, minLength: 1, maxLength: 100}, maxItems: 50}
+    handoff:
+      type: boolean
+      default: false
+      description: >-
+        The child must answer with the handoff JSON {purpose, files:[path:line], done,
+        commit_hash?, summary<=80 chars} (validated, one retry); usage is added for you.
     budget:
       type: object
       description: Per-child limits; exhaustion forces one summarise-now reply, then TOOL_BUDGET_EXCEEDED.
@@ -40,6 +59,11 @@ parameters:
         max_usd: {type: number, exclusiveMinimum: 0}
         timeout_ms: {type: integer, minimum: 1000, maximum: 86400000}
       additionalProperties: false
+    task_schemas:
+      type: array
+      maxItems: 10
+      items: {type: object}
+      description: Batch only - output schemas aligned with tasks[] by index (a task's own output_schema wins).
     tasks:
       type: array
       minItems: 1
@@ -56,7 +80,13 @@ parameters:
           name: {type: string, pattern: "^[a-z0-9_]{1,64}$"}
           model: {type: string}
           output_schema: {type: object}
-          mode: {type: string, enum: [spawn, fork]}
+          mode: {type: string, enum: [spawn, fork, exact]}
+          allowedTools: {type: array, items: {type: string, minLength: 1, maxLength: 200}, maxItems: 100}
+          inherit_mcp_toolsets:
+            anyOf:
+              - {type: boolean}
+              - {type: array, items: {type: string, minLength: 1, maxLength: 100}, maxItems: 50}
+          handoff: {type: boolean}
           budget:
             type: object
             properties:

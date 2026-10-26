@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from typing import Any
 
 import pytest
@@ -211,11 +212,10 @@ async def test_live_log_written_for_child(services: Services, gateway: RoutedGat
     teams = teams_of(services)
     parent = await new_parent(services)
     kid = await teams.spawn(parent, agent="default", prompt="CHILD-LOG go", name="logger", background=False)
-    path = live_log_path(services.settings.home, parent, kid.session_id)
-    assert (
-        path
-        == services.settings.home / "sessions" / parent / "delegation" / "live" / f"{kid.session_id}.jsonl"
-    )
+    assert re.fullmatch(r"sa-1-[0-9a-f]{8}", kid.subagent_id)
+    path = live_log_path(services.settings.home, parent, kid.subagent_id, 1)
+    live = services.settings.home / "sessions" / parent / "delegation" / "live"
+    assert path == live / kid.subagent_id / "task-1.log"
     lines = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines()]
     types = {line["type"] for line in lines}
     assert "run.started" in types and "message.delta" not in types

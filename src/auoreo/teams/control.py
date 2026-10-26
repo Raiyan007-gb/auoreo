@@ -53,7 +53,7 @@ class Control:
             )
             rows = list((await s.execute(q)).scalars())
         for row in rows:
-            if ref in (row.session_id, row.name):
+            if ref in (row.session_id, row.name, row.subagent_id):
                 return row
         known = ", ".join(f"{r.name} ({r.session_id})" for r in rows) or "none"
         raise TeamsError(f"no subagent '{ref}' among this session's children (known: {known})")
@@ -72,7 +72,8 @@ class Control:
             live = self.t.members_live.get(row.session_id)
             out.append(
                 {
-                    "subagent_id": row.session_id,
+                    "subagent_id": row.subagent_id or row.session_id,
+                    "task_id": row.session_id,
                     "name": row.name,
                     "agent": row.agent,
                     "depth": row.depth,
@@ -93,12 +94,22 @@ class Control:
         await self.t.s.emit(
             parent, "subagent.steered", {"parent": parent, "child": row.session_id, "name": row.name}
         )
-        return {"subagent_id": row.session_id, "name": row.name, "steered": True}
+        return {
+            "subagent_id": row.subagent_id or row.session_id,
+            "task_id": row.session_id,
+            "name": row.name,
+            "steered": True,
+        }
 
     async def stop(self, parent: str, ref: str) -> dict[str, Any]:
         row = await self.child(parent, ref)
         stopped = await self.stop_session(row.session_id)
-        return {"subagent_id": row.session_id, "name": row.name, "stopped": stopped}
+        return {
+            "subagent_id": row.subagent_id or row.session_id,
+            "task_id": row.session_id,
+            "name": row.name,
+            "stopped": stopped,
+        }
 
     async def stop_session(self, sid: str) -> bool:
         cancelled = await self.t.s.coordinator.cancel(sid)

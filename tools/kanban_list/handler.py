@@ -1,3 +1,4 @@
+from auoreo.teams import kanban_guard as guard
 from auoreo.teams.tooling import attempt, teams_for
 from auoreo.tools.context import ToolContext, ToolResult
 
@@ -8,6 +9,7 @@ def _fmt(row) -> str:
 
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
+    guard.refuse_worker(ctx, "list")
     kb = teams_for(ctx).kanban
     rows = await attempt(kb.list_tasks(args.get("board", "default"), args.get("status")))
     text = "\n".join(_fmt(r) for r in rows) or "no tasks"

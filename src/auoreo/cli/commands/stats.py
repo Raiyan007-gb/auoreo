@@ -16,10 +16,16 @@ def stats(
     project: Annotated[
         bool, typer.Option("--project", help="Group by project (the cwd a session was created in).")
     ] = False,
+    by_subagent: Annotated[
+        bool, typer.Option("--by-subagent", help="Group by delegated subagent (spec §25.15).")
+    ] = False,
 ) -> None:
-    """Token and cost usage per model and per session (or per project with --project)."""
+    """Token and cost usage per model and per session (or per project / subagent)."""
     if project:  # --- G5a
         _by_project(days, as_json)
+        return
+    if by_subagent:  # --- I3
+        _by_subagent(days, as_json)
         return
 
     async def go(svc: Services) -> dict[str, Any]:
@@ -61,6 +67,33 @@ def _by_project(days: int, as_json: bool) -> None:
         table.add_row(
             r["key"],
             str(r["sessions"]),
+            str(r["calls"]),
+            f"{r['prompt_tokens']:,}",
+            f"{r['completion_tokens']:,}",
+            f"{r['cost_usd']:.4f}",
+        )
+    console.print(table)
+
+
+def _by_subagent(days: int, as_json: bool) -> None:
+    from auoreo.core.usage_attrib import by_subagent
+
+    async def go(svc: Services) -> list[dict[str, Any]]:
+        return await by_subagent(svc.db, days)
+
+    rows = with_services(go, memory=False)
+    if as_json:
+        dump_json({"days": days, "by_subagent": rows})
+        return
+    table = Table(title=f"usage by subagent (last {days}d)")
+    for col in ("subagent", "task", "parent", "depth", "calls", "prompt", "completion", "cost $"):
+        table.add_column(col, justify="left" if col in ("subagent", "task", "parent") else "right")
+    for r in rows:
+        table.add_row(
+            r["subagent_id"],
+            r["task_name"],
+            r["parent_session_id"],
+            str(r["depth"]),
             str(r["calls"]),
             f"{r['prompt_tokens']:,}",
             f"{r['completion_tokens']:,}",

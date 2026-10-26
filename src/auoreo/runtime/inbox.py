@@ -8,7 +8,7 @@ import asyncio
 import uuid
 from collections import deque
 from dataclasses import dataclass, field, replace
-from typing import Literal
+from typing import Any, Literal
 
 OUT_OF_BAND = "[OUT-OF-BAND]"  # == runtime.budget.OUT_OF_BAND (kept import-free here)
 
@@ -36,6 +36,7 @@ class RunOptions:
     bare: bool = False  # --- G5a: system prompt = agent body only (`auoreo run --bare`)
     variant: str | None = None  # shape requests by the variants.yaml entry matching this id
     effort: str | None = None  # reasoning effort override (`--thinking low|medium|high|max`)
+    exact: Any = None  # --- I3: `teams.fork.ExactSpec` — frozen spec + tool list of an exact fork
 
 
 @dataclass

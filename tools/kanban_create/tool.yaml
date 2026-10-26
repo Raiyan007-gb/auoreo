@@ -4,6 +4,7 @@ parameters:
   type: object
   properties:
     board: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$", default: default}
+    profile: {type: string, pattern: "^[a-z][a-z0-9_]*$", maxLength: 64, description: "Worker agent the dispatcher spawns for this task (default: i3.kanban.agent)."}
     title: {type: string, minLength: 1, maxLength: 200}
     body: {type: string, maxLength: 20000}
   required: [title]

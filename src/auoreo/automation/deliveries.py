@@ -258,6 +258,7 @@ class DeliveryWorker:
                 title=f"{row.kind}:{row.source}"[:120],
                 agent=payload.get("agent"),
                 workflow=payload.get("workflow"),
+                model=payload.get("model"),  # --- I3: job model/provider
             )
         except KeyError as exc:
             raise RunError(str(exc).strip("'\"")) from exc
@@ -282,6 +283,13 @@ class DeliveryWorker:
         self, row: DeliveryRow, text: str, meta: dict[str, Any]
     ) -> tuple[str | None, list[dict[str, Any]]]:
         specs = list(row.payload.get("deliver") or [row.target])
+        fan_out = False
+        if row.kind == "job":  # --- I3: origin|home|all aliases + header/footer (spec §16.7)
+            from auoreo.automation import cron_extras
+
+            specs, fan_out = await cron_extras.expand_deliver(self.s, specs, row.payload.get("origin"))
+            if "when" in row.payload:  # scheduler-fired runs only (not hand-enqueued rows)
+                text = cron_extras.frame(self.s, row.payload, text)
         attempts: list[dict[str, Any]] = []
         for spec in specs:
             name, target = providers.split_spec(str(spec))
@@ -298,9 +306,10 @@ class DeliveryWorker:
                     "external_id": receipt.external_id,
                 }
             )
-            if receipt.ok:
+            if receipt.ok and not fan_out:
                 return name, attempts
-        return None, attempts
+        winners = [a["provider"] for a in attempts if a["ok"]]
+        return (",".join(winners) or None), attempts
 
     async def close(self) -> None:
         for task in self._tasks:

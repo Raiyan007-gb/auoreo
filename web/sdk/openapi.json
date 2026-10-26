@@ -1113,6 +1113,15 @@
             "title": "Catch Up",
             "type": "boolean"
           },
+          "context_from": {
+            "description": "previous | <job name>",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Context From",
+            "type": "array"
+          },
           "deliver": {
             "items": {
               "type": "string"
@@ -1144,6 +1153,44 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "footer": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Delivery footer (\"\" disables)",
+            "title": "Footer"
+          },
+          "header": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Delivery header (\"\" disables)",
+            "title": "Header"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
           "name": {
             "pattern": "^[a-z][a-z0-9_]{0,63}$",
             "title": "Name",
@@ -1155,12 +1202,37 @@
             "title": "Prompt",
             "type": "string"
           },
+          "provider": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z][a-z0-9_.-]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
           "schedule": {
-            "description": "5-field cron | every <n>m|h|d | in <n>m|h|d | ISO datetime",
+            "description": "cron | every <n>m|h|d | <n>m|h|d | every monday 9am [tz] | in <n>m|h|d | ISO datetime",
             "maxLength": 200,
             "minLength": 1,
             "title": "Schedule",
             "type": "string"
+          },
+          "script": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pre-run script under <home>/scripts/",
+            "title": "Script"
           },
           "timeout_s": {
             "anyOf": [
@@ -1186,6 +1258,18 @@
               }
             ],
             "title": "Tz"
+          },
+          "workdir": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workdir"
           }
         },
         "required": [
@@ -5615,7 +5699,14 @@
             "type": "string"
           },
           "subagent_id": {
+            "description": "sa-{n}-{hex8} (I3); the child session id for older rows",
             "title": "Subagent Id",
+            "type": "string"
+          },
+          "task_id": {
+            "default": "",
+            "description": "The child session id",
+            "title": "Task Id",
             "type": "string"
           },
           "usage": {

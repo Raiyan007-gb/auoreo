@@ -18,7 +18,8 @@ import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
+from sqlalchemy.orm import aliased
 
 from auoreo.core.db import KanbanCommentRow, KanbanTaskRow, utcnow
 
@@ -49,6 +50,7 @@ def task_dict(row: KanbanTaskRow) -> dict[str, Any]:
         "worker": row.worker,
         "session_id": row.session_id,
         "failures": row.failures,
+        "profile": row.profile,
         "heartbeat_at": row.heartbeat_at,
         "created_at": row.created_at,
         "updated_at": row.updated_at,
@@ -59,6 +61,8 @@ class KanbanStore:
     def __init__(self, services: Services) -> None:
         self.s = services
         self._reclaimer: asyncio.Task[None] | None = None
+        self.worker_boards: dict[str, str] = {}  # --- I3: dispatched worker session → its board
+        self.worker_names: dict[str, str] = {}  # dispatched worker session → its worker name
 
     # ------------------------------------------------------------ lifecycle
     def start(self) -> None:
@@ -85,8 +89,10 @@ class KanbanStore:
         )
 
     # ------------------------------------------------------------ operations
-    async def create(self, board: str, title: str, body: str = "") -> KanbanTaskRow:
-        row = KanbanTaskRow(board=board, title=title, body=body)
+    async def create(
+        self, board: str, title: str, body: str = "", *, profile: str | None = None
+    ) -> KanbanTaskRow:
+        row = KanbanTaskRow(board=board, title=title, body=body, profile=profile)
         async with self.s.db.session() as s:
             s.add(row)
             await s.commit()
@@ -99,12 +105,26 @@ class KanbanStore:
             raise KanbanError(f"unknown kanban task {task_id}")
         return row
 
-    async def claim(self, board: str, worker: str, session_id: str | None = None) -> KanbanTaskRow | None:
+    async def claim(
+        self, board: str, worker: str, session_id: str | None = None, *, task_id: int | None = None
+    ) -> KanbanTaskRow | None:
         """Claim the oldest `ready` task on `board`; None when nothing is ready (or a
-        concurrent claimer won the same row)."""
+        concurrent claimer won the same row). A worker already holding `wip_per_worker` (3)
+        claimed tasks is refused (spec §25.11 board WIP≤3/worker), atomically in the UPDATE.
+        `task_id` claims that task (the dispatcher) instead of the oldest."""
+        wip = self.s.settings.i3.kanban.wip_per_worker
+        mine = aliased(KanbanTaskRow)
+        held = (
+            select(func.count())
+            .select_from(mine)
+            .where(mine.worker == worker, mine.status == "claimed")
+            .correlate_except(mine)
+            .scalar_subquery()
+        )
+        wanted = (KanbanTaskRow.id == task_id,) if task_id is not None else ()
         first_ready = (
             select(KanbanTaskRow.id)
-            .where(KanbanTaskRow.board == board, KanbanTaskRow.status == "ready")
+            .where(KanbanTaskRow.board == board, KanbanTaskRow.status == "ready", *wanted)
             .order_by(KanbanTaskRow.id)
             .limit(1)
             .scalar_subquery()
@@ -112,7 +132,7 @@ class KanbanStore:
         now = utcnow()
         stmt = (
             update(KanbanTaskRow)
-            .where(KanbanTaskRow.id == first_ready, KanbanTaskRow.status == "ready")
+            .where(KanbanTaskRow.id == first_ready, KanbanTaskRow.status == "ready", held < wip)
             .values(status="claimed", worker=worker, session_id=session_id, heartbeat_at=now, updated_at=now)
             .returning(KanbanTaskRow.id)
             .execution_options(synchronize_session=False)
@@ -122,10 +142,26 @@ class KanbanStore:
             ids = list(res.scalars())
             await s.commit()
         if len(ids) != 1:
+            if await self.held(worker) >= wip:
+                raise KanbanError(
+                    f"worker {worker} already holds {wip} claimed tasks (WIP limit); finish one first"
+                )
             return None
         row = await self.get(ids[0])
         await self._event("task_claimed", row)
         return row
+
+    async def set_session(self, task_id: int, session_id: str) -> None:
+        async with self.s.db.session() as s:
+            row = await s.get(KanbanTaskRow, task_id)
+            if row is not None:
+                row.session_id = session_id
+                await s.commit()
+
+    async def held(self, worker: str) -> int:
+        async with self.s.db.session() as s:
+            q = select(func.count()).where(KanbanTaskRow.worker == worker, KanbanTaskRow.status == "claimed")
+            return int((await s.execute(q)).scalar_one())
 
     async def _transition(
         self, task_id: int, by_worker: str | None, /, *, allowed: tuple[str, ...], **values: Any

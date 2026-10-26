@@ -1,11 +1,13 @@
 import json
 
-from auoreo.teams.tooling import attempt, teams_for
+from auoreo.teams import kanban_guard as guard
+from auoreo.teams.tooling import attempt
 from auoreo.tools.context import ToolContext, ToolResult
 
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
-    data = await attempt(teams_for(ctx).kanban.show(args["task_id"]))
+    kb, _ = await guard.task_on_board(ctx, args["task_id"])
+    data = await attempt(kb.show(args["task_id"]))
     worker = f" worker={data['worker']}" if data["worker"] else ""
     lines = [f"#{data['id']} [{data['status']}] {data['title']} (board={data['board']}{worker})"]
     if data["body"]:

@@ -55,7 +55,12 @@ async def test_delegation_pause_toggle_and_subagents(
     r = await client.get(f"/api/sessions/{parent}/subagents")
     assert r.status_code == 200
     [row] = r.json()
-    assert row["subagent_id"] == kid.session_id and row["role"] == "leaf" and row["status"] == "completed"
+    assert (
+        row["task_id"] == kid.session_id
+        and row["subagent_id"] == kid.subagent_id
+        and row["role"] == "leaf"
+        and row["status"] == "completed"
+    )
     assert (await client.get("/api/sessions/nope/subagents")).status_code == 404
     paused = [
         e.data

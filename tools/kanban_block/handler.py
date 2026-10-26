@@ -1,4 +1,5 @@
-from auoreo.teams.tooling import attempt, teams_for
+from auoreo.teams import kanban_guard as guard
+from auoreo.teams.tooling import attempt
 from auoreo.tools.context import ToolContext, ToolResult
 
 
@@ -8,6 +9,6 @@ def _fmt(row) -> str:
 
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
-    kb = teams_for(ctx).kanban
+    kb, _ = await guard.task_on_board(ctx, args["task_id"])
     row = await attempt(kb.block(args["task_id"], args["reason"], args.get("worker")))
     return ToolResult(_fmt(row), meta={"id": row.id, "status": row.status})

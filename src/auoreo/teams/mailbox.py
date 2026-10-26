@@ -31,6 +31,8 @@ MAIL_TYPES = (
     "permission_request",
     "permission_response",
     "idle_notification",
+    "team_permission_update",  # --- I3: leader→worker control (teams.control_msgs)
+    "mode_set_request",
 )
 
 

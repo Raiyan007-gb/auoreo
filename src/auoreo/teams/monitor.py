@@ -3,11 +3,14 @@
 While a delegated turn runs, `ChildMonitor` polls the child's events every
 `teams2.delegation.poll_s` and
 
-- appends them to `<home>/sessions/<parent>/delegation/live/<child>.jsonl` (no deltas);
+- appends them to `<home>/sessions/<parent>/delegation/live/<sa-id>/task-<n>.log` (JSON
+  lines, no deltas);
 - every `heartbeat_s` emits `subagent.progress` on the parent (idle seconds, usage so far)
   and bumps `TeamsService.last_activity[parent]`;
-- after `stale_warn_s` without a child event emits one `subagent.progress` with
-  `stale: "warn"`; after `stale_fail_s` stops the child and records `STALE`;
+- tracks whether a tool call is open (`tool.started` without `tool.completed`): without a
+  child event for `i3.delegation.stale_idle_s` (450 s) outside a tool call, or
+  `stale_in_tool_s` (1200 s) inside one, it stops the child and records `STALE`; one
+  `subagent.progress` with `stale: "warn"` comes first (half the limit or `stale_warn_s`);
 - enforces `budget{max_tokens,max_usd}` (child tree usage): the first overrun injects one
   summarise-now grace note; another model call after it stops the child. Either way the
   result carries `TOOL_BUDGET_EXCEEDED`.
@@ -65,8 +68,10 @@ class Budget:
         return None
 
 
-def live_log_path(home: Path, parent: str, child: str) -> Path:
-    return Path(home) / "sessions" / parent / "delegation" / "live" / f"{child}.jsonl"
+def live_log_path(home: Path, parent: str, subagent_id: str, n: int = 1) -> Path:
+    """`<home>/sessions/<parent>/delegation/live/<sa-id>/task-<n>.log` (spec §16.1); `n` counts
+    the child's turns (1 = the spawn, then one per resume)."""
+    return Path(home) / "sessions" / parent / "delegation" / "live" / subagent_id / f"task-{n}.log"
 
 
 class ChildMonitor:
@@ -76,7 +81,10 @@ class ChildMonitor:
         self.budget = budget
         cfg = teams.s.settings.teams2.delegation
         self.cfg = cfg
-        self.path = live_log_path(teams.s.settings.home, m.parent_session_id, m.session_id)
+        sid = m.subagent_id or m.session_id
+        self.path = live_log_path(teams.s.settings.home, m.parent_session_id, sid, max(m.runs, 1))
+        self.i3 = teams.s.settings.i3.delegation
+        self.open_tools: set[str] = set()  # call ids between tool.started and tool.completed
         self.verdict: dict[str, Any] | None = None
         self.budget_hit: str | None = None
         self._grace_calls: int | None = None
@@ -120,15 +128,32 @@ class ChildMonitor:
         if now - self._last_beat >= self.cfg.heartbeat_s:
             self._last_beat = now
             await self._progress({"idle_s": round(idle, 1), **({"usage": usage} if usage else {})})
-        if idle >= self.cfg.stale_fail_s:
-            msg = f"no activity for {idle:.0f}s (stale_fail_s={self.cfg.stale_fail_s:.0f})"
+        limit, where = self.stale_limit()
+        if idle >= limit:
+            msg = f"no activity for {idle:.0f}s {where} (limit {limit:.0f}s)"
             await self._stop({"code": STALE, "message": msg})
             return
-        if idle >= self.cfg.stale_warn_s and not self._warned:
+        if idle >= min(self.cfg.stale_warn_s, limit / 2) and not self._warned:
             self._warned = True
             await self._progress({"idle_s": round(idle, 1), "stale": "warn"})
         if usage is not None:
             await self._check_budget(usage)
+
+    def stale_limit(self) -> tuple[float, str]:
+        """Idle limit: `stale_idle_s` (450 s) outside a tool call, `stale_in_tool_s` (1200 s)
+        while one runs; `teams2.delegation.stale_fail_s` caps both."""
+        if self.open_tools:
+            return min(self.i3.stale_in_tool_s, self.cfg.stale_fail_s), "inside a tool call"
+        return min(self.i3.stale_idle_s, self.cfg.stale_fail_s), "outside tool calls"
+
+    def _track(self, etype: str, data: dict[str, Any]) -> None:
+        call = str(data.get("call_id") or "")
+        if etype == "tool.started":
+            self.open_tools.add(call)
+        elif etype == "tool.completed":
+            self.open_tools.discard(call)
+        elif etype.startswith("run."):  # a turn boundary closes whatever was left open
+            self.open_tools.clear()
 
     async def _check_budget(self, usage: dict[str, Any]) -> None:
         why = self.budget.exceeded(usage)
@@ -170,6 +195,8 @@ class ChildMonitor:
         if not events:
             return 0
         self._seq = events[-1].seq
+        for e in events:
+            self._track(e.type, e.data if isinstance(e.data, dict) else {})
         lines = [
             {"ts": e.created_at.timestamp(), "seq": e.seq, "type": e.type, "data": e.data}
             for e in events

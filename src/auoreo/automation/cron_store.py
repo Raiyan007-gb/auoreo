@@ -7,11 +7,16 @@ them like any other job and `auoreo cron` / `GET /api/cron` show them.
 - `dry_run` validates without writing and returns the next 5 fires + the catch-up class.
 - Only jobs under `<home>/jobs/` can be removed (bundled/project jobs are read-only here).
 - After a write or removal the harness reloads and the scheduler re-syncs.
+- Writes are atomic, 0600, under an RLock + `flock(<jobs>/.lock)` (I3).
 """
 
 from __future__ import annotations
 
+import contextlib
+import os
 import re
+import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -21,7 +26,7 @@ import yaml
 from pydantic import ValidationError
 
 from auoreo.automation.scheduler import scheduler_of
-from auoreo.automation.schedules import Schedule, ScheduleError, parse_schedule
+from auoreo.automation.schedules import Schedule, ScheduleError, canonical, parse_schedule
 from auoreo.harness.manifests import JobManifest
 
 if TYPE_CHECKING:
@@ -56,12 +61,13 @@ class Plan:
 
 
 def normalize(schedule: str, now: datetime | None = None) -> str:
-    """`in <n>m|h|d` → ISO one-shot (UTC); anything else unchanged."""
+    """`in <n>m|h|d` → ISO one-shot (UTC); `30m` → `every 30m`; `every monday 9am` → cron
+    (its tz is picked up by `plan`); anything else unchanged."""
     text = schedule.strip()
     if m := IN_RE.match(text):
         when = (now or datetime.now(UTC)) + timedelta(seconds=int(m.group(1)) * UNIT_S[m.group(2).lower()])
         return when.replace(microsecond=0).isoformat()
-    return text
+    return canonical(text)[0]
 
 
 def next_fires(sched: Schedule, now: datetime | None = None, n: int = FIRES) -> list[datetime]:
@@ -88,7 +94,13 @@ def catch_up_class(m: JobManifest, sched: Schedule) -> str:
 def plan(data: dict[str, Any], now: datetime | None = None) -> Plan:
     raw = dict(data)
     original = str(raw.get("schedule", ""))
-    raw["schedule"] = normalize(original, now)
+    try:
+        raw["schedule"] = normalize(original, now)
+        tz_in_text = canonical(original)[1]
+    except ScheduleError as exc:
+        raise CronStoreError(str(exc)) from exc
+    if tz_in_text:
+        raw["tz"] = tz_in_text
     if raw["schedule"] != original.strip() and raw.get("description"):
         raw["description"] = f"{raw['description']} ({original.strip()})"
     try:
@@ -103,6 +115,36 @@ def plan(data: dict[str, Any], now: datetime | None = None) -> Plan:
     if sched.kind == "date" and sched.run_at is not None and sched.run_at <= (now or datetime.now(UTC)):
         raise CronStoreError(f"job '{manifest.name}': one-shot time {manifest.schedule} is in the past")
     return Plan(manifest, sched, next_fires(sched, now), catch_up_class(manifest, sched))
+
+
+_RLOCK = threading.RLock()
+
+
+@contextlib.contextmanager
+def store_lock(folder: Path) -> Iterator[None]:
+    """In-process RLock + an exclusive `flock` on `<jobs>/.lock` (spec §16.7 RLock+flock)."""
+    folder.mkdir(parents=True, exist_ok=True)
+    with _RLOCK, (folder / ".lock").open("a+b") as fh:
+        try:
+            import fcntl
+        except ImportError:  # Windows: in-process exclusion only
+            yield
+            return
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def write_private(target: Path, text: str) -> None:
+    """Atomic write of a 0600 file (the tmp file is created 0600, then renamed over)."""
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    os.chmod(tmp, 0o600)
+    tmp.replace(target)
 
 
 def jobs_dir(services: Services) -> Path:
@@ -129,12 +171,12 @@ async def create(
     if name in services.harness.jobs:
         raise CronStoreError(f"a job named '{name}' already exists; pick another name or remove it first")
     target = path_of(services, name)
-    target.parent.mkdir(parents=True, exist_ok=True)
     body = p.manifest.model_dump(mode="json", exclude_defaults=True)
     body.setdefault("name", name)
-    tmp = target.with_suffix(".yaml.tmp")
-    tmp.write_text(HEADER + yaml.safe_dump(body, sort_keys=False, allow_unicode=True), encoding="utf-8")
-    tmp.replace(target)
+    with store_lock(target.parent):
+        if target.exists():
+            raise CronStoreError(f"a job named '{name}' already exists")
+        write_private(target, HEADER + yaml.safe_dump(body, sort_keys=False, allow_unicode=True))
     await _reload(services)
     await services.audit.record(
         actor=actor,
@@ -158,7 +200,8 @@ def removable(services: Services, name: str) -> Path:
 
 async def remove(services: Services, name: str, *, actor: str = "agent") -> None:
     path = removable(services, name)
-    path.unlink(missing_ok=True)
+    with store_lock(path.parent):
+        path.unlink(missing_ok=True)
     await _reload(services)
     await services.audit.record(actor=actor, action="cron.removed", decision="allow", detail={"job": name})
     await services.emit("server", "cron.removed", {"job": name, "actor": actor})

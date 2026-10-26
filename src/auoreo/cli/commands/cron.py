@@ -1,4 +1,4 @@
-"""`auoreo cron list|run|pause|resume|runs` — scheduled jobs (`jobs/<name>.yaml`)."""
+"""`auoreo cron list|add|run|pause|resume|runs` — scheduled jobs (`jobs/<name>.yaml`)."""
 
 from __future__ import annotations
 
@@ -49,6 +49,56 @@ def list_(url: UrlOpt = None, as_json: JsonOpt = False) -> None:
             f"{last['status']} #{last['id']} {last['scheduled_for']}" if last else "-",
         )
     console.print(table)
+
+
+@app.command("add")
+def add(
+    name: str,
+    schedule: Annotated[
+        str, typer.Option("--schedule", "-s", help="cron | every 2h | 30m | every monday 9am <tz> | ISO")
+    ],
+    prompt: Annotated[str, typer.Option("--prompt", "-p", help="What the agent should do.")],
+    tz: Annotated[str | None, typer.Option(help="IANA time zone.")] = None,
+    agent: Annotated[str, typer.Option(help="Agent folder to run.")] = "default",
+    deliver: Annotated[
+        list[str] | None,
+        typer.Option(help="Delivery target (repeatable): provider[:target]|origin|home|all."),
+    ] = None,
+    model: Annotated[str | None, typer.Option(help="Model alias/id for the runs.")] = None,
+    script: Annotated[str | None, typer.Option(help="Pre-run script under <home>/scripts/.")] = None,
+    description: Annotated[str | None, typer.Option(help="One-line description.")] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Print the next 5 fires + catch-up class; save nothing.")
+    ] = False,
+    url: UrlOpt = None,
+    as_json: JsonOpt = False,
+) -> None:
+    """Create a job (`<home>/jobs/<name>.yaml`); `--dry-run` only previews it (spec §25.11)."""
+    body: dict[str, Any] = {"name": name, "schedule": schedule, "prompt": prompt, "agent": agent}
+    optional = {"tz": tz, "deliver": deliver, "model": model, "script": script, "description": description}
+    body |= {k: v for k, v in optional.items() if v}
+    if url:
+        info = check(remote("POST", url, "/api/cron", json={**body, "dry_run": dry_run}))
+    else:
+        from auoreo.automation.cron_store import CronStoreError, create
+
+        body.setdefault("description", prompt.strip().splitlines()[0][:120] or name)
+
+        async def go(svc: Services) -> dict[str, Any]:
+            try:
+                return (await create(svc, body, dry_run=dry_run, actor="cli")).as_dict()
+            except CronStoreError as exc:
+                typer.echo(str(exc), err=True)
+                raise typer.Exit(1) from exc
+
+        info = local(go)
+    if as_json:
+        dump_json({**info, "dry_run": dry_run})
+        return
+    head = "dry run (nothing saved)" if dry_run else f"created job '{info['name']}'"
+    typer.echo(f"{head}: {info['schedule']} [{info['kind']}, tz {info['tz']}, {info['catch_up']}]")
+    for fire in info["next_fires"]:
+        typer.echo(f"  {fire}")
 
 
 @app.command("run")

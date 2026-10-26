@@ -1,8 +1,8 @@
 name: swarm
-description: The coordinator splits the goal into kanban tasks and board keys, implementer workers claim the tasks and put results on the team board, and the reviewer writes summary/final.
+description: The swarm lead splits the goal into kanban tasks and board keys, implementer workers claim the tasks and put results on the team board, and the reviewer writes summary/final.
 steps:
   - id: plan
-    agent: coordinator
+    agent: swarm_lead
     input: |-
       You are the swarm coordinator for this goal:
       {{input}}

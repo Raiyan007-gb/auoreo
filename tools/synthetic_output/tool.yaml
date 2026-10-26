@@ -1,0 +1,21 @@
+name: synthetic_output
+toolset: teams
+description: >-
+  Coordinator: record your structured final output (a JSON object). When you were delegated
+  with an output_schema it is validated against that schema (a mismatch is an error you can
+  fix and retry); the recorded object becomes your final answer. Call it once, then finish
+  with a one-line note.
+parameters:
+  type: object
+  properties:
+    output:
+      type: object
+      description: The final structured result (e.g. the handoff {purpose, files, done, summary}).
+  required: [output]
+  additionalProperties: false
+default_action: allow
+is_concurrency_safe: false
+interactive_only: false
+timeout_ms: 10000
+redaction: mask
+search_hint: final structured output result json coordinator synthesis

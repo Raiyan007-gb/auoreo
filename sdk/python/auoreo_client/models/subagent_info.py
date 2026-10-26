@@ -25,7 +25,8 @@ class SubagentInfo:
         role (None | str):
         running (bool):
         status (str):
-        subagent_id (str):
+        subagent_id (str): sa-{n}-{hex8} (I3); the child session id for older rows
+        task_id (str | Unset): The child session id Default: ''.
         usage (SubagentInfoUsage | Unset):
     """
 
@@ -36,6 +37,7 @@ class SubagentInfo:
     running: bool
     status: str
     subagent_id: str
+    task_id: str | Unset = ""
     usage: SubagentInfoUsage | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -55,6 +57,8 @@ class SubagentInfo:
 
         subagent_id = self.subagent_id
 
+        task_id = self.task_id
+
         usage: dict[str, Any] | Unset = UNSET
         if not isinstance(self.usage, Unset):
             usage = self.usage.to_dict()
@@ -72,6 +76,8 @@ class SubagentInfo:
                 "subagent_id": subagent_id,
             }
         )
+        if task_id is not UNSET:
+            field_dict["task_id"] = task_id
         if usage is not UNSET:
             field_dict["usage"] = usage
 
@@ -101,6 +107,8 @@ class SubagentInfo:
 
         subagent_id = d.pop("subagent_id")
 
+        task_id = d.pop("task_id", UNSET)
+
         _usage = d.pop("usage", UNSET)
         usage: SubagentInfoUsage | Unset
         if isinstance(_usage, Unset):
@@ -116,6 +124,7 @@ class SubagentInfo:
             running=running,
             status=status,
             subagent_id=subagent_id,
+            task_id=task_id,
             usage=usage,
         )
 
