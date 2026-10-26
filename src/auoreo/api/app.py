@@ -45,6 +45,7 @@ from auoreo.api.routers import goals as goals_router
 from auoreo.api.routers import hooks as hooks_router
 from auoreo.api.routers import i5 as i5_router  # --- I5
 from auoreo.api.routers import kanban as kanban_router
+from auoreo.api.routers import livekit as livekit_router  # --- I8
 from auoreo.api.routers import meetings as meetings_router  # --- F4
 from auoreo.api.routers import metrics as metrics_router  # --- G5c
 from auoreo.api.routers import oauth as oauth_router  # --- I7
@@ -122,6 +123,7 @@ ROUTERS = (
     workspace_router,  # --- I4: workspace trust
     oauth_router,  # --- I7: authorization/settled after `auoreo login`
     i5_router,  # --- I5: POST /api/lsp/stop, GET /api/memory/usage
+    livekit_router,  # --- I8: POST /api/livekit/token + POST /livekit/webhook
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

@@ -101,6 +101,8 @@ async def capabilities(svc: ServicesDep) -> RtcCapabilities:
         voice_enabled=bool(st.voice_enabled),
         speak=bool(st.voice_enabled and st.voice_speak_over_rtc),
         teleop_input_enabled=bool(st.teleop_input_enabled),
+        livekit=bool(st.backends.get("rtc_transport") == "livekit" and st.i8.livekit.web_toggle),  # --- I8
+        livekit_agent=st.i8.livekit.worker.agent_name if st.i8.livekit.worker.enabled else None,
     )
 
 

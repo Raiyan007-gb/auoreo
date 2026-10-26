@@ -474,3 +474,6 @@ EXTRA_CHECKS.append(i7_checks)
 from auoreo.core.diagnostics_i5 import i5_checks  # noqa: E402  --- I5: disk/settings/worktrees/TCC
 
 EXTRA_CHECKS.append(i5_checks)
+from auoreo.core.diagnostics_i8 import i8_checks  # noqa: E402  --- I8: desktop health_report, LiveKit worker
+
+EXTRA_CHECKS.append(i8_checks)

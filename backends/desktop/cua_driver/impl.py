@@ -10,6 +10,14 @@ screenshot feeds `verify`.
 
 The child gets a scrubbed environment (no API keys) with
 `CUA_DRIVER_RS_TELEMETRY_ENABLED=0` unless `settings.cua_telemetry`. Floor version 0.20.
+
+I8: `middle_click` (`click` with `button: middle`), `set_value` (element token + value),
+`list_apps`; `opts.mode` (som|vision|ax) is passed to `get_desktop_state`; a sticky
+`opts.window {pid, window_id}` becomes a window target; foreground pointer ops move first and
+wait `opts.settle_ms` (moveAndSettle 50 ms); `--no-overlay` per `i8.computer_use.no_overlay`
+(per-OS default); `health_report()` runs `cua-driver health_report --json` (exit 0/1/2,
+`display_count == 0` guard, macOS accessibility + screen-recording readiness); `unhide()` asks the
+driver to restore hidden apps at turn end (best effort).
 """
 
 from __future__ import annotations
@@ -18,6 +26,7 @@ import asyncio
 import base64
 import contextlib
 import io
+import json
 import os
 import re
 import shutil
@@ -25,8 +34,19 @@ import sys
 from typing import Any
 
 from auoreo.backends import BackendStatus
-from auoreo.backends.desktop import MUTATING, ActResult, DesktopBackend, DesktopState, compare, to_pixels
+from auoreo.backends.desktop import (
+    MUTATING,
+    OBSERVE,
+    ActResult,
+    DesktopBackend,
+    DesktopState,
+    HealthReport,
+    compare,
+    no_overlay_default,
+    to_pixels,
+)
 from auoreo.core.secrets import ENV_ALLOWLIST
+from auoreo.core.settings_i8 import i8_of
 from auoreo.tools.context import ToolError
 
 MIN_VERSION = (0, 20)
@@ -37,6 +57,8 @@ _TOOLS = {
     "click": "click",
     "double_click": "double_click",
     "right_click": "right_click",
+    "middle_click": "click",
+    "set_value": "set_value",
     "type": "type_text",
     "scroll": "scroll",
     "drag": "drag",
@@ -73,6 +95,36 @@ def image_of(result: Any) -> bytes | None:
         if data and str(getattr(block, "mime_type", "")).startswith("image/"):
             return base64.b64decode(data)
     return None
+
+
+def elements_of(result: Any) -> list[dict[str, Any]]:
+    data = getattr(result, "structured_content", None) or {}
+    items = data.get("elements", []) if isinstance(data, dict) else []
+    out = []
+    for e in items:
+        if isinstance(e, dict) and (tok := e.get("element_token") or e.get("token")):
+            out.append({"token": str(tok), "role": e.get("role"), "label": e.get("label") or e.get("name")})
+    return out
+
+
+def parse_health(code: int, out: str) -> HealthReport:
+    """`cua-driver health_report --json` → HealthReport (exit code wins; display_count=0 → 2;
+    macOS needs accessibility AND screen recording, else 1)."""
+    try:
+        data = json.loads(out) if out.strip() else {}
+    except ValueError:
+        data = {}
+    data = data if isinstance(data, dict) else {}
+    count = int(data.get("display_count", 0) or 0)
+    ax, rec = data.get("accessibility"), data.get("screen_recording")
+    detail = str(data.get("detail") or data.get("status") or f"exit {code}")
+    if count == 0:
+        return HealthReport(2, "display_count=0 (no display attached)", 0, ax, rec)
+    level = min(2, max(0, code))
+    if sys.platform == "darwin" and not (ax and rec):
+        level = max(level, 1)
+        detail = "grant Accessibility and Screen Recording to com.trycua.driver"
+    return HealthReport(level, detail, count, ax, rec)
 
 
 def text_of(result: Any) -> str:
@@ -117,13 +169,42 @@ class Backend(DesktopBackend):
             return BackendStatus(False, f"cua-driver {got} is older than 0.20", remedy=INSTALL)
         return BackendStatus(True, f"cua-driver {'.'.join(map(str, version))}")
 
+    @property
+    def no_overlay(self) -> bool:
+        configured = i8_of(self.settings).computer_use.no_overlay
+        return no_overlay_default() if configured is None else bool(configured)
+
+    async def health_report(self) -> HealthReport:
+        exe = shutil.which(self.command)
+        if exe is None:
+            return HealthReport(2, f"{self.command} is not installed")
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                exe,
+                "health_report",
+                "--json",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                env=child_env(False),
+            )
+            out, _ = await asyncio.wait_for(proc.communicate(), 15)
+        except Exception as exc:
+            return HealthReport(2, f"health_report failed: {type(exc).__name__}")
+        return parse_health(proc.returncode or 0, out.decode("utf-8", "replace"))
+
+    async def unhide(self) -> None:
+        if self._client is None:
+            return
+        with contextlib.suppress(Exception):
+            await self._client.call_tool("unhide_apps", {"session": SESSION})
+
     # ----------------------------------------------------------- connection
     async def _run(self) -> None:
         from mcp import Client, StdioServerParameters
 
         params = StdioServerParameters(
             command=self.command,
-            args=["mcp"],
+            args=["mcp", *(["--no-overlay"] if self.no_overlay else [])],
             env=child_env(bool(getattr(self.settings, "cua_telemetry", False))),
         )
         try:
@@ -159,11 +240,23 @@ class Backend(DesktopBackend):
         self._task = None
 
     # -------------------------------------------------------------- actions
-    async def _screenshot(self) -> bytes | None:
-        return image_of(await self._call("get_desktop_state", {}))
+    async def _screenshot(self, mode: str = "vision") -> bytes | None:
+        return image_of(await self._call("get_desktop_state", {"mode": mode}))
 
     def _args(self, op: str, rec: dict[str, Any], size: tuple[int, int]) -> tuple[str, dict[str, Any]]:
         args: dict[str, Any] = {"delivery_mode": rec["delivery_mode"]}
+        window = (rec.get("opts") or {}).get("window")
+        desktop = (
+            {"kind": "window", "pid": window.get("pid"), "window_id": window.get("window_id")}
+            if isinstance(window, dict) and window.get("window_id") is not None
+            else DESKTOP
+        )
+        if op == "set_value":
+            return "set_value", {
+                **args,
+                "element_token": rec["target"],
+                "value": (rec.get("opts") or {}).get("value", ""),
+            }
         if op == "focus_app":
             return "launch_app", {"name": rec["target"]}
         if op == "key":
@@ -171,13 +264,15 @@ class Backend(DesktopBackend):
             tool = "hotkey" if len(keys) > 1 else "press_key"
             return tool, {
                 **args,
-                "target": DESKTOP,
+                "target": desktop,
                 **({"keys": keys} if len(keys) > 1 else {"key": keys[0]}),
             }
         if rec["target"]:
             args["element_token"] = rec["target"]
         else:
-            args["target"] = DESKTOP
+            args["target"] = desktop
+        if op == "middle_click":
+            args["button"] = "middle"
         if rec["x"] is not None and rec["y"] is not None:
             args["x"], args["y"] = to_pixels(rec["x"], rec["y"], *size)
         if op == "type":
@@ -201,14 +296,21 @@ class Backend(DesktopBackend):
         to: tuple[int, int] | None = None,
         direction: str | None = None,
         amount: int | None = None,
+        opts: dict[str, Any] | None = None,
     ) -> ActResult:
+        opts = dict(opts or {})
+        mode = str(opts.get("mode") or "som")
         if op == "wait":
             await asyncio.sleep(max(0.0, min(float(amount or 1), 10.0)))
             return ActResult(True, None, None, "waited")
         if op == "screenshot":
-            return ActResult(True, await self._screenshot(), None, "desktop screenshot")
-        if op == "list_windows":
-            result = await self._call("list_windows", {})
+            result = await self._call("get_desktop_state", {"mode": mode})
+            data = {"mode": mode, "elements": elements_of(result)}
+            return ActResult(
+                True, image_of(result), None, text_of(result)[:4000] or "desktop screenshot", data
+            )
+        if op in OBSERVE:
+            result = await self._call(op, {})
             return ActResult(True, None, None, text_of(result)[:4000])
         if op not in MUTATING:
             raise ToolError(f"unsupported op {op!r}")
@@ -218,12 +320,22 @@ class Backend(DesktopBackend):
             from PIL import Image
 
             size = Image.open(io.BytesIO(pre)).size
-        rec = {"target": target, "x": x, "y": y, "text": text, "key": key}
+        rec = {"target": target, "x": x, "y": y, "text": text, "key": key, "opts": opts}
         rec |= {"delivery_mode": delivery_mode, "to": to, "direction": direction, "amount": amount}
         tool, args = self._args(op, rec, size)
+        settle = int(opts.get("settle_ms") or 0)
+        if settle and delivery_mode == "foreground" and "x" in args:
+            await self._call(
+                "move_cursor", {"x": args["x"], "y": args["y"], "target": args.get("target", DESKTOP)}
+            )
+            await asyncio.sleep(settle / 1000)
         result = await self._call(tool, args)
-        post = await self._screenshot()
-        return ActResult(True, post, compare(pre, post), text_of(result)[:1000] or f"{tool} done")
+        if opts.get("capture_after"):
+            state = await self._call("get_desktop_state", {"mode": mode})
+            post, data = image_of(state), {"elements": elements_of(state)}
+        else:
+            post, data = await self._screenshot(), {}
+        return ActResult(True, post, compare(pre, post), text_of(result)[:1000] or f"{tool} done", data)
 
     async def state(self) -> DesktopState:
         result = await self._call("list_windows", {})

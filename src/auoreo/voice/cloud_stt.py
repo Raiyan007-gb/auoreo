@@ -41,15 +41,19 @@ def _data(fields: Fields) -> dict[str, str | list[str]]:
 
 
 async def post_form(
-    provider: str, url: str, headers: dict[str, str], wav: bytes, fields: Fields
+    provider: str, url: str, headers: dict[str, str], wav: bytes, fields: Fields, settings: Any = None
 ) -> dict[str, Any]:
-    """POST `file=audio.wav` + ordered form fields; returns the JSON body."""
+    """POST `file=audio.wav` + ordered form fields; returns the JSON body. With `settings`,
+    the audio is shaped first (silence trim / AAC, `voice.upload`)."""
+    from auoreo.voice.upload import prepare_upload
+
+    fname, blob, mime = await prepare_upload(wav, settings)
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as client:
             r = await client.post(
                 url,
                 headers=headers,
-                files=[("file", ("audio.wav", wav, "audio/wav"))],
+                files=[("file", (fname, blob, mime))],
                 data=_data(fields),
             )
     except httpx.HTTPError as exc:
@@ -64,9 +68,12 @@ async def post_form(
 
 
 async def stream_sse(
-    provider: str, url: str, headers: dict[str, str], wav: bytes, fields: Fields
+    provider: str, url: str, headers: dict[str, str], wav: bytes, fields: Fields, settings: Any = None
 ) -> AsyncIterator[dict[str, Any]]:
     """POST multipart and yield each `data: {json}` event of a text/event-stream answer."""
+    from auoreo.voice.upload import prepare_upload
+
+    fname, blob, mime = await prepare_upload(wav, settings)
     try:
         async with (
             httpx.AsyncClient(timeout=TIMEOUT_S) as client,
@@ -74,7 +81,7 @@ async def stream_sse(
                 "POST",
                 url,
                 headers={**headers, "Accept": "text/event-stream"},
-                files=[("file", ("audio.wav", wav, "audio/wav"))],
+                files=[("file", (fname, blob, mime))],
                 data=_data(fields),
             ) as r,
         ):

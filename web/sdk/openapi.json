@@ -2934,6 +2934,221 @@
         "title": "LatestSeq",
         "type": "object"
       },
+      "LiveKitAgentDispatch": {
+        "additionalProperties": false,
+        "properties": {
+          "agent_name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Agent Name",
+            "type": "string"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          }
+        },
+        "required": [
+          "agent_name"
+        ],
+        "title": "LiveKitAgentDispatch",
+        "type": "object"
+      },
+      "LiveKitRoomConfig": {
+        "additionalProperties": false,
+        "description": "Only explicit agent dispatch is allowed; any other room option is refused (400).",
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/LiveKitAgentDispatch"
+            },
+            "maxItems": 4,
+            "title": "Agents",
+            "type": "array"
+          }
+        },
+        "title": "LiveKitRoomConfig",
+        "type": "object"
+      },
+      "LiveKitToken": {
+        "properties": {
+          "expires_in": {
+            "description": "Token lifetime in seconds (\u2264 900)",
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "participant_identity": {
+            "title": "Participant Identity",
+            "type": "string"
+          },
+          "participant_token": {
+            "description": "Room-scoped JWT (never logged or audited)",
+            "title": "Participant Token",
+            "type": "string"
+          },
+          "room_name": {
+            "title": "Room Name",
+            "type": "string"
+          },
+          "server_url": {
+            "title": "Server Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_url",
+          "participant_token",
+          "room_name",
+          "participant_identity",
+          "expires_in"
+        ],
+        "title": "LiveKitToken",
+        "type": "object"
+      },
+      "LiveKitTokenRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "participant_attributes": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Token attributes (size-capped)",
+            "title": "Participant Attributes"
+          },
+          "participant_identity": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "deprecated": true,
+            "description": "Ignored: the server mints an opaque uuid4 identity (spec \u00a726.10)",
+            "title": "Participant Identity"
+          },
+          "participant_metadata": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Token metadata (size-capped)",
+            "title": "Participant Metadata"
+          },
+          "participant_name": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participant Name"
+          },
+          "room_config": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveKitRoomConfig"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "room_name": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An existing room from this server (default: the session's room)",
+            "title": "Room Name"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AUOREO session the room belongs to",
+            "title": "Session Id"
+          }
+        },
+        "title": "LiveKitTokenRequest",
+        "type": "object"
+      },
+      "LiveKitWebhookAck": {
+        "properties": {
+          "event": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event"
+          },
+          "extra": {
+            "additionalProperties": true,
+            "title": "Extra",
+            "type": "object"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "status": {
+            "description": "`ok` or `duplicate`",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "LiveKitWebhookAck",
+        "type": "object"
+      },
       "LoginRequest": {
         "properties": {
           "password": {
@@ -5041,6 +5256,24 @@
             "description": "aiortc is installed (else offers answer 501)",
             "title": "Available",
             "type": "boolean"
+          },
+          "livekit": {
+            "default": false,
+            "description": "I8: the LiveKit transport is selected and `i8.livekit.web_toggle` is on (call panel toggle; tokens from `POST /api/livekit/token`)",
+            "title": "Livekit",
+            "type": "boolean"
+          },
+          "livekit_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "I8: agent name to dispatch (`room_config.agents`) when the LiveKit worker runs",
+            "title": "Livekit Agent"
           },
           "speak": {
             "description": "An outbound speech track is attached unless the offer says `speak: false`",
@@ -10323,6 +10556,115 @@
         "summary": "Create Task",
         "tags": [
           "kanban"
+        ]
+      }
+    },
+    "/api/livekit/token": {
+      "post": {
+        "description": "Mint a room token for the browser (`TokenSource.endpoint`); the JWT is never logged.",
+        "operationId": "token_api_livekit_token_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveKitTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveKitToken"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Disallowed or oversized fields"
+          },
+          "403": {
+            "description": "Unknown room, undispatchable agent, or LiveKit Cloud without consent"
+          },
+          "404": {
+            "description": "Unknown session"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "501": {
+            "description": "LiveKit transport not selected, SDK missing or not configured"
+          },
+          "502": {
+            "description": "The LiveKit server API failed"
+          }
+        },
+        "summary": "Token",
+        "tags": [
+          "livekit"
         ]
       }
     },
@@ -18517,6 +18859,43 @@
         "summary": "Receive Hook",
         "tags": [
           "hooks"
+        ]
+      }
+    },
+    "/livekit/webhook": {
+      "post": {
+        "description": "LiveKit server \u2192 AUOREO room events (`application/webhook+json`), verified on the raw body.",
+        "operationId": "webhook_livekit_webhook_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveKitWebhookAck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Signature or body hash invalid"
+          },
+          "403": {
+            "description": "LiveKit API key/secret not configured (fail-closed)"
+          },
+          "404": {
+            "description": "Webhook receiver disabled"
+          },
+          "413": {
+            "description": "Body over 1 MiB"
+          },
+          "429": {
+            "description": "Rate limit (after authentication)"
+          }
+        },
+        "summary": "Webhook",
+        "tags": [
+          "livekit"
         ]
       }
     },

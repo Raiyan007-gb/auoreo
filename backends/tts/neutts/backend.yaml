@@ -1,0 +1,12 @@
+kind: tts
+name: neutts
+description: >-
+  NeuTTS Air local TTS (neuphonic/neutts-air, Apache-2.0; 24 kHz; voice cloned from
+  i8.tts.neutts_ref_audio + neutts_ref_text). The `neuttsair` package is imported lazily;
+  other NeuTTS variants (NeuTTS Open License) need i8.tts.neutts_nc_opt_in. ≤ 2000 chars.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0 (Air only; nano/2E NeuTTS Open License)
+posture: ok

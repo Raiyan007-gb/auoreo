@@ -116,7 +116,7 @@ async def test_scripted_verify_and_failure(services: Services, workdir: Path) ->
     desk = services.backend("desktop")
     desk.scripted_verify = [Verify(False, 0.0)]
     res = await call(services, ctx, {"op": "click", "target": "10,10"})
-    assert "matched=False" in res.content and "suspected no-op" in res.content
+    assert "matched=False" in res.content and "verdict=suspected_noop next=escalate" in res.content
     desk.fail_ops = {"double_click"}
     res = await call(services, ctx, {"op": "double_click", "target": "10,10"})
     assert res.is_error and "FAILED" in res.content

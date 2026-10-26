@@ -620,6 +620,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/livekit/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Token
+         * @description Mint a room token for the browser (`TokenSource.endpoint`); the JWT is never logged.
+         */
+        post: operations["token_api_livekit_token_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/lsp/stop": {
         parameters: {
             query?: never;
@@ -2307,6 +2327,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/livekit/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Webhook
+         * @description LiveKit server → AUOREO room events (`application/webhook+json`), verified on the raw body.
+         */
+        post: operations["webhook_livekit_webhook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metrics": {
         parameters: {
             query?: never;
@@ -3569,6 +3609,90 @@ export interface components {
             /** Seq */
             seq: number;
         };
+        /** LiveKitAgentDispatch */
+        LiveKitAgentDispatch: {
+            /** Agent Name */
+            agent_name: string;
+            /** Metadata */
+            metadata?: string | null;
+        };
+        /**
+         * LiveKitRoomConfig
+         * @description Only explicit agent dispatch is allowed; any other room option is refused (400).
+         */
+        LiveKitRoomConfig: {
+            /** Agents */
+            agents?: components["schemas"]["LiveKitAgentDispatch"][];
+        };
+        /** LiveKitToken */
+        LiveKitToken: {
+            /**
+             * Expires In
+             * @description Token lifetime in seconds (≤ 900)
+             */
+            expires_in: number;
+            /** Participant Identity */
+            participant_identity: string;
+            /**
+             * Participant Token
+             * @description Room-scoped JWT (never logged or audited)
+             */
+            participant_token: string;
+            /** Room Name */
+            room_name: string;
+            /** Server Url */
+            server_url: string;
+        };
+        /** LiveKitTokenRequest */
+        LiveKitTokenRequest: {
+            /**
+             * Participant Attributes
+             * @description Token attributes (size-capped)
+             */
+            participant_attributes?: {
+                [key: string]: string;
+            } | null;
+            /**
+             * Participant Identity
+             * @deprecated
+             * @description Ignored: the server mints an opaque uuid4 identity (spec §26.10)
+             */
+            participant_identity?: string | null;
+            /**
+             * Participant Metadata
+             * @description Token metadata (size-capped)
+             */
+            participant_metadata?: string | null;
+            /** Participant Name */
+            participant_name?: string | null;
+            room_config?: components["schemas"]["LiveKitRoomConfig"] | null;
+            /**
+             * Room Name
+             * @description An existing room from this server (default: the session's room)
+             */
+            room_name?: string | null;
+            /**
+             * Session Id
+             * @description AUOREO session the room belongs to
+             */
+            session_id?: string | null;
+        };
+        /** LiveKitWebhookAck */
+        LiveKitWebhookAck: {
+            /** Event */
+            event?: string | null;
+            /** Extra */
+            extra?: {
+                [key: string]: unknown;
+            };
+            /** Id */
+            id?: string | null;
+            /**
+             * Status
+             * @description `ok` or `duplicate`
+             */
+            status: string;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Password */
@@ -4501,6 +4625,17 @@ export interface components {
              * @description aiortc is installed (else offers answer 501)
              */
             available: boolean;
+            /**
+             * Livekit
+             * @description I8: the LiveKit transport is selected and `i8.livekit.web_toggle` is on (call panel toggle; tokens from `POST /api/livekit/token`)
+             * @default false
+             */
+            livekit: boolean;
+            /**
+             * Livekit Agent
+             * @description I8: agent name to dispatch (`room_config.agents`) when the LiveKit worker runs
+             */
+            livekit_agent?: string | null;
             /**
              * Speak
              * @description An outbound speech track is attached unless the offer says `speak: false`
@@ -6912,6 +7047,80 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    token_api_livekit_token_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LiveKitTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveKitToken"];
+                };
+            };
+            /** @description Disallowed or oversized fields */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown room, undispatchable agent, or LiveKit Cloud without consent */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description LiveKit transport not selected, SDK missing or not configured */
+            501: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The LiveKit server API failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10902,6 +11111,61 @@ export interface operations {
             };
             /** @description deliver_only: every delivery target failed */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webhook_livekit_webhook_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveKitWebhookAck"];
+                };
+            };
+            /** @description Signature or body hash invalid */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description LiveKit API key/secret not configured (fail-closed) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Webhook receiver disabled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Body over 1 MiB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rate limit (after authentication) */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

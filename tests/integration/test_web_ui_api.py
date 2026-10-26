@@ -29,7 +29,14 @@ async def test_rtc_capabilities_reports_teleop(client: httpx.AsyncClient, servic
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["teleop_input_enabled"] is False
-    assert set(body) == {"available", "voice_enabled", "speak", "teleop_input_enabled"}
+    assert set(body) == {
+        "available",
+        "voice_enabled",
+        "speak",
+        "teleop_input_enabled",
+        "livekit",
+        "livekit_agent",
+    }
     services.settings.teleop_input_enabled = True
     assert (await client.get("/api/rtc/capabilities")).json()["teleop_input_enabled"] is True
 

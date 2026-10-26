@@ -30,10 +30,15 @@ Kinds today: `capture`, `browser`, `sandbox` (none · docker · bwrap; `sandbox_
 warn|fail` decides what happens when the selected one is unavailable), `stt`, `tts`,
 `vad`, `wake` (fake · sherpa_onnx · openwakeword · porcupine), `desktop`, `rerank` (none · fake · cross_encoder · cohere; fail-open), `environment` (local · docker ·
 ssh · e2b · modal · daytona), `detection` / `face` / `sensor` (fake defaults; faces off unless
-`faces_enabled`), `rtc_transport` (aiortc · livekit · openai_realtime), `diarize` (fake · sherpa_onnx · pyannote). Real voice/desktop libraries are imported lazily; their
+`faces_enabled`), `rtc_transport` (aiortc · livekit · openai_realtime), `diarize` (fake · sherpa_onnx · pyannote), `audio_input` (fake · sounddevice; I8 wake-daemon microphone). Real voice/desktop libraries are imported lazily; their
 `check()` reports what is missing, and the `fake` sibling keeps tests and demos keyless.
 
 G6 voice lanes: `stt/{mistral,elevenlabs,deepinfra,xai,deepgram}` (httpx / WebSocket,
 contract-tested with pytest-httpx and a fake WebSocket server), `rtc_transport/openai_realtime`,
 `wake/porcupine`, `tts/edge_tts` (subprocess only) and the `face/sherpa_onnx` stub; see
 `docs/voice.md`. STT backends may override `stream()` to yield partial deltas.
+
+I8: `stt/local_command` (allowlisted, sandboxed local command), `tts/mistral` (httpx),
+`tts/neutts` (lazy local, Air only unless NC opt-in), `wake/sidecar`, `audio_input/*`,
+`browser/chrome_cdp` (approval-gated real-profile CDP bridge). Desktop backends gained optional
+`focused`, clipboard, `unhide` and `health_report` hooks with safe defaults.

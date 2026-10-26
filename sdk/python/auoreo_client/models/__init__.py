@@ -109,6 +109,15 @@ from .list_proposals_api_memory_prefs_proposals_get_status_type_0 import (
 )
 from .list_suggestions_api_suggestions_get_status_type_0 import ListSuggestionsApiSuggestionsGetStatusType0
 from .list_tasks_api_kanban_get_status_type_0 import ListTasksApiKanbanGetStatusType0
+from .live_kit_agent_dispatch import LiveKitAgentDispatch
+from .live_kit_room_config import LiveKitRoomConfig
+from .live_kit_token import LiveKitToken
+from .live_kit_token_request import LiveKitTokenRequest
+from .live_kit_token_request_participant_attributes_type_0 import (
+    LiveKitTokenRequestParticipantAttributesType0,
+)
+from .live_kit_webhook_ack import LiveKitWebhookAck
+from .live_kit_webhook_ack_extra import LiveKitWebhookAckExtra
 from .login_request import LoginRequest
 from .lsp_stop_request import LspStopRequest
 from .lsp_stopped import LspStopped
@@ -352,6 +361,13 @@ __all__ = (
     "ListProposalsApiMemoryPrefsProposalsGetStatusType0",
     "ListSuggestionsApiSuggestionsGetStatusType0",
     "ListTasksApiKanbanGetStatusType0",
+    "LiveKitAgentDispatch",
+    "LiveKitRoomConfig",
+    "LiveKitToken",
+    "LiveKitTokenRequest",
+    "LiveKitTokenRequestParticipantAttributesType0",
+    "LiveKitWebhookAck",
+    "LiveKitWebhookAckExtra",
     "LoginRequest",
     "LspStopped",
     "LspStopRequest",

@@ -16,6 +16,15 @@ class RtcCapabilities(BaseModel):
     teleop_input_enabled: bool = Field(
         description="`settings.teleop_input_enabled`: offers may set `input: true` (`auoreo-input` channel)"
     )
+    livekit: bool = Field(
+        default=False,
+        description="I8: the LiveKit transport is selected and `i8.livekit.web_toggle` is on "
+        "(call panel toggle; tokens from `POST /api/livekit/token`)",
+    )
+    livekit_agent: str | None = Field(
+        default=None,
+        description="I8: agent name to dispatch (`room_config.agents`) when the LiveKit worker runs",
+    )
 
 
 class SessionContext(BaseModel):

@@ -229,3 +229,59 @@ this environment.
 - aiortc join: real loopback offer/answer through the API; no NAT traversal.
 - Teleop input: aiortc loopback against the `fake` desktop backend; no real display was driven.
 - STUN: the doctor probe was tested against a local UDP responder; public STUN only in live runs.
+
+## I8: LiveKit worker, token endpoint, webhook, web toggle
+
+- **Worker** (`auoreo.voice.livekit_worker`, `{"i8": {"livekit": {"worker": {"enabled": true}}}}`
+  with `backends.rtc_transport = "livekit"`): an in-process `livekit-agents` `AgentServer`
+  (thread jobs, explicit dispatch `agent_name`, default `auoreo`). Each job joins the room with an
+  `AgentSession` whose STT is a tap feeding the participant's 16 kHz audio into a `LiveKitLink`
+  peer of the `RtcManager`, so transcription, barge-in, echo guard, filters and spoken replies are
+  the same code and events as aiortc; replies are published as track `auoreo-voice`; barge-in calls
+  `AgentSession.interrupt()`. `livekit-agents` is **not** a declared extra (every 1.x pins
+  OpenTelemetry/OpenAI versions that conflict with the `otel` extra and LiteLLM): install it by
+  hand; `status` and the doctor row `livekit:worker` say so.
+- **`POST /api/livekit/token`** (AUOREO auth; LiveKit standard token-endpoint body + `session_id`):
+  `201 {server_url, participant_token, room_name, participant_identity, expires_in}`. Identity is a
+  server uuid4 (a client value is ignored), the room must be one this server created for the
+  session (else a new uuid room), grants are `room_join` + publish/subscribe only, TTL
+  `livekit.token_ttl_s` ≤ 900 s, `room_config` accepts only dispatch to the worker's agent,
+  metadata/attributes ≤ `i8.livekit.max_metadata_bytes`. Audited with hashes, never the JWT.
+- **`POST /livekit/webhook`** (no AUOREO auth; called by the LiveKit server): the `Authorization`
+  JWT (API secret) must carry `sha256` of the raw body (`hmac.compare_digest`); no secret → 403,
+  bad signature → 401, a redelivered event id within 1 h → 200 `duplicate`, more than
+  `i8.livekit.webhook_rate_per_min` (30) → 429. Emits `livekit.webhook{event, room_hash, …}`.
+- **Web**: `GET /api/rtc/capabilities` reports `livekit` / `livekit_agent`; the call panel then
+  shows a **LiveKit** switch that joins via `livekit-client` (loaded lazily) instead of P2P.
+  Teleop input and approvals never use LiveKit data channels.
+
+The loopback contract (speech → transcript → spoken reply → barge-in cut → bounds) runs on both
+transports in `tests/integration/test_i8_transports.py` (aiortc for real, LiveKit through fake
+`livekit.rtc` / `livekit.agents` namespaces; no LiveKit server here).
+
+## I8: computer use safety and web computer use
+
+`computer` tool (`auoreo.tools.cu_safety`, `i8.computer_use`):
+
+- `[input_target_mismatch]`: a mutating op is refused when the focused window `{pid, window_id}`
+  changed since the last screenshot (outside the agent's own actions); take a new screenshot.
+- `[stale_element_token]`: element tokens from a `som`/`ax` screenshot are valid until the next
+  mutating op, unless `capture_after: true` re-read the state.
+- Sticky `pid` + `window_id` target later ops until another window or `focus_app`.
+- Verdict enum on every mutating op: `confirmed → done`, `unverifiable → verify_fresh_state`,
+  `suspected_noop → escalate`.
+- New ops `middle_click` (alias `middle`), `set_value` (token + `text`), `list_apps`; `mode`
+  `som | vision | ax`; screenshots capped at `max_image_dimension` (1456 px); pointer ops wait
+  `move_settle_ms` (50 ms); `type` of ≥ 200 or non-ASCII chars pastes via the clipboard (save →
+  set → verify → paste → 100 ms → restore); at the end of a run `unhide()` + lock release.
+- `health_report()` → doctor row `desktop:health` (exit 0/1/2, `display_count=0` is unavailable,
+  macOS needs Accessibility + Screen Recording for cua-driver). `no_overlay` defaults per OS (off
+  on macOS/X11/headless/WSL2, on on Windows/Wayland); override `i8.computer_use.no_overlay`.
+
+Web: `i8.browser.trace` records a Playwright trace per session at
+`<home>/sessions/<id>/browser-trace-<ts>.zip`. `backends.browser = "chrome_cdp"` attaches to a
+Chrome you started with `--remote-debugging-port` (`i8.browser.cdp_url`, loopback only) — real
+profile, so every session first needs the `browser_cdp` permission (ask by default).
+
+Not tested here: a real desktop / cua-driver, macOS permissions, a user's own Chrome profile (a
+locally launched headless Chromium stands in for the CDP test).

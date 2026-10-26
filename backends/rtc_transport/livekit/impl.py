@@ -202,15 +202,36 @@ class Backend(TelephonyMixin, RtcTransport):  # type: ignore[misc,valid-type]
                 await closer()
 
     def mint_token(
-        self, identity: str, room: str, ttl_s: int | None = None, *, kind: str | None = None
+        self,
+        identity: str,
+        room: str,
+        ttl_s: int | None = None,
+        *,
+        kind: str | None = None,
+        name: str | None = None,
+        metadata: str | None = None,
+        attributes: dict[str, str] | None = None,
+        agents: Sequence[str] = (),
     ) -> str:
+        """Least-grant room token (§26.10): `room_join` for one room, publish/subscribe only;
+        no create/list/admin/record grants. I8: optional display name, metadata, attributes and
+        explicit agent dispatch (`roomConfig.agents[].agent_name`)."""
         api = sdk()
         key, secret = self._keys()
-        ttl = timedelta(seconds=ttl_s or int(self.cfg.token_ttl_s))
+        ttl = timedelta(seconds=min(int(ttl_s or self.cfg.token_ttl_s), 900))
         grants = api.VideoGrants(room_join=True, room=room, can_publish=True, can_subscribe=True)
         token = api.AccessToken(key, secret).with_identity(identity).with_ttl(ttl).with_grants(grants)
         if kind:  # F5: the agent joins as `agent` so subscribable() and other agents skip it
             token = token.with_kind(kind)
+        if name:
+            token = token.with_name(name)
+        if metadata:
+            token = token.with_metadata(metadata)
+        if attributes:
+            token = token.with_attributes(dict(attributes))
+        if agents:
+            dispatch = [api.RoomAgentDispatch(agent_name=a) for a in agents]
+            token = token.with_room_config(api.RoomConfiguration(agents=dispatch))
         return str(token.to_jwt())
 
     # ------------------------------------------------------------ transport

@@ -38,6 +38,6 @@ class Backend(SttBackend):
         ]
         terms = [t.strip().replace(" ", "_") for t in keyterms if t.strip()][:MAX_BIAS]
         fields += [("context_bias", t) for t in terms]
-        body = await post_form("mistral", URL, {"x-api-key": key}, wav, fields)
+        body = await post_form("mistral", URL, {"x-api-key": key}, wav, fields, self.settings)
         segs = [Segment(**s) for s in segments_of(body)]
         return Transcript(str(body.get("text", "")).strip(), segs, body.get("language") or language, None)

@@ -9,6 +9,7 @@ JSON-RPC 2.0, one object per line on stdio (the `plugins.protocol.RpcPeer` frami
     transcribe {wav_b64, language, keyterms}   → Transcript dict
     synthesize {text, voice, speed}            → {audio_b64, media_type, sample_rate}
     vad {wav_b64}                              → {segments: [[start_s, end_s], ...]}
+    wake {wav_b64}                             → {hit: {phrase, start, score} | null}   (I8)
     shutdown {}                                → {ok: true}, then exit
 
 Binary payloads are base64 and capped at 25 MB decoded, both directions. A backend `ToolError`
@@ -33,7 +34,7 @@ MAX_PAYLOAD_BYTES = 25 * 1024 * 1024
 MAX_B64_CHARS = (MAX_PAYLOAD_BYTES + 2) // 3 * 4
 SETTINGS_ENV = "AUOREO_VOICE_HOST_SETTINGS"
 DEBUG_ENV = "AUOREO_VOICE_HOST_DEBUG"
-KINDS = ("stt", "tts", "vad")
+KINDS = ("stt", "tts", "vad", "wake")
 TOOL_ERROR, BAD_PARAMS, NO_METHOD = -32001, -32602, -32601
 
 
@@ -74,6 +75,7 @@ class VoiceHostServer:
             "transcribe": self.transcribe,
             "synthesize": self.synthesize,
             "vad": self.vad,
+            "wake": self.wake,
             "shutdown": self.shutdown,
         }
         if os.environ.get(DEBUG_ENV) == "1":
@@ -138,6 +140,12 @@ class VoiceHostServer:
         segs = await self.backend("vad").speech_segments(decode_payload(p.get("wav_b64")))
         return {"segments": [[float(a), float(b)] for a, b in segs]}
 
+    async def wake(self, p: dict[str, Any]) -> dict[str, Any]:
+        hit = await self.backend("wake").detect(decode_payload(p.get("wav_b64")))
+        if hit is None:
+            return {"hit": None}
+        return {"hit": {"phrase": hit.phrase, "start": float(hit.start), "score": float(hit.score)}}
+
     async def shutdown(self, _p: dict[str, Any]) -> dict[str, Any]:
         self.stop.set()
         return {"ok": True}
@@ -169,6 +177,14 @@ async def _env(_p: dict[str, Any]) -> dict[str, Any]:
     return {"keys": sorted(os.environ)}
 
 
+def host_names(st: Any) -> dict[str, str]:
+    """Inner backend per kind: `voice_host_backends` (stt/tts/vad) + `i8.wake.host_backend`."""
+    names: dict[str, str] = dict(st.voice_host_backends.model_dump())
+    i8 = getattr(st, "i8", None)
+    names["wake"] = str(i8.wake.host_backend) if i8 is not None else "fake"
+    return names
+
+
 def _settings() -> Any:
     from auoreo.core.settings import Settings
 
@@ -178,7 +194,7 @@ def _settings() -> Any:
 
 async def serve(proto_out: IO[bytes]) -> None:
     st = _settings()
-    server = VoiceHostServer(st, st.voice_host_backends.model_dump())
+    server = VoiceHostServer(st, host_names(st))
     loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader(limit=MAX_B64_CHARS + 1024 * 1024)
     await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)

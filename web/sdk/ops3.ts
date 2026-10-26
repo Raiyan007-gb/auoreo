@@ -13,6 +13,8 @@ export type RtcAnswer = S["RtcAnswer"];
 export type RtcClosed = S["RtcClosed"];
 export type RtcPeerInfo = S["RtcPeerInfo"];
 export type SessionContext = S["SessionContext"];
+export type LiveKitTokenRequest = S["LiveKitTokenRequest"];
+export type LiveKitToken = S["LiveKitToken"];
 
 type Ops3Request = <T>(method: string, path: string, init?: { body?: unknown }) => Promise<T>;
 
@@ -28,6 +30,9 @@ export function g5bMethods(request: Ops3Request) {
       request<RtcAnswer>("POST", "/api/rtc/offer", { body: { type: "offer", input: false, ...body } satisfies RtcOfferBody }),
     rtcClose: (rtcId: string) => request<RtcClosed>("DELETE", `/api/rtc/${enc(rtcId)}`),
     rtcPeers: () => request<RtcPeerInfo[]>("GET", "/api/rtc"),
+    /** I8: server-minted LiveKit room token (the API secret never reaches the browser). */
+    livekitToken: (body: Partial<LiveKitTokenRequest>) =>
+      request<LiveKitToken>("POST", "/api/livekit/token", { body }),
     sessionContext: (sessionId: string) => request<SessionContext>("GET", `/api/sessions/${enc(sessionId)}/context`),
   };
 }

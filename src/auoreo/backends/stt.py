@@ -31,6 +31,8 @@ class Transcript:
     segments: list[Segment] = field(default_factory=list)
     language: str | None = None
     confidence: float | None = None
+    no_speech: bool = False
+    """I8: the backend's gates judged the audio non-speech (callers re-listen, never inject)."""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

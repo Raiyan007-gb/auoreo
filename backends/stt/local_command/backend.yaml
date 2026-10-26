@@ -1,0 +1,13 @@
+kind: stt
+name: local_command
+description: >-
+  Runs a configured local STT command (i8.stt.local_command.template with {input}/{model}/
+  {output_dir}; argv only, no shell) under the selected sandbox backend with a scrubbed
+  environment. Executables must be named in i8.stt.local_command.allowlist (deny by default);
+  stdout text (or <input>.txt) is the transcript. 25 MB pre-check, 30 s timeout.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: depends on the command
+posture: ok

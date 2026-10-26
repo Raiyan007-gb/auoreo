@@ -34,7 +34,7 @@ class Backend(SttBackend):
             ("tag_audio_events", "false"),
         ]
         fields += [("keyterms", t) for t in [k for k in keyterms if k.strip()][:MAX_KEYTERMS]]
-        body = await post_form("elevenlabs", URL, {"xi-api-key": key}, wav, fields)
+        body = await post_form("elevenlabs", URL, {"xi-api-key": key}, wav, fields, self.settings)
         text = str(body.get("text", "")).strip()
         segs = [Segment(**s) for s in words_to_segments(body.get("words") or [], text)]
         conf = body.get("language_probability")

@@ -28,6 +28,14 @@ round), or — if still pending — appended to the next transcribed utterance i
 
 Speech that starts while a turn runs but nothing is being spoken emits
 `voice.barge_in{cancelled: false}` (the utterance becomes a steer).
+
+I8: a per-peer noise floor (`voice.barge.NoiseFloor`, calibrate 400 ms / sustain 300 ms) raises
+the barge-in loudness bar in noisy rooms; when the STT backend streams (`SttBackend.streaming`
+and `i8.stt.streaming_rtc`), partial transcripts are emitted as `voice.partial{rtc_id,
+session_id, text, final}` while the final text becomes the turn; every transcript passes the
+hallucination / no-speech / TTS-echo filter (`voice.filters`) before it is injected — a
+dropped one emits `voice.transcript_dropped{reason}` and the bridge simply keeps listening
+(re-listen); utterances are biased with the default keyterms.
 """
 
 from __future__ import annotations
@@ -40,7 +48,9 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from auoreo.core.settings_i8 import i8_of
 from auoreo.voice.audio import rms, wav_from_pcm
+from auoreo.voice.barge import NoiseFloor
 from auoreo.voice.meeting import live_meeting
 
 if TYPE_CHECKING:
@@ -72,6 +82,7 @@ class _Peer:
     preroll_ms: float = 0.0
     window: deque[tuple[float, bool]] = field(default_factory=deque)
     echo_dropped: int = 0
+    noise: NoiseFloor = field(default_factory=NoiseFloor)
 
 
 def _tail(frames: deque[bytes], ms: float, rate: int) -> bytes:
@@ -116,7 +127,7 @@ class RtcVoiceBridge:
         if not frame:
             return
         ms = len(frame) / 2 / sample_rate * 1000
-        st = self.peers.setdefault(rtc_id, _Peer())
+        st = self.peers.get(rtc_id) or self.peers.setdefault(rtc_id, self._new_peer())
         if self.speaker is not None and self.manager is not None:
             self.speaker.start()  # attached before a loop existed
         peer = self.manager.peers.get(rtc_id) if self.manager is not None else None
@@ -145,6 +156,10 @@ class RtcVoiceBridge:
             self._start_utterance(st, PREROLL_MS, sample_rate)
             self._speech_started(rtc_id, session_id)
 
+    def _new_peer(self) -> _Peer:
+        cfg = i8_of(self.svc.settings).barge
+        return _Peer(noise=NoiseFloor(float(cfg.calibrate_ms), float(cfg.floor_multiplier)))
+
     def _classify(self, st: _Peer, peer: Any, frame: bytes, rate: int) -> tuple[bytes, bool, bool]:
         """`(frame, speech, loud)` after the echo guard (an echo frame becomes silence)."""
         settings = self.svc.settings
@@ -155,20 +170,24 @@ class RtcVoiceBridge:
             return bytes(len(frame)), False, False
         guarded = echo is not None and echo.active(now)
         threshold = settings.voice_speaking_rms * (settings.voice_echo_margin if guarded else 1.0)
-        loud = rms(frame) > threshold
+        level = rms(frame)
+        speaking = peer is not None and peer.speaking
+        loud = level > (st.noise.threshold(threshold) if speaking else threshold)
         speech = self.voice.vad.is_speech(frame, rate) and (loud or not guarded)
+        if not speaking and not guarded:
+            st.noise.feed(len(frame) / 2 / rate * 1000, level, quiet=not speech)
         return frame, speech, loud
 
-    @staticmethod
-    def _barge_tripped(st: _Peer, peer: Any, ms: float, loud: bool) -> bool:
+    def _barge_tripped(self, st: _Peer, peer: Any, ms: float, loud: bool) -> bool:
+        window_ms = float(i8_of(self.svc.settings).barge.sustain_ms)
         st.window.append((ms, loud))
         total = sum(m for m, _ in st.window)
-        while st.window and total - st.window[0][0] >= BARGE_WINDOW_MS:
+        while st.window and total - st.window[0][0] >= window_ms:
             total -= st.window.popleft()[0]
         started = peer.speech.started_at
         if started is None or time.monotonic() - started < BARGE_GRACE_S:
             return False
-        if total < BARGE_WINDOW_MS - 1e-6:
+        if total < window_ms - 1e-6:
             return False
         return sum(m for m, hot in st.window if hot) / total >= BARGE_TRIP
 
@@ -243,7 +262,7 @@ class RtcVoiceBridge:
         if meeting is not None and not await meeting.append_live(rtc_id, pcm, rate):
             return
         try:
-            t = await self.voice.transcribe_wav(wav_from_pcm(pcm, rate))
+            t = await self._transcribe(rtc_id, session_id, wav_from_pcm(pcm, rate))
         except Exception as exc:
             log.warning("rtc %s: utterance transcription failed: %s", rtc_id, exc)
             await self.svc.emit(
@@ -254,6 +273,16 @@ class RtcVoiceBridge:
             return
         text = t.text.strip()
         if not text:
+            return
+        judged = self.voice.judge(t, session_id)
+        if not judged.keep:  # re-listen: never inject a hallucination or our own voice
+            data = {
+                "rtc_id": rtc_id,
+                "session_id": session_id,
+                "reason": judged.reason,
+                "score": judged.score,
+            }
+            await self.svc.emit(session_id or "server", "voice.transcript_dropped", data)
             return
         duration = round(len(pcm) / 2 / rate, 3)
         await self.svc.emit(
@@ -266,6 +295,29 @@ class RtcVoiceBridge:
             if self.take_note(session_id):
                 text = f"{text}\n\n{SPEECH_INTERRUPTED_NOTE}"
             await self.svc.coordinator.submit(session_id, text, "steer" if running else "followup")
+
+    async def _transcribe(self, rtc_id: str, session_id: str | None, wav: bytes) -> Any:
+        """Batch STT, or streaming deltas (`voice.partial`) when the backend streams."""
+        from auoreo.backends.stt import Transcript
+
+        stt = self.voice.stt
+        if not (stt.streaming and i8_of(self.svc.settings).stt.streaming_rtc):
+            return await self.voice.transcribe_wav(wav)
+        await self.voice.check_model(session_id)
+        lang = self.svc.settings.voice_language
+        acc: list[str] = []
+        async for d in stt.stream(wav, language=lang, keyterms=self.voice.keyterms()):
+            if d.done:
+                return Transcript(d.text.strip() or "".join(acc).strip(), [], d.language or lang)
+            acc.append(d.text)
+            data = {
+                "rtc_id": rtc_id,
+                "session_id": session_id,
+                "text": "".join(acc).strip(),
+                "final": d.final,
+            }
+            await self.svc.emit(session_id or "server", "voice.partial", data)
+        return Transcript("".join(acc).strip(), [], lang)
 
     def _spawn(self, coro: Any) -> None:
         try:
