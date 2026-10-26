@@ -16,7 +16,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
-from auoreo.gateway.aux import resolve_aux_model
+from auoreo.gateway.auxiliary import resolve_aux_model
 from auoreo.gateway.types import LLMRequest, TextDelta
 
 if TYPE_CHECKING:

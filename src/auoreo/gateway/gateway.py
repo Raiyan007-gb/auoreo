@@ -24,7 +24,8 @@ from litellm import exceptions as lx
 
 from auoreo.core.redaction import redact
 from auoreo.core.settings import Settings
-from auoreo.gateway import aux, deploy, openrouter
+from auoreo.gateway import auxiliary as aux
+from auoreo.gateway import deploy, openrouter
 from auoreo.gateway.authflow import SLOT_KEY, AuthFlow
 from auoreo.gateway.budgets import BudgetTracker
 from auoreo.gateway.ctxprobe import Window, guard_min_context, resolve_window
@@ -198,7 +199,16 @@ class LiteLLMGateway:
         kw = deploy.router_kwargs(self.settings, self._model_list, supported_pre_call_checks())
         if self.settings.gateway_tuning.session_affinity and "optional_pre_call_checks" not in kw:
             log.info("litellm Router has no session_affinity pre-call check; skipping")
-        return litellm.Router(**kw)  # type: ignore[attr-defined]
+        # The Router copies each deployment's model_info (e.g. a `[1m]` or `i2.deployments`
+        # max_input_tokens) onto the model's SHARED key in the process-wide `litellm.model_cost`,
+        # so `sonnet[1m]` would make plain `sonnet` look 1M wide too. Per-deployment entries stay
+        # under their unique ids; the shared keys are restored (we apply overrides ourselves).
+        before = {k: dict(v) for k, v in litellm.model_cost.items() if isinstance(v, dict)}
+        router = litellm.Router(**kw)  # type: ignore[attr-defined]
+        for key, value in before.items():
+            if litellm.model_cost.get(key) != value:
+                litellm.model_cost[key] = value
+        return router
 
     def _creds(self, model: str) -> dict[str, str]:
         return credential_params(model, self.secret)

@@ -8,8 +8,8 @@ import pytest
 
 from auoreo.core.settings import ModelGroup, Settings
 from auoreo.core.settings_gateway import AuxSettings
-from auoreo.gateway import aux
-from auoreo.gateway.aux import AUX_TASKS, resolve_aux_model
+from auoreo.gateway import auxiliary as aux
+from auoreo.gateway.auxiliary import AUX_TASKS, resolve_aux_model
 from auoreo.gateway.fake import FakeGateway
 
 

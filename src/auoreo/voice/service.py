@@ -47,7 +47,7 @@ TRANSLATE_PROMPT = (
 
 async def translate_text(services: Services, text: str, target: str, source: str | None = None) -> str:
     """One aux call (`purpose=translate`, temperature 0, the `small` group when configured)."""
-    from auoreo.gateway.aux import resolve_aux_model
+    from auoreo.gateway.auxiliary import resolve_aux_model
     from auoreo.gateway.types import LLMRequest, TextDelta
 
     for tag in (target, source):

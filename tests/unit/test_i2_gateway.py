@@ -19,7 +19,7 @@ from auoreo.core import metrics_text
 from auoreo.core.secrets import SecretStore
 from auoreo.core.settings import ModelGroup, Settings
 from auoreo.core.settings_i2 import I2Settings
-from auoreo.gateway import aux
+from auoreo.gateway import auxiliary as aux
 from auoreo.gateway.budgets import METRIC
 from auoreo.gateway.deploy import ANTHROPIC_1M_BETA, build_model_list
 from auoreo.gateway.errors import GatewayError
@@ -433,3 +433,19 @@ async def test_context_window_tiers_and_min_context_guard(home: Any) -> None:
     _ok_router(gw, seen)
     _ = [i async for i in gw.stream(_req("tiny", metadata={"purpose": "title"}))]  # aux: no guard
     assert seen
+
+
+def test_deployment_overrides_do_not_leak_into_the_shared_model_table(home: Any) -> None:
+    """`[1m]` / per-deployment windows must not rewrite litellm's global entry for the base model."""
+    before = litellm.get_model_info("gpt-4o-mini")["max_input_tokens"]
+    st = Settings(
+        home=home,
+        models={"default": ModelGroup(models=["openai/gpt-4o-mini"])},
+        fallbacks={},
+        i2=I2Settings(deployments={"openai/gpt-4o-mini": {"max_input_tokens": 99_000}}),
+    )
+    gw = LiteLLMGateway(st, lambda _: None)
+    assert gw.context_window("default") == 99_000  # the override still applies to its group …
+    assert litellm.get_model_info("gpt-4o-mini")["max_input_tokens"] == before  # … and only there
+    plain = LiteLLMGateway(Settings(home=home, fallbacks={}), lambda _: None)
+    assert plain.context_window("gpt-4o-mini") == before

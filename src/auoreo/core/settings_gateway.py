@@ -25,7 +25,7 @@ AuxTask = Literal[
 class AuxSettings(BaseModel):
     """`settings.auxiliary`: which model serves background/aux calls (spec §10.7).
 
-    Resolution (see `auoreo.gateway.aux.resolve_aux_model`): `tasks[<task>]` → first entry of
+    Resolution (see `auoreo.gateway.auxiliary.resolve_aux_model`): `tasks[<task>]` → first entry of
     `text_chain` (or `vision_chain`) whose credentials exist → `small` group → main model.
     Entries are routing groups, `<provider>/<model>` ids, or `main` (the session's model)."""
 

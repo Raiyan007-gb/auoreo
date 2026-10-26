@@ -57,7 +57,7 @@ def _render(rows: list[dict], backend: str, query: str, extra: dict) -> ToolResu
 
 async def _aux_keywords(svc, query: str) -> list[str]:
     """2–3 keyword queries from one temperature-0 aux call; [] on any failure."""
-    from auoreo.gateway.aux import resolve_aux_model
+    from auoreo.gateway.auxiliary import resolve_aux_model
     from auoreo.gateway.types import LLMRequest, TextDelta
 
     try:

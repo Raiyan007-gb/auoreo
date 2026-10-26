@@ -59,6 +59,9 @@ Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` �
 - Secrets come only from env / keyring / `secrets.db`. Tools never read `.env` or
   `secrets.db` (executor-enforced floor) and child processes get a scrubbed env.
 - No `elif` chains of 4+ (use dict dispatch); files ≤ 500 lines (`api/app.py` ≤ 300).
+- Every path must check out on Windows: no reserved names (`con`, `prn`, `aux`, `nul`, `com1`…,
+  `lpt1`… — even with an extension), no `<>:"|?*`, no case-only clashes, no symlinks
+  (`tests/unit/test_portable_paths.py`).
 
 ## Workflow
 

@@ -19,7 +19,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from auoreo.gateway.aux import resolve_aux_model
+from auoreo.gateway.auxiliary import resolve_aux_model
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Finish, LLMRequest, TextDelta, Usage, tool_schema
 from auoreo.runtime.compaction_extras import prior_checkpoint

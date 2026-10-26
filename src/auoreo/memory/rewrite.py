@@ -13,7 +13,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
-from auoreo.gateway.aux import resolve_aux_model
+from auoreo.gateway.auxiliary import resolve_aux_model
 from auoreo.gateway.types import LLMRequest, TextDelta
 from auoreo.memory.service import is_trivial
 

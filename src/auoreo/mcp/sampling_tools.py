@@ -25,7 +25,7 @@ from mcp.types import (
     ToolUseContent,
 )
 
-from auoreo.gateway.aux import resolve_aux_model
+from auoreo.gateway.auxiliary import resolve_aux_model
 from auoreo.gateway.resolve import expand_alias, resolve_model
 from auoreo.gateway.types import ToolCall, tool_schema
 

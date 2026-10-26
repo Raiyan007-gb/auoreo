@@ -14,7 +14,7 @@ from litellm import exceptions as lx
 
 from auoreo.core.settings import ModelGroup, Settings
 from auoreo.core.settings_gateway import GatewayTuning
-from auoreo.gateway import aux
+from auoreo.gateway import auxiliary as aux
 from auoreo.gateway.errors import FallbackTriggeredError, GatewayError
 from auoreo.gateway.gateway import LiteLLMGateway, build_model_list, map_error, supported_pre_call_checks
 from auoreo.gateway.types import LLMRequest, TextDelta, Usage

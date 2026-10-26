@@ -24,7 +24,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
-from auoreo.gateway.aux import resolve_aux_model
+from auoreo.gateway.auxiliary import resolve_aux_model
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import LLMRequest, TextDelta, Usage
 
