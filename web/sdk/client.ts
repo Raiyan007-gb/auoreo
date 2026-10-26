@@ -12,6 +12,7 @@ import { g5bMethods } from "./ops3"; // --- G5b
 import { g6Methods } from "./ops4"; // --- G6
 import { g7Methods } from "./ops5"; // --- G7
 import { i5Methods } from "./ops6"; // --- I5
+import { envMethods } from "./env"; // --- ENV
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -102,6 +103,8 @@ export const EVENT_TYPES = [
   "compaction.failed",
   "compaction.skipped",
   "harness.reloaded",
+  "settings.changed",
+  "secret.changed",
   "message",
 ] as const;
 
@@ -289,6 +292,7 @@ export function createClient(opts: ClientOptions = {}) {
     ...g6Methods(request), // --- G6: PREFS.md proposals + skills hub (./ops4.ts)
     ...g7Methods(request), // --- G7: session plan/sources + usage timeseries (./ops5.ts)
     ...i5Methods(request), // --- I5: share links, skills hub, memory usage, lsp stop (./ops6.ts)
+    ...envMethods(request), // --- ENV: Settings → Environment (./env.ts)
   };
 }
 

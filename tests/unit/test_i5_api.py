@@ -109,7 +109,8 @@ async def test_scoped_reload(client: httpx.AsyncClient, services: Services) -> N
 
     (services.settings.home / "settings.json").write_text(json.dumps({"model": "small"}))
     cfg = (await client.post("/api/harness/reload", params={"kind": "model"})).json()
-    assert cfg["changes"] == {"config": {"changed": ["model"]}} and "next server start" in cfg["note"]
+    assert cfg["changes"] == {"config": {"changed": ["model"]}} and "applied live" in cfg["note"]
+    assert services.settings.model == "small"  # ENV: applied in place, no restart
     (services.settings.home / "settings.json").write_text(json.dumps({"port": "not-a-port"}))
     assert (await client.post("/api/harness/reload", params={"kind": "config"})).status_code == 422
     assert (await client.post("/api/harness/reload", params={"kind": "bogus"})).status_code == 422

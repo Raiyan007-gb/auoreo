@@ -186,13 +186,20 @@ def render_context(
     memory: str = "",
     locale: str | None = None,
     tone: str = "",
+    settings: Any = None,
 ) -> str:
     """Tier-2 context block (sent as a user-role snapshot each turn).
 
     `locale` and `tone` (the per-turn style lines from `auoreo.voice.tone.tone_of`) live
     here, never in a stable-tier section, so changing them cannot break the session's
-    byte-stable system prompt. Unset locale → `spec.extras["locale"]` → `Settings.locale`."""
+    byte-stable system prompt. Unset locale → `spec.extras["locale"]` → `Settings.locale`.
+    With `settings`, the custom variables flagged `expose_to_agent` are listed (names; plain
+    values only) — per turn, so a change applies from the next turn without a cache break."""
     reminder = str(spec.extras.get("reminders", {}).get(permission_mode, ""))
+    if settings is not None:
+        from auoreo.core.env_custom import agent_block
+
+        reminder = "\n\n".join(p for p in (agent_block(settings), reminder) if p)
     if not spec.context_template:
         return reminder
     if locale is None:

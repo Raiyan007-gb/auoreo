@@ -40,6 +40,8 @@ else a tool needs comes from its manifest `requires_env`; tools that need a term
 `TERM` themselves (terminal_pty's `term` argument), so it is not inherited from the host."""
 ENV_ALLOWED_PREFIXES = ("AUOREO_TELEMETRY_",)
 ROTATION_SUFFIXES = ("#prev", "#rotated_at", "#prev_expires")
+UPDATED_SUFFIX = "#updated_at"
+"""`<name>#updated_at` (epoch seconds) is written by every set/rotate; hidden from `names()`."""
 SECRETS_SCHEMA_VERSION = 1
 
 
@@ -169,6 +171,7 @@ class SecretStore:
         with self._locked():
             data = self._load()
             data[name] = value
+            data[name + UPDATED_SUFFIX] = str(int(time.time()))
             self._save(data)
 
     def delete(self, name: str) -> bool:
@@ -177,11 +180,21 @@ class SecretStore:
             if name not in data:
                 return False
             del data[name]
+            data.pop(name + UPDATED_SUFFIX, None)
             self._save(data)
             return True
 
     def names(self) -> list[str]:
-        return sorted(self._load())
+        return sorted(n for n in self._load() if not n.endswith(UPDATED_SUFFIX))
+
+    def updated_at(self) -> dict[str, int]:
+        """`name → epoch seconds` of the last set/rotate (names written before this existed
+        have no entry). Never touches a value."""
+        out: dict[str, int] = {}
+        for n, v in self._load().items():
+            if n.endswith(UPDATED_SUFFIX) and v.strip().isdigit():
+                out[n.removesuffix(UPDATED_SUFFIX)] = int(v)
+        return out
 
     # --- H1b: rotation with a grace window (spec §25.14) + values for the literal scanner
     def rotate(self, name: str, value: str, grace_s: int, now: float | None = None) -> bool:
@@ -198,6 +211,7 @@ class SecretStore:
                 for suffix in ROTATION_SUFFIXES:
                     data.pop(f"{name}{suffix}", None)
             data[name] = value
+            data[name + UPDATED_SUFFIX] = str(t)
             self._save(data)
         return bool(old and grace_s > 0)
 
@@ -230,7 +244,9 @@ class SecretStore:
             data = self._load()
         except SecretStoreError:
             return []
-        return [v for n, v in data.items() if not n.endswith(("#rotated_at", "#prev_expires"))]
+        return [
+            v for n, v in data.items() if not n.endswith(("#rotated_at", "#prev_expires", UPDATED_SUFFIX))
+        ]
 
     def get(self, name: str, *, by: str | None = None) -> str | None:
         """env → keyring → secrets.db. Never raises for a missing value.

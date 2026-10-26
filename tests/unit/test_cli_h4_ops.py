@@ -252,7 +252,7 @@ def test_new_feature_stops_on_open_pr(repo: Path, monkeypatch: pytest.MonkeyPatc
 
 
 def test_new_feature_outside_git(workdir: Path) -> None:
-    assert "not inside a git repository" in _run(["new-feature", "x"], 1).replace("\n", "")
+    assert "not inside a git repository" in " ".join(_run(["new-feature", "x"], 1).split())
 
 
 def test_worktree_gc(repo: Path) -> None:

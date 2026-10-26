@@ -221,7 +221,7 @@ class AgentRunner:
                 log.exception("memory recall failed")
         st = self.s.settings
         context = render_context(
-            spec, self.s.cwd, engine.mode, memory_block, st.locale or "", tone_of(text, st)
+            spec, self.s.cwd, engine.mode, memory_block, st.locale or "", tone_of(text, st), st
         )
         context = self.nudge.apply(rt, spec, text, options, context)  # --- G2b: §11.8 nudge
         context = "" if options.exact is not None else context  # I3: the fork's prefix stays exact

@@ -9,11 +9,12 @@ snapshot); the kind decides what else happens and which part of the diff is repo
 | `command` | —                                                                 | `commands`         |
 | `mcp`     | MCP bridge re-syncs servers (connect new, drop removed)          | `mcp`              |
 | `lsp`     | in-process language servers stop (they restart on next use)      | `lsp.stopped`      |
-| `config`  | settings.json re-read + validated; changed keys listed           | `config.changed`   |
-| `model`   | same as `config`, limited to model routing keys                  | `config.changed`   |
+| `config`  | settings.json re-read, validated and applied live (`live_settings`) | `config.changed` |
+| `model`   | same as `config`, reporting only model routing keys              | `config.changed`   |
 
-Settings are NOT hot-swapped into the running services (that would race in-flight turns):
-`config`/`model` report what changed and say when it applies, honestly.
+`config`/`model` go through `core.live_settings`: live keys are copied into the running
+settings in place (a step already in flight keeps its frozen request), startup-only keys are
+reported as needing a restart — honestly, per key.
 """
 
 from __future__ import annotations
@@ -25,14 +26,16 @@ MODEL_KEYS = ("model", "small_model", "models", "aliases", "fallbacks", "auxilia
 _DIFF_KEY: dict[str, str] = {"agent": "agents", "command": "commands", "mcp": "mcp"}
 
 
-def _changed_settings(svc: Any, keys: tuple[str, ...] | None) -> list[str]:
-    from auoreo.core.settings import Settings, get_settings
+async def _apply_settings(svc: Any, keys: tuple[str, ...] | None) -> tuple[list[str], list[str]]:
+    """`(changed, restart_required)` after applying settings.json live (ValidationError when broken)."""
+    from auoreo.core.live_settings import live_of
 
-    get_settings.cache_clear()
-    fresh = Settings(home=svc.settings.home)  # raises ValidationError on a broken settings.json
-    old, new = svc.settings.model_dump(mode="json"), fresh.model_dump(mode="json")
-    names = keys or tuple(sorted({*old, *new}))
-    return [k for k in names if old.get(k) != new.get(k) and k != "home"]
+    res = await live_of(svc).reload("reload")
+
+    def pick(names: list[str]) -> list[str]:
+        return [k for k in names if keys is None or k in keys]
+
+    return pick(res.changed), pick(res.restart_required)
 
 
 async def scoped_reload(
@@ -49,12 +52,12 @@ async def scoped_reload(
 
         stopped = await stop_lsp(manager_for(svc))
         return {"lsp": {"stopped": stopped}}, "language servers restart on their next use"
-    changed = _changed_settings(svc, MODEL_KEYS if kind == "model" else None)
-    note = (
-        "settings.json is valid; changed keys apply at the next server start"
-        if changed
-        else "settings.json is valid; nothing changed"
-    )
+    changed, restart = await _apply_settings(svc, MODEL_KEYS if kind == "model" else None)
+    note = "settings.json is valid; nothing changed"
+    if changed:
+        note = "settings.json is valid; changes applied live"
+    if restart:
+        note += "; restart required for: " + ", ".join(restart)
     return {"config": {"changed": changed}}, note
 
 

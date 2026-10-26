@@ -38,6 +38,8 @@ from auoreo.api.routers import context as context_router  # --- G5b
 from auoreo.api.routers import cron as cron_router
 from auoreo.api.routers import delegation as delegation_router  # --- H2
 from auoreo.api.routers import deliveries as deliveries_router
+from auoreo.api.routers import env_api as env_router  # --- ENV
+from auoreo.api.routers import env_custom_api as env_custom_router  # --- ENV
 from auoreo.api.routers import environments as environments_router  # --- W2-B
 
 # --- W0-C
@@ -124,6 +126,8 @@ ROUTERS = (
     oauth_router,  # --- I7: authorization/settled after `auoreo login`
     i5_router,  # --- I5: POST /api/lsp/stop, GET /api/memory/usage
     livekit_router,  # --- I8: POST /api/livekit/token + POST /livekit/webhook
+    env_router,  # --- ENV: Settings → Environment (catalog, live writes, undo, .env import)
+    env_custom_router,  # --- ENV: custom variables
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

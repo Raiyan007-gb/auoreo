@@ -47,13 +47,14 @@ async def _audit(svc: Services, command: str, via: str, code: int | None) -> Non
 
 async def _via_sandbox(svc: Services, argv: list[str], mode: str, net: str, timeout: float) -> int:
     from auoreo.backends.sandbox import ExecSpec, SandboxError
+    from auoreo.core.env_custom import shell_env
     from auoreo.core.secrets import child_env
 
     backend = svc.backend("sandbox")
     spec = ExecSpec(
         argv=argv,
         cwd=svc.cwd,
-        env=child_env([], svc.secrets),
+        env=child_env([], svc.secrets) | shell_env(svc, "cli:exec"),
         timeout_s=timeout,
         mode=mode,  # type: ignore[arg-type]
         net=net,  # type: ignore[arg-type]
@@ -75,6 +76,7 @@ async def _via_sandbox(svc: Services, argv: list[str], mode: str, net: str, time
 
 async def _via_environment(svc: Services, command: str, timeout: float) -> int:
     from auoreo.backends.environment import ExecRequest
+    from auoreo.core.env_custom import shell_env
     from auoreo.core.secrets import child_env
 
     backend = svc.backend("environment")
@@ -86,7 +88,7 @@ async def _via_environment(svc: Services, command: str, timeout: float) -> int:
         except Exception as exc:
             err_console.print(f"[red]{getattr(backend, 'name', 'environment')} refused: {exc}[/red]")
             return 2
-    env = {} if getattr(backend, "remote", False) else child_env([], svc.secrets)
+    env = {} if getattr(backend, "remote", False) else child_env([], svc.secrets) | shell_env(svc, "cli:exec")
     yield_ms = int(min(timeout, 30) * 1000)
     workdir = str(svc.cwd) if getattr(backend, "host_paths", False) else None
     req = ExecRequest(cmd=command, workdir=workdir, yield_time_ms=yield_ms, env=env)

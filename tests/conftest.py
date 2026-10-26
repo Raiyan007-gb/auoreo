@@ -51,6 +51,12 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # I4 workspace trust: the suite's project roots (`<workdir>/.auoreo`) are trusted;
     # tests/unit/test_workspace_trust.py unsets this to exercise the untrusted path.
     monkeypatch.setenv("AUOREO_SECURITY_TRUST_ALL_WORKSPACES", "1")
+    # ENV: the live-settings watcher stays idle in tests (they call `poll_once()` directly) and
+    # literal redactions of custom secret values never leak from one test into the next.
+    from auoreo.core import live_settings, redaction
+
+    monkeypatch.setattr(live_settings, "POLL_S", 3600.0)
+    monkeypatch.setattr(redaction, "_LITERALS", {})
     yield
 
 

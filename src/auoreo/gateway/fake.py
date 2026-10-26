@@ -166,6 +166,8 @@ class FakeGateway:
             except json.JSONDecodeError:
                 args = {}
             return Scripted(tool_calls=[(name, args)])
+        if user == "/context":  # e2e: echo the per-turn <context> block the model was given
+            return Scripted(text=f"context: {_turn_context(request.messages)}")
         if user.startswith("/think "):
             topic = user[7:].strip()
             return Scripted(
@@ -257,6 +259,15 @@ def _last_user_text(messages: tuple[dict[str, Any], ...]) -> str:
             if content.startswith("<context>") and "</context>" in content:
                 content = content.split("</context>", 1)[1]
             return content.strip()
+    return ""
+
+
+def _turn_context(messages: tuple[dict[str, Any], ...]) -> str:
+    """The runner's `<context>…</context>` wrapper of the latest user message ('' if none)."""
+    for m in reversed(messages):
+        content = text_of(m.get("content")) if m.get("role") == "user" else ""
+        if content.startswith("<context>") and "</context>" in content:
+            return content[len("<context>") : content.index("</context>")].strip()
     return ""
 
 

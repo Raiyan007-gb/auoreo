@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 from auoreo.backends.sandbox import escalation_request, permissions_request
 from auoreo.core import justifications
 from auoreo.core import observability as obs
+from auoreo.core.env_custom import shell_env  # --- ENV
 from auoreo.core.guardian import guardian_verdict
 from auoreo.core.redaction import redact_tool_output
 from auoreo.core.secrets import child_env, secret_scope
@@ -231,7 +232,8 @@ class ToolExecutor:
             return refused
 
         # Execute.
-        ctx.env = {**child_env(tool.manifest.requires_env, self.s.secrets), **egress.env}
+        ctx.env = {**child_env(tool.manifest.requires_env, self.s.secrets), **shell_env(self.s, tool.name)}
+        ctx.env |= egress.env  # custom variables (expose_to_shell) only reach shell tools
         ctx.services.setdefault("services", self.s)
         ctx.services.setdefault("executor", self)  # `tool_call` re-enters the pipeline
         policy = ExecPolicy(

@@ -78,6 +78,8 @@ def test_secrets_payload_has_schema_version_and_legacy_still_reads(tmp_path: Pat
     store.set("A", "1")
     key = store.key_file.read_bytes().strip()
     payload = json.loads(Fernet(key).decrypt(store.path.read_bytes()))
+    stamp = payload["entries"].pop("A#updated_at")  # ENV: write time, hidden from names()
+    assert stamp.isdigit() and store.names() == ["A"] and set(store.updated_at()) == {"A"}
     assert payload == {"schema_version": SECRETS_SCHEMA_VERSION, "entries": {"A": "1"}}
     # legacy (pre-I1) flat map
     store.path.write_bytes(Fernet(key).encrypt(json.dumps({"OLD": "x"}).encode()))

@@ -162,6 +162,15 @@ def register_redaction_patterns(name: str, regexes: Iterable[str]) -> None:
     _EXTRA[name] = tuple(_validate(rx) for rx in regexes)
 
 
+_LITERALS: dict[str, dict[str, str]] = {}
+"""Exact secret values (e.g. secret custom variables) by set → {label: value}; replaced verbatim."""
+
+
+def set_literals(name: str, values: dict[str, str]) -> None:
+    """Replace the literal set `name` (values shorter than 6 chars are skipped: too ambiguous)."""
+    _LITERALS[name] = {k: v for k, v in values.items() if len(v) >= 6}
+
+
 def registered_patterns() -> dict[str, int]:
     return {k: len(v) for k, v in _EXTRA.items()}
 
@@ -219,6 +228,10 @@ def _redact_split(text: str, mode: RedactMode) -> str:
 
 
 def _redact_core(text: str, mode: RedactMode) -> str:
+    for literals in _LITERALS.values():  # exact values first, before other passes reshape them
+        for label, value in literals.items():
+            if value in text:
+                text = text.replace(value, "***" if mode == "mask" else sentinel(label))
     if any(p in text for p in ALL_PREFIXES):
         text = _PREFIX_RE.sub(lambda m: _hide(m.group(0), mode), text)
         text = _WEAK_RE.sub(lambda m: _hide(m.group(0), mode), text)

@@ -23,6 +23,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `policies/<name>.star` | Starlark exec policies: `# key: value` header + `decide(req)`; run after floors, before rules |
 | `commands/<name>.md` | Slash commands (`/compact`, `/model`, `/plan`, `/review`); `handler: prompt` renders the body |
 | `memory/*.md` | Templates copied into `~/.auoreo/memory/` |
+| `src/auoreo/core/env_catalog*.py`, `live_settings.py`, `env_*.py` | The variable catalog (`.env.example` + Settings → Environment), live apply of settings.json/secrets.db (in-place `svc.settings`, per-area refresh, watcher), custom variables; API `api/routers/env_api.py` |
 | `src/auoreo/harness/` | discovery → loader → registry → orchestrator |
 | `src/auoreo/runtime/` | inbox, agent loop, session coordinator, compaction, slash-command dispatch, titles |
 | `src/auoreo/gateway/` | LLM gateway (LiteLLM Router) + fake gateway |
@@ -35,7 +36,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `sdk/python/` | Generated Python client (`scripts/gen_sdk.sh`, re-run after API changes) + hand-written SSE extras |
 | `src/auoreo/policy/`, `src/auoreo/remote/`, `src/auoreo/perception/`, `src/auoreo/goals/`, `src/auoreo/suggestions/`, `src/auoreo/skillhub/`, `src/auoreo/mcp/` | Bandit model/effort policy; daemon + exec-server + bridge; sensor sessions; goals; consent-first suggestions; skills hub (taps, lockfile, quarantine); MCP bridge + sampling |
 | `packaging/`, `Dockerfile`, `compose.yaml`, `packages/npm/`, `desktop/` | Wheel build hook, PyInstaller spec, update-manifest signing; container; npm launcher; Electron shell |
-| `docs/` | `roadmap-m3-plus.md`, `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md`, `environments.md`, `remote.md`, `perception.md`, `teleop.md`, `release.md` |
+| `docs/` | `roadmap-m3-plus.md`, `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md`, `environments.md`, `environment.md` (web-managed env), `remote.md`, `perception.md`, `teleop.md`, `release.md` |
 
 Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` → repo root
 (bundled) → `extra_roots` from `settings.json`.
@@ -58,6 +59,11 @@ Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` �
 - A project `<cwd>/.auoreo/` is inert (no hooks, MCP, tool code, plugins, policies or allow rules) until trusted (`auoreo trust`); tools reach the network only through the egress proxy unless a one-shot `net_direct` grant with a justification says otherwise.
 - Secrets come only from env / keyring / `secrets.db`. Tools never read `.env` or
   `secrets.db` (executor-enforced floor) and child processes get a scrubbed env.
+- Web-managed environment (`/api/env`, `docs/environment.md`): secrets are write-only (no response,
+  event or audit row carries a value), the real environment always wins (409), `[env-only]` knobs
+  are read-only (403), the web never writes a `.env`. New variables go in
+  `core/env_catalog_data.py` (then `gen_env_example.py --write`); a startup-only field goes in
+  `env_catalog.RESTART_REQUIRED`, a cached one gets a refresh path in `core/live_handlers.py`.
 - No `elif` chains of 4+ (use dict dispatch); files ≤ 500 lines (`api/app.py` ≤ 300).
 - Every path must check out on Windows: no reserved names (`con`, `prn`, `aux`, `nul`, `com1`…,
   `lpt1`… — even with an extension), no `<>:"|?*`, no case-only clashes, no symlinks
