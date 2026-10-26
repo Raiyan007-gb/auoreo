@@ -35,6 +35,7 @@ from auoreo.runtime.guards import LoopGuards
 from auoreo.runtime.inbox import Inbox, RunOptions
 from auoreo.runtime.liveness import LivenessWatchdog
 from auoreo.runtime.multimodal import prepare_messages
+from auoreo.runtime.nudges import MemoryNudge, recall_query
 from auoreo.runtime.recovery import model_step
 from auoreo.runtime.sequence import repair
 from auoreo.runtime.stopgates import StopGates, prompt_hook
@@ -102,6 +103,7 @@ class AgentRunner:
         self.usage = UsageLedger(services.db, services.gateway.price)
         self.compaction = CompactionService(services, self.usage)
         self.policy = BanditPolicy(services, self.usage)  # --- W1-C (off unless bandit.enabled)
+        self.nudge = MemoryNudge(services)  # --- G2b
 
     # ------------------------------------------------------------ persistence
     async def load_history(self, session_id: str) -> list[dict[str, Any]]:
@@ -204,13 +206,15 @@ class AgentRunner:
         if self.s.memory is not None and spec.agent.manifest.memory and not options.skip_memory:
             try:
                 top_k = (choice.arm.top_k if choice else None) or 8  # bandit arm may tune recall depth
-                memory_block = await self.s.memory.context_block(text, limit=top_k)
+                query = await recall_query(self.s, rt, text)  # --- G2b: opt-in rewrite, fail-open
+                memory_block = await self.s.memory.context_block(query, limit=top_k)
             except Exception:  # recall must never fail the turn
                 log.exception("memory recall failed")
         st = self.s.settings
         context = render_context(
             spec, self.s.cwd, engine.mode, memory_block, st.locale or "", tone_of(text, st)
         )
+        context = self.nudge.apply(rt, spec, text, options, context)  # --- G2b: §11.8 nudge
         rt.generation += 1  # the liveness watchdog is bound to this turn's generation
         turn = Turn(TurnBudget.for_turn(st.loop, subagent=rt.subagent), LivenessWatchdog(self.s, rt, run_id))
 

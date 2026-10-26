@@ -105,21 +105,33 @@ def _tool_pair(i: int, name: str, size: int) -> list[dict[str, Any]]:
     ]
 
 
-def test_prune_plan_shapes_old_read_results_only() -> None:
+def test_prune_plan_shapes_old_bulky_results_only() -> None:
     hist: list[dict[str, Any]] = [{"role": "user", "content": "go"}]
+    hist += _tool_pair(0, "read", 30_000)  # head protection: first 3 messages never pruned
     hist += _tool_pair(1, "read", 30_000)  # old + prunable
-    hist += _tool_pair(2, "write", 30_000)  # not a read-type tool
+    hist += _tool_pair(2, "skill", 30_000)  # not a shell/read/web/edit tool
     hist += _tool_pair(3, "bash", 5_000)  # too small
+    hist += _tool_pair(5, "write", 30_000)  # edit/write results are prunable (S2)
     hist += [{"role": "user", "content": f"m{i}"} for i in range(10)]
     hist += _tool_pair(4, "grep", 30_000)  # within the last 10 messages
     hist += [{"role": "user", "content": f"n{i}"} for i in range(8)]
     changes, reclaimed = prune_plan(hist)
-    assert list(changes) == [2]
-    new = changes[2]["content"]
+    assert list(changes) == [4, 10]
+    new = changes[4]["content"]
     assert new.startswith("x" * PRUNE_HEAD) and new.endswith("END-MARKER")
     assert f"[pruned {30_000 - PRUNE_HEAD - PRUNE_TAIL} chars]" in new
-    assert changes[2]["tool_call_id"] == "c1" and reclaimed > 20_000
-    assert "tool_calls" in hist[1]  # assistant side untouched
+    assert changes[4]["tool_call_id"] == "c1" and reclaimed > 40_000
+    assert "tool_calls" in hist[3]  # assistant side untouched
+
+
+@pytest.mark.parametrize("name", ["pwsh", "shell", "bash", "web_search", "web_fetch", "edit", "write"])
+def test_prunable_set_covers_shell_web_and_edit(name: str) -> None:
+    from auoreo.runtime.compaction import PRUNABLE_TOOLS
+
+    assert name in PRUNABLE_TOOLS
+    hist = [{"role": "user", "content": c} for c in "abc"]
+    hist += _tool_pair(1, name, 20_000) + [{"role": "user", "content": f"m{i}"} for i in range(10)]
+    assert list(prune_plan(hist)[0]) == [4]
 
 
 async def test_prune_hysteresis_and_persistence(services: Services) -> None:
@@ -127,7 +139,8 @@ async def test_prune_hysteresis_and_persistence(services: Services) -> None:
     sess = await services.create_session()
     rt = await services.coordinator.runtime(sess.id)
     runner = services.coordinator.runner
-    small = [{"role": "user", "content": "go"}, *_tool_pair(1, "read", 9_000)]
+    small = [{"role": "user", "content": "go"}, {"role": "user", "content": "on"}]
+    small += _tool_pair(1, "read", 9_000)
     small += [{"role": "user", "content": f"m{i}"} for i in range(10)]
     for m in small:
         await runner._persist(rt, m)
@@ -137,7 +150,7 @@ async def test_prune_hysteresis_and_persistence(services: Services) -> None:
     assert await comp._prune(rt) == 2
     rows = await db_messages(services, sess.id)
     assert [r.message for r in rows] == rt.history
-    assert "[pruned" in rt.history[2]["content"] and "[pruned" in rt.history[14]["content"]
+    assert "[pruned" in rt.history[3]["content"] and "[pruned" in rt.history[15]["content"]
 
 
 # --------------------------------------------------------------- S6 split
@@ -198,10 +211,15 @@ async def test_manual_compaction_shrinks_archives_and_keeps_system_prompt(
     assert {a.compaction_id for a in arch} == {res.compaction_id}
     kinds = [e.type for e in await since(services, sess.id, mark)]
     assert kinds == ["compaction.started", "compaction.completed"]
-    # summarizer call: tool-free, small group, temperature 0, compaction template
+    # summarizer call (S5, KV-aware): small group, temperature 0, tool calls disabled; the
+    # agent's system prompt + tools + head replay verbatim, the instruction comes last
     aux = next(r for r in reversed(gateway.requests) if r.metadata.get("purpose") == "compaction")
-    assert aux.model == "small" and aux.tools == () and aux.temperature == 0
-    assert aux.tool_choice == "none" and "## Next step" in aux.messages[0]["content"]
+    main0 = next(r for r in gateway.requests if r.metadata.get("purpose") not in {"compaction", "title"})
+    assert aux.model == "small" and aux.temperature == 0 and aux.tool_choice == "none"
+    assert aux.messages[0] == main0.messages[0] and aux.tools == main0.tools
+    assert aux.messages[1] == before[0]
+    assert aux.messages[2]["content"].startswith("<transcript>")
+    assert "## Next step" in aux.messages[-1]["content"]
     # next turn: byte-identical system prompt, compaction text not in it
     await turns(services, sess.id, 1, start=99)
     main = [r for r in gateway.requests if r.metadata.get("purpose") not in {"compaction", "title"}]

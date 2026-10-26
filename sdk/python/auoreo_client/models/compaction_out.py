@@ -6,6 +6,8 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
 T = TypeVar("T", bound="CompactionOut")
 
 
@@ -19,6 +21,7 @@ class CompactionOut:
         pre_tokens (int):
         pruned (int):
         summary_chars (int):
+        source (str | Unset):  Default: 'summary'.
     """
 
     archived: int
@@ -27,6 +30,7 @@ class CompactionOut:
     pre_tokens: int
     pruned: int
     summary_chars: int
+    source: str | Unset = "summary"
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -42,6 +46,8 @@ class CompactionOut:
 
         summary_chars = self.summary_chars
 
+        source = self.source
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -54,6 +60,8 @@ class CompactionOut:
                 "summary_chars": summary_chars,
             }
         )
+        if source is not UNSET:
+            field_dict["source"] = source
 
         return field_dict
 
@@ -72,6 +80,8 @@ class CompactionOut:
 
         summary_chars = d.pop("summary_chars")
 
+        source = d.pop("source", UNSET)
+
         compaction_out = cls(
             archived=archived,
             compaction_id=compaction_id,
@@ -79,6 +89,7 @@ class CompactionOut:
             pre_tokens=pre_tokens,
             pruned=pruned,
             summary_chars=summary_chars,
+            source=source,
         )
 
         compaction_out.additional_properties = d

@@ -20,6 +20,7 @@ from pydantic_settings import (
 )
 
 from auoreo.core.paths import home_dir
+from auoreo.core.settings_compaction import CompactionSettings  # --- G2b
 from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
 from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # --- G1a
 from auoreo.core.settings_models import (
@@ -79,6 +80,7 @@ class Settings(BaseSettings):
     gateway_tuning: GatewayTuning = Field(default_factory=GatewayTuning)
     memory: MemorySettings = Field(default_factory=MemorySettings)
     loop: LoopSettings = Field(default_factory=LoopSettings)
+    compaction: CompactionSettings = Field(default_factory=CompactionSettings)  # --- G2b
     extra_roots: list[Path] = Field(default_factory=list)
     """Additional definition roots (lowest precedence after bundled), e.g. `.claude`."""
     max_cost_usd: float | None = None
@@ -210,7 +212,7 @@ class Settings(BaseSettings):
     """Normalised RMS (0..1) above which the fake VAD counts a 30 ms frame as speech."""
     voice_stt_model: str | None = None
     """Model override for the selected STT backend (e.g. `small`, `whisper-1`)."""
-    voice_endpoint_silence_ms: int = Field(default=700, ge=100, le=5000)
+    voice_endpoint_silence_ms: int = Field(default=1250, ge=100, le=5000)
     """Silence after speech that ends a live (WebRTC) utterance."""
     voice_wake_phrase: str = "hey oreo"
     voice_kws_model_dir: Path | None = None

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from auoreo.harness.loader import VAR_RE, AgentDef, FamilyDef, SkillDef, ToolDef
-from auoreo.harness.manifests import Rule, Variant
+from auoreo.harness.manifests import UNLISTED_TOOLS, Rule, Variant
 from auoreo.harness.registry import Harness
 
 
@@ -68,9 +68,33 @@ def _skills_index(skills: list[SkillDef]) -> str:
     return "\n".join(f"- `{s.name}` — {s.manifest.description.strip()}" for s in skills)
 
 
+def order_tools(tools: list[ToolDef], order: list[str]) -> list[ToolDef]:
+    """Spec §12 `toolOrder`: named tools first/last as listed; every other tool takes the
+    `<unlisted-tools>` slot in its incoming (deterministic) order."""
+    if UNLISTED_TOOLS not in order:
+        return tools
+    by_name = {t.name: t for t in tools}
+    slot = order.index(UNLISTED_TOOLS)
+    listed = set(order)
+    before = [by_name[n] for n in order[:slot] if n in by_name]
+    after = [by_name[n] for n in order[slot + 1 :] if n in by_name]
+    return [*before, *(t for t in tools if t.name not in listed), *after]
+
+
+def mode_reminders(families: dict[str, FamilyDef]) -> dict[str, str]:
+    """`mode:` overlays (e.g. `plan-reminder`) keyed by permission mode."""
+    out: dict[str, str] = {}
+    for fam in sorted(families.values(), key=lambda f: f.family.name):
+        if fam.family.mode and fam.text:
+            out.setdefault(fam.family.mode, fam.text)
+    return out
+
+
 def pick_family(families: dict[str, FamilyDef], model: str) -> FamilyDef | None:
     fallback = None
     for fam in sorted(families.values(), key=lambda f: f.family.name):
+        if fam.family.mode:  # mode reminders ride the context block, never the system prompt
+            continue
         if not fam.family.match:
             fallback = fallback or fam
             continue
@@ -100,6 +124,9 @@ def build_spec(
 ) -> AgentSpec:
     agent = harness.agent(agent_name)
     selected = harness.select_tools(agent.manifest)
+    vf = harness.snapshot.variants
+    if vf is not None:
+        selected = order_tools(selected, list(vf.manifest.tool_order))
     direct = [t for t in selected if t.manifest.exposure == "direct"]
     deferred = [t for t in selected if t.manifest.exposure == "deferred"]
     skills = harness.select_skills(agent.manifest)
@@ -116,14 +143,17 @@ def build_spec(
     stable: list[str] = []
     context: list[str] = []
     sections = sorted(harness.snapshot.prompts.values(), key=lambda p: (p.section.order, p.section.name))
+    complete = [s for s in sections if s.section.complete and s.section.role == "section"]
     for sec in sections:
         if sec.section.role != "section":  # compaction / guardian are aux-call prompts
             continue
         if sec.section.tier == "stable":
+            if complete and sec is not complete[0]:  # `complete: true` shadows every other section
+                continue
             stable.append(render(sec.template, stable_values))
         else:
             context.append(sec.template)
-    fam = pick_family(harness.snapshot.families, model)
+    fam = None if complete else pick_family(harness.snapshot.families, model)
     if fam and fam.text:
         stable.append(fam.text)
 
@@ -143,6 +173,7 @@ def build_spec(
         rules=tuple(rules),
         variant=pick_variant(harness, model),
         max_steps=agent.manifest.max_steps,
+        extras={"reminders": mode_reminders(harness.snapshot.families)},
     )
 
 
@@ -159,15 +190,16 @@ def render_context(
     `locale` and `tone` (the per-turn style lines from `auoreo.voice.tone.tone_of`) live
     here, never in a stable-tier section, so changing them cannot break the session's
     byte-stable system prompt. Unset locale → `spec.extras["locale"]` → `Settings.locale`."""
+    reminder = str(spec.extras.get("reminders", {}).get(permission_mode, ""))
     if not spec.context_template:
-        return ""
+        return reminder
     if locale is None:
         locale = spec.extras.get("locale")
     if locale is None:
         from auoreo.core.settings import get_settings
 
         locale = get_settings().locale
-    return render(
+    text = render(
         spec.context_template,
         {
             "cwd": str(cwd),
@@ -181,6 +213,7 @@ def render_context(
             "tone": tone,
         },
     ).strip()
+    return f"{text}\n\n{reminder}" if reminder else text
 
 
 def floors(harness: Harness) -> list[str]:

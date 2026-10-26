@@ -2198,8 +2198,12 @@ export interface components {
         };
         /** CompactRequest */
         CompactRequest: {
+            /** From */
+            from?: number | null;
             /** Retain Ratio */
             retain_ratio?: number | null;
+            /** Up To */
+            up_to?: number | null;
         };
         /** CompactionOut */
         CompactionOut: {
@@ -2213,6 +2217,11 @@ export interface components {
             pre_tokens: number;
             /** Pruned */
             pruned: number;
+            /**
+             * Source
+             * @default summary
+             */
+            source: string;
             /** Summary Chars */
             summary_chars: number;
         };

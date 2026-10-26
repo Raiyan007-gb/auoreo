@@ -17,6 +17,7 @@ from auoreo.core.permissions import PermissionEngine
 from auoreo.harness.manifests import WorkflowManifest
 from auoreo.harness.orchestrator import render
 from auoreo.runtime import commands
+from auoreo.runtime.compaction_idle import IdleCompactor
 from auoreo.runtime.hooks import hooks_of
 from auoreo.runtime.inbox import InboxFull, InputKind, RunOptions, TurnRequest
 from auoreo.runtime.runner import AgentRunner, SessionRuntime, TurnResult
@@ -37,6 +38,7 @@ class SessionRunCoordinator:
         self._results: dict[str, TurnResult] = {}
         self._idle: dict[str, asyncio.Event] = {}
         self._background: set[asyncio.Task[Any]] = set()
+        self.idle = IdleCompactor(services, self.runner.compaction)  # --- G2b: S4(c)
 
     async def runtime(self, session_id: str) -> SessionRuntime:
         rt = self._runtimes.get(session_id)
@@ -81,6 +83,7 @@ class SessionRunCoordinator:
         engine-handled slash commands such as `/model`). `interactive` is only changed
         when given explicitly: injected mail or steering never flips a session's mode."""
         rt = await self.runtime(session_id)
+        await self.idle.preempt(session_id)  # foreground input beats a background compaction
         if interactive is not None:
             rt.interactive = interactive
         if kind == "followup" or (kind == "steer" and not rt.running):
@@ -124,6 +127,7 @@ class SessionRunCoordinator:
         finally:
             rt.running = False
             self._idle.setdefault(rt.session_id, asyncio.Event()).set()
+            self.idle.schedule(rt)
 
     async def _session_start(self, rt: SessionRuntime, agent: str) -> None:
         """SessionStart hooks, once per runtime (its first turn); best effort."""
@@ -246,6 +250,7 @@ class SessionRunCoordinator:
         """Drop cached runtime state for a deleted session."""
         self._runtimes.pop(session_id, None)
         self._idle.pop(session_id, None)
+        self.idle.cancel_timer(session_id)
 
     def _spawn(self, coro: Coroutine[Any, Any, Any]) -> None:
         task = asyncio.create_task(coro)
@@ -260,6 +265,7 @@ class SessionRunCoordinator:
     async def shutdown(self) -> None:
         for sid in list(self._runtimes):
             await self.cancel(sid, keep_inbox=False)
+        await self.idle.shutdown()
         for task in list(self._background):
             task.cancel()
         await self.background_idle(timeout=2)

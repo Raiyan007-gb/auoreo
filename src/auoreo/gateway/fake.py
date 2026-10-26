@@ -44,6 +44,8 @@ from auoreo.gateway.types import (
     text_of,
 )
 
+AUTO_PURPOSES = ("vision", "hyde", "translate", "memory_query")
+
 
 @dataclass
 class Scripted:
@@ -83,7 +85,7 @@ class FakeGateway:
         elif request.metadata.get("purpose") == "guardian":  # nor does the smart-mode guardian
             default = os.environ.get("AUOREO_FAKE_GUARDIAN", "ESCALATE")
             item = Scripted(text=self.guardian_script.popleft() if self.guardian_script else default)
-        elif request.metadata.get("purpose") in ("vision", "hyde", "translate"):  # nor do these aux calls
+        elif request.metadata.get("purpose") in AUTO_PURPOSES:  # nor do these aux calls
             item = self._auto(request)
         else:
             item = self.script.popleft() if self.script else self._auto(request)
@@ -103,6 +105,9 @@ class FakeGateway:
     def _auto(self, request: LLMRequest) -> Scripted:
         if request.metadata.get("purpose") == "hyde":
             return Scripted(text=_hyde(_last_user_text(request.messages)))
+        if request.metadata.get("purpose") == "memory_query":  # deterministic standalone rewrite
+            latest = _last_user_text(request.messages).split("<latest>")[-1].removesuffix("</latest>")
+            return Scripted(text=f"standalone: {latest}")
         if request.metadata.get("purpose") == "translate":
             target = request.metadata.get("target", "")
             return Scripted(text=f"[{target}] {_last_user_text(request.messages)}")
@@ -148,7 +153,8 @@ class FakeGateway:
 
 def _summary(request: LLMRequest) -> Scripted:
     """Deterministic compaction summary: the template headings plus a short digest."""
-    transcript = str(request.messages[1].get("content") or "") if len(request.messages) > 1 else ""
+    texts = (str(m.get("content") or "") for m in request.messages)
+    transcript = next((t for t in texts if t.startswith("<transcript>")), "")
     lines = [ln for ln in transcript.splitlines() if ln.strip()]
     heads = ("Objective", "Key concepts", "Files and code", "Errors and fixes", "Pending/blocked")
     body = [f"## {h}\n- (fake summary)" for h in heads]

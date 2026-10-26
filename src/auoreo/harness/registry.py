@@ -123,6 +123,11 @@ def _load_snapshot(roots: list[Root], strict_overlays: bool) -> Snapshot:
                 continue
             target[name] = item
 
+    complete = sorted((p for p in snap.prompts.values() if p.section.complete), key=lambda p: p.section.name)
+    for extra in complete[1:]:  # spec §12: exactly one `complete: true` section may exist
+        msg = f"only one prompt section may set 'complete: true' (already: '{complete[0].section.name}')"
+        record(LoadError(extra.path, msg), extra.source)
+
     # Permission layers: every file loads; lowest precedence first (last match wins).
     for cand in reversed(list(iter_candidates(roots, "permissions"))):
         try:
