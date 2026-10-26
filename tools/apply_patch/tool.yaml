@@ -7,14 +7,17 @@ description: |-
   +line of the new file
   *** Update File: path/old.py
   *** Move to: path/renamed.py      (optional)
-  @@ optional context header
+  @@ class Foo                       (optional; stack @@ lines to narrow: @@ class Foo / @@ def bar():)
    unchanged context line
   -removed line
   +added line
+  *** End of File                   (optional: the hunk is at the end of the file)
   *** Delete File: path/gone.py
   *** End Patch
-  Each hunk's context and removed lines must match the file exactly and uniquely.
-  The patch is validated completely before any file is changed.
+  Hunks of a file apply in order. Context and removed lines must match the file (exact,
+  else ignoring whitespace); without an @@ header a hunk must match uniquely. The patch is
+  validated completely before any file is changed; language-server diagnostics for the
+  changed files are returned when a server is running.
 parameters:
   type: object
   properties:

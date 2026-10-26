@@ -1,0 +1,25 @@
+name: terminal_pty_read
+toolset: shell
+description: >-
+  Read new output from a terminal_pty session (waiting up to yield_time_ms for some), or
+  with tail_chars the last N characters of the terminal regardless of what was read before.
+parameters:
+  type: object
+  properties:
+    session_id: {type: string}
+    yield_time_ms: {type: integer, minimum: 0, maximum: 30000, default: 500}
+    tail_chars: {type: integer, minimum: 1, maximum: 64000, description: Return the last N characters (already-read output included).}
+    max_output_tokens: {type: integer, minimum: 50, maximum: 16000, default: 4000}
+    raw: {type: boolean, default: false, description: Keep ANSI escape sequences.}
+  required: [session_id]
+  additionalProperties: false
+permission: terminal_pty
+pattern_arg: session_id
+default_action: allow
+exposure: deferred
+interrupt: cancel
+timeout_ms: 45000
+search_hint: terminal pty read output poll screen tail
+max_result_size_chars: 64000
+net: none
+sandbox_mode: read-only

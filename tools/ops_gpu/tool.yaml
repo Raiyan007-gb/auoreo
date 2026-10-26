@@ -1,0 +1,19 @@
+name: ops_gpu
+toolset: ops
+description: >-
+  NVIDIA GPU readings via NVML (pynvml): per device name, utilisation, memory, temperature
+  and power, plus the driver version, as compact markdown. Says plainly when there is no
+  NVIDIA GPU/driver or pynvml is not installed (extra `ops`).
+parameters:
+  type: object
+  properties:
+    processes: {type: boolean, default: false, description: Also list compute processes per GPU.}
+  additionalProperties: false
+permission: ops
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+exposure: deferred
+timeout_ms: 15000
+search_hint: gpu nvidia cuda vram utilisation temperature nvml monitor ops
+sandbox_mode: read-only

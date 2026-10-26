@@ -7,7 +7,7 @@ from auoreo.gateway.types import ImagePart
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 from auoreo.tools.images import to_part
 
-MAX_BYTES = 100 * 1024 * 1024
+MAX_BYTES = 20 * 1024 * 1024  # default media cap
 MIN_TEXT_CHARS = 20  # fewer than this on a page → treat it as a scan and render it
 RENDER_DPI = 100
 
@@ -105,12 +105,18 @@ async def _render(path: Path, page: int, env: dict[str, str]) -> bytes | None:
         return jpg
 
 
+def media_cap(ctx: ToolContext) -> int:
+    """Spec §2.8 document/media cap (20 MiB; `settings.tools.media_max_bytes`)."""
+    svc = ctx.services.get("services")
+    return int(getattr(getattr(getattr(svc, "settings", None), "tools", None), "media_max_bytes", MAX_BYTES))
+
+
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
     path = ctx.resolve_path(args["path"])
     if not path.is_file():
         raise ToolError(f"file not found: {args['path']}")
-    if path.stat().st_size > MAX_BYTES:
-        raise ToolError(f"{path} is larger than {MAX_BYTES // (1024 * 1024)} MB")
+    if path.stat().st_size > (cap_bytes := media_cap(ctx)):
+        raise ToolError(f"{path} is larger than the {cap_bytes / (1024 * 1024):g} MiB document cap")
     with path.open("rb") as fh:
         if not fh.read(1024).lstrip().startswith(b"%PDF-"):
             raise ToolError(f"{path} is not a PDF (no %PDF- header)")

@@ -1,0 +1,23 @@
+name: jobs_output
+toolset: shell
+description: >-
+  New output of a background job (from jobs_list) since it was last read, waiting up to
+  yield_time_ms for more; reports the exit code once it has finished.
+parameters:
+  type: object
+  properties:
+    job_id: {type: string, description: Job id from jobs_list (an exec_command or terminal_pty session_id).}
+    yield_time_ms: {type: integer, minimum: 0, maximum: 30000, default: 0}
+    max_output_tokens: {type: integer, minimum: 50, maximum: 16000, default: 4000}
+  required: [job_id]
+  additionalProperties: false
+permission: jobs
+pattern_arg: job_id
+default_action: allow
+exposure: deferred
+interrupt: cancel
+timeout_ms: 45000
+search_hint: background job output poll logs running process
+max_result_size_chars: 64000
+net: none
+sandbox_mode: read-only

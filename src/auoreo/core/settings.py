@@ -35,6 +35,7 @@ from auoreo.core.settings_models import (
 )
 from auoreo.core.settings_obs import LoggingSettings  # --- G5c
 from auoreo.core.settings_security import ApprovalSettings, SecuritySettings
+from auoreo.core.settings_tools import ToolSettings  # --- G4b
 from auoreo.policy.config import BanditSettings
 from auoreo.remote.config import BridgePeer, RemoteEnvironment  # --- W2-B
 
@@ -396,6 +397,7 @@ class Settings(BaseSettings):
     http: HttpSecuritySettings = Field(default_factory=HttpSecuritySettings)  # --- G1a
     webhooks: WebhookSettings = Field(default_factory=WebhookSettings)  # --- G1a
     logging: LoggingSettings = Field(default_factory=LoggingSettings)  # --- G5c
+    tools: ToolSettings = Field(default_factory=ToolSettings)  # --- G4b
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

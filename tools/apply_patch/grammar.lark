@@ -5,9 +5,10 @@ add_line: "+" LINE? NL
 delete: "*** Delete File: " PATH NL
 update: "*** Update File: " PATH NL move? hunk+
 move: "*** Move to: " PATH NL
-hunk: header? hunk_line+
+hunk: header* hunk_line+ eof?
 header: "@@" LINE? NL
-hunk_line: CONTEXT NL | REMOVE NL | ADDED NL
+eof: "*** End of File" NL
+hunk_line: CONTEXT NL | REMOVE NL | ADDED NL | NL
 CONTEXT: / [^\n]*/
 REMOVE: /-[^\n]*/
 ADDED: /\+[^\n]*/

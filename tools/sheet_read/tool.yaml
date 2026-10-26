@@ -3,12 +3,18 @@ toolset: files
 description: >-
   Read a spreadsheet (.xlsx/.xlsm via openpyxl, .csv/.tsv) and return it as a markdown
   table. Lists the workbook's sheets; `sheet` picks one (default: the first/active).
+  Files over 20 MiB are refused.
 parameters:
   type: object
   properties:
     path: {type: string, description: Spreadsheet path, absolute or relative to the working directory.}
     sheet: {type: string, description: Worksheet name (xlsx only).}
     max_rows: {type: integer, minimum: 1, maximum: 5000, default: 200}
+    engine:
+      type: string
+      enum: [auto, builtin, pandas]
+      default: auto
+      description: "pandas (opt-in, extra `tabular`): typed columns + dtypes; auto = settings.tools.tabular_pandas."
   required: [path]
   additionalProperties: false
 permission: read

@@ -1,0 +1,22 @@
+name: terminal_pty_signal
+toolset: shell
+description: >-
+  Send a POSIX signal (INT, TERM, KILL, HUP, QUIT, TSTP, CONT, USR1, USR2, WINCH) to a
+  terminal_pty session's process group and return any output that follows.
+parameters:
+  type: object
+  properties:
+    session_id: {type: string}
+    signal: {type: string, enum: [INT, TERM, KILL, HUP, QUIT, TSTP, CONT, USR1, USR2, WINCH], default: INT}
+    yield_time_ms: {type: integer, minimum: 0, maximum: 10000, default: 500}
+  required: [session_id]
+  additionalProperties: false
+permission: terminal_pty
+pattern_arg: session_id
+default_action: allow
+is_destructive: true
+exposure: deferred
+timeout_ms: 20000
+search_hint: terminal pty signal interrupt sigint sigterm kill stop process
+net: none
+sandbox_mode: danger-full-access

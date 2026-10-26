@@ -1,9 +1,12 @@
 """web_search: a chain of backends, first configured one that answers wins.
 
 1. Exa      — when `EXA_API_KEY` is in the secret store (env → keyring → secrets.db).
-2. SearXNG  — when `settings.searxng_url` is set (`GET <url>/search?format=json`).
-Neither configured → a clear error telling the model to use web_fetch on a known URL.
-Keys are read through `services.secrets`, never from the tool's child env.
+2. Parallel — when `PARALLEL_API_KEY` is in the secret store (`POST /v1/search`, mode fast;
+   its `errors[]` are surfaced, never dropped).
+3. SearXNG  — when `settings.searxng_url` is set (`GET <url>/search?format=json`).
+None configured → a clear error telling the model to use web_fetch on a known URL.
+Keys are read through `services.secrets`, never from the tool's child env. Each hop gets
+`timeout_s` (default `settings.tools.web_search_timeout_s`, at most 60 s).
 """
 
 import httpx
@@ -11,6 +14,8 @@ import httpx
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 
 EXA_URL = "https://api.exa.ai/search"
+PARALLEL_URL = "https://api.parallel.ai/v1/search"
+MAX_TIMEOUT_S = 60.0
 NO_BACKEND = "no search backend configured; use web_fetch on a known URL"
 SNIPPET_CHARS = 300
 UA = {"User-Agent": "auoreo/0.1"}
@@ -39,6 +44,26 @@ async def _exa(client: httpx.AsyncClient, key: str, query: str, n: int) -> list[
     return out
 
 
+async def _parallel(client: httpx.AsyncClient, key: str, query: str, n: int) -> list[dict]:
+    res = await client.post(
+        PARALLEL_URL,
+        headers={**UA, "x-api-key": key},
+        json={
+            "objective": query,
+            "search_queries": [query[:200]],
+            "mode": "fast",
+            "max_results": n,
+            "advanced_settings": {"excerpt_settings": {"max_chars_per_result": 1500}},
+        },
+    )
+    res.raise_for_status()
+    body = res.json()
+    rows = body.get("results") or []
+    if not rows and body.get("errors"):
+        raise ValueError(f"parallel errors: {body['errors']}"[:300])
+    return [_row(r.get("title"), r.get("url"), " ".join(r.get("excerpts") or [])) for r in rows]
+
+
 async def _searxng(client: httpx.AsyncClient, base: str, query: str, n: int) -> list[dict]:
     res = await client.get(f"{base.rstrip('/')}/search", params={"q": query, "format": "json"}, headers=UA)
     res.raise_for_status()
@@ -54,15 +79,22 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
     chain = []
     if secrets is not None and (key := secrets.get("EXA_API_KEY")):
         chain.append(("exa", lambda c: _exa(c, key, query, n)))
+    if secrets is not None and (pkey := secrets.get("PARALLEL_API_KEY")):
+        chain.append(("parallel", lambda c: _parallel(c, pkey, query, n)))
     if settings is not None and (base := getattr(settings, "searxng_url", None)):
         chain.append(("searxng", lambda c: _searxng(c, base, query, n)))
     if not chain:
         raise ToolError(NO_BACKEND)
     errors: list[str] = []
-    async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+    default = float(getattr(getattr(settings, "tools", None), "web_search_timeout_s", 20.0))
+    timeout = min(float(args.get("timeout_s") or default), MAX_TIMEOUT_S)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
         for name, call in chain:
             try:
                 results = (await call(client))[:n]
+            except httpx.TimeoutException:
+                errors.append(f"{name}: timed out after {timeout:g}s")
+                continue
             except (httpx.HTTPError, ValueError) as exc:
                 errors.append(f"{name}: {type(exc).__name__}: {exc}"[:300])
                 continue

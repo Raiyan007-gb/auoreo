@@ -1,0 +1,29 @@
+name: monitor
+toolset: ops
+description: >-
+  Watch something until a condition holds: stream a command's output (`cmd`), re-run a
+  command every `every_s` seconds (`cmd` + `every_s`, e.g. a health check), or follow a
+  growing file (`path`, like tail -f). Ends when a line matches the `until` regex, the
+  streamed command exits, or `timeout_s` passes; emits progress while it watches and returns
+  the matching line plus recent output.
+parameters:
+  type: object
+  properties:
+    cmd: {type: string, minLength: 1, description: Command (bash -lc) to stream or poll. Give cmd or path.}
+    path: {type: string, description: File to follow (new lines only unless from_start).}
+    until: {type: string, minLength: 1, maxLength: 500, description: Python regex searched in each new line (poll mode - each run's whole output).}
+    every_s: {type: number, minimum: 1, maximum: 300, description: "With cmd: re-run it at this interval instead of streaming."}
+    timeout_s: {type: integer, minimum: 1, maximum: 3590, default: 60, description: Give up after this long (capped by settings.tools.monitor_max_s).}
+    from_start: {type: boolean, default: false, description: "With path: also check the file's existing lines."}
+    ignore_case: {type: boolean, default: false}
+    max_output_tokens: {type: integer, minimum: 50, maximum: 16000, default: 2000}
+  additionalProperties: false
+permission: monitor
+default_action: allow
+exposure: deferred
+interrupt: cancel
+timeout_ms: 3600000
+search_hint: monitor watch wait until log tail follow condition poll health check
+max_result_size_chars: 64000
+net: none
+sandbox_mode: workspace-write

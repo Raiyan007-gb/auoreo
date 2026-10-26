@@ -1,6 +1,6 @@
 name: delegate_task
 toolset: teams
-description: 'Run a self-contained task in a subagent; returns a <task-notification>.'
+description: 'Run a self-contained task in a subagent (goal), or several at once (tasks[], at most 3 run concurrently); returns <task-notification>s.'
 parameters:
   type: object
   properties:
@@ -17,7 +17,24 @@ parameters:
     model: {type: string, description: Optional model alias/group override for the child.}
     output_schema: {type: object, description: JSON Schema the child's final answer must satisfy.}
     role: {type: string, enum: [worker, supervisor], description: supervisor needs teams_orchestrator_enabled.}
-  required: [goal]
+    tasks:
+      type: array
+      minItems: 1
+      maxItems: 10
+      description: >-
+        Batch mode instead of goal: independent tasks run in parallel (3 at a time); a
+        foreground batch returns all task-notifications joined in task order.
+      items:
+        type: object
+        properties:
+          goal: {type: string, minLength: 1, maxLength: 20000}
+          context: {type: string, maxLength: 50000}
+          agent: {type: string}
+          name: {type: string, pattern: "^[a-z0-9_]{1,64}$"}
+          model: {type: string}
+          output_schema: {type: object}
+        required: [goal]
+        additionalProperties: false
   additionalProperties: false
 permission: delegate
 pattern_arg: agent
