@@ -20,10 +20,11 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from auoreo.automation import lock
+from auoreo.automation import cron_extras, lock
 from auoreo.automation.deliveries import DeliveryWorker, outbox_of
 from auoreo.automation.schedules import Schedule, ScheduleError, missed_fire, parse_schedule
 from auoreo.automation.templating import render
+from auoreo.automation.webhook_extras import ScriptError
 from auoreo.core.db import JobRunRow, utcnow
 from auoreo.harness.manifests import JobManifest
 
@@ -32,6 +33,16 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 WATCH_INTERVAL_S = 30.0
+
+
+class _Failed:
+    """A run that failed before its delivery row existed (e.g. the pre-run script)."""
+
+    def __init__(self, error: str) -> None:
+        self.id: int | None = None
+        self.session_id: str | None = None
+        self.status, self.error = "failed", error
+        self.result: dict[str, Any] = {}
 
 
 class JobScheduler:
@@ -252,6 +263,7 @@ class JobScheduler:
         session_id: str | None = None
         error: str | None = None
         delivery_id: int | None = None
+        row: Any = None
         if m is None:
             error = "job definition disappeared"
         else:
@@ -271,6 +283,12 @@ class JobScheduler:
                 error and error[:2000],
             )
             await s.commit()
+        if m is not None:  # --- I3: history cap + notify_on_complete
+            await cron_extras.prune_runs(self.s, name)
+            with contextlib.suppress(Exception):
+                await cron_extras.notify(
+                    self.s, m, run, getattr(row, "result", {}).get("text", "") if row else ""
+                )
         data = {"job": name, "run_id": run_id, "session_id": session_id, "delivery_id": delivery_id}
         await self.s.emit(
             "server",
@@ -282,7 +300,12 @@ class JobScheduler:
     async def _run_delivery(self, m: JobManifest, run_id: int) -> Any:
         sched = self.schedule_of(m.name)
         tz = sched.tz if sched else UTC
-        prompt = render(m.prompt, {"now": datetime.now(tz).isoformat(timespec="minutes"), "job": m.name})
+        when = datetime.now(tz).isoformat(timespec="minutes")
+        prompt = render(m.prompt, {"now": when, "job": m.name})
+        try:  # --- I3: pre-run script, context_from, workdir (spec §16.7)
+            prompt = await cron_extras.build_prompt(self.s, m, prompt)
+        except ScriptError as exc:
+            return _Failed(str(exc))
         timeout_s = m.timeout_s or self.s.settings.teams2.job_timeout_s  # §16.7 hard interrupt
         payload = {
             "prompt": prompt,
@@ -292,6 +315,10 @@ class JobScheduler:
             "timeout_s": timeout_s,
             "job": m.name,
             "run_id": run_id,
+            "when": when,
+            "model": cron_extras.run_model(m),
+            "origin": m.origin,
+            **{k: v for k, v in (("header", m.header), ("footer", m.footer)) if v is not None},
         }
         outbox = outbox_of(self.s)
         row = await outbox.enqueue(

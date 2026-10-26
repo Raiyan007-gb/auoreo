@@ -2621,6 +2621,11 @@ export interface components {
              * @default true
              */
             catch_up: boolean;
+            /**
+             * Context From
+             * @description previous | <job name>
+             */
+            context_from?: string[];
             /** Deliver */
             deliver?: string[];
             /** Description */
@@ -2636,19 +2641,40 @@ export interface components {
              * @default true
              */
             enabled: boolean;
+            /**
+             * Footer
+             * @description Delivery footer ("" disables)
+             */
+            footer?: string | null;
+            /**
+             * Header
+             * @description Delivery header ("" disables)
+             */
+            header?: string | null;
+            /** Model */
+            model?: string | null;
             /** Name */
             name: string;
             /** Prompt */
             prompt: string;
+            /** Provider */
+            provider?: string | null;
             /**
              * Schedule
-             * @description 5-field cron | every <n>m|h|d | in <n>m|h|d | ISO datetime
+             * @description cron | every <n>m|h|d | <n>m|h|d | every monday 9am [tz] | in <n>m|h|d | ISO datetime
              */
             schedule: string;
+            /**
+             * Script
+             * @description Pre-run script under <home>/scripts/
+             */
+            script?: string | null;
             /** Timeout S */
             timeout_s?: number | null;
             /** Tz */
             tz?: string | null;
+            /** Workdir */
+            workdir?: string | null;
         };
         /** CronJobInfo */
         CronJobInfo: {
@@ -4484,8 +4510,17 @@ export interface components {
             running: boolean;
             /** Status */
             status: string;
-            /** Subagent Id */
+            /**
+             * Subagent Id
+             * @description sa-{n}-{hex8} (I3); the child session id for older rows
+             */
             subagent_id: string;
+            /**
+             * Task Id
+             * @description The child session id
+             * @default
+             */
+            task_id: string;
             /** Usage */
             usage?: {
                 [key: string]: unknown;

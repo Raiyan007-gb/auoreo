@@ -20,6 +20,25 @@ from croniter import croniter
 from tzlocal import get_localzone
 
 EVERY_RE = re.compile(r"^every\s+(\d+)\s*(m|min|h|d)$", re.IGNORECASE)
+BARE_RE = re.compile(r"^(\d+)\s*(m|min|h|d)$", re.IGNORECASE)  # I3: `30m` = every 30m
+_DAYS = {"sun": "0", "mon": "1", "tue": "2", "wed": "3", "thu": "4", "fri": "5", "sat": "6"}
+DAY_FIELD = {
+    **_DAYS,
+    **{
+        full: _DAYS[full[:3]]
+        for full in ("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+    },
+    "tues": "2",
+    "thurs": "4",
+    "day": "*",
+    "weekday": "1-5",
+    "weekend": "0,6",
+}
+WEEKLY_RE = re.compile(
+    r"^every\s+(?P<day>" + "|".join(sorted(DAY_FIELD, key=len, reverse=True)) + r")"
+    r"\s+(?:at\s+)?(?P<h>\d{1,2})(?::(?P<m>\d{2}))?\s*(?P<ampm>am|pm)?(?:\s+(?P<tz>[A-Za-z_]+(?:/[A-Za-z_+-]+)*))?$",
+    re.IGNORECASE,
+)
 UNIT_S = {"m": 60, "min": 60, "h": 3600, "d": 86_400}
 DOW = ("sun", "mon", "tue", "wed", "thu", "fri", "sat", "sun")
 MIN_GRACE_S, MAX_GRACE_S = 120.0, 7200.0
@@ -90,9 +109,40 @@ def _apscheduler_dow(expr: str) -> str:
     return ",".join(dict.fromkeys(DOW[int(d)] for d in days))
 
 
+def weekly(text: str) -> tuple[str, str | None] | None:
+    """`every monday 9am [<tz>]` / `every weekday at 17:30 UTC` → (`MM HH * * DOW`, tz or None)."""
+    m = WEEKLY_RE.match(text.strip())
+    if m is None:
+        return None
+    day, hour, minute, ampm, tz = (
+        m.group("day").lower(),
+        int(m.group("h")),
+        int(m.group("m") or 0),
+        m.group("ampm"),
+        m.group("tz"),
+    )
+    if ampm:
+        if not 1 <= hour <= 12:
+            raise ScheduleError(f"'{text}': hour {hour} is not valid with {ampm}")
+        hour = hour % 12 + (12 if ampm.lower() == "pm" else 0)
+    if hour > 23 or minute > 59:
+        raise ScheduleError(f"'{text}': invalid time of day")
+    return f"{minute} {hour} * * {DAY_FIELD[day]}", tz
+
+
+def canonical(text: str) -> tuple[str, str | None]:
+    """Normalize at write time (spec §25.11): a bare duration `30m` → `every 30m`;
+    `every monday 9am <tz>` → (`0 9 * * 1`, tz). Anything else is returned unchanged."""
+    raw = text.strip()
+    if BARE_RE.match(raw):
+        return f"every {raw}", None
+    return weekly(raw) or (raw, None)
+
+
 def parse_schedule(schedule: str, tz: str | None = None, job: str = "?") -> Schedule:
     """Raises `ScheduleError` naming the job for anything it cannot schedule."""
-    text = schedule.strip()
+    text, tz_in_text = canonical(schedule)
+    tz = tz_in_text or tz
     zinfo = zone(tz, job)
     if m := EVERY_RE.match(text):
         seconds = int(m.group(1)) * UNIT_S[m.group(2).lower()]

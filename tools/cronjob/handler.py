@@ -8,7 +8,22 @@ from auoreo.automation.scheduler import scheduler_of
 from auoreo.automation.views import job_infos
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 
-FIELDS = ("name", "schedule", "prompt", "description", "tz", "agent", "deliver", "timeout_s")
+FIELDS = (
+    "name",
+    "schedule",
+    "prompt",
+    "description",
+    "tz",
+    "agent",
+    "deliver",
+    "timeout_s",
+    "model",
+    "provider",
+    "script",
+    "context_from",
+    "workdir",
+    "notify_on_complete",
+)
 
 
 def _services(ctx: ToolContext) -> Any:
@@ -18,7 +33,7 @@ def _services(ctx: ToolContext) -> Any:
     return svc
 
 
-async def _list(svc: Any, args: dict) -> ToolResult:
+async def _list(svc: Any, args: dict, ctx_session: str = "") -> ToolResult:
     infos = await job_infos(scheduler_of(svc))
     lines = [
         f"- {j.name}: {j.schedule}{' (' + j.tz + ')' if j.tz else ''} agent={j.agent} "
@@ -28,12 +43,13 @@ async def _list(svc: Any, args: dict) -> ToolResult:
     return ToolResult("\n".join([f"{len(infos)} job(s)", *lines]), meta={"jobs": [j.name for j in infos]})
 
 
-async def _create(svc: Any, args: dict) -> ToolResult:
+async def _create(svc: Any, args: dict, ctx_session: str) -> ToolResult:
     missing = [k for k in ("name", "schedule", "prompt") if not args.get(k)]
     if missing:
         raise ToolError(f"action=create needs {', '.join(missing)}")
     data = {k: args[k] for k in FIELDS if args.get(k) is not None}
     data.setdefault("description", str(args["prompt"]).strip().splitlines()[0][:120] or args["name"])
+    data["origin_session"] = ctx_session  # --- I3: notify_on_complete / deliver: [origin]
     dry = bool(args.get("dry_run"))
     try:
         p = await create(svc, data, dry_run=dry)
@@ -47,7 +63,7 @@ async def _create(svc: Any, args: dict) -> ToolResult:
     return ToolResult(text, meta={**info, "dry_run": dry})
 
 
-async def _remove(svc: Any, args: dict) -> ToolResult:
+async def _remove(svc: Any, args: dict, ctx_session: str = "") -> ToolResult:
     if not args.get("name"):
         raise ToolError("action=remove needs name")
     try:
@@ -61,4 +77,7 @@ ACTIONS = {"list": _list, "create": _create, "remove": _remove}
 
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
-    return await ACTIONS[str(args.get("action") or "list")](_services(ctx), args)
+    action = str(args.get("action") or ("create" if args.get("dry_run") else "list"))
+    if args.get("dry_run") and action != "create":  # dry_run skips approval: never let it remove
+        raise ToolError("dry_run applies to action=create only")
+    return await ACTIONS[action](_services(ctx), args, ctx.session_id)

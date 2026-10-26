@@ -10,7 +10,9 @@ from pydantic import BaseModel, Field
 class CronCreate(BaseModel):
     name: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
     schedule: str = Field(
-        min_length=1, max_length=200, description="5-field cron | every <n>m|h|d | in <n>m|h|d | ISO datetime"
+        min_length=1,
+        max_length=200,
+        description="cron | every <n>m|h|d | <n>m|h|d | every monday 9am [tz] | in <n>m|h|d | ISO datetime",
     )
     prompt: str = Field(min_length=1, max_length=20_000)
     description: str | None = Field(default=None, max_length=500)
@@ -21,6 +23,16 @@ class CronCreate(BaseModel):
     enabled: bool = True
     catch_up: bool = True
     dry_run: bool = Field(default=False, description="Validate and preview; nothing is saved")
+    # --- I3 (spec §16.7)
+    model: str | None = Field(default=None, max_length=255)
+    provider: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_.-]*$")
+    script: str | None = Field(
+        default=None, max_length=255, description="Pre-run script under <home>/scripts/"
+    )
+    context_from: list[str] = Field(default_factory=list, max_length=5, description="previous | <job name>")
+    workdir: str | None = Field(default=None, max_length=1024)
+    header: str | None = Field(default=None, max_length=500, description='Delivery header ("" disables)')
+    footer: str | None = Field(default=None, max_length=500, description='Delivery footer ("" disables)')
 
 
 class CronPlan(BaseModel):

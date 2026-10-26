@@ -10,16 +10,23 @@ parameters:
   properties:
     action: {type: string, enum: [create, list, remove], default: list}
     name: {type: string, pattern: "^[a-z][a-z0-9_]{0,63}$", description: "create/remove: job name."}
-    schedule: {type: string, minLength: 1, maxLength: 200, description: "create: 5-field cron | every <n>m|h|d | in <n>m|h|d | ISO datetime."}
+    schedule: {type: string, minLength: 1, maxLength: 200, description: "create: 5-field cron | every <n>m|h|d | <n>m|h|d | every monday 9am [tz] | in <n>m|h|d | ISO datetime."}
     prompt: {type: string, minLength: 1, maxLength: 20000, description: "create: what the agent should do; {{now}} and {{job}} are available."}
     description: {type: string, maxLength: 500}
     tz: {type: string, maxLength: 64, description: IANA time zone for cron schedules.}
     agent: {type: string, pattern: "^[a-z][a-z0-9_]*$", default: default}
-    deliver: {type: array, items: {type: string, minLength: 1, maxLength: 200}, maxItems: 5, description: "Delivery targets (default [log])."}
+    deliver: {type: array, items: {type: string, minLength: 1, maxLength: 200}, maxItems: 5, description: "Delivery targets (default [log]): a provider[:target], or origin (this chat), home, all (fan-out)."}
+    model: {type: string, maxLength: 255, description: Model alias/id for the runs.}
+    provider: {type: string, pattern: "^[a-z][a-z0-9_.-]*$", description: Provider prefix for model.}
+    script: {type: string, maxLength: 255, description: "Pre-run script under <home>/scripts/; its stdout (sandboxed, redacted, capped) is injected as untrusted data."}
+    context_from: {type: array, items: {type: string, minLength: 1, maxLength: 64}, maxItems: 5, description: "previous (this job's last output) and/or other job names."}
+    workdir: {type: string, maxLength: 1024, description: Working directory for the script.}
+    notify_on_complete: {type: boolean, default: false, description: Tell this session when each run finishes.}
     timeout_s: {type: integer, minimum: 10, maximum: 86400, description: Hard interrupt for each run (default 180s).}
     dry_run: {type: boolean, default: false}
   additionalProperties: false
 pattern_arg: action
+pattern_flags: [dry_run]  # a dry run is its own permission pattern (allowed without approval)
 default_action: ask
 interactive_only: false
 timeout_ms: 60000

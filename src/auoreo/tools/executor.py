@@ -79,6 +79,9 @@ class ToolExecutor:
         return availability.reason(tool) if availability is not None else None
 
     def _pattern(self, tool: ToolDef, args: dict[str, Any], ctx: ToolContext) -> str:
+        flag = next((f for f in tool.manifest.pattern_flags if args.get(f) is True), None)
+        if flag is not None:  # I3: e.g. cronjob dry_run=true → pattern `dry_run`
+            return flag
         arg = tool.manifest.pattern_arg
         if not arg or not isinstance(args.get(arg), str):
             return "*"

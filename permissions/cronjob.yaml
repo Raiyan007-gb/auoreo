@@ -1,4 +1,6 @@
 # `cronjob` (spec §9/§16.7): listing is read-only; create/remove keep the tool's `ask` default,
-# so a human approves every new reminder or job (pattern = the tool's `action` argument).
+# so a human approves every new reminder or job (pattern = the tool's `action` argument);
+# `dry_run: true` turns the pattern into `dry_run`, which needs no approval (nothing is saved).
 rules:
   - {permission: cronjob, pattern: list, action: allow}
+  - {permission: cronjob, pattern: dry_run, action: allow}  # I3: dry runs validate only (pattern_flags)
