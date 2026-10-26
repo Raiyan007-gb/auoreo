@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const { parseListening, findBinary, tokenCookie, randomToken, updateChannel, isAppUrl, TOKEN_COOKIE } = require(
+const { parseListening, findBinary, loginRequest, RELOGIN_MS, randomToken, updateChannel, isAppUrl, TOKEN_COOKIE } = require(
   join(root, "lib.cjs"),
 );
 
@@ -47,22 +47,18 @@ test("findBinary uses auoreo.exe and ';' PATH on Windows", () => {
   assert.equal(findBinary("win32", { pathEnv: "C:\\nope;C:\\tools", exists }), "C:\\tools\\auoreo.exe");
 });
 
-test("tokenCookie: host-only HttpOnly strict cookie on the server origin, matching api/deps.py", () => {
-  const c = tokenCookie("http://127.0.0.1:53211/sessions?x=1", "s3cret");
-  assert.deepEqual(c, {
-    url: "http://127.0.0.1:53211/",
-    name: "auoreo_token",
-    value: "s3cret",
-    path: "/",
-    httpOnly: true,
-    secure: false,
-    sameSite: "strict",
-  });
-  assert.equal(tokenCookie("https://box.local:4096", "t").secure, true);
-  assert.throws(() => tokenCookie("file:///tmp/index.html", "t"), /unsupported/);
-  assert.throws(() => tokenCookie("http://127.0.0.1:1", ""), /empty token/);
-  const deps = readFileSync(join(root, "..", "src", "auoreo", "api", "deps.py"), "utf8");
-  assert.match(deps, new RegExp(`COOKIE = "${TOKEN_COOKIE}"`));
+test("loginRequest: same-origin POST /api/auth/login with the password; cookie name matches the server", () => {
+  const r = loginRequest("http://127.0.0.1:53211/sessions?x=1", "s3cret");
+  assert.equal(r.url, "http://127.0.0.1:53211/api/auth/login");
+  assert.equal(r.init.method, "POST");
+  assert.equal(r.init.headers.origin, "http://127.0.0.1:53211");
+  assert.deepEqual(JSON.parse(r.init.body), { password: "s3cret" });
+  assert.equal(loginRequest("https://box.local:4096", "t").url, "https://box.local:4096/api/auth/login");
+  assert.throws(() => loginRequest("file:///tmp/index.html", "t"), /unsupported/);
+  assert.throws(() => loginRequest("http://127.0.0.1:1", ""), /empty token/);
+  assert.ok(RELOGIN_MS < 15 * 60 * 1000);
+  const auth = readFileSync(join(root, "..", "src", "auoreo", "api", "session_auth.py"), "utf8");
+  assert.match(auth, new RegExp(`COOKIE = "${TOKEN_COOKIE}"`));
 });
 
 test("randomToken is long, URL-safe and unique", () => {

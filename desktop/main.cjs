@@ -6,7 +6,7 @@
 const { app, BrowserWindow, dialog, session, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const path = require("node:path");
-const { findBinary, isAppUrl, parseListening, randomToken, tokenCookie, updateChannel } = require("./lib.cjs");
+const { findBinary, isAppUrl, loginRequest, parseListening, randomToken, RELOGIN_MS, updateChannel } = require("./lib.cjs");
 
 const START_TIMEOUT_MS = 60_000;
 const channel = updateChannel(app.getVersion(), process.env);
@@ -83,10 +83,17 @@ function hardenNavigation(contents) {
   });
 }
 
+async function login(url, token) {
+  const { url: target, init } = loginRequest(url, token);
+  const res = await session.defaultSession.fetch(target, init);
+  if (!res.ok) throw new Error(`login failed: HTTP ${res.status}`);
+}
+
 async function start() {
   const token = randomToken();
   serverUrl = await startServer(token);
-  await session.defaultSession.cookies.set(tokenCookie(serverUrl, token));
+  await login(serverUrl, token);
+  setInterval(() => void login(serverUrl, token).catch(() => {}), RELOGIN_MS).unref();
   // Nothing but our own origin gets camera/mic/notification prompts granted implicitly.
   session.defaultSession.setPermissionRequestHandler((wc, _permission, cb) => cb(isAppUrl(wc.getURL(), serverUrl)));
 

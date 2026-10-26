@@ -39,23 +39,27 @@ function findBinary(platform, paths = {}) {
   return candidates.find((p) => exists(p)) ?? null;
 }
 
-/** `session.cookies.set()` details that authenticate every same-origin request (fetch, SSE,
- * WebSocket) without putting the token in a URL: host-only, HttpOnly, SameSite=strict,
- * session-lifetime, scoped to `/` of the server origin. */
-function tokenCookie(url, token) {
+/** The `session.fetch()` request that logs the window in: `POST /api/auth/login` with the
+ * per-launch password. The server answers with a short-lived HttpOnly, host-only,
+ * SameSite=strict JWT cookie (`auoreo_token`, never the password itself), which the Electron
+ * session stores and sends with every same-origin fetch, SSE and WebSocket request. */
+function loginRequest(url, token) {
   const origin = new URL(url);
   if (!/^https?:$/.test(origin.protocol)) throw new Error(`unsupported server URL: ${url}`);
   if (!token) throw new Error("empty token");
+  const base = `${origin.protocol}//${origin.host}`;
   return {
-    url: `${origin.protocol}//${origin.host}/`,
-    name: TOKEN_COOKIE,
-    value: token,
-    path: "/",
-    httpOnly: true,
-    secure: origin.protocol === "https:",
-    sameSite: "strict",
+    url: `${base}/api/auth/login`,
+    init: {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: base },
+      body: JSON.stringify({ password: token }),
+    },
   };
 }
+
+/** Re-login period: the session cookie lives at most 15 min; refresh well before it expires. */
+const RELOGIN_MS = 10 * 60 * 1000;
 
 /** A fresh per-launch server password (256 bits, URL-safe). */
 function randomToken() {
@@ -82,4 +86,4 @@ function isAppUrl(target, serverUrl) {
   }
 }
 
-module.exports = { parseListening, findBinary, tokenCookie, randomToken, updateChannel, isAppUrl, TOKEN_COOKIE, CHANNELS };
+module.exports = { parseListening, findBinary, loginRequest, RELOGIN_MS, randomToken, updateChannel, isAppUrl, TOKEN_COOKIE, CHANNELS };

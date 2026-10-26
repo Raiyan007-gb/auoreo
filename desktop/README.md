@@ -10,8 +10,9 @@ shows the same `web/dist` SPA that `auoreo serve` hosts on its single port.
    `<resources>/bin/auoreo[.exe]` through electron-builder `extraResources`, then `PATH`.
 3. **Spawns `auoreo serve --port 0`** with a fresh random `AUOREO_SERVER_PASSWORD` (256-bit) for each launch.
 4. **Waits for the discovery line** `server listening on http://…`, parsed by `parseListening`, with a 60 s timeout.
-5. **Authenticates the window with an `auoreo_token` cookie.** The cookie is HttpOnly, host-only and `SameSite=strict`
-   (`tokenCookie`), and the server already accepts it (`api/deps.py`, `api/ws.py`). The token never appears in a URL,
+5. **Logs the window in** with `POST /api/auth/login` (`loginRequest`, via `session.fetch`). The server sets a short-lived
+   HttpOnly, host-only, `SameSite=strict` JWT cookie (`auoreo_token`, never the password); the shell re-logs in every
+   10 min (`RELOGIN_MS`) so an idle window keeps working. The password never appears in a URL,
    in the renderer's JS or in localStorage. Fetch, SSE `/api/events` and WS `/ws` all send the cookie automatically.
 6. **Opens a locked-down `BrowserWindow`** at `<url>/sessions`: `contextIsolation: true`, `sandbox: true` and
    `nodeIntegration: false`. Navigation is restricted to the server origin, other links open in the system browser,
