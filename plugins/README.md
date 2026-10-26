@@ -33,3 +33,55 @@ entry point. Plugins never receive secrets they did not declare in `consumes`.
 | `await host.usage(session_id, model, cost_usd)` | `consumes: [usage]` | Spend in the usage ledger (budgets, `auoreo stats`); ≤ $100 per call |
 | `host.log(level, message)` | none | Plugin log line in the server log |
 
+
+## Trust tiers (I6, spec §25.15)
+
+`bundled (signed) > allow-listed (pinned) > local-path (--trust-local) > URL (deny)`.
+
+| Tier | How it gets here | Gate |
+|---|---|---|
+| bundled | ships in `plugins/` | ed25519 signature in `plugins/SIGNATURES.json` by a pinned key (`auoreo.plugins.signing.PLUGIN_PUBKEYS`); `i6.plugins.bundled_signatures: enforce\|warn\|off` (default `warn`) |
+| allow-listed | `auoreo plugin pip-add auoreo-plugin-<x>[==ver]` | only `oreo-plugin-*` / `auoreo-plugin-*`, pinned by SHA-256 in `i6.plugins.allow_list` or a configured tap (`i6.plugins.taps`, signed rows verified); installed with `uv pip install --require-hashes` into the plugin's own venv; must still be allow-listed at every start |
+| local-path | `auoreo plugin add <folder> --trust-local` | quarantined until `plugin verify` + `plugin enable` |
+| URL | — | always denied |
+
+`lock.json` records `{registry, version, sha256, signed_by, tier, venv_sha256}` (+ `package`
+and `entry` for pip installs). `auoreo doctor` re-hashes every installed plugin folder and venv
+(each `*.dist-info/RECORD` file hash) against the lock; the host quarantines a plugin whose venv
+no longer matches. `auoreo plugin trust` shows tier/registry/signer/integrity, `auoreo plugin
+search` lists the taps, `auoreo plugin entry-points` lists `importlib.metadata` entry points
+(`auoreo.plugin`, `oreo.plugin`) of the server's own environment — listed only, never imported
+or started (install them with `pip-add` so they get their own venv).
+
+Re-sign the bundled plugins after editing one (release owner, private key never committed):
+`python packaging/sign_plugins.py sign --key <pem>`; `python packaging/sign_plugins.py verify`.
+
+A pip plugin's entry point is `package.module:Class` (the runtime imports it from the venv);
+its `plugin.yaml` is taken from the package data (or synthesized) with `entry` set to it.
+
+## Webhook providers (`provides: [webhook_provider]`)
+
+A plugin can add a webhook provider kind for `webhooks/<route>.yaml` (`provider: <kind>`):
+return `webhook_providers: ["<kind>"]` from `initialize` and implement
+
+```python
+def webhook_verify(self, kind, secret, headers, body: bytes, now) -> dict:
+    return {"ok": True, "event": "push", "delivery_id": "abc"}  # or {"ok": False, "reason": "…"}
+
+
+def webhook_parse(self, kind, payload, headers) -> dict:  # optional normalization
+    return payload
+```
+
+Core keeps routing, body caps, rate limits, idempotency, sessions and delivery. Built-in kinds
+(`github`, `gitlab`, `svix`, `generic`, `telegram-callback`) cannot be replaced; a route whose
+provider is not running answers 503.
+
+## Creator mode limits: `vmTimeoutMs`
+
+`i6.creator.vm_timeout_ms` (default **5000**, `vmTimeoutMs` in the spec) bounds the
+**synchronous** body of a creator tool (`def run(args, ctx)`): it runs under a POSIX interval
+timer in the sandbox process and fails with `TimeoutError` when it overruns. An `async def run`
+**escapes this bound** once it awaits — only the tool timeout (`plugins_tool_timeout_s`) and the
+host's call timeout apply to async bodies. On platforms without `setitimer` (Windows) the bound
+is not enforced.

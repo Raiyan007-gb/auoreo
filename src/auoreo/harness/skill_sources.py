@@ -19,7 +19,7 @@ from typing import Any
 
 from auoreo.harness.manifests import SLUG_RE, SkillManifest
 
-SOURCE_RANK: dict[str, int] = {"runtime": 250, "project": 300, "bundled": 600, "plugin": 700, "mcp": 800}
+SOURCE_RANK: dict[str, int] = {"runtime": 250, "project": 300, "plugin": 400, "bundled": 600, "mcp": 800}
 """Spec §15 ranks (lower = higher precedence); `extra:<n>` roots rank with bundled + n."""
 
 MENTION_RE = re.compile(r"(?<![\w@./-])@([a-z0-9][a-z0-9_-]*(?:\.[a-z0-9_-]+)*(?::[A-Za-z0-9_.:-]+)?)")
@@ -167,10 +167,12 @@ class SkillCatalog:
         return [s for src in order for s in self._by_source[src]]
 
     def merged(self, folder: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, str]]]:
-        """`(name → winning skill, collisions)` with folder skills first."""
-        out: dict[str, Any] = dict(folder)
+        """`(name → winning skill, collisions)` by `rank` (spec §24.10 L890: runtime > project >
+        plugin > bundled > extra roots > MCP); folder skills win ties."""
+        ordered = sorted([*folder.values(), *self.all()], key=lambda sk: rank(sk.source))
+        out: dict[str, Any] = {}
         collisions: list[dict[str, str]] = []
-        for skill in self.all():
+        for skill in ordered:
             winner = out.get(skill.name)
             if winner is not None:
                 collisions.append(
@@ -178,7 +180,7 @@ class SkillCatalog:
                         "name": skill.name,
                         "winner": winner.source,
                         "loser": skill.source,
-                        "qualified": skill.qualified,
+                        "qualified": getattr(skill, "qualified", f"{skill.source}:{skill.name}"),
                     }
                 )
                 continue

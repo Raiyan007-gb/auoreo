@@ -20,6 +20,7 @@ class HarnessEntry:
         name (str):
         path (None | str):
         source (str):
+        activity_hint (None | str | Unset):
         available (bool | None | Unset):
         emoji (None | str | Unset):
         unavailable_reason (None | str | Unset):
@@ -30,6 +31,7 @@ class HarnessEntry:
     name: str
     path: None | str
     source: str
+    activity_hint: None | str | Unset = UNSET
     available: bool | None | Unset = UNSET
     emoji: None | str | Unset = UNSET
     unavailable_reason: None | str | Unset = UNSET
@@ -46,6 +48,12 @@ class HarnessEntry:
         path = self.path
 
         source = self.source
+
+        activity_hint: None | str | Unset
+        if isinstance(self.activity_hint, Unset):
+            activity_hint = UNSET
+        else:
+            activity_hint = self.activity_hint
 
         available: bool | None | Unset
         if isinstance(self.available, Unset):
@@ -76,6 +84,8 @@ class HarnessEntry:
                 "source": source,
             }
         )
+        if activity_hint is not UNSET:
+            field_dict["activity_hint"] = activity_hint
         if available is not UNSET:
             field_dict["available"] = available
         if emoji is not UNSET:
@@ -102,6 +112,15 @@ class HarnessEntry:
         path = _parse_path(d.pop("path"))
 
         source = d.pop("source")
+
+        def _parse_activity_hint(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        activity_hint = _parse_activity_hint(d.pop("activity_hint", UNSET))
 
         def _parse_available(data: object) -> bool | None | Unset:
             if data is None:
@@ -136,6 +155,7 @@ class HarnessEntry:
             name=name,
             path=path,
             source=source,
+            activity_hint=activity_hint,
             available=available,
             emoji=emoji,
             unavailable_reason=unavailable_reason,

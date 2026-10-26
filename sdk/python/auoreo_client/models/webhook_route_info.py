@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING, Any, TypeVar, cast
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
-from ..models.webhook_route_info_provider import WebhookRouteInfoProvider
-
 if TYPE_CHECKING:
     from ..models.webhook_route_info_filters_item import WebhookRouteInfoFiltersItem
 
@@ -28,7 +26,7 @@ class WebhookRouteInfo:
         max_body_bytes (int):
         name (str):
         path (str):
-        provider (WebhookRouteInfoProvider):
+        provider (str): github | generic | gitlab | svix | telegram-callback | <plugin kind>
         rate_limit_per_minute (int):
         secret_configured (bool): Whether the referenced secret resolves (value never shown)
         workflow (None | str):
@@ -43,7 +41,7 @@ class WebhookRouteInfo:
     max_body_bytes: int
     name: str
     path: str
-    provider: WebhookRouteInfoProvider
+    provider: str
     rate_limit_per_minute: int
     secret_configured: bool
     workflow: None | str
@@ -71,7 +69,7 @@ class WebhookRouteInfo:
 
         path = self.path
 
-        provider = self.provider.value
+        provider = self.provider
 
         rate_limit_per_minute = self.rate_limit_per_minute
 
@@ -130,7 +128,7 @@ class WebhookRouteInfo:
 
         path = d.pop("path")
 
-        provider = WebhookRouteInfoProvider(d.pop("provider"))
+        provider = d.pop("provider")
 
         rate_limit_per_minute = d.pop("rate_limit_per_minute")
 

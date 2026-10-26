@@ -48,6 +48,8 @@ INSTALL_ENV = (
     "XDG_CACHE_HOME",
 )
 Verify = Literal["ok", "mismatch", "missing"]
+LOCK_PROVENANCE = ("tier", "registry", "signed_by", "package", "entry")
+"""I6: provenance keys carried into lock.json (`{registry, version, sha256, signed_by}`)."""
 
 
 class InstallError(RuntimeError):
@@ -183,6 +185,7 @@ async def install(
     python: str = "3.12",
     seed: bool = False,
     timeout: float = 600.0,
+    provenance: dict[str, Any] | None = None,
 ) -> Installed:
     """Create/refresh the venv when the lock is missing or stale; always refresh the runtime."""
     target = install_dir(home, name)
@@ -198,12 +201,17 @@ async def install(
     await _make_venv(venv, python, seed, target, timeout)
     installed = await _install_deps(src, venv, timeout)
     copy_runtime(venv)
+    from auoreo.plugins.trust import venv_hash  # --- I6: provenance + venv pin
+
+    prov = {k: v for k, v in (provenance or {}).items() if k in LOCK_PROVENANCE}
     lock = {
+        **prov,
         "name": name,
         "version": _pyproject(src).get("project", {}).get("version", ""),
         "sha256": sha,
         "python": python,
         "requirements": installed,
+        "venv_sha256": venv_hash(venv),
         "installed_at": datetime.now(UTC).isoformat(),
     }
     tmp = target / "lock.json.tmp"

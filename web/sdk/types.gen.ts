@@ -3162,6 +3162,8 @@ export interface components {
         };
         /** HarnessEntry */
         HarnessEntry: {
+            /** Activity Hint */
+            activity_hint?: string | null;
             /** Available */
             available?: boolean | null;
             /** Description */
@@ -3894,10 +3896,20 @@ export interface components {
             /** Provides */
             provides: string[];
             /**
+             * Signed By
+             * @description ed25519 key id that signed it (I6)
+             */
+            signed_by?: string | null;
+            /**
              * Status
              * @enum {string}
              */
-            status: "running" | "stopped" | "crashed" | "disabled" | "invalid_config";
+            status: "running" | "stopped" | "crashed" | "disabled" | "invalid_config" | "unverified" | "quarantined";
+            /**
+             * Tier
+             * @description bundled | allow-listed | local-path (I6)
+             */
+            tier?: string | null;
             /**
              * Tools
              * @description Registered dynamic tools (`plugin__<name>__<tool>`)
@@ -5041,9 +5053,9 @@ export interface components {
             path: string;
             /**
              * Provider
-             * @enum {string}
+             * @description github | generic | gitlab | svix | telegram-callback | <plugin kind>
              */
-            provider: "github" | "generic";
+            provider: string;
             /** Rate Limit Per Minute */
             rate_limit_per_minute: number;
             /**

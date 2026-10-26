@@ -1,0 +1,10 @@
+# MCP bundle (spec §25.15 L1072): the official knowledge-graph memory server (npm
+# @modelcontextprotocol/server-memory). Separate from AUOREO's own memory (~/.auoreo/memory.db);
+# its graph lives in the server's own file. Off by default: `auoreo mcp add --bundle memory`.
+name: memory
+transport: stdio
+command: npx
+args: ["-y", "@modelcontextprotocol/server-memory"]
+timeout_ms: 30000
+enabled: false
+exposure: deferred

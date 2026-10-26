@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import ToolDef
 from auoreo.runtime.multimodal import image_message, tool_messages
+from auoreo.tools.activity import activity_fields
 from auoreo.tools.context import ToolContext, ToolResult
 from auoreo.tools.executor import ToolOutcome
 
@@ -57,6 +58,7 @@ async def tool_round(
                     "call_id": call.id,
                     "tool": call.name,
                     "arguments": call.arguments[:4000],
+                    **activity_fields(tools.get(call.name), call.arguments),  # --- I6: activityHint
                 },
             )
             return await runner.executor.run(call, tools=tools, ctx=ctx, engine=engine)

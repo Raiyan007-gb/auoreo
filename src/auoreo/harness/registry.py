@@ -378,6 +378,7 @@ class Harness:
         def tool_row(t: ToolDef) -> dict[str, Any]:
             why = self.availability.reason(t)
             extra = {"available": why is None, "unavailable_reason": why, "emoji": t.manifest.emoji}
+            extra["activity_hint"] = t.manifest.activity_hint or None  # --- I6
             return {**row("tool", t.name, t.source, t.path, t.manifest.description), **extra}
 
         out: dict[str, list[dict[str, Any]]] = {}

@@ -231,7 +231,6 @@ from .voice_status import VoiceStatus
 from .voice_transcription import VoiceTranscription
 from .webhook_route_info import WebhookRouteInfo
 from .webhook_route_info_filters_item import WebhookRouteInfoFiltersItem
-from .webhook_route_info_provider import WebhookRouteInfoProvider
 from .welcome_event import WelcomeEvent
 from .welcome_event_action import WelcomeEventAction
 from .welcome_event_step import WelcomeEventStep
@@ -456,7 +455,6 @@ __all__ = (
     "VoiceTranscription",
     "WebhookRouteInfo",
     "WebhookRouteInfoFiltersItem",
-    "WebhookRouteInfoProvider",
     "WelcomeEvent",
     "WelcomeEventAction",
     "WelcomeEventStep",

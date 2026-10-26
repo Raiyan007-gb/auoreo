@@ -47,15 +47,30 @@ async def _connect(services: Services) -> McpBridge:
     return bridge
 
 
-def test_rank_orders_folder_roots_before_plugins_before_mcp() -> None:
+def test_rank_order_runtime_project_plugin_bundled_mcp() -> None:
+    """Spec §24.10 L890: runtime > project > plugin > bundled > (extra roots) > MCP."""
     assert (
         rank("runtime")
         < rank("project")
+        < rank("plugin:x")
         < rank("bundled")
         < rank("extra:0")
-        < rank("plugin:x")
         < rank("mcp:y")
     )
+
+
+def test_plugin_skill_beats_bundled_but_not_project() -> None:
+    from types import SimpleNamespace
+
+    cat = SkillCatalog()
+    cat.set("plugin:p", [make_skill("plugin:p", "shared", "from plugin", text="p")])
+    bundled = SimpleNamespace(name="shared", source="bundled")
+    merged, collisions = cat.merged({"shared": bundled})
+    assert merged["shared"].source == "plugin:p"
+    assert collisions[0]["winner"] == "plugin:p" and collisions[0]["loser"] == "bundled"
+    project = SimpleNamespace(name="shared", source="project")
+    merged, _ = cat.merged({"shared": project})
+    assert merged["shared"] is project
 
 
 def test_catalog_precedence_and_collisions() -> None:

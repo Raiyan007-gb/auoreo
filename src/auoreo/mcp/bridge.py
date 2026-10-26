@@ -10,23 +10,36 @@ form mode becomes a question to the user of the session whose tool call is runni
 (secret fields refused); URL mode is a consent card + `mcp.elicitation.open` for the UI —
 the user completes it in a browser, never us; a `-32042` tool error waits for
 `notifications/elicitation/complete` and retries (≤3).
-Sampling (`mcp/sampling.py`) is offered only to servers with `sampling.enabled`. A
-per-tool `tools.<name>.timeoutMs` overrides the server's `timeout_ms`.
+Sampling (`mcp/sampling.py`) is offered only to servers with `sampling.enabled` (tool use
+inside sampling declared via `sampling.tools`). A per-tool `tools.<name>.timeoutMs` overrides
+the server's `timeout_ms`. I6 (`mcp/client_extras.py`): `tools/list_changed` → re-list +
+generation bump + `mcp.tools_changed`; `roots` (cwd + allow-list, `roots/list_changed` when
+the calling cwd changes); legacy `transport: sse`.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import itertools
 import logging
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from mcp.server import MCPServer, Server
+from mcp.types import SamplingCapability, SamplingToolsCapability
 
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.manifests import McpServerManifest, ToolManifest
 from auoreo.harness.registry import ToolCollisionError
+from auoreo.mcp.client_extras import (
+    Debouncer,
+    RootsState,
+    listen_tools_changed,
+    sse_target,
+    with_tools_changed,
+)
 from auoreo.mcp.elicitation import (
     ElicitationFailed,
     call_with_elicitation,
@@ -70,6 +83,11 @@ class _Connection:
         """Session of the latest tool call on this server (elicitation fallback when the
         server's request arrives in a task that does not carry `CURRENT_SESSION`)."""
         self.client: Client | None = None
+        self.roots: RootsState | None = None
+        self.listen: Any = None
+        """`on_change` callback for a `subscriptions/listen` stream (None = don't listen)."""
+        self.call_id: str | None = None
+        """Tool call currently running on this server (sampling iteration budget key)."""
         self.ready = asyncio.Event()
         self.stop = asyncio.Event()
         self.error: BaseException | None = None
@@ -80,17 +98,27 @@ class _Connection:
             # In-process servers only get a back-channel for server→client requests
             # (elicitation) on the legacy handshake; real transports negotiate (`auto`).
             in_process = isinstance(self.target, (MCPServer, Server))
-            mode = "legacy" if in_process else "auto"
+            legacy = in_process or self.manifest.transport == "sse"
+            tools_cap = SamplingCapability(tools=SamplingToolsCapability()) if self.sample else None
             async with Client(
                 self.target,
-                mode=mode,
+                mode="legacy" if legacy else "auto",
                 elicitation_callback=self.elicit,
                 sampling_callback=self.sample,
+                sampling_capabilities=tools_cap,
+                list_roots_callback=self.roots.callback if self.roots else None,
                 message_handler=self.on_message,
             ) as client:
                 self.client = client
+                listener = None
+                if self.listen is not None and not legacy:
+                    listener = asyncio.create_task(listen_tools_changed(client, self.listen))
                 self.ready.set()
                 await self.stop.wait()
+                if listener is not None:
+                    listener.cancel()
+                    with contextlib.suppress(asyncio.CancelledError, Exception):
+                        await listener
         except Exception as exc:
             self.error = exc
             log.warning("MCP server '%s' failed: %s", self.manifest.name, exc)
@@ -103,11 +131,15 @@ class McpBridge:
     def __init__(self, services: Services) -> None:
         self.s = services
         self._conns: dict[str, _Connection] = {}
+        self._debounce: dict[str, Debouncer] = {}
+        self._calls = itertools.count(1)
 
     def _target(self, m: McpServerManifest) -> Any:
         env = {k: self._resolve(v) for k, v in m.env.items()}
         if m.transport == "stdio":
             return StdioServerParameters(command=m.command or "", args=m.args, env=env or None)
+        if m.transport == "sse":
+            return sse_target(m.url or "", {k: self._resolve(v) for k, v in m.headers.items()})
         if m.headers:
             import httpx2
             from mcp.client.streamable_http import streamable_http_client
@@ -136,9 +168,17 @@ class McpBridge:
     async def connect(self, manifest: McpServerManifest, target: Any, timeout: float = 20.0) -> list[str]:
         conn = _Connection(manifest, target)
         conn.elicit = make_elicitation_callback(self.s, manifest.name, lambda: conn.last_session)
-        conn.on_message = notification_handler(self.s, manifest.name)
+        cfg = self.s.settings.i6.mcp
+        debounce = self._debounce[manifest.name] = Debouncer(
+            lambda: self.refresh_tools(manifest.name), cfg.refresh_debounce_s
+        )
+        conn.on_message = with_tools_changed(notification_handler(self.s, manifest.name), debounce)
+        conn.listen = debounce if cfg.listen_tools_changed else None
+        conn.roots = RootsState(manifest.roots.paths) if manifest.roots.enabled else None
         if manifest.sampling.enabled:
-            conn.sample = SamplingHandler(self.s, manifest, lambda: conn.last_session)
+            conn.sample = SamplingHandler(
+                self.s, manifest, lambda: conn.last_session, call_key=lambda: conn.call_id
+            )
         conn.task = asyncio.create_task(conn.run(), name=f"mcp:{manifest.name}")
         self._conns[manifest.name] = conn
         try:
@@ -148,7 +188,25 @@ class McpBridge:
             return []
         if conn.client is None:
             return []
-        listing = await conn.client.list_tools()
+        names = await self._register_tools(manifest, conn.client)
+        await self.sync_skills(manifest.name)
+        return names
+
+    async def refresh_tools(self, server: str) -> list[str]:
+        """`tools/list_changed`: re-list, re-register (generation bump), emit an event."""
+        conn = self._conns.get(server)
+        if conn is None or conn.client is None:
+            return []
+        self.s.harness.unregister_dynamic(f"{PREFIX}{server}__")
+        names = await self._register_tools(conn.manifest, conn.client)
+        generation = self.s.harness.generation
+        await self.s.emit(
+            "server", "mcp.tools_changed", {"server": server, "tools": names, "generation": generation}
+        )
+        return names
+
+    async def _register_tools(self, manifest: McpServerManifest, client: Client) -> list[str]:
+        listing = await client.list_tools()
         names: list[str] = []
         for t in listing.tools:
             name = tool_name(manifest.name, t.name)
@@ -175,7 +233,6 @@ class McpBridge:
                 log.error("MCP server '%s': %s", manifest.name, exc)
                 continue
             names.append(name)
-        await self.sync_skills(manifest.name)
         return names
 
     async def sync_skills(self, server: str) -> int:
@@ -192,7 +249,10 @@ class McpBridge:
             if conn is None or conn.client is None:
                 return ToolResult(f"MCP server '{server}' is not connected", is_error=True)
             conn.last_session = sid = CURRENT_SESSION.get() or ctx.session_id
+            conn.call_id = f"{sid}:{next(self._calls)}"
             client = conn.client
+            if conn.roots is not None:
+                await conn.roots.note_cwd(Path(ctx.cwd), client)
             try:
                 result = await call_with_elicitation(
                     self.s,
@@ -238,6 +298,8 @@ class McpBridge:
 
     async def disconnect(self, name: str) -> None:
         conn = self._conns.pop(name, None)
+        if (debounce := self._debounce.pop(name, None)) is not None:
+            debounce.cancel()
         self.s.harness.unregister_dynamic(f"{PREFIX}{name}__")
         self.s.harness.unregister_skills(f"mcp:{name}")
         if conn is None:

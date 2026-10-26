@@ -6,7 +6,7 @@ answer on `POST /hooks/github/<route>`).
 ```yaml
 name: github-pr               # route name
 description: React to pull request events.
-provider: github              # github | generic | gitlab | svix (see "Signatures")
+provider: github              # github | generic | gitlab | svix | telegram-callback | <plugin kind>
 secret: "secret:webhook/github-pr"   # reference into the secret store, never a value
 events: [pull_request]        # provider event names; empty = all
 filters:
@@ -33,7 +33,7 @@ filters:                      # every top-level filter must pass
 prompt: "raw payload: {{__raw__}}"   # the raw body, capped at 4000 characters
 script: normalize.py          # <home>/scripts/normalize.py: JSON in → JSON object out (null = ignore)
 script_timeout_s: 30          # default teams2.webhook_script_timeout_s
-allowed_cidrs: ["140.82.112.0/20"]   # optional; X-Forwarded-For only from teams2.webhook_trusted_proxies
+allowed_cidrs: ["140.82.112.0/20"]   # optional (or [github]); X-Forwarded-For only from teams2.webhook_trusted_proxies
 ```
 
 After the signature check the payload goes through `script:` (no shell, scrubbed env, killed on
@@ -47,6 +47,18 @@ timeout → 502) and then `transform` hooks matching `webhook:<route>`, before e
 | `generic` | `X-Timestamp: <unix seconds>`, `X-Signature-256: sha256=<hex HMAC-SHA256("<ts>.<raw body>")>`, `X-Delivery-Id`, event in body `event` or `X-Event` | ±300 s skew + delivery-id cache |
 | `gitlab`  | `X-Gitlab-Token: <secret>` (constant-time compare), `X-Gitlab-Event`, `webhook-id` | delivery-id cache |
 | `svix`    | `svix-id`, `svix-timestamp`, `svix-signature: v1,<b64 HMAC(key, "<id>.<ts>.<body>")> …` with a `whsec_<base64>` secret; any `v1` entry may match | ±300 s skew + `svix-id` cache |
+| `telegram-callback` | `X-Telegram-Bot-Api-Secret-Token: <secret>` (the `secret_token` given to `setWebhook`; constant-time compare); event = the update kind (`message`, `callback_query`, …) | `update_id` cache |
+
+Providers sit behind the `WebhookProvider` interface (`src/auoreo/automation/webhook_providers.py`):
+`verify(secret, headers, body, now) → Verdict{ok, reason, event, delivery_id}`, `event_name`,
+`delivery_id`, optional `parse` (payload normalization). A plugin with
+`provides: [webhook_provider]` can add a new kind (see `plugins/README.md`); a route whose kind is
+not provided by a running plugin answers 503. Built-in kinds cannot be replaced.
+
+`allowed_cidrs: [github]` expands to GitHub's webhook ranges (`GET https://api.github.com/meta`
+→ `hooks`), cached at `~/.auoreo/cache/github-meta.json` and refreshed at most daily in the
+background. Offline, the cached ranges keep working; with no cache at all the route fails closed
+(403). `auoreo doctor` warns when the cache is older than 7 days (`i6.webhooks.*`).
 
 A generic request without a parseable `X-Timestamp`, or outside ±300 s, is rejected (401).
 `auoreo webhook test <route> -f payload.json` signs with the scheme of the route's provider.

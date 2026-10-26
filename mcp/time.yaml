@@ -1,0 +1,9 @@
+# MCP bundle (spec §25.15 L1072): the official time / timezone server (PyPI mcp-server-time).
+# Off by default. Enable with `auoreo mcp add --bundle time`.
+name: time
+transport: stdio
+command: uvx
+args: ["mcp-server-time"]
+timeout_ms: 30000
+enabled: false
+exposure: deferred

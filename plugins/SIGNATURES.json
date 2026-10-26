@@ -1,0 +1,47 @@
+{
+  "plugins": {
+    "calendar": {
+      "sha256": "cffd0f2bbb2cdc9f291a17754ce86b3c4f18cb53eef66e1cf6e3f9bc109feafa",
+      "sig": "cVLicEH+DNrYH5A9+w15+YLUk2ostedf7sJt9AsCnh7ridyK0ZoU4/UM0H6uotJgcceAneLd2dpTbRfNtSHhBg==",
+      "signed_by": "825d1dbf6ca0c28f",
+      "version": "0.1.0"
+    },
+    "discord": {
+      "sha256": "7a44ff2886471ff432f0ca0c1951ad5066c2b00c97ffaf3f275fc9b0a52fd38e",
+      "sig": "LD4PxlPzJA+Rh4UgEAHPZQTt9g0yprd4e6s71ZNf/mFtlXsYSMklsUUDhtnvRFq0JOCoF3XXggwdv2cKwSlMAw==",
+      "signed_by": "825d1dbf6ca0c28f",
+      "version": "0.1.0"
+    },
+    "email": {
+      "sha256": "beb69078109d8c36e81050a3fcad4def3c987a5a11ad334bbf3c1f713a70c042",
+      "sig": "jcejPKHMAMTQDw98Xb9mEp03BN7i6C1qSU2bOpx5nEWbuBxDmkuLivgN/B0RlrgaTozH3y3hHys/AHNluzUGCw==",
+      "signed_by": "825d1dbf6ca0c28f",
+      "version": "0.1.0"
+    },
+    "imagegen": {
+      "sha256": "13cc303958c11a8dd8382677a743fcc93995c284f21abde9f4ccaee9308fb30e",
+      "sig": "Dww6ucO89qZ1Sd/MXIZMtGh1h+zfEjiz9gd3s3tzBY2yIWAFWYdbM8DE/8zLJqqvSLIX/HQ5Blx9Fy32/58jAQ==",
+      "signed_by": "825d1dbf6ca0c28f",
+      "version": "0.1.0"
+    },
+    "miio": {
+      "sha256": "928c4e797d552a6bb45f425b29b052042f1496da64844da8175a270aab66143c",
+      "sig": "L4wVG1p66dMzgXKGclysJwqyNK+GljPS1+UMNLXI8aSGr872VnhoaDZbAIB60YahPzsJ+J9Sm2pXgIiLoNsEDw==",
+      "signed_by": "825d1dbf6ca0c28f",
+      "version": "0.1.0"
+    },
+    "mqtt": {
+      "sha256": "b39e69b8340696c39f3ee4e83971812353f4f9d2ae7236656fd7c6b53c1bd61d",
+      "sig": "pLaasbp3cx4JJGFLddlbzLALsHqAf8lhQdVDRehFFknejn5H336oA18nZsts5t7pbMbcbyTK4CjXwuVRlCP4Dg==",
+      "signed_by": "825d1dbf6ca0c28f",
+      "version": "0.1.0"
+    },
+    "telegram": {
+      "sha256": "f0878c4bd47f9653ea842c10b3fc84c6d389137f19c7f3bc227ad6f2b70b7562",
+      "sig": "vj8dEYnCUYU5iAt39xyhr07XQzzdQE16FO4wm/f7CjtUIMo+FSkycu/uqt8wDYZHCHTZPKkFHtg9c/MiCXunBg==",
+      "signed_by": "825d1dbf6ca0c28f",
+      "version": "0.1.0"
+    }
+  },
+  "version": 1
+}

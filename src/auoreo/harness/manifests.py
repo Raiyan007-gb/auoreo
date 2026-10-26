@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 from auoreo.harness.manifests_webhook import WebhookFilter as WebhookFilter  # re-export
 from auoreo.harness.manifests_webhook import WebhookManifest as WebhookManifest  # re-export
@@ -82,6 +82,27 @@ class ToolManifest(_Strict):
     output_schema: dict[str, Any] | None = None
     """JSON Schema for a structured result (`ToolResult.meta["structured"]`, else the JSON
     content); a mismatch turns the result into an error the model sees."""
+    # --- I6: progress contract (spec §25.7 L977)
+    progress_schema: dict[str, Any] | None = Field(
+        default=None, validation_alias=AliasChoices("progress_schema", "progressSchema")
+    )
+    """JSON Schema for the `data` of `ctx.progress(..., data=...)`; an invalid payload is dropped."""
+    activity_hint: str = Field(
+        default="", max_length=120, validation_alias=AliasChoices("activity_hint", "activityHint")
+    )
+    """Short UI label while running, e.g. `Reading {path}` (`{arg}` from the call's arguments)."""
+
+    @field_validator("progress_schema")
+    @classmethod
+    def _progress_schema(cls, v: dict[str, Any] | None) -> dict[str, Any] | None:
+        if v is not None:
+            from jsonschema import Draft202012Validator, SchemaError
+
+            try:
+                Draft202012Validator.check_schema(v)
+            except SchemaError as exc:
+                raise ValueError(f"progressSchema is not a valid JSON Schema: {exc.message}") from exc
+        return v
 
     @field_validator("parameters")
     @classmethod
@@ -185,11 +206,20 @@ class McpSampling(_Strict):
     """Model/alias for the aux call; unset = aux routing (`auxiliary.tasks.sampling`)."""
 
 
+class McpRoots(_Strict):
+    """Client `roots` (deprecated in MCP 2026-07-28, kept as a compat shim, default off)."""
+
+    enabled: bool = False
+    paths: list[str] = Field(default_factory=list)
+    """Explicit allow-list added to the session cwd (absolute, `~` expanded, realpath'd)."""
+
+
 class McpServerManifest(_Strict):
     """`mcp/<name>.yaml`. Env/header values may be `secret:<name>` references."""
 
     name: str = Field(pattern=NAME_RE)
-    transport: Literal["stdio", "streamable-http"] = "stdio"
+    transport: Literal["stdio", "streamable-http", "sse"] = "stdio"
+    """`sse` is the legacy HTTP+SSE transport (pre-2025 servers); prefer `streamable-http`."""
     command: str | None = None
     args: list[str] = Field(default_factory=list)
     env: dict[str, str] = Field(default_factory=dict)
@@ -202,6 +232,8 @@ class McpServerManifest(_Strict):
     """Per remote-tool overrides keyed by the server's tool name (`timeoutMs` / `timeout_ms`)."""
     sampling: McpSampling = Field(default_factory=lambda: McpSampling())
     """Server→client `sampling/createMessage` (default off; aux call, approval-gated)."""
+    roots: McpRoots = Field(default_factory=lambda: McpRoots())
+    """`file://` roots = the calling session's cwd + `paths`; `roots/list_changed` on change."""
 
 
 class BackendManifest(_Strict):
@@ -312,7 +344,9 @@ class PluginManifest(_Strict):
     name: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
     version: str = Field(pattern=r"^\d+\.\d+\.\d+")
     description: str = Field(min_length=1)
-    provides: list[Literal["tools", "delivery", "connector", "backend", "skills"]] = Field(min_length=1)
+    provides: list[Literal["tools", "delivery", "connector", "backend", "skills", "webhook_provider"]] = (
+        Field(min_length=1)
+    )
     consumes: list[str] = Field(default_factory=list)
     """Capabilities the plugin needs from the host (`sessions`, `memory`, `secrets:<name>`)."""
     permissions: list[str] = Field(default_factory=list)
@@ -332,6 +366,13 @@ class PluginManifest(_Strict):
         if v.get("type") != "object":
             raise ValueError("config_schema must be a JSON Schema with type: object")
         return v
+
+    def is_module_entry(self, folder: Any) -> bool:
+        """I6: a pip-installed plugin (`requirements.lock` in its folder) names an importable
+        `package.module:Class` entry point instead of a `file.py:Class` inside the folder."""
+        module = self.entry.split(":", 1)[0]
+        is_dotted = re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*", module) is not None
+        return is_dotted and not module.endswith(".py") and (folder / "requirements.lock").is_file()
 
 
 class PermissionFile(_Strict):

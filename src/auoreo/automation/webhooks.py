@@ -6,12 +6,15 @@ on the raw body, current then `#prev` within the rotation grace (401) → JSON c
 object (415 / 400) → `script:` + `transform` hooks (200 ignored on drop, 502 on failure) →
 event + filters (200 ignored) → duplicate delivery id (200 duplicate) → rate limit (429) → enqueue → 202, or
 for `deliver_only` routes deliver now → 200 / 502. Every decision is audited without the body.
-Signature schemes live in `webhook_verify`.
+Signature schemes live in `webhook_verify`, behind `webhook_providers.WebhookProvider` (built-in
+kinds + plugin `webhook_provider`s; an unknown kind answers 503). `allowed_cidrs` may name the
+`github` preset (`github_meta`).
 """
 
 from __future__ import annotations
 
 import hashlib
+import inspect
 import json
 import logging
 import time
@@ -21,16 +24,16 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.exc import IntegrityError
 
+from auoreo.automation import github_meta  # --- I6: `allowed_cidrs: [github]` preset
+from auoreo.automation import webhook_providers as providers  # --- I6
 from auoreo.automation.deliveries import DeliveryWorker, outbox_of
 from auoreo.automation.templating import dotted, first_failing, raw_text, render, untrusted
 from auoreo.automation.webhook_extras import IGNORE, ScriptError, client_ip, ip_in, transform
+from auoreo.automation.webhook_providers import Verdict, WebhookProvider
 from auoreo.automation.webhook_verify import (
     DELIVERY_HEADER,
-    DELIVERY_HEADERS,
-    EVENT_HEADER,
     SIGNATURE_HEADER,
     TIMESTAMP_SKEW_S,
-    VERIFIERS,
     body_challenge,
     candidates,
     missing_secrets,
@@ -72,17 +75,16 @@ class BodyTooLarge(Exception):
 
 
 def event_name(manifest: WebhookManifest, headers: Mapping[str, str], payload: dict[str, Any]) -> str:
-    if manifest.provider in {"github", "gitlab"}:
-        return headers.get(EVENT_HEADER[manifest.provider], "")
-    ev = payload.get("type" if manifest.provider == "svix" else "event")
-    return ev if isinstance(ev, str) else headers.get("x-event", "")
+    provider = providers.get(manifest.provider)
+    return provider.event_name(headers, payload) if provider is not None else ""
 
 
-def delivery_id_of(manifest: WebhookManifest, headers: Mapping[str, str], body: bytes) -> str:
-    for name in DELIVERY_HEADERS[manifest.provider]:
-        if value := headers.get(name):
-            return value
-    return hashlib.sha256(body).hexdigest()
+def delivery_id_of(
+    manifest: WebhookManifest, headers: Mapping[str, str], body: bytes, payload: dict[str, Any] | None = None
+) -> str:
+    provider = providers.get(manifest.provider)
+    found = provider.delivery_id(headers, body, payload or {}) if provider is not None else None
+    return found or hashlib.sha256(body).hexdigest()
 
 
 def github_target(payload: dict[str, Any]) -> str:
@@ -157,7 +159,8 @@ class WebhookIngress:
         if manifest.allowed_cidrs:
             trusted = self.services.settings.teams2.webhook_trusted_proxies
             ip = client_ip(request.client.host if request.client else None, request.headers, trusted)
-            if not ip_in(ip, manifest.allowed_cidrs):
+            allowed = await github_meta.expand(manifest.allowed_cidrs, self.services.settings)
+            if not ip_in(ip, allowed):
                 res = HookResult(403, {"detail": "forbidden"}, "ip not allowed")
                 return await self._audit(route, res, {"ip": ip[:64]})
         try:
@@ -169,9 +172,15 @@ class WebhookIngress:
 
     async def _verify(
         self, manifest: WebhookManifest, headers: dict[str, str], body: bytes
-    ) -> HookResult | None:
+    ) -> HookResult | Verdict:
         route = manifest.name
         now = time.time()
+        provider = providers.get(manifest.provider)
+        if provider is None:
+            res = HookResult(
+                503, {"detail": "webhook provider unavailable"}, f"no provider {manifest.provider}"
+            )
+            return await self._audit(route, res, {})
         grace = self.services.settings.webhooks.rotation_grace_s
         keys = candidates(self.services.secrets.get, secret_name(manifest), grace, now)
         if not keys:
@@ -179,11 +188,10 @@ class WebhookIngress:
                 self._warned.add(route)
                 log.error("webhook route %s: secret %s is not set; rejecting (403)", route, manifest.secret)
             return await self._audit(route, HookResult(403, {"detail": "forbidden"}, "missing secret"), {})
-        verifier = VERIFIERS[manifest.provider]
         reason = "bad signature"
         for which, secret in keys:
-            failed = verifier(secret, headers, body, now)
-            if failed is None:
+            verdict = await _safe_verify(provider, secret, headers, body, now)
+            if verdict.ok:
                 if which == "prev":
                     await self.services.audit.record(
                         actor="webhook",
@@ -192,8 +200,8 @@ class WebhookIngress:
                         reason="previous secret within the rotation grace",
                         detail={"route": route[:64]},
                     )
-                return None
-            reason = failed if which == "current" else reason
+                return verdict
+            reason = verdict.reason or reason if which == "current" else reason
         if "timestamp" in reason:
             log.warning("webhook route %s: %s", route, reason)
         return await self._audit(route, HookResult(401, {"detail": reason}, reason), {})
@@ -203,8 +211,9 @@ class WebhookIngress:
         payload = _json_object(body)
         if manifest.challenge and (value := body_challenge(payload)) is not None:
             return await self._audit(route, HookResult(200, {"challenge": value}, "challenge"), {})
-        if (rejected := await self._verify(manifest, headers, body)) is not None:
-            return rejected
+        verdict = await self._verify(manifest, headers, body)
+        if isinstance(verdict, HookResult):
+            return verdict
         ctype = headers.get("content-type", "").split(";")[0].strip().lower()
         if ctype != "application/json" and not ctype.endswith("+json"):
             res = HookResult(415, {"detail": "content type must be application/json"}, "content type")
@@ -212,12 +221,21 @@ class WebhookIngress:
         if payload is None:
             res = HookResult(400, {"detail": "body must be a JSON object"}, "bad json")
             return await self._audit(route, res, {})
-        return await self._accept(manifest, headers, body, payload)
+        return await self._accept(manifest, headers, body, payload, verdict)
 
     async def _accept(
-        self, manifest: WebhookManifest, headers: dict[str, str], body: bytes, payload: dict[str, Any]
+        self,
+        manifest: WebhookManifest,
+        headers: dict[str, str],
+        body: bytes,
+        payload: dict[str, Any],
+        verdict: Verdict | None = None,
     ) -> HookResult:
         route = manifest.name
+        provider = providers.get(manifest.provider)
+        if provider is not None:  # optional normalize (a plugin provider answers over RPC)
+            parsed = provider.parse(payload, headers)
+            payload = await parsed if inspect.isawaitable(parsed) else parsed
         try:
             changed = await transform(self.services, manifest, payload)
         except ScriptError as exc:
@@ -230,9 +248,11 @@ class WebhookIngress:
                 route, HookResult(200, {"status": "ignored"}, "dropped by transform"), {}
             )
         payload = changed
-        event = event_name(manifest, headers, payload)
+        event = (verdict.event if verdict else None) or event_name(manifest, headers, payload)
         action = payload.get("action")
-        delivery_id = delivery_id_of(manifest, headers, body)
+        delivery_id = (verdict.delivery_id if verdict else None) or delivery_id_of(
+            manifest, headers, body, payload
+        )
         info = {"event": event, "delivery_id": delivery_id[:128]}
         names = {event, f"{event}.{action}"} if isinstance(action, str) else {event}
         if manifest.events and not names & set(manifest.events):
@@ -309,6 +329,17 @@ class WebhookIngress:
 
     async def close(self) -> None:
         self._windows.clear()
+
+
+async def _safe_verify(
+    provider: WebhookProvider, secret: str, headers: dict[str, str], body: bytes, now: float
+) -> Verdict:
+    """A provider that raises (a crashed plugin) rejects; it never 500s the route."""
+    try:
+        return await provider.verify(secret, headers, body, now)
+    except Exception as exc:
+        log.warning("webhook provider %s failed to verify: %s", provider.kind, exc)
+        return Verdict(False, "provider error")
 
 
 def _json_object(body: bytes) -> dict[str, Any] | None:

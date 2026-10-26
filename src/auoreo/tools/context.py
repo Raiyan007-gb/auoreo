@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
@@ -16,10 +17,12 @@ from typing import TYPE_CHECKING, Any
 
 from auoreo.gateway.types import ImagePart
 from auoreo.schema.events import ToolProgress
+from auoreo.tools.activity import progress_error
 
 if TYPE_CHECKING:
     from auoreo.harness.registry import Harness
 
+log = logging.getLogger(__name__)
 
 CURRENT_SESSION: ContextVar[str | None] = ContextVar("auoreo_current_session", default=None)
 """Session id of the tool call running in this task; set by the executor around each
@@ -48,6 +51,7 @@ class CallInfo:
     tool: str
     interval_s: float = 0.5
     last: float = 0.0
+    progress_schema: dict[str, Any] | None = None  # --- I6: validates `progress(data=…)`
 
 
 CURRENT_CALL: ContextVar[CallInfo | None] = ContextVar("auoreo_current_call", default=None)
@@ -192,26 +196,32 @@ class ToolContext:
         percent: float | None = None,
         phase: str = "running",
         cancellable: bool = False,
+        data: dict[str, Any] | None = None,
     ) -> bool:
         """Emit a `tool.progress` event for the running call (spec §25.7). Rate-limited per
-        call; returns False when dropped (no call running, or within the interval)."""
+        call; returns False when dropped (no call running, within the interval, or `data`
+        violating the tool's `progressSchema`)."""
         call = CURRENT_CALL.get()
         if call is None:
+            return False
+        if data is not None and (why := progress_error(call.progress_schema, data)) is not None:
+            log.warning("tool %s: dropped progress: %s", call.tool, why)
             return False
         now = time.monotonic()
         final = percent is not None and percent >= 100
         if not final and call.last and now - call.last < call.interval_s:
             return False
         call.last = now
-        data = ToolProgress(
+        ev = ToolProgress(
             call_id=call.call_id,
             tool=call.tool,
             phase=phase if phase in _PHASES else "running",
             message=message[:500],
             percent=None if percent is None else max(0.0, min(100.0, float(percent))),
             cancellable=cancellable,
+            data=data,
         )
-        await self.emit("tool.progress", data.model_dump(exclude_none=True, exclude={"run_id"}))
+        await self.emit("tool.progress", ev.model_dump(exclude_none=True, exclude={"run_id"}))
         return True
 
     @property

@@ -6,41 +6,64 @@ Standard library only: this file is copied into each plugin venv's site-packages
 
 A plugin class is constructed with a `HostAPI` and may define (all optional, sync or async):
 
-    initialize(config, consumes_granted) -> {tools, deliveries, connectors, skills}
+    initialize(config, consumes_granted) -> {tools, deliveries, connectors, skills, webhook_providers}
     call_tool(name, args, session_id) -> str | {"content": str, "is_error": bool}
     send(name, target, text, meta) -> {"ok": bool, "detail": str, "external_id": str | None}
     connector_start(name) / connector_stop(name)
     config_update(config)
+    webhook_verify(kind, secret, headers, body: bytes, now) -> bool | {"ok", "reason", "event", "delivery_id"}
+    webhook_parse(kind, payload, headers) -> dict   (optional payload normalization)
     shutdown()
 
-Class attributes `TOOLS`, `DELIVERIES`, `CONNECTORS`, `SKILLS` are used when there is no
-`initialize`. Anything the plugin prints goes to stderr; stdout is reserved for the protocol.
+Class attributes `TOOLS`, `DELIVERIES`, `CONNECTORS`, `SKILLS`, `WEBHOOK_PROVIDERS` are used when
+there is no `initialize`. `entry` is `file.py:Class` inside the plugin folder or, for pip-installed
+plugins, an importable `package.module:Class` (the `auoreo.plugin` entry point). Anything the
+plugin prints goes to stderr; stdout is reserved for the protocol.
+
+Creator mode bounds a SYNCHRONOUS `def run` with `vmTimeoutMs` (config `vm_timeout_ms`, POSIX
+interval timer); an `async def run` escapes that bound once it awaits (only the host's tool
+timeout applies).
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
+import importlib
 import importlib.util
 import inspect
 import itertools
 import json
 import os
+import signal
 import sys
+import threading
 import traceback
 from pathlib import Path
 from typing import Any
 
 PROTOCOL_VERSION = 1
-KINDS = ("tools", "deliveries", "connectors", "skills")
+KINDS = ("tools", "deliveries", "connectors", "skills", "webhook_providers")
 HANDLERS: dict[str, tuple[str, tuple[str, ...]]] = {
     "tool.call": ("call_tool", ("name", "args", "session_id")),
     "delivery.send": ("send", ("name", "target", "text", "meta")),
     "connector.start": ("connector_start", ("name",)),
     "connector.stop": ("connector_stop", ("name",)),
     "config.update": ("config_update", ("config",)),
+    "webhook.verify": ("webhook_verify", ("kind", "secret", "headers", "body", "now")),
+    "webhook.parse": ("webhook_parse", ("kind", "payload", "headers")),
 }
-DEFAULTS: dict[str, Any] = {"args": {}, "meta": {}, "session_id": "", "config": {}}
+DEFAULTS: dict[str, Any] = {
+    "args": {},
+    "meta": {},
+    "session_id": "",
+    "config": {},
+    "headers": {},
+    "payload": {},
+    "body": b"",
+    "now": 0.0,
+}
 
 
 async def _maybe(value: Any) -> Any:
@@ -108,22 +131,44 @@ def _load_attr(path: Path, attr: str) -> Any:
     return getattr(module, attr)
 
 
+def _bounded(fn: Any, args: Any, ctx: Any, ms: int) -> Any:
+    """Call a SYNC function under a wall-clock bound (`vmTimeoutMs`); POSIX main thread only."""
+    usable = ms > 0 and hasattr(signal, "setitimer") and threading.current_thread() is threading.main_thread()
+    if not usable:
+        return fn(args, ctx)
+
+    def alarm(signum: int, frame: Any) -> None:
+        raise TimeoutError(f"vmTimeoutMs: the synchronous body ran longer than {ms} ms")
+
+    old = signal.signal(signal.SIGALRM, alarm)
+    signal.setitimer(signal.ITIMER_REAL, ms / 1000)
+    try:
+        return fn(args, ctx)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, old)
+
+
 class _Ephemeral:
-    """Creator mode: one `async def run(args, ctx)` loaded from a file."""
+    """Creator mode: one `async def run(args, ctx)` (or sync `def run`) loaded from a file."""
 
     def __init__(self, host: HostAPI, path: Path, name: str) -> None:
         self.host = host
         self.name = name
         self.fn = _load_attr(path, "run")
+        self.vm_timeout_ms = 5000
 
     def initialize(self, config: dict[str, Any], consumes_granted: list[str]) -> dict[str, Any]:
+        self.vm_timeout_ms = int(config.get("vm_timeout_ms") or self.vm_timeout_ms)
         params = config.get("parameters") or {"type": "object", "properties": {}}
         desc = config.get("description") or self.name
         return {"tools": [{"name": self.name, "description": desc, "parameters": params}]}
 
     async def call_tool(self, name: str, args: dict[str, Any], session_id: str) -> Any:
         ctx = argparse.Namespace(session_id=session_id, log=lambda m: self.host.log("info", str(m)))
-        return await _maybe(self.fn(args, ctx))
+        if inspect.iscoroutinefunction(self.fn):
+            return await self.fn(args, ctx)  # async bodies escape vmTimeoutMs (documented)
+        return await _maybe(_bounded(self.fn, args, ctx, self.vm_timeout_ms))
 
 
 def _shape(method: str, result: Any) -> Any:
@@ -132,6 +177,12 @@ def _shape(method: str, result: Any) -> Any:
             return {"content": str(result["content"]), "is_error": bool(result.get("is_error"))}
         text = result if isinstance(result, str) else json.dumps(result, default=str)
         return {"content": text, "is_error": False}
+    if method == "webhook.verify":
+        res = result if isinstance(result, dict) else {"ok": bool(result)}
+        keep = ("reason", "event", "delivery_id", "identity")
+        return {"ok": res.get("ok") is True, **{k: str(res[k]) for k in keep if res.get(k) is not None}}
+    if method == "webhook.parse":
+        return {"payload": result if isinstance(result, dict) else None}
     if method == "delivery.send":
         res = result if isinstance(result, dict) else {"ok": bool(result)}
         return {
@@ -192,6 +243,8 @@ class Runtime:
         if method not in HANDLERS:
             raise RpcError(-32601, f"method not found: {method}")
         attr, keys = HANDLERS[method]
+        if method == "webhook.verify":
+            p = {**p, "body": base64.b64decode(str(p.get("body_b64", "")))}
         fn = getattr(self.plugin, attr, None)
         if fn is None:
             raise RpcError(-32601, f"plugin does not implement {attr}")
@@ -274,7 +327,10 @@ def main(argv: list[str] | None = None) -> None:
         folder = Path(ns.dir).resolve()
         sys.path.insert(0, str(folder))
         file_name, cls_name = ns.entry.split(":", 1)
-        rt.plugin = _load_attr(folder / file_name, cls_name)(rt.host)
+        if file_name.endswith(".py"):
+            rt.plugin = _load_attr(folder / file_name, cls_name)(rt.host)
+        else:  # pip-installed plugin: the `auoreo.plugin` entry point `package.module:Class`
+            rt.plugin = getattr(importlib.import_module(file_name), cls_name)(rt.host)
     asyncio.run(rt.serve())
 
 

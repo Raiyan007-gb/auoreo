@@ -221,7 +221,11 @@ class CreatorManager:
             info = await peer.request(
                 "initialize",
                 {
-                    "config": {"description": d.description, "parameters": d.parameters},
+                    "config": {
+                        "description": d.description,
+                        "parameters": d.parameters,
+                        "vm_timeout_ms": self.s.settings.i6.creator.vm_timeout_ms,  # --- I6
+                    },
                     "consumes_granted": [],
                 },
                 timeout=20,
