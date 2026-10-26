@@ -121,7 +121,8 @@ async def ws_guard(
     svc: Services = websocket.app.state.services
     if not origin_allowed(origin, svc.settings.cors_origins):
         raise WebSocketException(code=CLOSE_POLICY, reason="origin not allowed")
-    if not token_matches(
+    open_ws = svc.settings.cli.ws_auth == "off"  # --- G5a: `serve --ws-auth off` (loopback only)
+    if not open_ws and not token_matches(
         svc.settings.server_password, authorization=authorization, query_token=token, cookie=auoreo_token
     ):
         raise WebSocketException(code=CLOSE_POLICY, reason="invalid or missing token")

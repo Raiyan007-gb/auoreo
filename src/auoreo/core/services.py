@@ -201,7 +201,7 @@ class Services:
         await self.emit(
             row.id,
             "session.created",
-            {"agent": agent, "workflow": workflow, "parent_id": parent_id},
+            {"agent": agent, "workflow": workflow, "parent_id": parent_id, "cwd": str(self.cwd)},
         )
         return row
 

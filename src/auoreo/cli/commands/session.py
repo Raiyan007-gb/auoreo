@@ -118,3 +118,7 @@ def export(
     else:
         output.write_text(text, encoding="utf-8")
         err_console.print(f"wrote {output}")
+
+
+# --- G5a: create/get/rename/unarchive/queue/steer/share/retry/revert/attach
+from auoreo.cli.commands import session_more  # noqa: E402,F401

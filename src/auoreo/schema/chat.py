@@ -94,6 +94,8 @@ class Health(BaseModel):
     version: str
     generation: int
     gateway: str
+    code_sha: str | None = None
+    """Fingerprint of the running code (`auoreo doctor` compares it with the local install)."""
 
 
 class UsageRecord(BaseModel):

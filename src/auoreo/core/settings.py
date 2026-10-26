@@ -20,6 +20,7 @@ from pydantic_settings import (
 )
 
 from auoreo.core.paths import home_dir
+from auoreo.core.settings_cli import CliSettings  # --- G5a
 from auoreo.core.settings_compaction import CompactionSettings  # --- G2b
 from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
 from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # --- G1a
@@ -398,6 +399,7 @@ class Settings(BaseSettings):
     webhooks: WebhookSettings = Field(default_factory=WebhookSettings)  # --- G1a
     logging: LoggingSettings = Field(default_factory=LoggingSettings)  # --- G5c
     tools: ToolSettings = Field(default_factory=ToolSettings)  # --- G4b
+    cli: CliSettings = Field(default_factory=CliSettings)  # --- G5a
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

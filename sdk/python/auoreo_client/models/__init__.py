@@ -139,6 +139,9 @@ from .reload_result_changes_additional_property import ReloadResultChangesAdditi
 from .reply_api_permissions_request_id_reply_post_response_reply_api_permissions_request_id_reply_post import (
     ReplyApiPermissionsRequestIdReplyPostResponseReplyApiPermissionsRequestIdReplyPost,
 )
+from .retry_accepted import RetryAccepted
+from .revert_request import RevertRequest
+from .revert_result import RevertResult
 from .rtc_answer import RtcAnswer
 from .rtc_capabilities import RtcCapabilities
 from .rtc_closed import RtcClosed
@@ -158,6 +161,11 @@ from .session_create import SessionCreate
 from .session_deleted import SessionDeleted
 from .session_detail import SessionDetail
 from .session_info import SessionInfo
+from .session_rename import SessionRename
+from .share_created import ShareCreated
+from .shared_session import SharedSession
+from .shared_session_messages_item import SharedSessionMessagesItem
+from .shares_revoked import SharesRevoked
 from .suggestion_accepted import SuggestionAccepted
 from .suggestion_create import SuggestionCreate
 from .suggestion_create_action import SuggestionCreateAction
@@ -318,6 +326,9 @@ __all__ = (
     "ReloadResultChanges",
     "ReloadResultChangesAdditionalProperty",
     "ReplyApiPermissionsRequestIdReplyPostResponseReplyApiPermissionsRequestIdReplyPost",
+    "RetryAccepted",
+    "RevertRequest",
+    "RevertResult",
     "RtcAnswer",
     "RtcCapabilities",
     "RtcClosed",
@@ -337,6 +348,11 @@ __all__ = (
     "SessionDeleted",
     "SessionDetail",
     "SessionInfo",
+    "SessionRename",
+    "ShareCreated",
+    "SharedSession",
+    "SharedSessionMessagesItem",
+    "SharesRevoked",
     "SuggestionAccepted",
     "SuggestionCreate",
     "SuggestionCreateAction",

@@ -50,6 +50,7 @@ from auoreo.api.routers import ops as ops_router  # --- W0-B
 from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import policy as policy_router  # --- W1-C
 from auoreo.api.routers import rtc as rtc_router
+from auoreo.api.routers import sessions_more as sessions_more_router  # --- G5a
 from auoreo.api.routers import suggestions as suggestions_router
 from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import voice as voice_router
@@ -103,6 +104,7 @@ ROUTERS = (
     # --- G5b
     context_router,
     metrics_router,  # --- G5c: GET /metrics
+    sessions_more_router,  # --- G5a: rename/share/retry/revert
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

@@ -1107,7 +1107,8 @@ export interface paths {
         delete: operations["delete_api_sessions__session_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Rename */
+        patch: operations["rename_api_sessions__session_id__patch"];
         trace?: never;
     };
     "/api/sessions/{session_id}/archive": {
@@ -1245,6 +1246,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions/{session_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry
+         * @description Cut the last user turn (recorded as `session.reverted`) and queue its text again.
+         */
+        post: operations["retry_api_sessions__session_id__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/revert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revert
+         * @description Keep messages `0..to_idx`; the cut messages travel in a `session.reverted` event.
+         */
+        post: operations["revert_api_sessions__session_id__revert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/share": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share
+         * @description Mint a read-only share link. The token is shown once; revoke with `DELETE …/share`.
+         */
+        post: operations["share_api_sessions__session_id__share_post"];
+        /** Unshare */
+        delete: operations["unshare_api_sessions__session_id__share_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sessions/{session_id}/unarchive": {
         parameters: {
             query?: never;
@@ -1256,6 +1318,26 @@ export interface paths {
         put?: never;
         /** Unarchive */
         post: operations["unarchive_api_sessions__session_id__unarchive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shared/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Shared
+         * @description Public (no password): the token itself is the capability. 404 when unknown or revoked.
+         */
+        get: operations["shared_api_shared__token__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2667,6 +2749,8 @@ export interface components {
         };
         /** Health */
         Health: {
+            /** Code Sha */
+            code_sha?: string | null;
             /** Gateway */
             gateway: string;
             /** Generation */
@@ -3330,6 +3414,32 @@ export interface components {
             /** Generation */
             generation: number;
         };
+        /** RetryAccepted */
+        RetryAccepted: {
+            /** Run Id */
+            run_id: string | null;
+            /** Session Id */
+            session_id: string;
+            /** Text */
+            text: string;
+        };
+        /** RevertRequest */
+        RevertRequest: {
+            /**
+             * To Idx
+             * @description Keep messages 0..to_idx (-1 clears the history)
+             */
+            to_idx: number;
+        };
+        /** RevertResult */
+        RevertResult: {
+            /** Removed */
+            removed: number;
+            /** Session Id */
+            session_id: string;
+            /** To Idx */
+            to_idx: number;
+        };
         /** RtcAnswer */
         RtcAnswer: {
             /** Rtc Id */
@@ -3682,6 +3792,40 @@ export interface components {
             updated_at: string;
             /** Workflow */
             workflow: string;
+        };
+        /** SessionRename */
+        SessionRename: {
+            /** Title */
+            title: string;
+        };
+        /** ShareCreated */
+        ShareCreated: {
+            /** Path */
+            path: string;
+            /** Session Id */
+            session_id: string;
+            /** Token */
+            token: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * SharedSession
+         * @description Read-only view behind a share token; secrets in messages are always redacted.
+         */
+        SharedSession: {
+            /** Messages */
+            messages: {
+                [key: string]: unknown;
+            }[];
+            session: components["schemas"]["SessionDetail"];
+        };
+        /** SharesRevoked */
+        SharesRevoked: {
+            /** Revoked */
+            revoked: number;
+            /** Session Id */
+            session_id: string;
         };
         /** SuggestionAccepted */
         SuggestionAccepted: {
@@ -6520,6 +6664,45 @@ export interface operations {
             };
         };
     };
+    rename_api_sessions__session_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     archive_api_sessions__session_id__archive_get: {
         parameters: {
             query?: {
@@ -6813,6 +6996,166 @@ export interface operations {
             };
         };
     };
+    retry_api_sessions__session_id__retry_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetryAccepted"];
+                };
+            };
+            /** @description Session is running */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Queue full */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revert_api_sessions__session_id__revert_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevertRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RevertResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    share_api_sessions__session_id__share_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unshare_api_sessions__session_id__share_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharesRevoked"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     unarchive_api_sessions__session_id__unarchive_post: {
         parameters: {
             query?: never;
@@ -6835,6 +7178,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shared_api_shared__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SharedSession"];
                 };
             };
             /** @description Validation Error */

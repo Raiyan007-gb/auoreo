@@ -1,24 +1,31 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
 import typer
 
 from auoreo.cli.common import err_console, settings
-from auoreo.core.services import Services
-
-_TERMINAL = {"run.completed", "run.failed", "run.blocked", "run.aborted", "run.max_steps"}
-
+from auoreo.cli.run_support import (
+    RunPlan,
+    RunUsageError,
+    compose_prompt,
+    parse_rule,
+    run_attached,
+    run_in_process,
+)
+from auoreo.core.settings import Settings
+from auoreo.runtime.inbox import RunOptions
 
 FORMATS = ("text", "json", "stream-json")
+EFFORTS = ("low", "medium", "high", "max")
 
 
 def run(
-    prompt: Annotated[str, typer.Argument(help="The message to send.")],
+    prompt: Annotated[str | None, typer.Argument(help="The message ('-' reads stdin).")] = None,
     agent: Annotated[str | None, typer.Option(help="Agent folder name.")] = None,
     workflow: Annotated[str | None, typer.Option(help="Workflow name.")] = None,
     model: Annotated[str | None, typer.Option("--model", "-m", help="Model or routing group.")] = None,
@@ -32,70 +39,139 @@ def run(
         ),
     ] = "text",
     as_json: Annotated[bool, typer.Option("--json", help="Alias of --format stream-json.")] = False,
+    # --- G5a: spec §18 flags (machinery in cli/run_support.py)
+    print_only: Annotated[bool, typer.Option("--print", help="Print only the final answer text.")] = False,
+    interactive: Annotated[
+        bool, typer.Option("--interactive", "-i", help="Prompt loop; asks are answered here.")
+    ] = False,
+    bare: Annotated[bool, typer.Option("--bare", help="System prompt = the agent body only.")] = False,
+    files: Annotated[
+        list[Path] | None, typer.Option("--file", "-f", help="Attach a file (repeatable, 10 MiB each).")
+    ] = None,
+    fork: Annotated[str | None, typer.Option("--fork", help="Fork this session and run in the fork.")] = None,
+    cont: Annotated[bool, typer.Option("--continue", "-c", help="Continue the most recent session.")] = False,
+    title: Annotated[str | None, typer.Option("--title", help="Title for a new session.")] = None,
+    variant: Annotated[
+        str | None, typer.Option(help="Shape requests by the variants.yaml entry matching this id.")
+    ] = None,
+    thinking: Annotated[str | None, typer.Option(help="Reasoning effort: low|medium|high|max.")] = None,
+    attach: Annotated[str | None, typer.Option("--attach", help="Run against a running server URL.")] = None,
+    allow: Annotated[
+        list[str] | None, typer.Option("--allow", help="Session rule <perm>[:<pattern>] (repeatable).")
+    ] = None,
+    deny: Annotated[list[str] | None, typer.Option("--deny", help="Session deny rule (repeatable).")] = None,
+    auto: Annotated[
+        bool, typer.Option("--auto", help="Auto-approve asks (floors/denies still apply).")
+    ] = False,
 ) -> None:
-    """Run one message non-interactively (tools needing approval are denied)."""
+    """Run a message (non-interactive by default: tools needing approval are denied)."""
     if as_json:
         fmt = "stream-json"
     if fmt not in FORMATS:
         err_console.print(f"[red]--format must be one of {', '.join(FORMATS)}[/red]")
         raise typer.Exit(2)
-    st = settings(gateway=gateway)
-    from auoreo.remote import cli_client, uds  # --- W2-B: a live daemon socket wins
-
-    if (sock := uds.daemon_socket(st.home)) is not None:
-        code = cli_client.run_over_socket(
-            sock,
-            prompt,
-            agent=agent,
-            workflow=workflow,
-            model=model,
-            session=session,
-            fmt=fmt,
-            pretty=_pretty,
-            note=lambda msg: err_console.print(f"[dim]{msg}[/dim]"),
-        )
-        raise typer.Exit(code)
-    code = asyncio.run(_run(st, prompt, agent, workflow, model, session, fmt))
+    try:
+        flags = Flags(print_only, interactive, bare, files or [], fork, cont, title, variant, thinking)
+        plan = build_plan(prompt, agent, workflow, model, session, fmt, flags, attach, allow, deny, auto)
+        code = _dispatch(settings(gateway=gateway), plan, attach)
+    except RunUsageError as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
+    except KeyError as exc:
+        err_console.print(f"[red]{str(exc).strip(chr(39) + chr(34))}[/red]")
+        raise typer.Exit(1) from exc
     raise typer.Exit(code)
 
 
-async def _run(st, prompt, agent, workflow, model, session, fmt) -> int:  # type: ignore[no-untyped-def]
-    svc = await Services.create(st, cwd=Path.cwd(), with_mcp=True)
-    try:
-        sid = session or (await svc.create_session(agent=agent, workflow=workflow, model=model)).id
-        sub = svc.bus.subscribe(None)
-        run_id = await svc.coordinator.submit(
-            sid, prompt, agent=agent, workflow=workflow, model=model, interactive=False
+def _dispatch(st: Settings, plan: RunPlan, attach: str | None) -> int:
+    if attach:
+        return run_attached(attach, plan, _pretty)
+    from auoreo.remote import cli_client, uds  # --- W2-B: a live daemon socket wins
+
+    sock = uds.daemon_socket(st.home)
+    if sock is None or plan.local_only or plan.fmt == "print":
+        return asyncio.run(run_in_process(st, plan, _pretty))
+    if plan.fork or plan.cont or plan.title:
+        return run_attached(f"unix:{sock}", plan, _pretty)
+    return cli_client.run_over_socket(
+        sock,
+        plan.prompt,
+        agent=plan.agent,
+        workflow=plan.workflow,
+        model=plan.model,
+        session=plan.session,
+        fmt=plan.fmt,
+        pretty=_pretty,
+        note=lambda msg: err_console.print(f"[dim]{msg}[/dim]"),
+    )
+
+
+@dataclass(frozen=True)
+class Flags:
+    print_only: bool
+    interactive: bool
+    bare: bool
+    files: list[Path]
+    fork: str | None
+    cont: bool
+    title: str | None
+    variant: str | None
+    thinking: str | None
+
+
+def _validate(f: Flags, session: str | None, fmt: str, attach: str | None) -> None:
+    if f.print_only and f.interactive:
+        raise RunUsageError("--print and --interactive are mutually exclusive")
+    if f.interactive and (attach or fmt != "text"):
+        raise RunUsageError("--interactive runs in-process with text output (no --attach/--format)")
+    if sum(map(bool, (f.fork, f.cont, session))) > 1:
+        raise RunUsageError("use only one of --session, --continue, --fork")
+    if f.thinking is not None and f.thinking not in EFFORTS:
+        raise RunUsageError(f"--thinking must be one of {', '.join(EFFORTS)}")
+
+
+def build_plan(
+    prompt: str | None,
+    agent: str | None,
+    workflow: str | None,
+    model: str | None,
+    session: str | None,
+    fmt: str,
+    f: Flags,
+    attach: str | None,
+    allow: list[str] | None,
+    deny: list[str] | None,
+    auto: bool,
+) -> RunPlan:
+    """Validate flag combinations and build the plan (raises RunUsageError → exit 2)."""
+    _validate(f, session, fmt, attach)
+    if prompt == "-" or (prompt is None and not f.interactive and not sys.stdin.isatty()):
+        prompt = sys.stdin.read()
+    if not (prompt or "").strip() and not f.interactive:
+        raise RunUsageError("a prompt is required (or use --interactive)")
+    rules = [parse_rule(r, "allow") for r in allow or []] + [parse_rule(r, "deny") for r in deny or []]
+    wants_options = f.bare or f.variant or f.thinking
+    plan = RunPlan(
+        prompt=compose_prompt(prompt or "", f.files),
+        agent=agent,
+        workflow=workflow,
+        model=model,
+        session=session,
+        fork=f.fork,
+        cont=f.cont,
+        title=f.title,
+        fmt="print" if f.print_only else fmt,
+        interactive=f.interactive,
+        auto=auto,
+        rules=rules,
+        options=RunOptions(bare=f.bare, variant=f.variant, effort=f.thinking) if wants_options else None,
+    )
+    if attach and (plan.rules or plan.auto or plan.options):
+        raise RunUsageError(
+            "--allow/--deny/--auto/--bare/--variant/--thinking need an in-process run; "
+            "set them on the server (settings.json / agent frontmatter) when using --attach"
         )
-        status = "completed"
-        final: dict = {}  # type: ignore[type-arg]
-        while run_id is not None:  # None: an engine-handled slash command (no turn)
-            ev = await sub.queue.get()
-            if fmt == "stream-json":
-                print(json.dumps(ev.model_dump(mode="json")), flush=True)
-            elif fmt == "text" and ev.aggregate_id == sid:
-                _pretty(ev.type, ev.data)
-            if ev.aggregate_id == sid and ev.type in _TERMINAL and ev.data.get("run_id") == run_id:
-                status = ev.type.split(".", 1)[1]
-                final = ev.data
-                break
-        await svc.coordinator.wait(sid, 5)
-        await svc.coordinator.background_idle(10)
-        if fmt == "json":
-            result = svc.coordinator.result(run_id) if run_id else None
-            out = {
-                "session_id": sid,
-                "run_id": run_id,
-                "status": status,
-                "text": result.text if result else final.get("text", ""),
-                "error": (result.error if result else final.get("error")),
-            }
-            print(json.dumps(out, indent=2), flush=True)
-        elif fmt == "text":
-            err_console.print(f"[dim]session {sid} · {status}[/dim]")
-        return 0 if status in {"completed", "max_steps"} else 1
-    finally:
-        await svc.close()
+    return plan
 
 
 def _pretty(kind: str, data: dict) -> None:  # type: ignore[type-arg]
