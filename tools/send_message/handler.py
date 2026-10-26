@@ -1,9 +1,11 @@
 from auoreo.teams.mailbox import BROADCAST, BROADCAST_SUMMARY_WORDS
-from auoreo.teams.tooling import attempt, my_team
+from auoreo.teams.tooling import attempt, my_team, teams_for
 from auoreo.tools.context import ToolContext, ToolError
 
 
 async def run(args: dict, ctx: ToolContext) -> str:
+    if args.get("control"):  # --- I3: leader→worker control message (teams.control_msgs)
+        return await _control(args, ctx)
     teams, team, me = await my_team(ctx)
     summary = args.get("summary", "")
     words = len(summary.split())
@@ -38,3 +40,19 @@ async def _remote(args: dict, ctx: ToolContext, teams, me: str, summary: str) ->
     except bridge.BridgeError as exc:
         raise ToolError(str(exc)) from exc
     return f"delivered to {args['to']} (their team {out.team}, mail #{out.mail_id})"
+
+
+async def _control(args: dict, ctx: ToolContext) -> str:
+    from auoreo.teams import control_msgs
+
+    teams = teams_for(ctx)
+    ctl = args["control"]
+    if ctl["type"] == "mode_set_request":
+        if not ctl.get("mode"):
+            raise ToolError("mode_set_request needs mode")
+        out = await attempt(control_msgs.mode_set(teams, ctx.session_id, args["to"], ctl["mode"]))
+        return f"{out['name']}: mode set to {out['effective']} (requested {out['mode']})"
+    out = await attempt(
+        control_msgs.permission_update(teams, ctx.session_id, args["to"], ctl.get("rules") or [])
+    )
+    return f"{out['name']}: {len(out['rules'])} session rule(s) added"

@@ -195,6 +195,6 @@ async def test_decide_workflow_inside_a_team_records_the_decision(
 
 
 async def test_swarm_and_decide_validate(services: Services) -> None:
-    for name, agents in {"swarm": ["coordinator", "reviewer"], "decide": ["researcher", "analyst"]}.items():
+    for name, agents in {"swarm": ["swarm_lead", "reviewer"], "decide": ["researcher", "analyst"]}.items():
         wf = services.harness.workflows[name].manifest
         assert [s.agent for s in wf.steps] == agents

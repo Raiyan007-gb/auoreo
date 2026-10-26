@@ -7,6 +7,29 @@ parameters:
     to: {type: string, minLength: 1, maxLength: 300, description: "Member name, \"*\", bridge:<peer>/<member> or uds:<socket path>/<member>."}
     message: {type: string, minLength: 1, maxLength: 100000}
     summary: {type: string, maxLength: 200, description: 'Preview: required over 500 chars; for "*" 1–10 words (5 broadcasts/min/team, audited).'}
+    control:
+      type: object
+      description: >-
+        Leader→worker control instead of mail (only to your own subagent; never shown to its
+        model). type=team_permission_update with rules [{permission, pattern?, action}]
+        (session-scoped, cannot re-allow what its ceiling denies), or type=mode_set_request
+        with mode (clamped to your own mode).
+      properties:
+        type: {type: string, enum: [team_permission_update, mode_set_request]}
+        rules:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            properties:
+              permission: {type: string, minLength: 1, maxLength: 100}
+              pattern: {type: string, maxLength: 500}
+              action: {type: string, enum: [allow, ask, deny]}
+            required: [permission, action]
+            additionalProperties: false
+        mode: {type: string, enum: [manual, smart, acceptEdits, yolo, plan]}
+      required: [type]
+      additionalProperties: false
   required: [to, message]
   additionalProperties: false
 default_action: allow

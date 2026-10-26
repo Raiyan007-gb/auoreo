@@ -24,6 +24,7 @@ STARTERS: list[str] = [
     "auoreo.automation.scheduler:start",
     "auoreo.automation.webhooks:start",
     "auoreo.teams:start",  # key = last dotted part → services.ext["teams"]
+    "auoreo.teams.dispatcher:start",  # I3 → services.ext["dispatcher"] (off unless i3.kanban.dispatch)
     "auoreo.plugins:start",  # → services.ext["plugins"]
     "auoreo.memory.curator:start",  # → services.ext["curator"] (deterministic, no LLM)
     "auoreo.voice:start",  # M4c → services.ext["voice"]

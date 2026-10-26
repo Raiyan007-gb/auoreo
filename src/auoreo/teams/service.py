@@ -269,14 +269,14 @@ class TeamsService:
         parent = await self.s.get_session(parent_session_id)
         if parent is None:
             raise TeamsError(f"unknown parent session '{parent_session_id}'")
+        if mode != "spawn" and parent_session_id in self.forks:  # boilerplate recursion guard
+            raise TeamsError("a forked subagent cannot fork again; use mode=spawn or do the work")
         await self.check_can_spawn(parent_session_id)
         self.supervisor.check_spawn(parent_session_id, parent.agent, role, output_schema)
         if not TASK_NAME_RE.fullmatch(name):
             raise TeamsError(f"invalid task name '{name}': use [a-z0-9_]+ (≤64 chars)")
         if mode not in MODES:
             raise TeamsError(f"unknown mode '{mode}' (known: {', '.join(MODES)})")
-        if mode != "spawn" and parent_session_id in self.forks:  # boilerplate recursion guard
-            raise TeamsError("a forked subagent cannot fork again; use mode=spawn or do the work")
         tools = self.s.harness.tools
         allowed = spawn_i3.check_allowed(tools, allowed_tools)  # unknown names fail loud
         extra_deny = spawn_i3.mcp_deny(tools, inherit_mcp_toolsets)
