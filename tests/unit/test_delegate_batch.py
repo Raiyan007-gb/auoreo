@@ -42,7 +42,11 @@ async def test_batch_runs_at_most_n_at_once(services: Services, gateway: RoutedG
     run = asyncio.create_task(
         call_tool(services, tool_ctx(services, parent), "delegate_task", {"tasks": tasks})
     )
-    await asyncio.sleep(0.4)
+    for _ in range(100):  # poll instead of a fixed sleep: slow CI must not fail this
+        if await spawned(services, parent) >= 2:
+            break
+        await asyncio.sleep(0.05)
+    await asyncio.sleep(0.2)  # give a (wrong) third spawn time to appear
     assert await spawned(services, parent) == 2  # the third waits for a free slot
     gate.set()
     text, err = await asyncio.wait_for(run, 20)

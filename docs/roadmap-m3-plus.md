@@ -340,8 +340,33 @@ Two read-only audits (§2 catalog + §21 milestones; §5–§26 normative) drove
   - the spec teardown order, SSE `events:tail` and the WS `control_response` error;
   - JWT cookies, age-encrypted secrets export, plugin quarantine, literal-secret asks and PTY shells inside the sandbox.
 
-Deliberately left as documented limits are listed in each merge commit body (e.g. Discord is
-outbound-only, Google Calendar is a CalDAV stub, and L3 exact-fork delegation is not built).
+- **I (third audit, §1–§26 in three passes):**
+  - security: capability-scoped `/ws`, creator grants keyed by package hash, subagent deny
+    inheritance, cookie-JWT WS expiry, plan-dir containment, LiveKit token hygiene, debug-bundle
+    privacy, MCP elicitation URL mode, owner-only key files, denial/guardian breakers,
+    split-secret redaction, a project `.env` allowlist, `/compact` idle lock, workspace trust;
+  - gateway: rotation grace + secrets API hot reload, key pools, daily budgets, structured output,
+    tool-schema shaper, partial tool-call events, OpenRouter lane, `best`/`[1m]`, ledger v6/v7;
+  - teams: kanban dispatcher + guards, cron fields/schedules/aliases/notify, exact fork, stale
+    idle-vs-in-tool, coordinator allowlist + `synthetic_output`, handoff schema, `sa-` ids;
+  - memory: re-embed job, topics/`memory_read`/drift guard/taxonomy, scopes + tenants + decay,
+    CJK FTS, docs chunking, a 230-row golden set gated in CI, ralph-lite loops;
+  - plugins/MCP: trust tiers + signatures + pinned pip installs, `list_changed`/roots/SSE,
+    sampling caps, bundled MCP servers, `WebhookProvider` + GitHub `/meta` CIDRs;
+  - messaging: Discord gateway connector, Telegram streaming/voice, `MEDIA:` voice notes, email
+    STARTTLS/XOAUTH2, Google Calendar v3, GitHub/Google OAuth connectors;
+  - web/CLI: share page, skills hub UI, diff view, edit-and-approve, `--json`/`--mini`, `queue`,
+    `pairing`, `reload`, `doctor --fix`, new doctor rows;
+  - voice/CU: wake daemon, streaming STT in RTC, STT filters, LiveKit agents worker + token/webhook,
+    desktop safety guards, Chrome CDP bridge, vision remap/retry;
+  - ops: per-tool egress proxy + `net` stage, search backends (Brave/Tavily/Jina/Firecrawl), npm +
+    Electron release jobs, `install.sh`, SHA-pinned CI + Dependabot + e2e, lane cassettes,
+    session snapshots, tool-catalog check, PR template, spike records.
+
+Deliberately left as documented limits are listed in each merge commit body (e.g. Discord has
+no streaming or voice channels, `livekit-agents` is not a declared extra because it cannot
+resolve alongside the `otel` extra, the cua-driver command names are contract-tested only, and
+Sigstore provenance for plugins is not built).
 
 ---
 

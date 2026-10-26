@@ -15,7 +15,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `prompts/*.md`, `prompts/families/*.md`, `prompts/variants.yaml` | System prompt sections, model-family overlays, request shaping |
 | `permissions/*.yaml` | Permission rules + unbypassable floors |
 | `mcp/<name>.yaml` | MCP servers (tools become `mcp__<server>__<tool>`) |
-| `backends/<kind>/<name>/backend.yaml` + `impl.py` | Device/library backends (capture, browser, stt, …) behind ABCs in `src/auoreo/backends/`; selected via `settings.backends` |
+| `backends/<kind>/<name>/backend.yaml` + `impl.py` | Device/library backends (capture, browser, stt, search, audio_input, …) behind ABCs in `src/auoreo/backends/`; selected via `settings.backends` |
 | `hooks/<name>.yaml` | Lifecycle hooks (Pre/PostToolUse, Stop, Session*, *Compact): a command gets the event as JSON on stdin |
 | `jobs/<name>.yaml` | Scheduled jobs (cron / `every` / one-shot); APScheduler fires, AUOREO runs the session and delivers |
 | `webhooks/<route>.yaml` | `POST /hooks/<route>`: HMAC-verified ingress → agent session → delivery |
@@ -28,7 +28,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `src/auoreo/gateway/` | LLM gateway (LiteLLM Router) + fake gateway |
 | `src/auoreo/core/` | settings, DB + Alembic migrations, events, bus, audit, redaction, permissions, approvals, questions, secrets, usage ledger, tunnels, WS connections, `extensions.py` (starter seam for optional subsystems) |
 | `src/auoreo/automation/`, `src/auoreo/teams/`, `src/auoreo/plugins/`, `src/auoreo/rtc/`, `src/auoreo/voice/` | Optional subsystems attached through `core/extensions.py` (webhooks + scheduler + deliveries; delegation/mailbox/kanban; plugin host; WebRTC; voice service + RTC bridge). The sandbox probe and memory curator are starters too |
-| `src/auoreo/tools/` | tool *engine* only (executor, context, net helpers) — no tool bodies |
+| `src/auoreo/tools/` | tool *engine* only (executor, stages, egress proxy + `net` stage, locks, context, net helpers) — no tool bodies |
 | `src/auoreo/memory/` | FTS5 + sqlite-vec hybrid memory |
 | `src/auoreo/api/`, `src/auoreo/cli/` | FastAPI app (one port; REST + SSE `/api/events` + WS `/ws`) and Typer CLI |
 | `web/` | React SPA (`web/app`), typed SDK (`web/sdk`, generated from `openapi.json`), Playwright e2e; `web/dist` is served at `/` |
@@ -55,6 +55,7 @@ Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` �
 - Schema changes need an Alembic revision in `src/auoreo/core/alembic/versions/` and a
   `SCHEMA_VERSION` bump; `Database.init()` upgrades file databases in place.
 - Hardline floors (`core/floors.py`, `floors_secrets.py`) run before policies, rules and yolo; a project `.env` can never set `AUOREO_*` security knobs.
+- A project `<cwd>/.auoreo/` is inert (no hooks, MCP, tool code, plugins, policies or allow rules) until trusted (`auoreo trust`); tools reach the network only through the egress proxy unless a one-shot `net_direct` grant with a justification says otherwise.
 - Secrets come only from env / keyring / `secrets.db`. Tools never read `.env` or
   `secrets.db` (executor-enforced floor) and child processes get a scrubbed env.
 - No `elif` chains of 4+ (use dict dispatch); files ≤ 500 lines (`api/app.py` ≤ 300).
