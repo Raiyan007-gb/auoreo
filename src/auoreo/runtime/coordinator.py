@@ -10,7 +10,7 @@ import asyncio
 import contextlib
 import logging
 import uuid
-from collections.abc import Coroutine
+from collections.abc import AsyncIterator, Coroutine
 from typing import TYPE_CHECKING, Any
 
 from auoreo.core.permissions import PermissionEngine
@@ -30,6 +30,14 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+class SessionBusy(Exception):
+    """A manual compaction was asked for while a turn runs (spec §11.9 S4(d): requires idle)."""
+
+    def __init__(self, session_id: str) -> None:
+        super().__init__(f"session '{session_id}' is busy; compact when it is idle")
+        self.session_id = session_id
+
+
 class SessionRunCoordinator:
     def __init__(self, services: Services) -> None:
         self.s = services
@@ -38,6 +46,7 @@ class SessionRunCoordinator:
         self._results: dict[str, TurnResult] = {}
         self._idle: dict[str, asyncio.Event] = {}
         self._background: set[asyncio.Task[Any]] = set()
+        self._compacting: set[str] = set()  # --- I4: manual compaction holds the start lock
         self.idle = IdleCompactor(services, self.runner.compaction)  # --- G2b: S4(c)
 
     async def runtime(self, session_id: str) -> SessionRuntime:
@@ -66,6 +75,30 @@ class SessionRunCoordinator:
     def is_running(self, session_id: str) -> bool:
         rt = self._runtimes.get(session_id)
         return bool(rt and rt.running)
+
+    def is_busy(self, session_id: str) -> bool:
+        """Running a turn, draining queued input, or inside a manual compaction."""
+        rt = self._runtimes.get(session_id)
+        draining = bool(rt and rt.task is not None and not rt.task.done())
+        return self.is_running(session_id) or draining or session_id in self._compacting
+
+    @contextlib.asynccontextmanager
+    async def compaction_lock(self, session_id: str) -> AsyncIterator[SessionRuntime]:
+        """Hold the session's start lock for a whole manual compaction (S4(d)/S6): refused
+        (`SessionBusy`) while a turn runs; input that arrives meanwhile is queued and its turn
+        starts only after the replace transaction has committed."""
+        rt = await self.runtime(session_id)
+        if self.is_busy(session_id):
+            raise SessionBusy(session_id)
+        await self.idle.preempt(session_id)
+        self.idle.cancel_timer(session_id)
+        self._compacting.add(session_id)
+        try:
+            yield rt
+        finally:
+            self._compacting.discard(session_id)
+            if rt.inbox.next_turn and (rt.task is None or rt.task.done()):
+                rt.task = asyncio.create_task(self._drain(rt), name=f"drain:{session_id}")
 
     async def submit(
         self,
@@ -103,7 +136,7 @@ class SessionRunCoordinator:
         run_id = f"run_{uuid.uuid4().hex[:12]}"
         rt.inbox.followup(TurnRequest(run_id, text, agent, workflow, model, options))
         self._idle.setdefault(session_id, asyncio.Event()).clear()
-        if rt.task is None or rt.task.done():
+        if (rt.task is None or rt.task.done()) and session_id not in self._compacting:
             rt.task = asyncio.create_task(self._drain(rt), name=f"drain:{session_id}")
         return run_id
 

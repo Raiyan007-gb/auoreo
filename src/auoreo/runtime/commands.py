@@ -91,9 +91,16 @@ async def _compact(inv: Invocation) -> Expanded:
             },
         )
     else:
-        # the service already emitted compaction.skipped / compaction.failed
-        with contextlib.suppress(CompactionError):
-            await comp.compact(sid, trigger="manual", **compact_args(inv.args))
+        from auoreo.runtime.coordinator import SessionBusy
+
+        try:  # S4(d): manual compaction requires idle and holds the start lock throughout
+            async with inv.coord.compaction_lock(sid):
+                # the service already emitted compaction.skipped / compaction.failed
+                with contextlib.suppress(CompactionError):
+                    await comp.compact(sid, trigger="manual", **compact_args(inv.args))
+        except SessionBusy:
+            reason = "busy: a turn is running; /compact runs only when the session is idle"
+            await s.emit(sid, "compaction.skipped", {"trigger": "manual", "reason": reason})
     return Expanded(inv.text, handled=True)
 
 
