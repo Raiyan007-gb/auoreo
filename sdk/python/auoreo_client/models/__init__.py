@@ -154,6 +154,7 @@ from .prefs_proposal_action import PrefsProposalAction
 from .prefs_proposal_in import PrefsProposalIn
 from .prefs_proposal_in_action import PrefsProposalInAction
 from .prefs_proposal_status import PrefsProposalStatus
+from .reembed_status import ReembedStatus
 from .reload_result import ReloadResult
 from .reload_result_changes import ReloadResultChanges
 from .reload_result_changes_additional_property import ReloadResultChangesAdditionalProperty
@@ -378,6 +379,7 @@ __all__ = (
     "PrefsProposalIn",
     "PrefsProposalInAction",
     "PrefsProposalStatus",
+    "ReembedStatus",
     "ReloadResult",
     "ReloadResultChanges",
     "ReloadResultChangesAdditionalProperty",

@@ -839,6 +839,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/reembed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reembed Status */
+        get: operations["reembed_status_api_memory_reembed_get"];
+        put?: never;
+        /**
+         * Reembed Start
+         * @description Start (or resume) the background re-embed job; returns the current progress.
+         */
+        post: operations["reembed_start_api_memory_reembed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory/search": {
         parameters: {
             query?: never;
@@ -3969,6 +3990,34 @@ export interface components {
              */
             reason: string;
         };
+        /** ReembedStatus */
+        ReembedStatus: {
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
+            /** Embed Model */
+            embed_model: string;
+            /** Error */
+            error?: string | null;
+            /**
+             * Stale
+             * @description rows whose stored embed_model differs from the current one
+             * @default 0
+             */
+            stale: number;
+            /**
+             * State
+             * @description idle | running | done | failed
+             */
+            state: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
         /** ReloadResult */
         ReloadResult: {
             /** Changes */
@@ -6843,6 +6892,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrefsProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reembed_status_api_memory_reembed_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReembedStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reembed_start_api_memory_reembed_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReembedStatus"];
                 };
             };
             /** @description Validation Error */
