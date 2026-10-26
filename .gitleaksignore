@@ -1,0 +1,4 @@
+# gitleaks fingerprints of deliberate findings (one per line: <commit>:<file>:<rule-id>:<line>,
+# or <file>:<rule-id>:<line> for `gitleaks dir`). Cassettes are allowlisted here, never by path.
+# Add an entry only after checking the value is fake; `gitleaks git --report-path r.json`
+# prints the Fingerprint field to copy.

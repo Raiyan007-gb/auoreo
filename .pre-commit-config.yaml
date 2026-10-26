@@ -5,3 +5,19 @@ repos:
     rev: v8.30.1
     hooks:
       - id: gitleaks
+  # --- I9 (spec §25.15 L1090): ruff lint (autofix) + format check, then ty (informational)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.2  # matches the uv.lock ruff
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+        args: [--check]
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check (informational, pre-1.0)
+        entry: sh -c 'uvx ty@0.0.92 check src --output-format concise || true'
+        language: system
+        pass_filenames: false
+        types: [python]

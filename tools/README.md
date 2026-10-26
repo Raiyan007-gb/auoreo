@@ -19,7 +19,10 @@ is_read_only: true
 is_concurrency_safe: true      # may run in parallel with other safe calls
 exposure: direct               # direct | deferred (found via tool_search) | hidden
 timeout_ms: 30000
-net: none                      # none | proxy | direct — egress class, recorded in the audit row
+net: none                      # none | proxy | direct — egress class, enforced by the executor:
+                               # proxy = through the loopback egress proxy (SSRF floor, host
+                               # lists, audit net{mode,host,port}); direct = never default, needs
+                               # a `net_justification` arg + `net_direct` approval (one-shot grant)
 sandbox_mode: workspace-write  # read-only | workspace-write | danger-full-access (bash runs
                                # through the selected `sandbox` backend with this mode)
 ```

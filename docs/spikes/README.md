@@ -12,3 +12,7 @@ decision, follow-ups. Each one has a reproducible script or prototype checked in
 | [Nuitka](nuitka.md) | L1095 | PyInstaller stays; the Nuitka onefile did not finish within the time box (litellm optimizer crashes, 7,175 modules to compile in C); kept as an experimental script | `scripts/build_binary_nuitka.py`, `scripts/spikes/auoreo.nuitka-package.config.yml` |
 | [Tauri](tauri.md) | L1055 | Electron stays; the size win does not dominate once the ~200 MB server is bundled, and signing is unchanged | `desktop-tauri/` |
 | [ACP changelog](acp.md) | L1039 | Stay on ACP v1; added `session/list`, `session/resume`, `session/close` + `sessionCapabilities` | `src/auoreo/api/routers/acp.py`, `tests/integration/test_acp_sessions.py` |
+| [Rerank / embed / chunk / fusion](rerank-embed.md) | §22-2 | RRF-60 + 512/50 + optional embedding, rerank off; golden-set CI gate; model bake-off **not run here** (keys/GPU) | `scripts/eval_memory.py`, `evals/memory/` |
+| [Perception stack](perception-stack.md) | §22-5 | Fakes stay default; licence posture gates selection (AGPL sidecar-only, NC opt-in); accuracy numbers **not run here** (hardware) | `backends/{diarize,detection,face}/` |
+| [WebRTC transport](webrtc-transport.md) | §22-6 | `aiortc` default for loopback/LAN, LiveKit for WAN/SIP; WAN/CGNAT matrix **not run here** | `backends/rtc_transport/`, `deploy/{livekit,coturn}/` |
+| [TTS bake-off](tts-bakeoff.md) | spike 7 | `kittentts` local default, hosted lanes by key; listening test **not run here** | `backends/tts/` |

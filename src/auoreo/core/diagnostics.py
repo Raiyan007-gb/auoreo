@@ -468,3 +468,12 @@ EXTRA_CHECKS.append(_i4_checks)
 from auoreo.core.diagnostics_i6 import i6_checks  # noqa: E402  --- I6: plugin trust + GitHub /meta cache
 
 EXTRA_CHECKS.append(i6_checks)
+
+
+async def _i9_checks(st: Settings) -> list[Check]:  # --- I9: egress proxy, ws server, reverse proxy
+    from auoreo.core.diagnostics_i9 import i9_checks
+
+    return await i9_checks(st)
+
+
+EXTRA_CHECKS.append(_i9_checks)

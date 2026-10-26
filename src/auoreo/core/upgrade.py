@@ -40,6 +40,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
 
 from auoreo import __version__
+from auoreo.core.upgrade_guard import LockHeld, db_schema, holder_lock, rollback_refusal
 
 Channel = Literal["stable", "beta", "dev"]
 CHANNELS: tuple[str, ...] = ("stable", "beta", "dev")
@@ -236,6 +237,12 @@ async def download(client: httpx.AsyncClient, asset: Asset, dest: Path) -> str:
 
 
 # ------------------------------------------------------------------ install
+def _schema_version() -> int:
+    from auoreo.core.db import SCHEMA_VERSION  # lazy: keeps sign_manifest/doctor imports light
+
+    return SCHEMA_VERSION
+
+
 def prev_path(binary: Path) -> Path:
     return binary.with_name(binary.stem + ".prev" + binary.suffix)
 
@@ -277,12 +284,24 @@ def windows_instructions(binary: Path, staged: Path) -> str:
     )
 
 
-def rollback(home: Path, binary: Path, *, windows: bool = False) -> str:
-    """Swap `auoreo.prev` back in; the current binary becomes the new `.prev` (roll forward)."""
+def rollback(home: Path, binary: Path, *, windows: bool = False, force: bool = False) -> str:
+    """Swap `auoreo.prev` back in; the current binary becomes the new `.prev` (roll forward).
+    I9: refused when state.db was already migrated past the previous build's schema (unless
+    `force`), and serialised by the holder lock."""
     prev = prev_path(binary)
     if not prev.is_file():
         raise UpgradeError(f"nothing to roll back to: {prev} does not exist")
     last = read_receipt(home) or {}
+    if (why := rollback_refusal(last, home, force=force)) is not None:
+        raise UpgradeError(why)
+    try:
+        with holder_lock(home, binary):
+            return _rollback_locked(home, binary, prev, last, windows=windows)
+    except LockHeld as exc:
+        raise UpgradeError(f"another upgrade/rollback is running ({exc})") from exc
+
+
+def _rollback_locked(home: Path, binary: Path, prev: Path, last: dict[str, Any], *, windows: bool) -> str:
     if windows:
         tmp = binary.with_name(binary.stem + ".cur" + binary.suffix)
         return (
@@ -294,7 +313,18 @@ def rollback(home: Path, binary: Path, *, windows: bool = False) -> str:
     os.replace(prev, binary)
     os.replace(tmp, prev)
     to = last.get("from", "previous") if last.get("action") == "installed" else "previous"
-    write_receipt(home, {"action": "rollback", "from": __version__, "to": to, "channel": last.get("channel")})
+    write_receipt(
+        home,
+        {
+            "action": "rollback",
+            "from": __version__,
+            "to": to,
+            "channel": last.get("channel"),
+            "steps": ["schema_guard", "lock", "swap_prev"],
+            "skips": [],
+            "db_schema": db_schema(home),
+        },
+    )
     return f"restored {binary} from {prev.name} (state.db written by a newer schema may refuse to open)"
 
 
@@ -345,12 +375,28 @@ async def run_upgrade(
     finally:
         if own:
             await client.aclose()
-    receipt = {"from": __version__, "to": m.version, "channel": channel, "sha256": digest}
+    receipt: dict[str, Any] = {
+        "from": __version__,
+        "to": m.version,
+        "channel": channel,
+        "sha256": digest,
+        "from_schema": _schema_version(),  # I9: the rollback schema guard compares against this
+        "min_schema_version": m.min_schema_version,
+        "steps": ["fetch", "verify_signature", "evaluate", "download", "verify_sha256", "stage"],
+    }
     if windows:
         out.status, out.message = "staged", windows_instructions(binary, staged)
+        receipt["skips"] = ["swap (a running .exe cannot be replaced; move it after closing auoreo)"]
         out.receipt = write_receipt(home, {"action": "staged", **receipt})
         return out
-    prev = swap(binary, staged)
+    try:
+        with holder_lock(home, binary):
+            prev = swap(binary, staged)
+    except LockHeld as exc:
+        _discard(staged)
+        raise UpgradeError(f"another upgrade/rollback is running ({exc})") from exc
+    receipt["steps"] += ["lock", "keep_prev", "swap"]
+    receipt["skips"] = ["restart (restart running servers yourself)"]
     out.status, out.message = "installed", f"{binary} → {m.version} (previous kept as {prev.name})"
     out.receipt = write_receipt(home, {"action": "installed", **receipt})
     return out

@@ -146,6 +146,10 @@ class I9Settings(BaseModel):
     fetch: FetchSettings = Field(default_factory=FetchSettings)
     guardian: GuardianSettings = Field(default_factory=GuardianSettings)
     ws: WsServerSettings = Field(default_factory=WsServerSettings)
+    reverse_proxy_url: str | None = None
+    """Public URL of a reverse proxy in front of this server (`deploy/nginx/auoreo.conf`);
+    when set, `auoreo doctor` fetches `/api/events` through it and asserts no buffering /
+    `no-cache` and a first SSE frame within 30 s."""
 
 
 __all__ = [

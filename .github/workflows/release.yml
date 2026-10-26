@@ -1,6 +1,7 @@
 name: release
 # Tag v<version> → PyPI (trusted publishing), GHCR multi-arch image, PyInstaller onefile
-# binaries + SHA256SUMS, signed update manifests, GitHub Release. See docs/release.md.
+# binaries + SHA256SUMS, npm launcher (provenance), Electron desktop builds,
+# signed update manifests, GitHub Release. See docs/release.md.
 on:
   push:
     tags: ["v*"]
@@ -17,8 +18,8 @@ jobs:
       version: ${{ steps.meta.outputs.version }}
       channel: ${{ steps.meta.outputs.channel }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
         with:
           python-version: "3.12"
       - name: version == tag guard
@@ -40,14 +41,14 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           package-manager-cache: false
       - run: npm ci
       - run: npm run build
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-dist
           path: web/dist
@@ -57,11 +58,11 @@ jobs:
     needs: [guard, web]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: web-dist
           path: web/dist
@@ -71,7 +72,7 @@ jobs:
         run: |
           unzip -l dist/*.whl | grep -q 'auoreo/_bundled/web/dist/index.html'
           unzip -l dist/*.whl | grep -q 'auoreo/_bundled/agents/default/AGENT.md'
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-dist
           path: dist/
@@ -84,11 +85,11 @@ jobs:
     permissions:
       id-token: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: python-dist
           path: dist/
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
 
   image:
     needs: guard
@@ -99,16 +100,16 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
-      - uses: docker/login-action@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
-        uses: docker/metadata-action@v6
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository }}
           # pep440: 1.2.3 → 1.2.3, 1.2, latest; 1.3.0rc1 → 1.3.0rc1 only (no latest)
@@ -116,7 +117,7 @@ jobs:
             type=pep440,pattern={{version}}
             type=pep440,pattern={{major}}.{{minor}}
           flavor: latest=auto
-      - uses: docker/build-push-action@v7
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -152,11 +153,11 @@ jobs:
       AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
       ASSET: dist/auoreo-${{ matrix.platform }}${{ matrix.exe }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: web-dist
           path: web/dist
@@ -192,14 +193,14 @@ jobs:
             --password "$APPLE_APP_PASSWORD" --wait
       - name: Windows — Azure login
         if: runner.os == 'Windows' && env.AZURE_CLIENT_ID != ''
-        uses: azure/login@v3
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Windows — Authenticode sign (Azure Artifact Signing)
         if: runner.os == 'Windows' && env.AZURE_CLIENT_ID != ''
-        uses: azure/artifact-signing-action@v2
+        uses: azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
         with:
           endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
           signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT_NAME }}
@@ -209,7 +210,7 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binary-${{ matrix.platform }}
           path: ${{ env.ASSET }}
@@ -223,8 +224,8 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v8
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: web-dist
           path: web/dist
@@ -237,7 +238,7 @@ jobs:
             uv run --no-sync --with "pyinstaller>=6.22,<7" python scripts/build_binary.py --platform-name
             test "$(dist/auoreo-linux-x64-musl --version)" = "${{ needs.guard.outputs.version }}"
           '
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binary-linux-x64-musl
           path: dist/auoreo-linux-x64-musl
@@ -254,16 +255,16 @@ jobs:
       UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
       VERSION: ${{ needs.guard.outputs.version }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
         with:
           python-version: "3.12"
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: binary-*
           path: binaries
           merge-multiple: true
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: python-dist
           path: python-dist
@@ -279,13 +280,128 @@ jobs:
             --base-url "https://github.com/${{ github.repository }}/releases/download/$GITHUB_REF_NAME"
       - name: create the GitHub Release
         run: |
-          pre=""
-          if [ "${{ needs.guard.outputs.channel }}" != "stable" ]; then pre="--prerelease"; fi
-          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes $pre \
-            binaries/* python-dist/* $(ls manifests/*.json 2>/dev/null || true)
+          pre=()
+          if [ "${{ needs.guard.outputs.channel }}" != "stable" ]; then pre=(--prerelease); fi
+          files=(binaries/* python-dist/* scripts/install.sh)
+          if compgen -G "manifests/*.json" >/dev/null; then files+=(manifests/*.json); fi
+          gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes "${pre[@]}" "${files[@]}"
       - name: publish manifests to the rolling `updates` release (what `auoreo upgrade` reads)
         if: env.UPDATE_SIGNING_KEY != ''
         run: |
           gh release view updates >/dev/null 2>&1 || gh release create updates --prerelease \
             --title "Update manifests" --notes "Signed manifest-<channel>.json files read by auoreo upgrade."
           gh release upload updates manifests/*.json --clobber
+
+  npm:
+    # I9 (spec §24.10 L893): npm launcher + per-platform binary packages, with provenance.
+    # Auth: npm trusted publishing (OIDC, `id-token: write`) when the packages are configured
+    # for this workflow; otherwise the `NPM_TOKEN` secret. Without either the job is skipped.
+    needs: [guard, binaries]
+    runs-on: ubuntu-24.04
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      CHANNEL: ${{ needs.guard.outputs.channel }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: version == tag guard (npm semver of the PEP 440 tag)
+        run: |
+          node packages/npm/scripts/sync-version.mjs --check
+          want="$(node -e 'import("./packages/npm/scripts/sync-version.mjs").then(m => console.log(m.toSemver(process.argv[1])))' "${GITHUB_REF_NAME#v}")"
+          have="$(node -p 'require("./packages/npm/package.json").version')"
+          test "$want" = "$have" || { echo "packages/npm is $have but the tag needs $want"; exit 1; }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: binary-*
+          path: binaries
+          merge-multiple: true
+      - run: node packages/npm/scripts/pack-platforms.mjs --artifacts binaries --out packages/npm/dist
+      - name: publish (platform packages first, then the launcher)
+        run: |
+          tag=latest
+          if [ "$CHANNEL" != "stable" ]; then tag="$CHANNEL"; fi
+          for dir in packages/npm/dist/*/; do
+            npm publish "$dir" --provenance --access public --tag "$tag"
+          done
+          npm publish packages/npm --provenance --access public --tag "$tag"
+
+  desktop:
+    # I9 (spec §25.15 L1095): Electron shell per OS, published to this release with the update
+    # channel files electron-updater reads (`AUOREO_CHANNEL`). Signing/notarisation only run when
+    # their secrets exist; otherwise the build is unsigned (auto-discovery disabled).
+    needs: [guard, binaries, github-release]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14, artifact: auoreo-macos-arm64, dest: mac-arm64/auoreo, args: --mac }
+          - { os: windows-latest, artifact: auoreo-windows-x64.exe, dest: win-x64/auoreo.exe, args: --win }
+          - { os: ubuntu-latest, artifact: auoreo-linux-x64, dest: linux-x64/auoreo, args: --linux --x64 }
+          - { os: ubuntu-24.04-arm, artifact: auoreo-linux-arm64, dest: linux-arm64/auoreo, args: --linux --arm64 }
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    env:
+      AUOREO_CHANNEL: ${{ needs.guard.outputs.channel }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_LINK_SECRET: ${{ secrets.CSC_LINK }}
+      WIN_CSC_LINK_SECRET: ${{ secrets.WIN_CSC_LINK }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: binary-${{ matrix.artifact == 'auoreo-macos-arm64' && 'macos-arm64' || matrix.artifact == 'auoreo-windows-x64.exe' && 'windows-x64' || matrix.artifact == 'auoreo-linux-arm64' && 'linux-arm64' || 'linux-x64' }}
+          path: desktop/staging
+      - name: stage the binary + set the version
+        run: |
+          mkdir -p "resources/bin/$(dirname "${{ matrix.dest }}")"
+          cp "staging/${{ matrix.artifact }}" "resources/bin/${{ matrix.dest }}"
+          chmod 0755 "resources/bin/${{ matrix.dest }}"
+          npm version --no-git-tag-version --allow-same-version "$(node -e 'import("../packages/npm/scripts/sync-version.mjs").then(m => console.log(m.toSemver(process.argv[1])))' "${GITHUB_REF_NAME#v}")"
+      - name: macOS signing secrets (only when present)
+        if: runner.os == 'macOS' && env.CSC_LINK_SECRET != ''
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          {
+            echo "CSC_LINK=$CSC_LINK"
+            echo "CSC_KEY_PASSWORD=$CSC_KEY_PASSWORD"
+            echo "APPLE_ID=$APPLE_ID"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
+          } >> "$GITHUB_ENV"
+      - name: Windows signing secrets (only when present)
+        if: runner.os == 'Windows' && env.WIN_CSC_LINK_SECRET != ''
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        run: |
+          {
+            echo "WIN_CSC_LINK=$WIN_CSC_LINK"
+            echo "WIN_CSC_KEY_PASSWORD=$WIN_CSC_KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+      - name: unsigned build (no certificate configured)
+        if: env.CSC_LINK_SECRET == '' && env.WIN_CSC_LINK_SECRET == ''
+        run: echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+      - run: npm install --no-audit --no-fund
+      - run: npx electron-builder --config electron-builder.yml ${{ matrix.args }} --publish always

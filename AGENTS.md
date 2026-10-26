@@ -66,12 +66,20 @@ uv sync
 uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run pytest
 uv run auoreo harness validate
 uv run python scripts/check_openapi.py --check
+uv run python scripts/verify_tool_catalog.py --check   # --write after adding/changing a tool
+./scripts/run_tests.sh [--per-file]                     # hermetic: env -i, fresh HOME
 cd web && npm ci && npm run typecheck && npm run lint && npm run build && npm run e2e
 AUOREO_GATEWAY=fake uv run auoreo web --port 0       # keyless live run with the UI
 ```
 
 Use Context7 (`resolve-library-id` → `query-docs`) before writing code against a
-versioned dependency, and note the library ID in the commit body.
+versioned dependency, and note it in the commit body as one trailer per source:
+`Docs: <URL> | <libraryID>@<version> | accessed YYYY-MM-DD`. PRs fill the evidence table in
+`.github/pull_request_template.md`. Test tiers: gateway HTTP replays VCR cassettes
+(`tests/fixtures/cassettes/<provider>/<case>.yaml`, re-record with `VCR_RECORD=1`); session
+replays compare snapshots (`tests/fixtures/snapshots/`, refresh with `AUOREO_SNAPSHOT=update`,
+never in CI). Tools declare `net: none | proxy | direct` (I9 egress: `proxy` goes through the
+loopback egress proxy, `direct` needs a `net_justification` + approval).
 
 ## Spec drift (deliberate)
 

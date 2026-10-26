@@ -17,11 +17,13 @@ async def test_run_checks_without_services(home: Path) -> None:
     rows = await diagnostics.run_checks(Settings(home=home, gateway="fake"))
     names = [c.check for c in rows]
     assert names[:4] == ["python", "sqlite", "sqlite-vec", "home"]
-    h1b = {"keyring", "ws_auth", "workspace_trust", "memory_reembed"}  # H1b + I4 rows: EXTRA_CHECKS
+    i9 = ["egress-proxy", "egress-sandbox", "ws-server", "search"]  # I9 rows: EXTRA_CHECKS, last
+    i6 = ["plugin-signatures"]  # I6 row (bundled plugin signatures)
+    h1b = {"keyring", "ws_auth", "workspace_trust", "memory_reembed", *i6, *i9}  # EXTRA_CHECKS rows
     builtin = [n for n in names if not n.startswith("rtc:") and n not in h1b]  # W2-D: EXTRA_CHECKS
     assert "harness" in names and builtin[-2:] == ["yolo", "otel"]
     tail = ["rtc:ice", "rtc:stun", "rtc:turn", "rtc:transport", "keyring", "ws_auth"]
-    assert names[-8:] == [*tail, "workspace_trust", "memory_reembed"]  # I4 rows last
+    assert names[-13:] == [*tail, "workspace_trust", "memory_reembed", *i6, *i9]  # I4, I6, I9 last
     assert "audit" not in names  # no state.db yet
     assert all(isinstance(c, Check) and c.level in {"ok", "warn", "error"} for c in rows)
     cred = next(c for c in rows if c.check == "credentials")

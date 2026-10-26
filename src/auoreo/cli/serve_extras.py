@@ -46,7 +46,9 @@ class ServeExtras:
         """`ws="none"` makes uvicorn refuse upgrades; ping knobs are protocol-level."""
         if not self.ws:
             return {"ws": "none"}
-        return {"ws_ping_interval": st.ws_ping_interval_s, "ws_ping_timeout": st.cli.ws_ping_timeout_s}
+        from auoreo.core.ws_server import ws_kwargs  # --- I9: pinned impl + loopback ping defaults
+
+        return ws_kwargs(st)
 
     def ws_line(self, host: str, port: int) -> str | None:
         if not self.ws:
@@ -121,6 +123,9 @@ def _check_ws(st: Settings, ws_ping_interval: float | None, ws_ping_timeout: flo
     for flag, value in (("--ws-ping-interval", ws_ping_interval), ("--ws-ping-timeout", ws_ping_timeout)):
         if value is not None and value <= 0:
             raise ServeOptionError(f"{flag} must be > 0")
+    from auoreo.core.ws_server import explicit_ping  # --- I9
+
+    explicit_ping(st, ws_ping_interval, ws_ping_timeout)
     if ws_ping_interval is not None:
         st.ws_ping_interval_s = ws_ping_interval
     if ws_ping_timeout is not None:

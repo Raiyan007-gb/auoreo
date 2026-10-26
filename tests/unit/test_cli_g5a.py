@@ -55,7 +55,8 @@ def test_serve_extras_resolve_applies_flags(home: Path) -> None:
     assert st.ws_ping_interval_s == 5 and st.cli.ws_ping_timeout_s == 9
     assert "https://app.example" in st.cors_origins and "box.lan" in st.http.trusted_hosts
     assert st.cli.ws_auth == "off"
-    assert ex.uvicorn_kwargs(st) == {"ws_ping_interval": 5, "ws_ping_timeout": 9}
+    # I9: pinned implementation; explicit flags turn protocol pings on even on loopback
+    assert ex.uvicorn_kwargs(st) == {"ws": "websockets-sansio", "ws_ping_interval": 5, "ws_ping_timeout": 9}
     assert ex.ws_line("127.0.0.1", 4100) == "websocket on ws://127.0.0.1:4100/ws"
     assert ex.ws_line("::1", 4100) == "websocket on ws://[::1]:4100/ws"
     off = serve_extras.resolve(Settings(home=home), ws=False)

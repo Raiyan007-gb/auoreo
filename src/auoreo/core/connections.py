@@ -26,6 +26,8 @@ class ConnectionManager:
         self.binary_dropped = 0
         """Binary frames received and dropped across all connections (metric)."""
         self.total_opened = 0
+        self.pings_sent = 0  # --- I9: app-level `ping{tick}` frames sent (metric)
+        self.keepalive_closes = 0  # closed with 1011 after two missed pongs (metric)
 
     def add(self, conn: Closable) -> None:
         self._conns[conn.conn_id] = conn
