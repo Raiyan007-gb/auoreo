@@ -1,0 +1,10 @@
+kind: search
+name: parallel
+description: >-
+  Parallel POST /v1/search: objective + 2-3 keyword search_queries, mode advanced|basic|turbo (i9.search.parallel). Key PARALLEL_API_KEY; errors[]/warnings surfaced.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [PARALLEL_API_KEY]
+license: proprietary API (client code in this repo)
+posture: ok

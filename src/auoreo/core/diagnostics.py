@@ -477,3 +477,12 @@ EXTRA_CHECKS.append(i5_checks)
 from auoreo.core.diagnostics_i8 import i8_checks  # noqa: E402  --- I8: desktop health_report, LiveKit worker
 
 EXTRA_CHECKS.append(i8_checks)
+
+
+async def _i9_checks(st: Settings) -> list[Check]:  # --- I9: egress proxy, ws server, reverse proxy
+    from auoreo.core.diagnostics_i9 import i9_checks
+
+    return await i9_checks(st)
+
+
+EXTRA_CHECKS.append(_i9_checks)

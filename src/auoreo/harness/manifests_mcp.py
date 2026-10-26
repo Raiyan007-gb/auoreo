@@ -53,4 +53,9 @@ class McpServerManifest(_Strict):
     sampling: McpSampling = Field(default_factory=lambda: McpSampling())
     """Server→client `sampling/createMessage` (default off; aux call, approval-gated)."""
     roots: McpRoots = Field(default_factory=lambda: McpRoots())
+    net: Literal["none", "proxy", "direct"] = "proxy"
+    """Egress class of the server's tools (I9, spec §25.10). Remote `streamable-http` servers with
+    `proxy` connect through the loopback egress proxy (SSRF floor + allow/deny lists; a local
+    server needs `i9.egress.allow_private_hosts`). `direct` connects without the proxy and every
+    call then needs a `net_justification` + approval."""
     """`file://` roots = the calling session's cwd + `paths`; `roots/list_changed` on change."""

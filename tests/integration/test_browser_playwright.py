@@ -165,6 +165,7 @@ async def test_redirect_to_private_address_refused(
 
     monkeypatch.setattr("auoreo.backends.browser.check_url", guard)
     svc, browser = await _make(home, workdir, allow_private=False)
+    svc.settings.i9.egress.allow_private_hosts = ["127.0.0.1"]  # I9: the egress proxy agrees
     try:
         snap = await browser.navigate("s1", site + "/")
         assert snap.title == "Fixture"

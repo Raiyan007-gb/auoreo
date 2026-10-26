@@ -11,4 +11,4 @@ is_read_only: true
 is_concurrency_safe: false
 timeout_ms: 30000
 search_hint: browser page snapshot accessibility refs
-net: direct
+net: proxy

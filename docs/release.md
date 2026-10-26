@@ -22,7 +22,9 @@ git tag v0.3.0.dev1 && git push origin v0.3.0.dev1  # dev
 | `image` | `ghcr.io/<owner>/auoreo` for `linux/amd64,linux/arm64`, with provenance and an SBOM. Tags: `X.Y.Z`, `X.Y`, and `latest` (stable releases only) |
 | `binaries` | PyInstaller onefile builds on ubuntu-latest (linux-x64), ubuntu-24.04-arm (linux-arm64), macos-14 (macos-arm64) and windows-latest (windows-x64). Each one is smoke-tested (`--version` == tag) |
 | `binary-musl` | linux-x64-musl, built inside `python:3.12-alpine`. Experimental (`continue-on-error`) |
-| `github-release` | The GitHub Release with the binaries, `SHA256SUMS`, wheel/sdist and `manifest-<channel>.json`. The manifests are also uploaded to the rolling `updates` release |
+| `github-release` | The GitHub Release with the binaries, `SHA256SUMS`, wheel/sdist, `scripts/install.sh` and `manifest-<channel>.json`. The manifests are also uploaded to the rolling `updates` release |
+| `npm` | `@auoreo/cli-<platform>` packages (from the binaries) then the `auoreo` launcher, `npm publish --provenance`, dist-tag `latest`/`beta`/`dev`. Guard: the launcher's version must be the npm semver of the tag. Auth: npm trusted publishing (OIDC, environment `npm`) or the `NPM_TOKEN` secret |
+| `desktop` | Electron builds (mac arm64 dmg/zip, Windows NSIS, Linux AppImage/deb x64+arm64) with the staged binary, `AUOREO_CHANNEL` set so electron-updater gets `<channel>*.yml`; published to the same release. Signing env (`CSC_LINK`/`CSC_KEY_PASSWORD`, Apple notarisation, `WIN_CSC_LINK`) is exported only when the secret exists, else `CSC_IDENTITY_AUTO_DISCOVERY=false` |
 
 ## One-time setup
 
@@ -56,6 +58,20 @@ binaries ship unsigned and the steps are skipped.
 
 Signing happens before the artifact upload, so `SHA256SUMS` and the manifests hash the
 signed files.
+
+## Shell installer
+
+```bash
+curl -fsSL https://github.com/<owner>/auoreo/releases/latest/download/install.sh | sh
+sh install.sh --channel beta --dir ~/bin
+```
+
+`scripts/install.sh` (POSIX sh, shellcheck-clean in CI) detects OS/arch (`linux-x64`,
+`linux-arm64`, `linux-x64-musl`, `macos-arm64`), downloads `manifest-<channel>.json`, verifies
+its ed25519 signature against the pinned release key (python3 canonicalises the JSON, openssl
+verifies), downloads the asset, checks its sha256 and installs `~/.local/bin/auoreo`. Nothing
+is installed if either check fails. `tests/unit/test_install_sh.py` runs it against a local
+fake release directory.
 
 ## Update manifests and `auoreo upgrade`
 
@@ -101,8 +117,10 @@ use it.
    `uv tool upgrade auoreo`, `pipx upgrade auoreo` or `git pull && uv sync`. Beta and dev
    channels add the pre-release flag. These installs never swap files.
 5. `--rollback` swaps `auoreo.prev` back in, and the current binary becomes the new `.prev`.
-   A `state.db` already migrated by the newer release may refuse to open with the older
-   binary ("schema newer than this build"). Restore a backup in that case.
+   The receipt records `from_schema`; when `state.db` is already at a newer schema than the
+   previous build knows, the rollback is **refused** (restore a pre-upgrade backup of
+   `state.db` first). Upgrades and rollbacks hold a lock (`<home>/upgrade/.lock` plus one next
+   to the binary, for profiles sharing it); receipts list the `steps` run and the `skips`.
 
 ## Container
 

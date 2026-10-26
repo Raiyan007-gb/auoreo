@@ -1,0 +1,12 @@
+kind: search
+name: exa
+description: >-
+  Exa POST /search (type fast|auto|deep, contents.highlights + text.maxCharacters,
+  maxAgeHours freshness). Key EXA_API_KEY from the secret store. costDollars is logged to the
+  usage ledger; HTTP 402 is a typed BUDGET error. Chain position: settings.i9.search.order.
+impl: impl.py:Backend
+default: true  # the kind's doctor row; web_search itself walks i9.search.order
+requires_binaries: []
+requires_env: []  # default backends join every tool's secret scope; web_search declares EXA_API_KEY itself
+license: proprietary API (client code in this repo)
+posture: ok

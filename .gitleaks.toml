@@ -1,15 +1,107 @@
-# gitleaks config (G5c): the built-in rules plus allowlists for deliberate fake secrets.
+# gitleaks config (G5c, I9): the built-in rules, the spec §19.10 / §25.14 key prefixes as extra
+# [[rules]], and allowlists for deliberate fake secrets.
 # Used by .github/workflows/secret-scan.yml and the pre-commit hook in .pre-commit-config.yaml.
 # Never allowlist a path outside tests/ or generated files: real code must stay scanned.
+#
+# Cassettes (tests/fixtures/cassettes/) are NOT path-allowlisted: they are written already
+# redacted (tests/cassettes.py) and scanned like code. A deliberate finding in one is allowed
+# by its fingerprint in .gitleaksignore (`<commit>:<file>:<rule-id>:<line>`), never by path.
 title = "auoreo"
 
 [extend]
 useDefault = true
 
+# ------------------------------------------------------------------ §19.10 prefixes
+[[rules]]
+id = "auoreo-openrouter-key"
+description = "OpenRouter API key"
+regex = '''\bsk-or-(?:v1-)?[A-Za-z0-9_-]{20,}'''
+keywords = ["sk-or-"]
+
+[[rules]]
+id = "auoreo-anthropic-key"
+description = "Anthropic API key"
+regex = '''\bsk-ant-[A-Za-z0-9_-]{20,}'''
+keywords = ["sk-ant-"]
+
+[[rules]]
+id = "auoreo-perplexity-key"
+description = "Perplexity API key"
+regex = '''\bpplx-[A-Za-z0-9]{20,}'''
+keywords = ["pplx-"]
+
+[[rules]]
+id = "auoreo-exa-key"
+description = "Exa API key"
+regex = '''\bexa_[A-Za-z0-9]{20,}'''
+keywords = ["exa_"]
+
+[[rules]]
+id = "auoreo-groq-key"
+description = "Groq API key"
+regex = '''\bgsk_[A-Za-z0-9]{20,}'''
+keywords = ["gsk_"]
+
+[[rules]]
+id = "auoreo-tavily-key"
+description = "Tavily API key"
+regex = '''\btvly-(?:dev-|prod-)?[A-Za-z0-9]{20,}'''
+keywords = ["tvly-"]
+
+[[rules]]
+id = "auoreo-huggingface-token"
+description = "Hugging Face token"
+regex = '''\bhf_[A-Za-z0-9]{30,}'''
+keywords = ["hf_"]
+
+[[rules]]
+id = "auoreo-xai-key"
+description = "xAI API key"
+regex = '''\bxai-[A-Za-z0-9]{20,}'''
+keywords = ["xai-"]
+
+[[rules]]
+id = "auoreo-fireworks-key"
+description = "Fireworks API key"
+regex = '''\bfw-[A-Za-z0-9]{20,}'''
+keywords = ["fw-"]
+
+[[rules]]
+id = "auoreo-firecrawl-key"
+description = "Firecrawl API key"
+regex = '''\bfc-[a-f0-9]{32}\b'''
+keywords = ["fc-"]
+
+[[rules]]
+id = "auoreo-jina-key"
+description = "Jina API key"
+regex = '''\bjina_[A-Za-z0-9_-]{30,}'''
+keywords = ["jina_"]
+
+[[rules]]
+id = "auoreo-slack-app-token"
+description = "Slack app-level token"
+regex = '''\bxapp-\d-[A-Z0-9]+-\d+-[a-f0-9]{20,}'''
+keywords = ["xapp-"]
+
+[[rules]]
+id = "auoreo-fernet-token"
+description = "Fernet token / key material"
+regex = '''\bgAAAAA[A-Za-z0-9_-]{60,}={0,2}'''
+keywords = ["gAAAAA"]
+
+[[rules]]
+id = "auoreo-generic-llm-key"
+description = "dsk-/llm-/r1-/oai- prefixed provider keys (§25.14)"
+regex = '''\b(?:dsk|llm|r1|oai)-[A-Za-z0-9_-]{24,}'''
+keywords = ["dsk-", "llm-", "r1-", "oai-"]
+
+# ------------------------------------------------------------------ allowlists
 [[allowlists]]
-description = "test fixtures, cassettes and test modules (fake keys exercise redaction/filters)"
+description = "test modules and non-cassette fixtures (fake keys exercise redaction/filters)"
 paths = [
-  '''^tests/fixtures/''',
+  '''^tests/fixtures/(plugins|testrun)/''',
+  '''^tests/fixtures/memory_golden\.jsonl$''',
   '''^tests/.*\.py$''',
   '''^web/e2e/''',
   '''^plugins/[^/]+/tests/''',

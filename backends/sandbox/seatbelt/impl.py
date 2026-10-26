@@ -72,7 +72,7 @@ def build_profile(spec: ExecSpec, *, tmpdir: str | None = None) -> str:
         lines.append(f"(allow file-read* file-write* {_subpaths(rw)})")
     net = {
         "none": "",
-        "proxy": '(allow network-outbound (remote ip "localhost:*"))',
+        "proxy": f'(allow network-outbound (remote ip "localhost:{spec.proxy_port or "*"}"))',
         "direct": "(allow network-outbound)\n(allow system-socket)",
     }[spec.net]
     if net:

@@ -25,7 +25,7 @@ pattern_arg: repo
 exposure: deferred
 interactive_only: true
 timeout_ms: 120000
-net: direct
+net: proxy
 sandbox_mode: read-only
 requires_env:
 - GH_TOKEN

@@ -29,6 +29,13 @@ An explicit backend is probed at startup;
 on failure `sandbox_policy: warn` (default) audits `sandbox.fallback` and uses `none`,
 `fail` refuses to start. `auoreo doctor` shows the row with `enforced=` and the policy.
 
+`net: proxy` (I9): the child gets `HTTPS_PROXY`/`HTTP_PROXY` pointing at the call's loopback
+egress proxy (`src/auoreo/tools/egress.py`). Confinement: `bwrap`/`none`+Landlock restrict TCP
+connects to the proxy port with Landlock ABI ≥ 4 (otherwise the env is advisory and doctor's
+`egress-sandbox` row says "not enforced"); `seatbelt` allows `localhost:<proxy port>` only;
+`docker` gets no network (a container cannot reach the host loopback). Without a running proxy
+`proxy` behaves like `none` (network unshared).
+
 Each tool manifest declares `sandbox_mode` (`read-only < workspace-write <
 danger-full-access`, default `workspace-write`) and `net` (`none | proxy | direct`).
 A wider mode for one call needs `sandbox_mode` + `justification` arguments and an

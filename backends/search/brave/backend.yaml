@@ -1,0 +1,10 @@
+kind: search
+name: brave
+description: >-
+  Brave Search GET /res/v1/web/search (or /res/v1/llm/context for RAG grounding). Key BRAVE_API_KEY (X-Subscription-Token); paid lane with monthly free credits.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [BRAVE_API_KEY]
+license: proprietary API (client code in this repo)
+posture: ok

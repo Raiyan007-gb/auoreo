@@ -34,6 +34,7 @@ from auoreo.backends.browser import (
 )
 from auoreo.core.settings_i8 import i8_of
 from auoreo.tools.context import ToolError
+from auoreo.tools.egress import revoke_session, session_proxy
 
 REMEDY = "set PLAYWRIGHT_BROWSERS_PATH or settings.browser_executable_path"
 ACTION_TIMEOUT_MS = 10_000
@@ -94,6 +95,7 @@ class Backend(BrowserBackend):
         self._host_ok: dict[str, bool] = {}
         self._traced: set[str] = set()
         self.traces: list[Path] = []
+        self._proxy_tokens: dict[str, str] = {}  # session -> egress proxy token (I9)
 
     # ------------------------------------------------------------- launching
     def _launch_kwargs(self) -> dict[str, Any]:
@@ -151,8 +153,12 @@ class Backend(BrowserBackend):
     # -------------------------------------------------------------- sessions
     async def _open_page(self, session_id: str) -> Any:
         browser = await self._ensure_browser()
+        extra: dict[str, Any] = {}
+        routed = session_proxy(f"browser:{session_id}")  # I9: browser_* tools are `net: proxy`
+        if routed is not None:
+            extra["proxy"], self._proxy_tokens[session_id] = routed
         context = await browser.new_context(
-            viewport=dict(VIEWPORT), user_agent=self._user_agent, accept_downloads=False
+            viewport=dict(VIEWPORT), user_agent=self._user_agent, accept_downloads=False, **extra
         )
         context.set_default_timeout(ACTION_TIMEOUT_MS)
         context.set_default_navigation_timeout(NAV_TIMEOUT_MS)
@@ -194,6 +200,8 @@ class Backend(BrowserBackend):
 
     async def _close_page(self, session_id: str) -> None:
         entry = self._pages.pop(session_id, None)
+        if (token := self._proxy_tokens.pop(session_id, None)) is not None:
+            revoke_session(token)
         if entry is not None:
             await self._stop_trace(session_id, entry[0])
             with contextlib.suppress(Exception):

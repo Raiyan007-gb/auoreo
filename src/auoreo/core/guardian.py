@@ -2,7 +2,8 @@
 
 `guardian_verdict()` sends the policy (`prompts/guardian.md`, `role: guardian`, never part
 of the agent prompt) plus the comment-stripped command wrapped in `<command>…</command>`
-to the `small` routing group (or the session model), temperature 0, 16 tokens, 15 s.
+to the `small` routing group (or the session model), temperature 0, 16 tokens, 15 s
+(`AUOREO_SMART_TIMEOUT` / `i9.guardian.timeout_s`).
 The reply must be exactly `APPROVE`, `DENY` or `ESCALATE`; anything else, a timeout or a
 gateway error escalates to the human. Verdicts are cached by `sha256(permission+pattern)`
 (APPROVE 10 min, DENY 60 s). After 3 consecutive DENYs in a session the breaker trips
@@ -97,6 +98,16 @@ def strip_comments(command: str) -> str:
 def parse_verdict(text: str) -> Verdict:
     token = text.strip()
     return token if token in VERDICTS else "ESCALATE"  # type: ignore[return-value]
+
+
+def timeout_s(services: Services) -> float:
+    """I9: `AUOREO_SMART_TIMEOUT` → `i9.guardian.timeout_s` → 15 s (spec §25.10 L1015)."""
+    st = getattr(services, "settings", None)
+    override = getattr(st, "smart_timeout", None)
+    if override:
+        return float(override)
+    i9 = getattr(st, "i9", None)
+    return float(i9.guardian.timeout_s) if i9 is not None else TIMEOUT_S
 
 
 def _model(services: Services, model: str | None) -> str:
@@ -202,10 +213,11 @@ async def _call(
         max_tokens=MAX_TOKENS,
         metadata={"purpose": "guardian", **({"session_id": session_id} if session_id else {})},
     )
+    budget = timeout_s(services)
     try:
-        text = await asyncio.wait_for(_ask(services, request), TIMEOUT_S)
+        text = await asyncio.wait_for(_ask(services, request), budget)
     except TimeoutError:
-        log.warning("guardian timed out after %ss; escalating", TIMEOUT_S)
+        log.warning("guardian timed out after %ss; escalating", budget)
         return "ESCALATE"
     except GatewayError as exc:
         log.warning("guardian call failed (%s); escalating", exc.code)

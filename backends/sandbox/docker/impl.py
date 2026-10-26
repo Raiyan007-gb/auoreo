@@ -48,7 +48,8 @@ def run_kwargs(spec: ExecSpec, image: str, mem_limit: str, extra: list[Any]) -> 
         "working_dir": WORKDIR,
         "volumes": volumes,
         "environment": {k: v for k, v in spec.env.items() if k not in _HOST_ONLY_ENV},
-        "network_mode": "none" if spec.net == "none" else "bridge",
+        # I9: `proxy` cannot reach the host-loopback egress proxy from a container → no network
+        "network_mode": "bridge" if spec.net == "direct" else "none",
         "cap_drop": ["ALL"],
         "security_opt": ["no-new-privileges"],
         "read_only": read_only,

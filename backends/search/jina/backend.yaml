@@ -1,0 +1,10 @@
+kind: search
+name: jina
+description: >-
+  Jina search (s.jina.ai) and Reader (r.jina.ai, the web_fetch JS/anti-bot fallback; robots + DNT honoured, credentialed URLs never sent). Key JINA_API_KEY.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [JINA_API_KEY]
+license: proprietary API (client code in this repo)
+posture: ok

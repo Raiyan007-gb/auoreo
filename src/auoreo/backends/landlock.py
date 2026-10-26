@@ -66,7 +66,9 @@ if abi >= 3: fs |= 1 << 14
 if abi >= 5: fs |= 1 << 15
 FILE_RIGHTS = 1 | 2 | 4 | (1 << 14) | (1 << 15)
 READ = 1 | 4 | 8
-net = 3 if abi >= 4 and cfg.get("net") == "none" else 0
+mode = cfg.get("net")
+pport = cfg.get("proxy_port")
+net = 3 if abi >= 4 and (mode == "none" or (mode == "proxy" and pport)) else 0
 class Attr(ctypes.Structure):
     _fields_ = [("fs", ctypes.c_uint64), ("net", ctypes.c_uint64)]
 class Beneath(ctypes.Structure):
@@ -89,6 +91,13 @@ for path, want in [(p, READ) for p in cfg["ro"]] + [(p, fs) for p in cfg["rw"]]:
         if libc.syscall(445, ctypes.c_int(rfd), ctypes.c_int(1), ctypes.byref(rule), ctypes.c_uint32(0)) < 0:
             die("add_rule failed for " + path + ": " + os.strerror(ctypes.get_errno()))
     os.close(pfd)
+class NetPort(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [("allowed", ctypes.c_uint64), ("port", ctypes.c_uint64)]
+if net and mode == "proxy":
+    prule = NetPort(2, int(pport))
+    if libc.syscall(445, ctypes.c_int(rfd), ctypes.c_int(2), ctypes.byref(prule), ctypes.c_uint32(0)) < 0:
+        die("add_rule failed for proxy port: " + os.strerror(ctypes.get_errno()))
 if libc.prctl(38, 1, 0, 0, 0) != 0:
     die("cannot set NO_NEW_PRIVS")
 if libc.syscall(446, ctypes.c_int(rfd), ctypes.c_uint32(0)) < 0:
@@ -127,10 +136,13 @@ def wrap(
     python: str | None = None,
     tmp: str | None = None,
     require: bool = True,
+    proxy_port: int | None = None,
 ) -> list[str]:
-    """`argv` prefixed with the Landlock helper (pure; unit-tested)."""
+    """`argv` prefixed with the Landlock helper (pure; unit-tested). Under `net: proxy` with a
+    `proxy_port` (ABI >= 4) TCP connects are allowed to that port only (I9)."""
     ro, rw = roots(cwd, mode, readable, writable, tmp=tmp)
-    cfg = json.dumps({"ro": ro, "rw": rw, "net": net, "require": require}, separators=(",", ":"))
+    doc = {"ro": ro, "rw": rw, "net": net, "require": require, "proxy_port": proxy_port}
+    cfg = json.dumps(doc, separators=(",", ":"))
     return [python or sys.executable, "-I", "-S", "-c", HELPER, cfg, *argv]
 
 

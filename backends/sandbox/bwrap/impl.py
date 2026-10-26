@@ -48,8 +48,8 @@ def build_argv(
         argv += ["--ro-bind-try", p, p]
     argv += ["--proc", "/proc", "--dev", "/dev", "--tmpfs", "/tmp"]
     argv += ["--unshare-pid", "--unshare-user-try", "--unshare-ipc", "--unshare-uts"]
-    if spec.net == "none":
-        argv.append("--unshare-net")
+    if spec.net == "none" or (spec.net == "proxy" and spec.proxy_port is None):
+        argv.append("--unshare-net")  # I9: `proxy` without a running proxy gets no network
     argv += ["--die-with-parent", *(["--new-session"] if new_session else []), "--cap-drop", "ALL"]
     argv += ["--ro-bind" if spec.mode == "read-only" else "--bind", cwd, cwd]
     for p in spec.readable:
@@ -69,6 +69,7 @@ def build_argv(
             writable=spec.writable,
             python=landlock_python,
             tmp="/tmp",
+            proxy_port=spec.proxy_port if spec.net == "proxy" else None,
         )
     return argv + inner
 
@@ -116,5 +117,6 @@ class Backend(SandboxBackend):
             mode=spec.mode,
             net=spec.net,
             merge_stderr=spec.merge_stderr,
+            proxy_port=spec.proxy_port,
         )
         return await run_local(wrapped, backend=self.name, enforced=True)

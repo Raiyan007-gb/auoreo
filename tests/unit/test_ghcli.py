@@ -119,7 +119,7 @@ WRITE_TOOLS = {
 def test_manifests(services: Services) -> None:
     for name in GH_TOOLS:
         m = services.harness.tools[name].manifest
-        assert m.exposure == "deferred" and m.toolset == "github" and m.net == "direct", name
+        assert m.exposure == "deferred" and m.toolset == "github" and m.net == "proxy", name  # I9
         assert "GH_TOKEN" in m.requires_env and "GITHUB_TOKEN" in m.requires_env
         if name in WRITE_TOOLS:
             assert (m.permission_name, m.default_action, m.is_destructive) == ("github_write", "ask", True)

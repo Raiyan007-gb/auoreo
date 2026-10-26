@@ -13,6 +13,7 @@ from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from auoreo.harness.manifests_jobs import JobManifest as JobManifest  # re-export
 from auoreo.harness.manifests_mcp import McpRoots as McpRoots  # re-export
 from auoreo.harness.manifests_mcp import McpSampling as McpSampling  # re-export
 from auoreo.harness.manifests_mcp import McpServerManifest as McpServerManifest  # re-export
@@ -24,6 +25,11 @@ NAME_RE = r"^[a-z][a-z0-9_]*$"
 SLUG_RE = r"^[a-z0-9][a-z0-9._-]*$"
 
 Action = Literal["allow", "ask", "deny"]
+NET_JUSTIFICATION = {  # --- I9: injected into `net: direct` tools (checked by tools/netstage.py)
+    "type": "string",
+    "maxLength": 500,
+    "description": "Why this call must bypass the egress proxy (net: direct; a human reviews it).",
+}
 
 
 class _Strict(BaseModel):
@@ -132,6 +138,13 @@ class ToolManifest(_Strict):
         if v is not None and (not re.fullmatch(f"{file_ref}|{mod_ref}", v) or ".." in v):
             raise ValueError("check_fn must look like 'handler.py:available' or 'pkg.module:fn'")
         return v
+
+    @model_validator(mode="after")
+    def _net_direct(self) -> ToolManifest:
+        if self.net == "direct":  # I9 (§25.10): direct egress is approval + justification
+            props = self.parameters.setdefault("properties", {})
+            props.setdefault("net_justification", dict(NET_JUSTIFICATION))
+        return self
 
     @property
     def permission_name(self) -> str:
@@ -300,53 +313,6 @@ class PolicyManifest(_Strict):
     description: str = Field(min_length=1)
     priority: int = Field(default=100, ge=0, le=1000)
     enabled: bool = True
-
-
-class JobManifest(_Strict):
-    """`jobs/<name>.yaml`. APScheduler only fires the trigger; AUOREO runs the job in its own
-    session and records `job_runs` + `deliveries`."""
-
-    name: str = Field(pattern=NAME_RE)
-    description: str = Field(min_length=1)
-    schedule: str = Field(min_length=1)
-    """5-field cron (`0 9 * * 1-5`), `every 30m|2h|1d`, a bare duration (`30m` = every 30m),
-    `every monday 9am [<tz>]`, or an ISO-8601 one-shot datetime."""
-    tz: str | None = None
-    """IANA zone for cron schedules; default = process zone."""
-    agent: str = Field(default="default", pattern=NAME_RE)
-    workflow: str | None = None
-    prompt: str = Field(min_length=1)
-    """Template; `{{now}}` and `{{job}}` are available."""
-    skills: list[str] = Field(default_factory=list)
-    deliver: list[str] = Field(default_factory=lambda: ["log"])
-    """Delivery targets, tried in order (first success wins): `backends/delivery/<name>[:target]`
-    or an alias — `origin` (where the job was created), `home` (`suggestions_home`), `all`
-    (fan-out to every healthy provider)."""
-    enabled: bool = True
-    catch_up: bool = True
-    """Fire once if a run was missed while the server was down (within half a period, max 2h)."""
-    timeout_s: int | None = Field(default=None, ge=10, le=86_400)
-    """Hard interrupt per run; default `teams2.job_timeout_s` (spec §16.7: 3 minutes)."""
-    max_steps: int | None = Field(default=None, ge=1, le=500)
-    # --- I3 (spec §16.7, §25.7, §25.11)
-    model: str | None = Field(default=None, max_length=255)
-    """Model alias/id for the run (`provider` prefixes it when it has no `/`)."""
-    provider: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9_.-]*$")
-    script: str | None = Field(default=None, max_length=255)
-    """Pre-run script under `<home>/scripts/`; its stdout (sandboxed read-only, redacted, capped,
-    wrapped as UNTRUSTED data) is injected before the prompt."""
-    context_from: list[str] = Field(default_factory=list)
-    """`previous` (this job's last output) and/or other job names whose last output is injected."""
-    workdir: str | None = Field(default=None, max_length=1024)
-    """Working directory of the script (and the run's context note); must exist."""
-    origin: str | None = Field(default=None, max_length=200)
-    """Delivery spec `deliver: [origin]` resolves to (set by the cronjob tool from its session)."""
-    origin_session: str | None = Field(default=None, max_length=64)
-    notify_on_complete: bool = False
-    """Inject a `<job-notification>` into `origin_session` when a run finishes (§25.7)."""
-    header: str | None = Field(default=None, max_length=500)
-    """Delivery header override (`{job}`, `{when}`, `{run_id}`); "" disables; None = settings."""
-    footer: str | None = Field(default=None, max_length=500)
 
 
 class PluginManifest(_Strict):

@@ -1,0 +1,37 @@
+# Hand-authored (I9): OpenRouter OpenAI-compatible SSE stream (`openrouter/*` lane) with the
+# `usage.cost` field OpenRouter adds. Secrets filtered (Authorization: REDACTED).
+interactions:
+- request:
+    body: '{}'
+    headers:
+      authorization:
+      - REDACTED
+      content-type:
+      - application/json
+    method: POST
+    uri: https://openrouter.ai/api/v1/chat/completions
+  response:
+    body:
+      string: ': OPENROUTER PROCESSING
+
+
+        data: {"id":"gen-cassette-or-1","provider":"Anthropic","model":"anthropic/claude-sonnet-4.5","object":"chat.completion.chunk","created":1793000000,"choices":[{"index":0,"delta":{"role":"assistant","content":"hello from"},"finish_reason":null}]}
+
+
+        data: {"id":"gen-cassette-or-1","provider":"Anthropic","model":"anthropic/claude-sonnet-4.5","object":"chat.completion.chunk","created":1793000000,"choices":[{"index":0,"delta":{"content":" the openrouter cassette"},"finish_reason":"stop"}]}
+
+
+        data: {"id":"gen-cassette-or-1","provider":"Anthropic","model":"anthropic/claude-sonnet-4.5","object":"chat.completion.chunk","created":1793000000,"choices":[],"usage":{"prompt_tokens":11,"completion_tokens":7,"total_tokens":18,"cost":0.000138}}
+
+
+        data: [DONE]
+
+
+        '
+    headers:
+      content-type:
+      - text/event-stream
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -43,6 +43,7 @@ class Backend(SandboxBackend):
             net=spec.net,
             readable=spec.readable,
             writable=spec.writable,
+            proxy_port=spec.proxy_port if spec.net == "proxy" else None,
         )
         return wrapped, True
 
@@ -58,6 +59,7 @@ class Backend(SandboxBackend):
                 net=spec.net,
                 readable=spec.readable,
                 writable=spec.writable,
+                proxy_port=spec.proxy_port if spec.net == "proxy" else None,
             ),
             cwd=spec.cwd,
             env=spec.env,

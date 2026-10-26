@@ -44,7 +44,7 @@ is_concurrency_safe: true
 pattern_arg: repo
 exposure: deferred
 timeout_ms: 120000
-net: direct
+net: proxy
 sandbox_mode: read-only
 requires_env:
 - GH_TOKEN

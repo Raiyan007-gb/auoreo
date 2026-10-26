@@ -11,6 +11,7 @@ each worker reports its own counts.
 from __future__ import annotations
 
 import threading
+from collections.abc import Sized
 
 MAX_SERIES = 100
 HELP: dict[str, str] = {
@@ -56,6 +57,26 @@ def _escape(text: str) -> str:
 
 def _num(v: float) -> str:
     return str(int(v)) if float(v).is_integer() else repr(float(v))
+
+
+WS_METRICS: dict[str, tuple[str, str, str]] = {  # --- I9: name → (type, attribute, help)
+    "ws_binary_dropped_total": ("counter", "binary_dropped", "Binary /ws frames received and dropped."),
+    "ws_pings_sent_total": ("counter", "pings_sent", "App-level ping{tick} frames sent on /ws."),
+    "ws_keepalive_closes_total": ("counter", "keepalive_closes", "/ws closed after missed pongs."),
+    "ws_connections_opened_total": ("counter", "total_opened", "/ws connections accepted."),
+}
+
+
+def render_ws(connections: object | None) -> str:
+    """The `/ws` connection-manager counters plus the open-connection gauge (process-local)."""
+    lines: list[str] = []
+    for name, (kind, attr, text) in WS_METRICS.items():
+        lines += [f"# HELP {name} {text}", f"# TYPE {name} {kind}"]
+        lines.append(f"{name} {_num(float(getattr(connections, attr, 0) or 0))}")
+    lines += ["# HELP ws_connections_active Open /ws connections.", "# TYPE ws_connections_active gauge"]
+    active = len(connections) if isinstance(connections, Sized) else 0
+    lines.append(f"ws_connections_active {active}")
+    return "\n".join(lines) + "\n"
 
 
 def render(kinds: dict[str, str]) -> str:

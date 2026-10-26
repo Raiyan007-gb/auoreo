@@ -12,10 +12,12 @@ the connection to an internal address. Clients built here ignore proxy env vars
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import ipaddress
 import socket
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -118,6 +120,97 @@ class PinnedTransport(httpx.AsyncBaseTransport):
         await self.inner.aclose()
 
 
+def proxy_transport(proxy_url: str) -> httpx.AsyncBaseTransport:
+    """Transport through the loopback egress proxy (indirection for tests)."""
+    return httpx.AsyncHTTPTransport(proxy=proxy_url, trust_env=False)
+
+
+def egress_client(
+    *,
+    timeout_s: float = 30.0,
+    allow_private: bool = False,
+    follow_redirects: bool = False,
+    headers: dict[str, str] | None = None,
+) -> httpx.AsyncClient:
+    """The HTTP client a tool handler should use (I9, spec §25.10).
+
+    - `net: proxy` with a running egress proxy: every connection goes through the call's
+      proxy URL (the proxy resolves, validates and pins; it also applies the allow/deny host
+      lists and logs host/port for the audit row);
+    - `net: direct` (an approved one-shot grant), no tool context, or no proxy running:
+      `pinned_client` (resolve + validate + pin in-process);
+    - `net: none`: refused — the tool declared it never talks to the network.
+    """
+    from auoreo.tools.context import CURRENT_EXEC
+
+    policy = CURRENT_EXEC.get()
+    if policy is not None and policy.net == "none":
+        raise ToolError("this tool declares `net: none`; it may not open network connections")
+    if policy is not None and policy.net == "proxy" and policy.proxy_url:
+        client = httpx.AsyncClient(
+            transport=proxy_transport(policy.proxy_url),
+            timeout=timeout_s,
+            follow_redirects=follow_redirects,
+            trust_env=False,
+            headers=headers,
+        )
+        client._auoreo_proxied = True  # type: ignore[attr-defined]
+        return client
+    client = pinned_client(
+        timeout_s=timeout_s, allow_private=allow_private, follow_redirects=follow_redirects
+    )
+    if headers:
+        client.headers.update(headers)
+    return client
+
+
+def proxied(client: httpx.AsyncClient) -> bool:
+    return bool(getattr(client, "_auoreo_proxied", False))
+
+
+def _proxy_private_ok(host: str, port: int) -> bool:
+    from auoreo.tools.context import CURRENT_EXEC
+    from auoreo.tools.egress import private_ok_for
+
+    policy = CURRENT_EXEC.get()
+    return bool(policy and policy.proxy_url and private_ok_for(policy.proxy_url, host, port))
+
+
+def _refusal(url: str, exc: Exception) -> ToolError:
+    from auoreo.tools.context import CURRENT_EXEC
+    from auoreo.tools.egress import denial_for
+
+    policy = CURRENT_EXEC.get()
+    reason = denial_for(policy.proxy_url) if policy is not None and policy.proxy_url else None
+    return ToolError(f"egress proxy refused {url}: {reason or exc}")
+
+
+@contextlib.asynccontextmanager
+async def egress_stream(
+    client: httpx.AsyncClient, method: str, url: str, **kw: Any
+) -> AsyncIterator[httpx.Response]:
+    """`client.stream(...)` that turns an egress-proxy refusal into a clear `ToolError`."""
+    try:
+        async with client.stream(method, url, **kw) as resp:
+            if resp.headers.get("x-auoreo-egress") == "denied":
+                body = (await resp.aread()).decode("utf-8", "replace")[:300]
+                raise ToolError(f"egress proxy refused {url}: {body}")
+            yield resp
+    except httpx.ProxyError as exc:
+        raise _refusal(url, exc) from exc
+
+
+async def egress_send(client: httpx.AsyncClient, method: str, url: str, **kw: Any) -> httpx.Response:
+    """`client.request(...)` with the same refusal mapping (small JSON API calls)."""
+    try:
+        resp = await client.request(method, url, **kw)
+    except httpx.ProxyError as exc:
+        raise _refusal(url, exc) from exc
+    if resp.headers.get("x-auoreo-egress") == "denied":
+        raise ToolError(f"egress proxy refused {url}: {resp.text[:300]}")
+    return resp
+
+
 def pinned_client(
     *, timeout_s: float = 30.0, allow_private: bool = False, follow_redirects: bool = False
 ) -> httpx.AsyncClient:
@@ -150,12 +243,15 @@ async def safe_request(
     allow_private: bool = False,
 ) -> Fetched:
     """Request with manual redirects; every hop is shape-checked and connects to a pinned,
-    validated address (see module docstring)."""
-    async with pinned_client(timeout_s=timeout_s, allow_private=allow_private) as client:
+    validated address (see module docstring). Under `net: proxy` the hops go through the
+    call's egress proxy, which re-validates and pins each host itself (`egress_client`)."""
+    async with egress_client(timeout_s=timeout_s, allow_private=allow_private) as client:
         current = url
         for _ in range(MAX_REDIRECTS + 1):
-            check_shape(current)
-            async with client.stream(method, current, headers=headers, content=content) as resp:
+            host, port = check_shape(current)
+            if proxied(client):  # early, clear SSRF error; the proxy's own check is the pin
+                await resolve_validated(host, port, allow_private or _proxy_private_ok(host, port))
+            async with egress_stream(client, method, current, headers=headers, content=content) as resp:
                 if resp.is_redirect and "location" in resp.headers:
                     current = urljoin(current, resp.headers["location"])
                     method, content = (

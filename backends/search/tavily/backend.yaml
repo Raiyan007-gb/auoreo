@@ -1,0 +1,10 @@
+kind: search
+name: tavily
+description: >-
+  Tavily POST /search: basic depth, 8 results, 3 chunks/source (advanced), include_usage credits to the usage ledger, auto_parameters off; HTTP 432/433 -> BUDGET. Key TAVILY_API_KEY.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [TAVILY_API_KEY]
+license: proprietary API (client code in this repo)
+posture: ok

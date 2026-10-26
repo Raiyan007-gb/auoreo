@@ -316,9 +316,11 @@ class WsConnection:
             if await self.check_auth():
                 return
             if time.monotonic() - self.last_pong > 2 * interval:
+                self.svc.connections.keepalive_closes += 1  # --- I9: /metrics
                 await self.close(CLOSE_KEEPALIVE, "no pong for two ping intervals")
                 return
             self.tick += 1
+            self.svc.connections.pings_sent += 1
             await self.send(WsPing(type="ping", tick=self.tick, server_seq=await self.svc.events.last_seq()))
 
     async def check_auth(self) -> bool:

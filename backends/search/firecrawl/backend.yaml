@@ -1,0 +1,10 @@
+kind: search
+name: firecrawl
+description: >-
+  Firecrawl v2 /search and the /scrape extract lane (formats markdown) for JS-only pages. Key FIRECRAWL_API_KEY; i9.search.firecrawl_base_url for a self-host (AGPL, keep it an isolated service).
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [FIRECRAWL_API_KEY]
+license: proprietary API; self-host AGPL-3.0 (separate service, never imported)
+posture: ok

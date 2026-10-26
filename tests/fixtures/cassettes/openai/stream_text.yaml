@@ -1,0 +1,42 @@
+# Hand-authored (I9): OpenAI chat-completions SSE stream for the `openai/*` lane, in the shape
+# documented for stream_options.include_usage. Secrets filtered (Authorization: REDACTED).
+interactions:
+- request:
+    body: '{}'
+    headers:
+      authorization:
+      - REDACTED
+      content-type:
+      - application/json
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+  response:
+    body:
+      string: 'data: {"id":"chatcmpl-cassette1","object":"chat.completion.chunk","created":1793000000,"model":"gpt-4o-mini-2024-07-18","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+
+        data: {"id":"chatcmpl-cassette1","object":"chat.completion.chunk","created":1793000000,"model":"gpt-4o-mini-2024-07-18","choices":[{"index":0,"delta":{"content":"hello from"},"finish_reason":null}]}
+
+
+        data: {"id":"chatcmpl-cassette1","object":"chat.completion.chunk","created":1793000000,"model":"gpt-4o-mini-2024-07-18","choices":[{"index":0,"delta":{"content":" the openai cassette"},"finish_reason":null}]}
+
+
+        data: {"id":"chatcmpl-cassette1","object":"chat.completion.chunk","created":1793000000,"model":"gpt-4o-mini-2024-07-18","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+
+        data: {"id":"chatcmpl-cassette1","object":"chat.completion.chunk","created":1793000000,"model":"gpt-4o-mini-2024-07-18","choices":[],"usage":{"prompt_tokens":9,"completion_tokens":6,"total_tokens":15,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens_details":{"reasoning_tokens":0}}}
+
+
+        data: [DONE]
+
+
+        '
+    headers:
+      content-type:
+      - text/event-stream; charset=utf-8
+      x-request-id:
+      - req_cassette_openai_1
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -1,0 +1,35 @@
+# Dependency bumps (spec §25.15 L1094). Weekly, grouped, rebased automatically; never
+# auto-merged — CI (ruff, mypy, ty, pytest, SSE replay, sdk.yml) must be green and a human
+# merges. Lockfiles: uv.lock (uv), package-lock.json (npm). Actions are SHA-pinned; Dependabot
+# updates the SHA and the `# vX.Y.Z` comment together.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    rebase-strategy: auto
+    groups:
+      python-minor:
+        update-types: [minor, patch]
+    ignore:
+      - dependency-name: sqlite-vec  # exact 0.1.* pin on purpose (spec §25.15 L1094)
+        update-types: [version-update:semver-minor, version-update:semver-major]
+  - package-ecosystem: npm
+    directories: [/web, /packages/npm, /desktop]
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    rebase-strategy: auto
+    groups:
+      npm-minor:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    rebase-strategy: auto
+    groups:
+      actions:
+        patterns: ["*"]

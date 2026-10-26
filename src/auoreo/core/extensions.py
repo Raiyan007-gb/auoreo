@@ -18,6 +18,7 @@ log = logging.getLogger(__name__)
 
 STARTERS: list[str] = [
     "auoreo.core.sandbox_boot:start",  # first: policy=fail refuses before anything else starts
+    "auoreo.tools.egress:start",  # I9 → services.ext["egress"] (loopback CONNECT proxy for net: proxy)
     "auoreo.core.secrets:start",  # G1b: audit scoped secret reads (secret.read{name, by})
     "auoreo.gateway.i2_boot:start",  # I2: rotation grace, key pools, budgets, OR catalog
     "auoreo.runtime.hooks:start",

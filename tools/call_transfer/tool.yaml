@@ -23,6 +23,6 @@ exposure: deferred
 is_read_only: false
 is_destructive: true
 is_concurrency_safe: false
-net: direct
+net: none  # egress is the rtc backend's (fixed settings.livekit URL), not model-chosen
 timeout_ms: 90000
 search_hint: phone call transfer telephony sip forward hand off warm cold livekit dial

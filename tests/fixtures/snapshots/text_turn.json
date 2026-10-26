@@ -1,0 +1,67 @@
+[
+ {
+  "data": {
+   "agent": "default",
+   "workflow": "chat"
+  },
+  "type": "session.created"
+ },
+ {
+  "data": {
+   "agent": "default",
+   "model": "default"
+  },
+  "type": "run.started"
+ },
+ {
+  "data": {
+   "content": "hello there",
+   "role": "user"
+  },
+  "type": "message.created"
+ },
+ {
+  "data": {
+   "step": 1
+  },
+  "type": "step.started"
+ },
+ {
+  "data": {
+   "model": "default"
+  },
+  "type": "usage"
+ },
+ {
+  "data": {
+   "text": "General Kenobi."
+  },
+  "type": "message.delta"
+ },
+ {
+  "data": {
+   "content": "General Kenobi.",
+   "step": 1,
+   "tool_calls": []
+  },
+  "type": "message.completed"
+ },
+ {
+  "data": {
+   "budget": {
+    "total": 500,
+    "used": 1
+   },
+   "model_calls": 1,
+   "status": "completed",
+   "steps": 1
+  },
+  "type": "turn.summary"
+ },
+ {
+  "data": {
+   "text": "General Kenobi."
+  },
+  "type": "run.completed"
+ }
+]

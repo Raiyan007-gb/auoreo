@@ -26,6 +26,7 @@ async def test_run_checks_without_services(home: Path) -> None:
     extras = {"keyring", "ws_auth", "workspace_trust", "memory_reembed"}  # H1b + I4
     extras |= {"disk", "settings_schema", "worktrees", "desktop_tcc"}  # I5
     extras |= {"desktop:health", "livekit:worker"}  # I8
+    extras |= {"egress-proxy", "egress-sandbox", "ws-server", "search", "plugin-signatures"}  # I9, I6
     assert extras <= set(names[otel + 1 :])  # every EXTRA_CHECKS row comes after the built-ins
     assert "audit" not in names  # no state.db yet
     assert all(isinstance(c, Check) and c.level in {"ok", "warn", "error"} for c in rows)
