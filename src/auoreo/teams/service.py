@@ -26,7 +26,7 @@ from auoreo.core.db import TeamMemberRow, TeamRow
 from auoreo.runtime.hooks import subagent_stop
 from auoreo.runtime.inbox import RunOptions
 from auoreo.teams.board import Board
-from auoreo.teams.ceiling import CeilingEngine, clamp, leaf_permissions, role_for
+from auoreo.teams.ceiling import CeilingEngine, clamp, inherited, leaf_permissions, role_for
 from auoreo.teams.control import WAIT_DEFAULT_MS, WAIT_MAX_MS, WAIT_MIN_MS, Control
 from auoreo.teams.fleet import FLEET_CAP, Fleet
 from auoreo.teams.fork import fork_seed
@@ -309,13 +309,15 @@ class TeamsService:
         parent_mode = self._mode_of(parent_session_id, parent.agent)
         child_mode = child_manifest.permission_mode or self.s.settings.permission_mode
         crt = await self.s.coordinator.runtime(child.id)
+        rules, parent_denied = inherited(self.s.coordinator.engine_for(parent_session_id))  # I1 §19.6
         crt.engine = CeilingEngine(
             parent_mode,
             [],
             [],
             clamp(child_mode, parent_mode),
             str(self.s.cwd / ".auoreo" / "plans"),
-            denied=denied,
+            session_rules=rules,
+            denied=denied | parent_denied,
         )
         prt = await self.s.coordinator.runtime(parent_session_id)
         if mode == "fork":
