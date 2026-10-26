@@ -1,6 +1,7 @@
 """`auoreo debug bundle|snapshot` — local, redacted diagnostics archives (spec §20.3).
 
-Redaction is forced (patterns + every known secret value); nothing is uploaded."""
+Redaction is forced (patterns + every known secret value); `upload` (H4) sends only to the
+configured `cli2.debug_upload_url`, after a redaction gate and a confirmation."""
 
 from __future__ import annotations
 
@@ -68,3 +69,17 @@ def snapshot(
     path = out or Path.cwd() / f"snapshot-{session_id}.{fmt}"
     _write_private(path, text)
     console.print(f"wrote {path} (redacted)")
+
+
+# --- H4: opt-in upload to the configured endpoint only (forced redaction + gate + confirm)
+@app.command("upload")
+def upload(
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask for confirmation.")] = False,
+    keep: Annotated[
+        Path | None, typer.Option("--keep", help="Also keep the uploaded zip at this path.")
+    ] = None,
+) -> None:
+    """Upload a redacted debug bundle to `cli2.debug_upload_url` (refuses when unset)."""
+    from auoreo.cli.debug_upload import upload as do_upload
+
+    do_upload(settings(), yes=yes, keep=keep)

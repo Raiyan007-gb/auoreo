@@ -63,6 +63,13 @@ def run(
     auto: Annotated[
         bool, typer.Option("--auto", help="Auto-approve asks (floors/denies still apply).")
     ] = False,
+    # --- H4: spec §18 `--command` / `--share`
+    command: Annotated[
+        str | None, typer.Option("--command", help="Run this slash command; PROMPT becomes its args.")
+    ] = None,
+    share: Annotated[
+        bool, typer.Option("--share", help="Mint a read-only share link for the session afterwards.")
+    ] = False,
 ) -> None:
     """Run a message (non-interactive by default: tools needing approval are denied)."""
     if as_json:
@@ -72,7 +79,10 @@ def run(
         raise typer.Exit(2)
     try:
         flags = Flags(print_only, interactive, bare, files or [], fork, cont, title, variant, thinking)
+        if command is not None:
+            prompt = slash_prompt(command, prompt, interactive)
         plan = build_plan(prompt, agent, workflow, model, session, fmt, flags, attach, allow, deny, auto)
+        plan.share = share
         code = _dispatch(settings(gateway=gateway), plan, attach)
     except RunUsageError as exc:
         err_console.print(f"[red]{exc}[/red]")
@@ -91,7 +101,7 @@ def _dispatch(st: Settings, plan: RunPlan, attach: str | None) -> int:
     sock = uds.daemon_socket(st.home)
     if sock is None or plan.local_only or plan.fmt == "print":
         return asyncio.run(run_in_process(st, plan, _pretty))
-    if plan.fork or plan.cont or plan.title:
+    if plan.fork or plan.cont or plan.title or plan.share:
         return run_attached(f"unix:{sock}", plan, _pretty)
     return cli_client.run_over_socket(
         sock,
@@ -104,6 +114,22 @@ def _dispatch(st: Settings, plan: RunPlan, attach: str | None) -> int:
         pretty=_pretty,
         note=lambda msg: err_console.print(f"[dim]{msg}[/dim]"),
     )
+
+
+def slash_prompt(command: str, prompt: str | None, interactive: bool) -> str:
+    """`--command review` + "src/x.py" → "/review src/x.py" (the command must exist)."""
+    from auoreo.core.paths import bundled_root, home_dir
+    from auoreo.harness.discovery import default_roots
+    from auoreo.harness.registry import Harness
+
+    if interactive:
+        raise RunUsageError("--command runs one slash command; it does not combine with --interactive")
+    name = command.strip().lstrip("/")
+    h = Harness(default_roots(home_dir(), Path.cwd(), bundled_root(), settings().extra_roots))
+    if name not in h.commands:
+        raise RunUsageError(f"unknown command '/{name}' (known: {', '.join(sorted(h.commands))})")
+    args = sys.stdin.read() if prompt == "-" else (prompt or "")
+    return f"/{name} {args}".strip()
 
 
 @dataclass(frozen=True)
