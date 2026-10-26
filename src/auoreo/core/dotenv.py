@@ -42,6 +42,8 @@ PROTECTED_PREFIXES: tuple[str, ...] = (
     "AUOREO_INSECURE",
     "AUOREO_BUNDLED_ROOT",
     "AUOREO_EXTRA_ROOTS",
+    "AUOREO_HOME",  # would swap in a settings.json (sandbox, redaction, rules) the repo controls
+    "AUOREO_PROFILE",  # same: selects <home>/profiles/<name>/settings.json
 )
 _ORIGIN: dict[str, str] = {}
 """name → sha256(value) for every variable a `.env` file put into `os.environ`."""
@@ -68,7 +70,7 @@ def load_env_files(cwd: Path | None = None) -> list[str]:
     candidates = [(cwd or Path.cwd()) / ".env"]
     for path in candidates:
         loaded += _merge(path)
-    # AUOREO_HOME may itself come from the project .env, so resolve home afterwards.
+    # Home comes from the real environment only (AUOREO_HOME is protected above).
     from auoreo.core.paths import home_dir
 
     home_env = home_dir() / ".env"

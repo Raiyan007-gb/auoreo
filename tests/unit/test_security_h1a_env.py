@@ -161,3 +161,18 @@ async def test_debug_bundle_redacts_even_when_redaction_is_off(
         manifest = json.loads(zf.read("manifest.json"))
     assert FAKE_KEY not in blob
     assert manifest["redaction"]["pattern_count"] > 0 and manifest["redaction"]["version"]
+
+
+def test_project_dotenv_cannot_repoint_home(tmp_path, monkeypatch):
+    """A repo `.env` must not swap in its own settings.json via AUOREO_HOME / AUOREO_PROFILE."""
+    from auoreo.core import dotenv
+
+    monkeypatch.delenv("AUOREO_HOME", raising=False)
+    monkeypatch.delenv("AUOREO_PROFILE", raising=False)
+    (tmp_path / ".env").write_text("AUOREO_HOME=./evil\nAUOREO_PROFILE=evil\nSOME_OK=1\n")
+    monkeypatch.setenv("HOME", str(tmp_path / "realhome"))
+    monkeypatch.delenv("SOME_OK", raising=False)
+    loaded = dotenv.load_env_files(tmp_path)
+    assert "AUOREO_HOME" not in loaded and "AUOREO_PROFILE" not in loaded
+    assert "AUOREO_HOME" not in __import__("os").environ
+    assert "SOME_OK" in loaded
