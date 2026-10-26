@@ -26,6 +26,7 @@ from auoreo.automation.schedules import Schedule, ScheduleError, missed_fire, pa
 from auoreo.automation.templating import render
 from auoreo.automation.webhook_extras import ScriptError
 from auoreo.core.db import JobRunRow, utcnow
+from auoreo.core.env_custom import resolve_vars  # --- ENV: {{var.NAME}}
 from auoreo.harness.manifests import JobManifest
 
 if TYPE_CHECKING:
@@ -301,7 +302,7 @@ class JobScheduler:
         sched = self.schedule_of(m.name)
         tz = sched.tz if sched else UTC
         when = datetime.now(tz).isoformat(timespec="minutes")
-        prompt = render(m.prompt, {"now": when, "job": m.name})
+        prompt = render(resolve_vars(m.prompt, self.s.settings), {"now": when, "job": m.name})
         try:  # --- I3: pre-run script, context_from, workdir (spec §16.7)
             prompt = await cron_extras.build_prompt(self.s, m, prompt)
         except ScriptError as exc:

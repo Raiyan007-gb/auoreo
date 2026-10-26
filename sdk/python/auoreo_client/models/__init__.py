@@ -58,6 +58,8 @@ from .curator_contradiction import CuratorContradiction
 from .curator_merge import CuratorMerge
 from .curator_report import CuratorReport
 from .curator_report_text import CuratorReportText
+from .custom_var_out import CustomVarOut
+from .custom_var_write import CustomVarWrite
 from .delegation_pause import DelegationPause
 from .delegation_state import DelegationState
 from .delivery_info import DeliveryInfo
@@ -67,6 +69,22 @@ from .doctor_check import DoctorCheck
 from .doctor_check_level import DoctorCheckLevel
 from .doctor_report import DoctorReport
 from .doctor_summary import DoctorSummary
+from .dotenv_import import DotenvImport
+from .dotenv_import_counts import DotenvImportCounts
+from .dotenv_import_request import DotenvImportRequest
+from .dotenv_move import DotenvMove
+from .dotenv_move_to import DotenvMoveTo
+from .env_applied import EnvApplied
+from .env_entry import EnvEntry
+from .env_entry_kind import EnvEntryKind
+from .env_entry_source import EnvEntrySource
+from .env_entry_tier import EnvEntryTier
+from .env_entry_type import EnvEntryType
+from .env_listing import EnvListing
+from .env_secret_rotate import EnvSecretRotate
+from .env_secret_write import EnvSecretWrite
+from .env_section_out import EnvSectionOut
+from .env_setting_write import EnvSettingWrite
 from .environment_info import EnvironmentInfo
 from .environment_info_kind import EnvironmentInfoKind
 from .events_tail import EventsTail
@@ -312,6 +330,8 @@ __all__ = (
     "CuratorMerge",
     "CuratorReport",
     "CuratorReportText",
+    "CustomVarOut",
+    "CustomVarWrite",
     "DelegationPause",
     "DelegationState",
     "DeliveryInfo",
@@ -321,8 +341,24 @@ __all__ = (
     "DoctorCheckLevel",
     "DoctorReport",
     "DoctorSummary",
+    "DotenvImport",
+    "DotenvImportCounts",
+    "DotenvImportRequest",
+    "DotenvMove",
+    "DotenvMoveTo",
+    "EnvApplied",
+    "EnvEntry",
+    "EnvEntryKind",
+    "EnvEntrySource",
+    "EnvEntryTier",
+    "EnvEntryType",
     "EnvironmentInfo",
     "EnvironmentInfoKind",
+    "EnvListing",
+    "EnvSecretRotate",
+    "EnvSecretWrite",
+    "EnvSectionOut",
+    "EnvSettingWrite",
     "EventsTail",
     "EventsTailRequest",
     "ExportApiSessionsSessionIdExportGetFormat",

@@ -386,6 +386,162 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/env": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Env */
+        get: operations["get_env_api_env_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/env/custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Custom */
+        post: operations["create_custom_api_env_custom_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/env/custom/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Custom
+         * @description Change flags and/or the value (`value` omitted keeps it). `body.name` must equal `name`.
+         */
+        put: operations["update_custom_api_env_custom__name__put"];
+        post?: never;
+        /** Delete Custom */
+        delete: operations["delete_custom_api_env_custom__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/env/import-dotenv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Import
+         * @description Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews).
+         */
+        post: operations["post_import_api_env_import_dotenv_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/env/secrets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Secret
+         * @description Store a catalog secret (write-only; the response never echoes it).
+         */
+        put: operations["put_secret_api_env_secrets__name__put"];
+        post?: never;
+        /** Delete Secret */
+        delete: operations["delete_secret_api_env_secrets__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/env/secrets/{name}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate Secret
+         * @description New value; the previous one keeps resolving as `<name>#prev` for `grace_s`.
+         */
+        post: operations["rotate_secret_api_env_secrets__name__rotate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/env/settings/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Setting
+         * @description Set (or with `value: null` reset) one setting in settings.json and apply it live.
+         */
+        put: operations["put_setting_api_env_settings__name__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/env/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo
+         * @description Restore the previous settings.json version (10 are kept) and apply it live.
+         */
+        post: operations["undo_api_env_undo_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/environments": {
         parameters: {
             query?: never;
@@ -3104,6 +3260,51 @@ export interface components {
             /** Path */
             path: string;
         };
+        /** CustomVarOut */
+        CustomVarOut: {
+            /** Expose To Agent */
+            expose_to_agent: boolean;
+            /** Expose To Shell */
+            expose_to_shell: boolean;
+            /** Is Set */
+            is_set: boolean;
+            /** Name */
+            name: string;
+            /** Secret */
+            secret: boolean;
+            /** Updated At */
+            updated_at?: string | null;
+            /**
+             * Value
+             * @description Plain variables only; null for secrets
+             */
+            value?: string | null;
+        };
+        /** CustomVarWrite */
+        CustomVarWrite: {
+            /**
+             * Expose To Agent
+             * @default false
+             */
+            expose_to_agent: boolean;
+            /**
+             * Expose To Shell
+             * @default false
+             */
+            expose_to_shell: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Secret
+             * @default false
+             */
+            secret: boolean;
+            /**
+             * Value
+             * @description Omit on PUT to keep the value
+             */
+            value?: string | null;
+        };
         /** DelegationPause */
         DelegationPause: {
             /** Paused */
@@ -3227,6 +3428,183 @@ export interface components {
              * @default 0
              */
             warn: number;
+        };
+        /** DotenvImport */
+        DotenvImport: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Dry Run */
+            dry_run: boolean;
+            /** Moved */
+            moved: components["schemas"]["DotenvMove"][];
+            /** Note */
+            note: string;
+        };
+        /** DotenvImportRequest */
+        DotenvImportRequest: {
+            /**
+             * Dry Run
+             * @default false
+             */
+            dry_run: boolean;
+        };
+        /** DotenvMove */
+        DotenvMove: {
+            /** Name */
+            name: string;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * To
+             * @enum {string}
+             */
+            to: "secrets" | "settings" | "skipped" | "kept";
+        };
+        /**
+         * EnvApplied
+         * @description What a write changed and how it applies.
+         */
+        EnvApplied: {
+            /** Action */
+            action: string;
+            /** Changed */
+            changed?: string[];
+            /** Live */
+            live?: string[];
+            /** Name */
+            name?: string | null;
+            /** Note */
+            note: string;
+            /** Restart Required */
+            restart_required?: string[];
+        };
+        /** EnvEntry */
+        EnvEntry: {
+            /** Choices */
+            choices?: string[];
+            /** Default */
+            default?: unknown;
+            /** Description */
+            description: string;
+            /**
+             * Field
+             * @description settings.json key for `kind=setting`
+             */
+            field?: string | null;
+            /**
+             * Is Set
+             * @description A non-default value is in effect (secrets: a value exists)
+             */
+            is_set: boolean;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "setting" | "secret" | "passthrough";
+            /**
+             * Live
+             * @description A change applies without a restart
+             */
+            live: boolean;
+            /**
+             * Locked Reason
+             * @description Why the web cannot change it
+             */
+            locked_reason?: string | null;
+            /**
+             * Name
+             * @description The environment variable, e.g. `AUOREO_MODEL`
+             */
+            name: string;
+            /**
+             * Nullable
+             * @default false
+             */
+            nullable: boolean;
+            /**
+             * Pending Restart
+             * @description settings.json differs from the running value
+             * @default false
+             */
+            pending_restart: boolean;
+            /** Restart Reason */
+            restart_reason?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "env" | "dotenv" | "settings" | "secrets" | "override" | "default";
+            /**
+             * Tier
+             * @enum {string}
+             */
+            tier: "anywhere" | "home" | "env-only";
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "bool" | "int" | "float" | "str" | "enum" | "json";
+            /**
+             * Updated At
+             * @description Secrets: last write
+             */
+            updated_at?: string | null;
+            /**
+             * Value
+             * @description Effective value (redacted); always null for secrets
+             */
+            value?: unknown;
+            /** Writable */
+            writable: boolean;
+        };
+        /** EnvListing */
+        EnvListing: {
+            /** Custom */
+            custom: components["schemas"]["CustomVarOut"][];
+            /** Dotenv Exists */
+            dotenv_exists: boolean;
+            /** Dotenv Path */
+            dotenv_path: string;
+            /**
+             * History
+             * @description settings.json versions available to undo
+             */
+            history: number;
+            /** Pending Restart */
+            pending_restart?: string[];
+            /** Sections */
+            sections: components["schemas"]["EnvSectionOut"][];
+        };
+        /** EnvSecretRotate */
+        EnvSecretRotate: {
+            /** Grace S */
+            grace_s?: number | null;
+            /** Value */
+            value: string;
+        };
+        /** EnvSecretWrite */
+        EnvSecretWrite: {
+            /** Value */
+            value: string;
+        };
+        /** EnvSectionOut */
+        EnvSectionOut: {
+            /** Entries */
+            entries: components["schemas"]["EnvEntry"][];
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+        };
+        /** EnvSettingWrite */
+        EnvSettingWrite: {
+            /**
+             * Value
+             * @description New value (JSON for json-typed entries); null resets to the default
+             */
+            value: unknown;
         };
         /**
          * EnvironmentInfo
@@ -6499,6 +6877,372 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DoctorReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_env_api_env_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvListing"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_custom_api_env_custom_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomVarWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_custom_api_env_custom__name__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomVarWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_custom_api_env_custom__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_import_api_env_import_dotenv_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DotenvImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DotenvImport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_secret_api_env_secrets__name__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvSecretWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_secret_api_env_secrets__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rotate_secret_api_env_secrets__name__rotate_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvSecretRotate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_setting_api_env_settings__name__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnvSettingWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_api_env_undo_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvApplied"];
                 };
             };
             /** @description Validation Error */

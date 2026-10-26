@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import ValidationError
 
 from auoreo.api.deps import AUTH, ServicesDep
+from auoreo.core.env_store import EnvStoreError
 from auoreo.core.reload_kinds import ReloadKind, scoped_reload
 from auoreo.harness.registry import HarnessError
 from auoreo.schema.chat import HarnessEntry, HarnessListing, ReloadResult
@@ -44,7 +45,7 @@ async def reload(svc: ServicesDep, kind: ReloadKind | None = None) -> ReloadResu
     else:
         try:
             changes, note = await scoped_reload(svc, kind, diff)
-        except ValidationError as exc:
+        except (ValidationError, EnvStoreError) as exc:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"settings.json: {exc}") from exc
     scope = {"kind": kind} if kind else {}
     await svc.emit("server", "harness.reloaded", {"generation": gen, "errors": errors, **scope, **changes})

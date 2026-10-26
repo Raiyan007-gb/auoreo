@@ -14,6 +14,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from auoreo.core.env_custom import resolve_vars
 from auoreo.harness.loader import CommandDef
 from auoreo.harness.orchestrator import render
 from auoreo.runtime.compaction import CompactionError
@@ -55,7 +56,7 @@ def parse(text: str, known: dict[str, CommandDef]) -> tuple[CommandDef, str] | N
 
 
 def _render(inv: Invocation) -> str:
-    template = inv.command.template or "{{args}}"
+    template = resolve_vars(inv.command.template or "{{args}}", inv.coord.s.settings)  # {{var.NAME}}
     return render(template, {"args": inv.args, "input": inv.text, "worktree": str(inv.coord.s.cwd)}).strip()
 
 

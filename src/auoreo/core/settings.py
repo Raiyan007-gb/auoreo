@@ -24,6 +24,7 @@ from auoreo.core.settings_cli import CliSettings  # --- G5a
 from auoreo.core.settings_cli2 import Cli2Settings  # --- H4
 from auoreo.core.settings_compaction import CompactionSettings  # --- G2b
 from auoreo.core.settings_engine import ToolEngineSettings  # --- G4a
+from auoreo.core.settings_env import EnvSettings  # --- ENV
 from auoreo.core.settings_floors import FloorSettings  # --- H1a
 from auoreo.core.settings_g6 import G6Settings  # --- G6
 from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
@@ -429,6 +430,7 @@ class Settings(BaseSettings):
     i8: I8Settings = Field(default_factory=I8Settings)  # --- I8
     i9: I9Settings = Field(default_factory=I9Settings)  # --- I9
     smart_timeout: float | None = Field(default=None, gt=0, le=120)  # --- I9: AUOREO_SMART_TIMEOUT
+    env: EnvSettings = Field(default_factory=EnvSettings)  # --- ENV: web-managed custom variables
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

@@ -1691,6 +1691,104 @@
         "title": "CuratorReportText",
         "type": "object"
       },
+      "CustomVarOut": {
+        "properties": {
+          "expose_to_agent": {
+            "title": "Expose To Agent",
+            "type": "boolean"
+          },
+          "expose_to_shell": {
+            "title": "Expose To Shell",
+            "type": "boolean"
+          },
+          "is_set": {
+            "title": "Is Set",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Plain variables only; null for secrets",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name",
+          "secret",
+          "expose_to_shell",
+          "expose_to_agent",
+          "is_set"
+        ],
+        "title": "CustomVarOut",
+        "type": "object"
+      },
+      "CustomVarWrite": {
+        "properties": {
+          "expose_to_agent": {
+            "default": false,
+            "title": "Expose To Agent",
+            "type": "boolean"
+          },
+          "expose_to_shell": {
+            "default": false,
+            "title": "Expose To Shell",
+            "type": "boolean"
+          },
+          "name": {
+            "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "secret": {
+            "default": false,
+            "title": "Secret",
+            "type": "boolean"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 8192,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omit on PUT to keep the value",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CustomVarWrite",
+        "type": "object"
+      },
       "DelegationPause": {
         "properties": {
           "paused": {
@@ -1938,6 +2036,421 @@
           }
         },
         "title": "DoctorSummary",
+        "type": "object"
+      },
+      "DotenvImport": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "moved": {
+            "items": {
+              "$ref": "#/components/schemas/DotenvMove"
+            },
+            "title": "Moved",
+            "type": "array"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dry_run",
+          "moved",
+          "counts",
+          "note"
+        ],
+        "title": "DotenvImport",
+        "type": "object"
+      },
+      "DotenvImportRequest": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          }
+        },
+        "title": "DotenvImportRequest",
+        "type": "object"
+      },
+      "DotenvMove": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "to": {
+            "enum": [
+              "secrets",
+              "settings",
+              "skipped",
+              "kept"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "to"
+        ],
+        "title": "DotenvMove",
+        "type": "object"
+      },
+      "EnvApplied": {
+        "description": "What a write changed and how it applies.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "changed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Live",
+            "type": "array"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "restart_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Restart Required",
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "note"
+        ],
+        "title": "EnvApplied",
+        "type": "object"
+      },
+      "EnvEntry": {
+        "properties": {
+          "choices": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Choices",
+            "type": "array"
+          },
+          "default": {
+            "title": "Default"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "settings.json key for `kind=setting`",
+            "title": "Field"
+          },
+          "is_set": {
+            "description": "A non-default value is in effect (secrets: a value exists)",
+            "title": "Is Set",
+            "type": "boolean"
+          },
+          "kind": {
+            "enum": [
+              "setting",
+              "secret",
+              "passthrough"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "live": {
+            "description": "A change applies without a restart",
+            "title": "Live",
+            "type": "boolean"
+          },
+          "locked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the web cannot change it",
+            "title": "Locked Reason"
+          },
+          "name": {
+            "description": "The environment variable, e.g. `AUOREO_MODEL`",
+            "title": "Name",
+            "type": "string"
+          },
+          "nullable": {
+            "default": false,
+            "title": "Nullable",
+            "type": "boolean"
+          },
+          "pending_restart": {
+            "default": false,
+            "description": "settings.json differs from the running value",
+            "title": "Pending Restart",
+            "type": "boolean"
+          },
+          "restart_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Restart Reason"
+          },
+          "source": {
+            "enum": [
+              "env",
+              "dotenv",
+              "settings",
+              "secrets",
+              "override",
+              "default"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "tier": {
+            "enum": [
+              "anywhere",
+              "home",
+              "env-only"
+            ],
+            "title": "Tier",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "bool",
+              "int",
+              "float",
+              "str",
+              "enum",
+              "json"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Secrets: last write",
+            "title": "Updated At"
+          },
+          "value": {
+            "description": "Effective value (redacted); always null for secrets",
+            "title": "Value"
+          },
+          "writable": {
+            "title": "Writable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "kind",
+          "type",
+          "tier",
+          "source",
+          "is_set",
+          "live",
+          "writable"
+        ],
+        "title": "EnvEntry",
+        "type": "object"
+      },
+      "EnvListing": {
+        "properties": {
+          "custom": {
+            "items": {
+              "$ref": "#/components/schemas/CustomVarOut"
+            },
+            "title": "Custom",
+            "type": "array"
+          },
+          "dotenv_exists": {
+            "title": "Dotenv Exists",
+            "type": "boolean"
+          },
+          "dotenv_path": {
+            "title": "Dotenv Path",
+            "type": "string"
+          },
+          "history": {
+            "description": "settings.json versions available to undo",
+            "title": "History",
+            "type": "integer"
+          },
+          "pending_restart": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Pending Restart",
+            "type": "array"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/EnvSectionOut"
+            },
+            "title": "Sections",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sections",
+          "custom",
+          "history",
+          "dotenv_path",
+          "dotenv_exists"
+        ],
+        "title": "EnvListing",
+        "type": "object"
+      },
+      "EnvSecretRotate": {
+        "properties": {
+          "grace_s": {
+            "anyOf": [
+              {
+                "maximum": 2592000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grace S"
+          },
+          "value": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "EnvSecretRotate",
+        "type": "object"
+      },
+      "EnvSecretWrite": {
+        "properties": {
+          "value": {
+            "maxLength": 16384,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "EnvSecretWrite",
+        "type": "object"
+      },
+      "EnvSectionOut": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/EnvEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "entries"
+        ],
+        "title": "EnvSectionOut",
+        "type": "object"
+      },
+      "EnvSettingWrite": {
+        "properties": {
+          "value": {
+            "description": "New value (JSON for json-typed entries); null resets to the default",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value"
+        ],
+        "title": "EnvSettingWrite",
         "type": "object"
       },
       "EnvironmentInfo": {
@@ -9267,6 +9780,772 @@
         "summary": "Doctor",
         "tags": [
           "ops"
+        ]
+      }
+    },
+    "/api/env": {
+      "get": {
+        "operationId": "get_env_api_env_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvListing"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Env",
+        "tags": [
+          "env"
+        ]
+      }
+    },
+    "/api/env/custom": {
+      "post": {
+        "operationId": "create_custom_api_env_custom_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomVarWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Custom",
+        "tags": [
+          "env"
+        ]
+      }
+    },
+    "/api/env/custom/{name}": {
+      "delete": {
+        "operationId": "delete_custom_api_env_custom__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Custom",
+        "tags": [
+          "env"
+        ]
+      },
+      "put": {
+        "description": "Change flags and/or the value (`value` omitted keeps it). `body.name` must equal `name`.",
+        "operationId": "update_custom_api_env_custom__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomVarWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Custom",
+        "tags": [
+          "env"
+        ]
+      }
+    },
+    "/api/env/import-dotenv": {
+      "post": {
+        "description": "Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews).",
+        "operationId": "post_import_api_env_import_dotenv_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DotenvImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DotenvImport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Import",
+        "tags": [
+          "env"
+        ]
+      }
+    },
+    "/api/env/secrets/{name}": {
+      "delete": {
+        "operationId": "delete_secret_api_env_secrets__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Secret",
+        "tags": [
+          "env"
+        ]
+      },
+      "put": {
+        "description": "Store a catalog secret (write-only; the response never echoes it).",
+        "operationId": "put_secret_api_env_secrets__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvSecretWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Secret",
+        "tags": [
+          "env"
+        ]
+      }
+    },
+    "/api/env/secrets/{name}/rotate": {
+      "post": {
+        "description": "New value; the previous one keeps resolving as `<name>#prev` for `grace_s`.",
+        "operationId": "rotate_secret_api_env_secrets__name__rotate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvSecretRotate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Rotate Secret",
+        "tags": [
+          "env"
+        ]
+      }
+    },
+    "/api/env/settings/{name}": {
+      "put": {
+        "description": "Set (or with `value: null` reset) one setting in settings.json and apply it live.",
+        "operationId": "put_setting_api_env_settings__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnvSettingWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Setting",
+        "tags": [
+          "env"
+        ]
+      }
+    },
+    "/api/env/undo": {
+      "post": {
+        "description": "Restore the previous settings.json version (10 are kept) and apply it live.",
+        "operationId": "undo_api_env_undo_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Undo",
+        "tags": [
+          "env"
         ]
       }
     },

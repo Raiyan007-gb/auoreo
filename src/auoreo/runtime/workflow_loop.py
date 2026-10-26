@@ -45,8 +45,12 @@ def until_met(loop: WorkflowLoop, result: TurnResult) -> bool:
 def step_input(
     step: WorkflowStep, text: str, outputs: dict[str, Any], iteration: int = 1, last: str = ""
 ) -> str:
+    from auoreo.core.env_custom import resolve_vars
+    from auoreo.core.settings import get_settings
+
     return render(
-        step.input, {"input": text, "steps": outputs, "loop": {"iteration": iteration, "last": last}}
+        resolve_vars(step.input, get_settings()),
+        {"input": text, "steps": outputs, "loop": {"iteration": iteration, "last": last}},
     )
 
 

@@ -306,7 +306,7 @@ def load_workflow(c: Candidate) -> Loaded:
     manifest = _validate(WorkflowManifest, data, c.path, text)
     _check_name(c, manifest.name, text)
     for step in manifest.steps:
-        check_template(step.input, c.path, allowed={"input", "steps", "loop"})
+        check_template(step.input, c.path, allowed={"input", "steps", "loop", "var"})
     return Loaded(manifest, c.root.source, c.path)
 
 
@@ -368,7 +368,7 @@ def load_family(c: Candidate) -> FamilyDef:
     return FamilyDef(fam, body.strip(), c.root.source, c.path)
 
 
-COMMAND_VARS = {"args", "input", "worktree"}  # worktree: G6 subtask commands
+COMMAND_VARS = {"args", "input", "worktree", "var"}  # worktree: G6 subtask commands; var: custom vars
 
 
 def load_command(c: Candidate) -> CommandDef:
@@ -408,7 +408,7 @@ def load_job(c: Candidate) -> Loaded:
     data, text = _parse_yaml(c)
     manifest = _validate(JobManifest, data, c.path, text)
     _check_name(c, manifest.name, text)
-    check_template(manifest.prompt, c.path, allowed={"now", "job"})
+    check_template(manifest.prompt, c.path, allowed={"now", "job", "var"})
     return Loaded(manifest, c.root.source, c.path)
 
 
