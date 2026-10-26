@@ -40,6 +40,7 @@ export type UsageTotals = S["UsageTotals"];
 export type CommandInfo = S["CommandInfo"];
 export type LatestSeq = S["LatestSeq"];
 export type AuthStatus = S["AuthStatus"]; // --- G1a
+export type CapabilityToken = S["CapabilityToken"]; // --- H1b
 /** `?format=` of GET /api/sessions/{id}/export (from the OpenAPI query parameter). */
 export type ExportFormat = NonNullable<
   NonNullable<paths["/api/sessions/{session_id}/export"]["get"]["parameters"]["query"]>["format"]
@@ -194,6 +195,9 @@ export function createClient(opts: ClientOptions = {}) {
     login: (password: string) => request<AuthStatus>("POST", "/api/auth/login", { body: { password } }),
     logout: () => request<AuthStatus>("POST", "/api/auth/logout"),
     authStatus: () => request<AuthStatus>("GET", "/api/auth/status"),
+    // --- H1b: per-session `/ws` token for `serve --ws-auth capability`
+    authCapability: (sessionId: string) =>
+      request<CapabilityToken>("POST", "/api/auth/capability", { body: { session_id: sessionId } }),
 
     // sessions
     /** `archived: true` returns archived AND active sessions (the server's `?archived=true`). */

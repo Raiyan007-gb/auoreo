@@ -233,9 +233,9 @@ class _Enforcing:
 async def test_refuses_under_enforcing_sandbox(services: Services, workdir: Path) -> None:
     services._backends["sandbox"] = _Enforcing()
     text, err = await call(services, workdir, "exec_command", {"cmd": "echo hi"})
-    assert err and "unsandboxed" in text and "`bash` tool" in text
+    assert err and "cannot confine" in text and "`bash` tool" in text
     text, err = await call(services, workdir, "write_stdin", {"session_id": "abc"})
-    assert err and "unsandboxed" in text
+    assert err and "cannot confine" in text
 
 
 async def test_workdir_outside_cwd_needs_permission(

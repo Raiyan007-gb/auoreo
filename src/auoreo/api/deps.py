@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
-import secrets
 from typing import Annotated
 from urllib.parse import urlsplit
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request, status
 
+from auoreo.api.session_auth import COOKIE as COOKIE  # re-export
+from auoreo.api.session_auth import (
+    bearer_of,
+    client_ip,
+    password_matches,
+    principal,
+    schedule_refresh,
+)
 from auoreo.core.idempotency import Admission, valid_key
 from auoreo.core.services import Services
 
-COOKIE = "auoreo_token"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 IDEMPOTENCY_STATE = "auoreo_idempotency"
 """`scope["state"]` key: the admission `IdempotencyMiddleware` completes or releases."""
@@ -28,18 +34,13 @@ def token_matches(
     query_token: str | None = None,
     cookie: str | None = None,
 ) -> bool:
-    """Bearer header → `?token=` (only where the caller allows it: the WS handshake) → cookie.
-    Constant-time compare; no password configured means open."""
+    """Password check only (Bearer → `?token=`), constant-time; no password means open.
+    The `cookie` argument is ignored: the browser cookie is a session JWT (`session_auth`)."""
+    del cookie
     if not expected:
         return True
-    supplied: str | None = None
-    if authorization and authorization.lower().startswith("bearer "):
-        supplied = authorization[7:].strip()
-    elif query_token:
-        supplied = query_token
-    elif cookie:
-        supplied = cookie
-    return supplied is not None and secrets.compare_digest(supplied.encode(), expected.encode())
+    supplied = bearer_of(authorization) or query_token
+    return password_matches(expected, supplied)
 
 
 def same_origin(request: Request, extra: list[str]) -> bool:
@@ -58,19 +59,20 @@ def require_auth(
     authorization: Annotated[str | None, Header()] = None,
     auoreo_token: Annotated[str | None, Cookie()] = None,
 ) -> None:
-    """Bearer header → HttpOnly cookie (constant-time). `?token=` is never accepted here (WS
-    handshake only). A cookie-authenticated POST/PUT/PATCH/DELETE also needs a same-origin
-    `Origin`/`Referer` (CSRF)."""
+    """Bearer (server password or session JWT) → HttpOnly session-JWT cookie. `?token=` is
+    never accepted here (WS handshake only). A cookie-authenticated POST/PUT/PATCH/DELETE
+    also needs a same-origin `Origin`/`Referer` (CSRF)."""
     svc = get_services(request)
-    password = svc.settings.server_password
-    if not token_matches(password, authorization=authorization, cookie=auoreo_token):
+    who = principal(svc, authorization=authorization, cookie=auoreo_token, ip=client_ip(request))
+    if who is None:
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "invalid or missing token",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    bearer = bool(authorization and authorization.lower().startswith("bearer "))
-    cookie_write = password and not bearer and request.method not in SAFE_METHODS
+    request.scope.setdefault("state", {})["auoreo_principal"] = who
+    schedule_refresh(request, svc, who)  # --- H1b: sliding session cookie
+    cookie_write = who.via == "cookie" and request.method not in SAFE_METHODS
     if cookie_write and not same_origin(request, svc.settings.cors_origins):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "cross-origin request with cookie auth")
 

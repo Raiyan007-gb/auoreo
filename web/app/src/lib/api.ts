@@ -2,8 +2,17 @@ import { type Client, createClient } from "@sdk/client";
 
 const TOKEN_KEY = "auoreo_token";
 
-/** Server-injected `<meta name="auoreo-token">` wins; else the Settings field (localStorage). */
+/** H1b: the server marks a page whose request carried a valid session-JWT cookie with
+ * `<meta name="auoreo-auth" content="cookie">` (it never injects a secret). Requests then rely
+ * on the HttpOnly cookie, which the server refreshes on activity. */
+export function cookieAuth(): boolean {
+  return document.querySelector<HTMLMetaElement>('meta[name="auoreo-auth"]')?.content === "cookie";
+}
+
+/** Bearer token for API calls: none in cookie mode; else a legacy `<meta name="auoreo-token">`,
+ * else the Settings field (localStorage). */
 export function getToken(): string | null {
+  if (cookieAuth()) return null;
   const meta = document.querySelector<HTMLMetaElement>('meta[name="auoreo-token"]')?.content;
   if (meta) return meta;
   try {
@@ -14,7 +23,7 @@ export function getToken(): string | null {
 }
 
 export function hasMetaToken(): boolean {
-  return Boolean(document.querySelector<HTMLMetaElement>('meta[name="auoreo-token"]')?.content);
+  return cookieAuth() || Boolean(document.querySelector<HTMLMetaElement>('meta[name="auoreo-token"]')?.content);
 }
 
 export function setStoredToken(token: string): void {
@@ -42,7 +51,7 @@ export const api: Client = createClient({
 
 // --- G1a: EventSource cannot send `Authorization` and the server no longer accepts
 // `?token=` on /api/events, so a token typed into Settings is exchanged for the HttpOnly
-// cookie (which also makes the server inject the token meta on the next page load).
+// session-JWT cookie (the next page load is then marked `auoreo-auth: cookie`).
 function syncCookie(token: string): void {
   const done = token ? api.login(token) : api.logout();
   done.catch(() => {

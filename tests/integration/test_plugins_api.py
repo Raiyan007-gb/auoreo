@@ -89,9 +89,18 @@ async def test_pair_endpoint(client: httpx.AsyncClient, svc: Services) -> None:
 def test_cli_offline_list_add_pair_remove(home: Path, tmp_path: Path) -> None:
     runner = CliRunner()
     env = {"AUOREO_PORT": "9"}  # nothing listens there → on-disk fallbacks
-    r = runner.invoke(cli_app, ["plugin", "add", str(FIXTURE)], env=env)
+    assert runner.invoke(cli_app, ["plugin", "add", str(FIXTURE)], env=env).exit_code == 2  # H1b
+    r = runner.invoke(cli_app, ["plugin", "add", str(FIXTURE), "--trust-local"], env=env)
     assert r.exit_code == 0, r.output
     assert (home / "plugins" / "echo" / "plugin.yaml").is_file()
+    rows = {
+        p["name"]: p for p in json.loads(runner.invoke(cli_app, ["plugin", "list", "--json"], env=env).output)
+    }
+    assert rows["echo"]["status"] == "quarantined"  # H1b: add → quarantine → verify → enable
+    assert runner.invoke(cli_app, ["plugin", "enable", "echo"], env=env).exit_code == 1  # not verified
+    r = runner.invoke(cli_app, ["plugin", "verify", "echo"], env=env)
+    assert r.exit_code == 0, r.output
+    assert runner.invoke(cli_app, ["plugin", "enable", "echo"], env=env).exit_code == 0
     r = runner.invoke(cli_app, ["plugin", "list", "--json"], env=env)
     assert r.exit_code == 0, r.output
     rows = {p["name"]: p for p in json.loads(r.output)}

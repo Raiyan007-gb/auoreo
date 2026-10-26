@@ -151,13 +151,14 @@ async def test_login_cookie_csrf_and_meta_injection(
         assert "auoreo-token" not in (await c.get("/session/abc")).text
         assert (await c.post("/api/auth/login", json={"password": "nope"})).status_code == 401
         r = await c.post("/api/auth/login", json={"password": PW})
-        assert r.status_code == 200 and r.json() == {"secured": True, "authenticated": True}
+        assert r.status_code == 200 and r.json()["secured"] and r.json()["authenticated"]
         cookie = r.headers["set-cookie"].lower()
         assert "httponly" in cookie and "samesite=lax" in cookie and "secure" not in cookie
+        assert PW.lower() not in cookie  # H1b: the cookie is a session JWT, never the password
         page = await c.get("/")
-        assert f'<meta name="auoreo-token" content="{PW}">' in page.text
+        assert '<meta name="auoreo-auth" content="cookie">' in page.text and PW not in page.text
         assert page.headers["cache-control"] == "no-store"
-        assert (await c.get("/session/abc")).text.count("auoreo-token") == 1  # SPA deep link too
+        assert (await c.get("/session/abc")).text.count("auoreo-auth") == 1  # SPA deep link too
         # cookie auth works for GET (SSE) …
         assert (await c.get("/api/events", params={"follow": "false"})).status_code == 200
         # … but an unsafe method needs a same-origin Origin/Referer (CSRF)
@@ -171,7 +172,8 @@ async def test_login_cookie_csrf_and_meta_injection(
         assert (await c.get("/api/auth/status")).json()["authenticated"] is True
         await c.post("/api/auth/logout", headers=same)
         c.cookies.clear()
-        assert (await c.get("/api/auth/status")).json() == {"secured": True, "authenticated": False}
+        status = (await c.get("/api/auth/status")).json()
+        assert status["secured"] is True and status["authenticated"] is False
         async with client_for(app) as c2:  # bearer needs no Origin
             await _bearer_checks(c2)
 
@@ -179,7 +181,7 @@ async def test_login_cookie_csrf_and_meta_injection(
 async def _bearer_checks(c: httpx.AsyncClient) -> None:
     bearer = {"Authorization": f"Bearer {PW}"}
     assert (await c.post("/api/sessions", json={}, headers=bearer)).status_code == 201
-    assert "auoreo-token" not in (await c.get("/", headers=bearer)).text  # cookie only
+    assert "auoreo-auth" not in (await c.get("/", headers=bearer)).text  # cookie only
 
 
 async def test_login_cookie_is_secure_behind_https(services: Services, settings: Settings) -> None:

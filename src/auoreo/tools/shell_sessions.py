@@ -15,6 +15,7 @@ import atexit
 import contextlib
 import os
 import secrets
+import shlex
 import signal
 import time
 from collections.abc import Callable
@@ -242,7 +243,9 @@ class ShellRegistry(SessionScoped):
         env: dict[str, str],
         tty: bool,
         granted: str,
+        argv: list[str] | None = None,
     ) -> ShellProcess:
+        """Spawn `argv` (default `bash -lc <cmd>`; callers pass the sandbox-wrapped argv)."""
         self.ensure_tasks()
         mine = self._procs.setdefault(session_id, {})
         for pid, old in list(mine.items()):  # drop fully reported exits
@@ -254,7 +257,7 @@ class ShellRegistry(SessionScoped):
                 f"{', '.join(sorted(mine))}. Finish or interrupt one (write_stdin chars='\\u0003' "
                 "in tty mode) before starting another"
             )
-        argv = ["bash", "-lc", cmd]
+        argv = argv or ["bash", "-lc", cmd]
         master: int | None = None
         if tty:
             import pty
@@ -371,26 +374,74 @@ def clip_tokens(text: str, max_tokens: int) -> str:
     return f"{head}\n… [{len(text) - len(head) - len(tail)} chars omitted] …\n{tail}"
 
 
-UNSANDBOXED = (
-    "{tool} refused: the selected sandbox backend '{name}' enforces isolation, and the "
-    "persistent shell runs unsandboxed. Use the one-shot `bash` tool instead (it runs "
-    "through the sandbox)."
+UNWRAPPABLE = (
+    "{tool} refused: the sandbox backend '{name}' cannot confine a long-lived process, and a "
+    "persistent shell never runs unconfined under an enforcing backend. Use the one-shot `bash` "
+    "tool instead (it runs through the sandbox), or select backends.sandbox = bwrap|seatbelt|none."
 )
 
 
+def _probe_spec(cwd: Path, mode: str = "workspace-write", net: str = "none") -> Any:
+    from auoreo.backends.sandbox import ExecSpec
+
+    return ExecSpec(argv=["true"], cwd=cwd, mode=mode, net=net)  # type: ignore[arg-type]
+
+
 def sandbox_refusal(sandbox: Any, tool: str) -> str | None:
-    """Why the unsandboxed shell must refuse under `sandbox` (None = the `none` backend)."""
+    """Why a persistent shell must refuse under `sandbox`: only when the backend cannot wrap a
+    long-lived process (H1b — bwrap/seatbelt wrap it, `none` passes it through)."""
     name = str(getattr(sandbox, "name", "?"))
-    caps = sandbox.capabilities() if hasattr(sandbox, "capabilities") else {}
-    if name != "none" or any(caps.values()):
-        return UNSANDBOXED.format(tool=tool, name=name)
-    return None
+    wrap = getattr(sandbox, "wrap_long_lived", None)
+    if wrap is None:  # a backend predating the hook: only an honest no-op one is accepted
+        caps = sandbox.capabilities() if hasattr(sandbox, "capabilities") else {}
+        return None if name == "none" and not any(caps.values()) else UNWRAPPABLE.format(tool=tool, name=name)
+    return None if wrap(_probe_spec(Path.cwd())) is not None else UNWRAPPABLE.format(tool=tool, name=name)
+
+
+def sandboxed_argv(
+    sandbox: Any, cmd: str, *, root: Path, workdir: Path | None, tty: bool, tool: str
+) -> list[str]:
+    """`bash -lc <cmd>` wrapped by the sandbox backend with the calling tool's profile
+    (`ExecPolicy` mode + net; `root` is the writable working directory). Raises ShellError
+    when the backend cannot wrap it."""
+    from auoreo.backends.sandbox import ExecSpec
+    from auoreo.tools.context import CURRENT_EXEC, ExecPolicy
+
+    inner = cmd
+    if workdir is not None and workdir.resolve() != root.resolve():
+        inner = f"cd {shlex.quote(str(workdir))} && {cmd}"
+    argv = ["bash", "-lc", inner]
+    if sandbox is None:
+        return argv
+    wrap = getattr(sandbox, "wrap_long_lived", None)
+    if wrap is None:
+        if why := sandbox_refusal(sandbox, tool):
+            raise ShellError(why)
+        return argv
+    policy = CURRENT_EXEC.get() or ExecPolicy()
+    spec = ExecSpec(argv=argv, cwd=root, mode=policy.mode, net=policy.net)  # type: ignore[arg-type]
+    out = wrap(spec, tty=tty)
+    if out is None:
+        raise ShellError(UNWRAPPABLE.format(tool=tool, name=getattr(sandbox, "name", "?")))
+    return list(out[0])
 
 
 def refuse_if_sandboxed(ctx: ToolContext, tool: str) -> None:
-    """Never silently bypass an enforcing sandbox: only the `none` backend is accepted."""
+    """Refuse only when the selected backend cannot confine a long-lived process."""
     if why := sandbox_refusal(ctx.backend("sandbox"), tool):
         raise ToolError(why)
+
+
+def ctx_argv(ctx: ToolContext, cmd: str, *, workdir: Path | None, tty: bool, tool: str) -> list[str]:
+    """`sandboxed_argv` for a tool handler: the session cwd is the writable root (an approved
+    workdir outside it becomes the root instead)."""
+    root = ctx.cwd.resolve()
+    if workdir is not None and workdir != root and root not in workdir.parents:
+        root = workdir
+    try:
+        return sandboxed_argv(ctx.backend("sandbox"), cmd, root=root, workdir=workdir, tty=tty, tool=tool)
+    except ShellError as exc:
+        raise ToolError(str(exc)) from exc
 
 
 def render(p: ShellProcess, text: str, dropped: int, max_tokens: int) -> ToolResult:

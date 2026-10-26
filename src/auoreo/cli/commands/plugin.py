@@ -1,4 +1,4 @@
-"""`auoreo plugin list|add|remove|reload|pair`.
+"""`auoreo plugin list|add|verify|enable|remove|reload|pair`.
 
 Commands talk to a running server first (`--url`, `AUOREO_URL`, else `http://<host>:<port>`
 from settings) and fall back to working on disk when none answers: `list` then reports
@@ -16,14 +16,16 @@ import httpx
 import typer
 from rich.table import Table
 
+from auoreo.cli import audit_cli
 from auoreo.cli.common import console, dump_json, err_console, settings
 from auoreo.core.paths import bundled_root, ensure_home
 from auoreo.core.settings import Settings
 from auoreo.harness.discovery import Candidate, Root, default_roots
 from auoreo.harness.loader import LoadError, load_plugin
 from auoreo.harness.registry import Harness
+from auoreo.plugins import quarantine
 from auoreo.plugins.connectors import PairingStore, file_config
-from auoreo.plugins.install import folder_hash, verify
+from auoreo.plugins.install import verify
 
 app = typer.Typer(no_args_is_help=True)
 UrlOpt = Annotated[
@@ -31,7 +33,7 @@ UrlOpt = Annotated[
 ]
 COLUMNS = ("name", "version", "status", "provides", "tools", "verify")
 COPY_IGNORE = shutil.ignore_patterns(
-    ".venv", "__pycache__", "*.pyc", "lock.json", "pairing.json", "sessions.json"
+    ".venv", "__pycache__", "*.pyc", "lock.json", "pairing.json", "sessions.json", "quarantine.json"
 )
 
 
@@ -70,6 +72,8 @@ def _offline_rows(st: Settings) -> list[dict[str, Any]]:
     for name, d in sorted(harness.plugins.items()):
         m = d.manifest
         status = "stopped" if m.enabled and st.plugins_enabled else "disabled"
+        if quarantine.is_quarantined(home, name):
+            status = "quarantined"
         error = None
         try:
             validate_config(m, {**st.plugins.get(name, {}), **file_config(home, name)})
@@ -109,13 +113,26 @@ def list_(url: UrlOpt = None, as_json: Annotated[bool, typer.Option("--json")] =
 
 @app.command("add")
 def add(
-    path: Annotated[Path, typer.Argument(help="Local plugin folder (plugin.yaml + pyproject.toml).")],
+    path: Annotated[str, typer.Argument(help="Local plugin folder (plugin.yaml + pyproject.toml).")],
+    trust_local: Annotated[
+        bool, typer.Option("--trust-local", help="Required for a local folder (spec §25.15 trust tiers).")
+    ] = False,
     force: Annotated[bool, typer.Option("--force", help="Replace an existing copy.")] = False,
     url: UrlOpt = None,
 ) -> None:
-    """Copy a local plugin folder into ~/.auoreo/plugins/<name>/ (the runtime definition root)."""
+    """Copy a local plugin folder into ~/.auoreo/plugins/<name>/, QUARANTINED: it does not run
+    until `auoreo plugin verify <name>` passes and `auoreo plugin enable <name>` releases it."""
     st = settings()
-    src = path.expanduser().resolve()
+    if "://" in path:
+        err_console.print("[red]URL plugin sources are denied; clone it and add the local folder[/red]")
+        raise typer.Exit(2)
+    if not trust_local:
+        err_console.print(
+            "[red]local folders are the lowest trust tier: re-run with --trust-local after reviewing "
+            "the code[/red]"
+        )
+        raise typer.Exit(2)
+    src = Path(path).expanduser().resolve()
     try:
         loaded = load_plugin(Candidate("plugins", src.name, src / "plugin.yaml", Root("runtime", src.parent)))
     except (LoadError, OSError) as exc:
@@ -131,9 +148,48 @@ def add(
             if child.name != ".venv":  # keep the venv; the lock hash decides reinstalling
                 shutil.rmtree(child) if child.is_dir() else child.unlink()
     shutil.copytree(src, dest, ignore=COPY_IGNORE, dirs_exist_ok=True)
-    console.print(f"added {name} {loaded.manifest.version} → {dest} (sha256 {folder_hash(dest)[:16]})")
+    sha = quarantine.quarantine(st.home, name, source=str(src), tier="local-path")
+    audit_cli.record(
+        st, "plugin.add", {"name": name, "tier": "local-path", "sha256": sha, "source": str(src)}
+    )
+    console.print(f"added {name} {loaded.manifest.version} → {dest} (sha256 {sha[:16]}), quarantined")
+    console.print(f"next: `auoreo plugin verify {name}` then `auoreo plugin enable {name}`")
     if _api(st, url, "POST", "/api/harness/reload") is not None:
-        console.print("server reloaded; the plugin host picks it up on its next sync")
+        console.print("server reloaded; the plugin stays stopped until it is enabled")
+
+
+@app.command("verify")
+def verify_cmd(name: str) -> None:
+    """Check a quarantined plugin (manifest, unchanged hash, config schema, declared secrets)."""
+    st = settings()
+    report = quarantine.verify(ensure_home(st.home), name, st)
+    audit_cli.record(
+        st,
+        "plugin.verify",
+        {"name": name, "sha256": report.sha256, "problems": report.problems[:10]},
+        decision="allow" if report.ok else "deny",
+    )
+    for problem in report.problems:
+        err_console.print(f"[red]- {problem}[/red]")
+    for warning in report.warnings:
+        err_console.print(f"[yellow]- warning: {warning}[/yellow]")
+    if not report.ok:
+        raise typer.Exit(1)
+    console.print(f"{name}: verified (sha256 {report.sha256[:16]}); run `auoreo plugin enable {name}`")
+
+
+@app.command("enable")
+def enable_cmd(name: str, url: UrlOpt = None) -> None:
+    """Release a verified plugin from quarantine so the host starts it."""
+    st = settings()
+    if (why := quarantine.enable(ensure_home(st.home), name)) is not None:
+        audit_cli.record(st, "plugin.enable", {"name": name}, decision="deny", reason=why)
+        err_console.print(f"[red]{why}[/red]")
+        raise typer.Exit(1)
+    audit_cli.record(st, "plugin.enable", {"name": name})
+    console.print(f"{name}: enabled")
+    if _api(st, url, "POST", "/api/harness/reload") is not None:
+        console.print("server reloaded; the plugin host starts it on its next sync")
 
 
 @app.command("remove")

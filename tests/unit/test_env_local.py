@@ -23,7 +23,7 @@ async def test_default_is_local_and_checks(services: Services) -> None:
     b = services.backend("environment")
     assert isinstance(b, EnvironmentBackend) and b.name == "local" and b.remote is False
     status = await b.check()
-    assert status.ok and "unsandboxed" in status.detail
+    assert status.ok and "sandbox backend" in status.detail
 
 
 async def test_unbound_exec_stdin_and_close(services: Services, workdir: Path) -> None:
@@ -79,7 +79,7 @@ async def test_refuses_under_enforcing_sandbox(services: Services) -> None:
     services._backends["sandbox"] = _Enforcing()
     b = local_cls(services)(services.settings)
     b.bind(services)
-    with pytest.raises(ShellError, match="unsandboxed"):
+    with pytest.raises(ShellError, match="cannot confine a long-lived process"):
         await b.exec_command(ExecRequest("echo hi"), session_id="s1")
-    with pytest.raises(ShellError, match="unsandboxed"):
+    with pytest.raises(ShellError, match="cannot confine a long-lived process"):
         await b.write_stdin("abc", "x")

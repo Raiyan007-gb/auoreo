@@ -15,14 +15,13 @@ from dataclasses import dataclass
 from typing import Any
 
 from auoreo import __version__
+from auoreo.core import keyring_policy
 from auoreo.core.settings import Settings
 from auoreo.core.tunnels import PROVIDERS, TunnelError, TunnelInfo, TunnelManager
 
-WS_AUTH_CHOICES = ("token", "off")
-UNSUPPORTED_WS_AUTH = {
-    "capability": "capability tokens for /ws are not implemented; use --ws-auth token",
-    "jwt": "JWT auth for /ws is not implemented; use --ws-auth token",
-}
+WS_AUTH_CHOICES = ("token", "off", "jwt", "capability")
+TOKEN_WS_AUTH = frozenset({"jwt", "capability"})
+"""Modes that only accept tokens minted from the server password (H1b)."""
 TUNNEL_CHOICES = ("off", *sorted(PROVIDERS))
 MDNS_TYPE = "_auoreo._tcp.local."
 MDNS_INSTALL = "--mdns needs the `zeroconf` package: `uv pip install zeroconf` (or `pip install zeroconf`)"
@@ -130,13 +129,15 @@ def _check_ws(st: Settings, ws_ping_interval: float | None, ws_ping_timeout: flo
 
 def _check_ws_auth(st: Settings, ws_auth: str | None) -> None:
     if ws_auth is not None:
-        if ws_auth in UNSUPPORTED_WS_AUTH:
-            raise ServeOptionError(UNSUPPORTED_WS_AUTH[ws_auth])
         if ws_auth not in WS_AUTH_CHOICES:
             raise ServeOptionError(f"--ws-auth must be one of {', '.join(WS_AUTH_CHOICES)}")
-        st.cli.ws_auth = "off" if ws_auth == "off" else "token"
+        st.cli.ws_auth = ws_auth  # type: ignore[assignment]
     if st.cli.ws_auth == "off" and not st.is_loopback:
         raise ServeOptionError("--ws-auth off is only allowed on a loopback bind (127.0.0.1/::1)")
+    if st.cli.ws_auth in TOKEN_WS_AUTH and not st.server_password:
+        raise ServeOptionError(
+            f"--ws-auth {st.cli.ws_auth} mints tokens from the server password; set AUOREO_SERVER_PASSWORD"
+        )
 
 
 def _check_tunnel(st: Settings, tunnel: str) -> None:
@@ -172,6 +173,10 @@ def resolve(
         st.host = "0.0.0.0"  # advertised on the LAN, so it must be reachable there
     _check_ws_auth(st, ws_auth)
     _check_tunnel(st, tunnel)
+    try:  # --- H1b: exposed binds force `forbid-file` (no plaintext key files)
+        keyring_policy.enforce_public_bind(st, mdns=mdns)
+    except keyring_policy.KeyringPolicyError as exc:
+        raise ServeOptionError(str(exc)) from exc
     if mdns:
         try:
             import zeroconf  # noqa: F401

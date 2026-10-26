@@ -27,6 +27,7 @@ from auoreo.core.settings_engine import ToolEngineSettings  # --- G4a
 from auoreo.core.settings_floors import FloorSettings  # --- H1a
 from auoreo.core.settings_g6 import G6Settings  # --- G6
 from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
+from auoreo.core.settings_h1b import H1bSettings  # --- H1b
 from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # --- G1a
 from auoreo.core.settings_models import (
     LiveKitSettings,
@@ -410,6 +411,7 @@ class Settings(BaseSettings):
     cli2: Cli2Settings = Field(default_factory=Cli2Settings)  # --- H4
     teams2: Teams2Settings = Field(default_factory=Teams2Settings)  # --- H2
     floors: FloorSettings = Field(default_factory=FloorSettings)  # --- H1a
+    h1b: H1bSettings = Field(default_factory=H1bSettings)  # --- H1b
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

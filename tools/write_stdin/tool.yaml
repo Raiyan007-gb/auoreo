@@ -38,4 +38,4 @@ timeout_ms: 45000
 search_hint: send input stdin poll output running process exec_command
 max_result_size_chars: 64000
 net: none
-sandbox_mode: danger-full-access
+sandbox_mode: workspace-write

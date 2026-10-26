@@ -65,8 +65,8 @@ def test_serve_extras_resolve_applies_flags(home: Path) -> None:
 @pytest.mark.parametrize(
     ("kwargs", "match"),
     [
-        ({"ws_auth": "jwt"}, "not implemented"),
-        ({"ws_auth": "capability"}, "not implemented"),
+        ({"ws_auth": "jwt"}, "AUOREO_SERVER_PASSWORD"),
+        ({"ws_auth": "capability"}, "AUOREO_SERVER_PASSWORD"),
         ({"ws_auth": "bogus"}, "must be one of"),
         ({"tunnel": "ngrok"}, "must be one of"),
         ({"tunnel": "fake"}, "AUOREO_SERVER_PASSWORD"),
@@ -104,7 +104,7 @@ def test_serve_mdns_is_honest_about_zeroconf(home: Path, monkeypatch: pytest.Mon
 
 def test_serve_cli_refuses_bad_flags(cli_env: Path) -> None:
     r = runner.invoke(app, ["serve", "--port", "0", "--ws-auth", "jwt"])
-    assert r.exit_code == 2 and "not implemented" in r.output
+    assert r.exit_code == 2 and "AUOREO_SERVER_PASSWORD" in r.output
     r = runner.invoke(app, ["serve", "--port", "0", "--mdns"])  # mdns → 0.0.0.0 without a password
     assert r.exit_code == 2
 
@@ -247,15 +247,19 @@ def test_secrets_rotate_and_export(cli_env: Path, home: Path) -> None:
     assert store.get("svc/token#prev") == "old-value-111111"
     r = runner.invoke(app, ["secrets", "rotate", "svc/other"], input="typed-value-222222\n")
     assert r.exit_code == 0 and store.get("svc/other") == "typed-value-222222"
-    refused = runner.invoke(app, ["secrets", "export"])
+    refused = runner.invoke(app, ["secrets", "export"])  # H1b: needs --recipient
     assert refused.exit_code == 2 and fresh not in refused.output
+    assert runner.invoke(app, ["secrets", "export", "--insecure-plaintext"]).exit_code == 2
     out = cli_env / "s.json"
-    r = runner.invoke(app, ["secrets", "export", "--yes", "--out", str(out)])
+    r = runner.invoke(app, ["secrets", "export", "--insecure-plaintext", "--yes", "--to", str(out)])
     assert r.exit_code == 0 and fresh not in r.output
     assert stat.S_IMODE(out.stat().st_mode) == 0o600
-    assert json.loads(out.read_text())["svc/token"] == fresh
-    printed = runner.invoke(app, ["secrets", "export", "--stdout", "--yes"])
-    assert json.loads(printed.stdout)["svc/other"] == "typed-value-222222"
+    entries = {e["name"]: e["value"] for e in json.loads(out.read_text())["entries"]}
+    assert entries["svc/token"] == fresh
+    printed = runner.invoke(app, ["secrets", "export", "--insecure-plaintext", "--stdout", "--yes"])
+    assert {e["name"]: e["value"] for e in json.loads(printed.stdout)["entries"]}[
+        "svc/other"
+    ] == "typed-value-222222"
 
 
 # ------------------------------------------------------------------ exec / apply / review / stats

@@ -30,6 +30,22 @@ class Backend(SandboxBackend):
         version = self._landlock()
         return {"fs_isolation": version > 0, "net_isolation": version >= 4}
 
+    def wrap_long_lived(self, spec: ExecSpec, *, tty: bool = False) -> tuple[list[str], bool] | None:
+        """Unconfined unless `security.sandbox_landlock` layers the Landlock helper."""
+        if self._landlock() <= 0:
+            return list(spec.argv), False
+        if spec.outside_cwd():
+            return None
+        wrapped = landlock.wrap(
+            spec.argv,
+            cwd=spec.cwd,
+            mode=spec.mode,
+            net=spec.net,
+            readable=spec.readable,
+            writable=spec.writable,
+        )
+        return wrapped, True
+
     async def run(self, spec: ExecSpec) -> ExecResult:
         if self._landlock() <= 0:
             return await run_local(spec, backend=self.name, enforced=False)

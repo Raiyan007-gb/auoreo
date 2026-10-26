@@ -207,7 +207,11 @@ async def test_auth_required_when_password_set(services: Services, settings: Set
         # `?token=` is accepted only on the WS handshake; the browser SSE path is the cookie
         r = await c.get("/api/events", params={"token": "s3cret-pass", "follow": "false"})
         assert r.status_code == 401
-        c.cookies.set("auoreo_token", "s3cret-pass")
+        c.cookies.set("auoreo_token", "s3cret-pass")  # H1b: a raw-password cookie is refused
+        assert (await c.get("/api/events", params={"follow": "false"})).status_code == 401
+        c.cookies.clear()
+        login = await c.post("/api/auth/login", json={"password": "s3cret-pass"})
+        assert login.status_code == 200 and "s3cret-pass" not in login.headers["set-cookie"]
         r = await c.get("/api/events", params={"follow": "false"})
         assert r.status_code == 200
 
