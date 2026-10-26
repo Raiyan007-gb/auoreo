@@ -301,6 +301,48 @@ PyInstaller `--onefile` matrix + npm launcher + GHCR image + signed auto-update 
 - ACP: v1 `session/list` · `session/resume` · `session/close` + `sessionCapabilities`; the client
   methods (permission/fs/terminal) need a bidirectional transport.
 
+## Spec closure ✅ (G + H waves)
+
+Two read-only audits (§2 catalog + §21 milestones; §5–§26 normative) drove two more waves.
+
+- **G (catalog/normative gaps):**
+  - gateway retries and fallbacks;
+  - agent loop liveness and busy windows;
+  - webhook V2 signing, rotation and providers;
+  - Host/CSRF/cookie auth, WS extensions and a bounded inbox;
+  - log redaction with sentinel mode and a write-back guard;
+  - secret scope and audit, external-directory checks and sensitive-write asks;
+  - an unattended-approval policy;
+  - Landlock and seatbelt sandboxing;
+  - compaction restore, PTL retry, idle and partial compaction, and memory nudges;
+  - prompt `toolOrder` and families;
+  - terminal_pty, jobs, monitor and ops_gpu/ops_ping;
+  - DNS-pinned fetch and apply_patch V4A;
+  - tool-engine gating (`check_fn`/`env_gate`), lossless args, `tool.progress`, path locks and MCP sampling;
+  - structlog JSON, `/metrics`, cassettes, coverage floor and gitleaks;
+  - the full CLI/session surface;
+  - OpenAI Realtime, streaming STT, PREFS proposals, the skills hub and review subtasks.
+- **H (audit fixes):**
+  - argv-based hardline and ask floors, plus a shell secret-file scanner;
+  - `.env` can no longer set security knobs;
+  - forced debug redaction and env > secrets.db > .env precedence;
+  - auto sandbox (bwrap on Linux) and strict webhook secrets;
+  - the leaf role, the root cost cap, the delegate_task actions/fork/budget/pause/heartbeat, and resume_agent/stop_task;
+  - the cronjob tool and chat `/approve`;
+  - webhook filters, script and CIDR support, and transform hooks;
+  - plugin and MCP skills in the catalog, plus `@skill` mentions;
+  - plan review, a thinking stream, approval cascade, usage charts and per-session sources;
+  - the remaining CLI commands;
+  - the Python grep fallback, rust/go LSP and the apply_patch format step;
+  - the `forecast`, `run_code`, `review`, `video_analyze` and `workflow` tools;
+  - email and calendar plugins;
+  - the computer-use lock;
+  - the spec teardown order, SSE `events:tail` and the WS `control_response` error;
+  - JWT cookies, age-encrypted secrets export, plugin quarantine, literal-secret asks and PTY shells inside the sandbox.
+
+Deliberately left as documented limits are listed in each merge commit body (e.g. Discord is
+outbound-only, Google Calendar is a CalDAV stub, and L3 exact-fork delegation is not built).
+
 ---
 
 ## Verification matrix (this container vs. your machine)
@@ -315,7 +357,7 @@ PyInstaller `--onefile` matrix + npm launcher + GHCR image + signed auto-update 
 | WebRTC | ✓ aiortc loopback | browser ↔ server over LAN/TURN |
 | Tunnels | provider detection, fake | cloudflared/tailscale binaries |
 | Webhooks/cron/teams/hooks | ✓ end-to-end with fakes | GitHub/Telegram tokens |
-| Sandbox | fake backend; docker if daemon | bwrap/Landlock host, seatbelt |
+| Sandbox | ✓ bwrap + Landlock (enforced here); docker if daemon | seatbelt (macOS) |
 
 ## Execution model
 

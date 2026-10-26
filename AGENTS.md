@@ -33,7 +33,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `src/auoreo/api/`, `src/auoreo/cli/` | FastAPI app (one port; REST + SSE `/api/events` + WS `/ws`) and Typer CLI |
 | `web/` | React SPA (`web/app`), typed SDK (`web/sdk`, generated from `openapi.json`), Playwright e2e; `web/dist` is served at `/` |
 | `sdk/python/` | Generated Python client (`scripts/gen_sdk.sh`, re-run after API changes) + hand-written SSE extras |
-| `src/auoreo/policy/`, `src/auoreo/remote/`, `src/auoreo/perception/`, `src/auoreo/goals/`, `src/auoreo/suggestions/` | Bandit model/effort policy; daemon + exec-server + bridge; sensor sessions; goals; consent-first suggestions |
+| `src/auoreo/policy/`, `src/auoreo/remote/`, `src/auoreo/perception/`, `src/auoreo/goals/`, `src/auoreo/suggestions/`, `src/auoreo/skillhub/`, `src/auoreo/mcp/` | Bandit model/effort policy; daemon + exec-server + bridge; sensor sessions; goals; consent-first suggestions; skills hub (taps, lockfile, quarantine); MCP bridge + sampling |
 | `packaging/`, `Dockerfile`, `compose.yaml`, `packages/npm/`, `desktop/` | Wheel build hook, PyInstaller spec, update-manifest signing; container; npm launcher; Electron shell |
 | `docs/` | `roadmap-m3-plus.md`, `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md`, `environments.md`, `remote.md`, `perception.md`, `teleop.md`, `release.md` |
 
@@ -54,6 +54,7 @@ Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` �
   it never edits `services.py`. Device/library integrations are `backends/` with a fake.
 - Schema changes need an Alembic revision in `src/auoreo/core/alembic/versions/` and a
   `SCHEMA_VERSION` bump; `Database.init()` upgrades file databases in place.
+- Hardline floors (`core/floors.py`, `floors_secrets.py`) run before policies, rules and yolo; a project `.env` can never set `AUOREO_*` security knobs.
 - Secrets come only from env / keyring / `secrets.db`. Tools never read `.env` or
   `secrets.db` (executor-enforced floor) and child processes get a scrubbed env.
 - No `elif` chains of 4+ (use dict dispatch); files ≤ 500 lines (`api/app.py` ≤ 300).
