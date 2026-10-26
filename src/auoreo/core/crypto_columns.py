@@ -26,7 +26,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 
-from auoreo.core.secrets import _keyring_get, _keyring_set, _owner_only
+from auoreo.core.owner_files import read_owner_only, write_owner_only
+from auoreo.core.secrets import _keyring_get, _keyring_set
 
 if TYPE_CHECKING:
     from auoreo.core.diagnostics import Check
@@ -61,7 +62,7 @@ class DbKeyring:
         if (k := _keyring_get(KEY_NAME)) is not None:
             return parse_keys(k)
         if self.policy != "forbid-file" and self.key_file.is_file():
-            return parse_keys(self.key_file.read_bytes())
+            return parse_keys(read_owner_only(self.key_file))  # I1: owner-only or refused
         return []
 
     def save(self, keys: list[bytes]) -> str:
@@ -72,11 +73,7 @@ class DbKeyring:
             return "keyring"
         if self.policy != "allow-file":
             raise DbKeyError("no usable OS keyring and AUOREO_KEYRING forbids a key file")
-        self.key_file.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.key_file.with_suffix(".tmp")
-        tmp.write_text(value)
-        _owner_only(tmp)
-        tmp.replace(self.key_file)
+        write_owner_only(self.key_file, value.encode())  # 0600 from the first byte + rename
         return str(self.key_file)
 
     def ensure(self) -> list[bytes]:

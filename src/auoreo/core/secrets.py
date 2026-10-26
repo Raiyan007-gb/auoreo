@@ -2,7 +2,10 @@
 
 `secrets.db` is a JSON map encrypted with Fernet. The Fernet key lives in the OS keyring;
 if no usable keyring exists and `AUOREO_KEYRING=allow-file`, the key falls back to a
-0600 file next to the store (local/test use only).
+0600 file next to the store (local/test use only). Both files are written `0600` from the
+first byte + atomic rename and checked owner-only on read (`core.owner_files`, I1). The
+plaintext payload is `{"schema_version": 1, "entries": {...}}` (a legacy flat map still
+reads); a newer `schema_version` than this code knows refuses to load.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from auoreo.core.dotenv import from_dotenv
 from auoreo.core.keyring_policy import backend_allowed
+from auoreo.core.owner_files import read_owner_only, write_owner_only
 
 try:
     import fcntl
@@ -36,6 +40,7 @@ else a tool needs comes from its manifest `requires_env`; tools that need a term
 `TERM` themselves (terminal_pty's `term` argument), so it is not inherited from the host."""
 ENV_ALLOWED_PREFIXES = ("AUOREO_TELEMETRY_",)
 ROTATION_SUFFIXES = ("#prev", "#rotated_at", "#prev_expires")
+SECRETS_SCHEMA_VERSION = 1
 
 
 class SecretStoreError(RuntimeError):
@@ -108,7 +113,7 @@ class SecretStore:
         if keyring_ok and (k := _keyring_get(KEY_NAME)) is not None:
             return k.encode()
         if self.policy != "forbid-file" and self.key_file.is_file():
-            return self.key_file.read_bytes().strip()
+            return read_owner_only(self.key_file).strip()
         if not create:
             return None
         key = Fernet.generate_key()
@@ -117,9 +122,7 @@ class SecretStore:
         if self.policy != "allow-file":
             raise SecretStoreError("no usable OS keyring and AUOREO_KEYRING forbids a key file")
         log.warning("keyring unavailable; storing secrets key in %s (0600)", self.key_file)
-        self.key_file.parent.mkdir(parents=True, exist_ok=True)
-        self.key_file.write_bytes(key)
-        _owner_only(self.key_file)
+        write_owner_only(self.key_file, key)
         return key
 
     def _load(self) -> dict[str, str]:
@@ -129,20 +132,23 @@ class SecretStore:
         if key is None:
             raise SecretStoreError("secrets.db exists but its key is missing")
         try:
-            data = json.loads(Fernet(key).decrypt(self.path.read_bytes()))
+            data = json.loads(Fernet(key).decrypt(read_owner_only(self.path)))
         except InvalidToken as exc:
             raise SecretStoreError("secrets.db cannot be decrypted with the current key") from exc
+        if isinstance(data.get("schema_version"), int) and isinstance(data.get("entries"), dict):
+            if data["schema_version"] > SECRETS_SCHEMA_VERSION:
+                raise SecretStoreError(
+                    f"secrets.db schema_version {data['schema_version']} is newer than this "
+                    f"AUOREO ({SECRETS_SCHEMA_VERSION}): upgrade before using it"
+                )
+            data = data["entries"]
         return {str(k): str(v) for k, v in data.items()}
 
     def _save(self, data: dict[str, str]) -> None:
         key = self._key(create=True)
         assert key is not None
-        token = Fernet(key).encrypt(json.dumps(data).encode())
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_bytes(token)
-        _owner_only(tmp)
-        tmp.replace(self.path)
+        payload = {"schema_version": SECRETS_SCHEMA_VERSION, "entries": data}
+        write_owner_only(self.path, Fernet(key).encrypt(json.dumps(payload).encode()))
 
     # ------------------------------------------------------------------- API
     @contextlib.contextmanager
