@@ -25,6 +25,7 @@ from auoreo.gateway.resolve import make_gateway
 from auoreo.gateway.types import Gateway
 from auoreo.harness.discovery import default_roots
 from auoreo.harness.registry import Harness
+from auoreo.tools.availability import Availability
 
 if TYPE_CHECKING:
     from auoreo.mcp.bridge import McpBridge
@@ -85,11 +86,15 @@ class Services:
         harness = Harness(
             default_roots(home, cwd, bundled_root(), settings.extra_roots),
             strict_overlays=settings.strict_overlays,
+            error_on_collision=settings.tool_engine.error_on_collision,  # --- G4a
         )
         db = Database(db_path or settings.db_path)
         await db.init()
         bus = EventBus()
         secrets = SecretStore(home, settings.keyring)
+        harness.availability = Availability(
+            settings.tool_engine.check_fn_ttl_s, lambda n: n in secrets.names()
+        )
         svc = cls(
             settings=settings,
             cwd=cwd,

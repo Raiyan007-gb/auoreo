@@ -20,6 +20,7 @@ from pydantic_settings import (
 )
 
 from auoreo.core.paths import home_dir
+from auoreo.core.settings_engine import ToolEngineSettings  # --- G4a
 from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
 from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # --- G1a
 from auoreo.core.settings_models import (
@@ -392,6 +393,7 @@ class Settings(BaseSettings):
     """Per-request timeout for sidecar calls (a timed-out request fails; the process keeps running)."""
     http: HttpSecuritySettings = Field(default_factory=HttpSecuritySettings)  # --- G1a
     webhooks: WebhookSettings = Field(default_factory=WebhookSettings)  # --- G1a
+    tool_engine: ToolEngineSettings = Field(default_factory=ToolEngineSettings)  # --- G4a
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

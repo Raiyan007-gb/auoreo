@@ -62,6 +62,19 @@ class ToolManifest(_Strict):
     redaction: Literal["mask", "sentinel", "off"] = "mask"
     """Result redaction (spec §19.10): `mask` = display `head6…tail4`; `sentinel` (file reads)
     = `«redacted:<prefix>…»`; `off` only for tools whose output never carries file content."""
+    # --- G4a: availability + presentation (spec §9.1)
+    is_enabled: bool = True
+    """`false` hides the tool from every agent (kept in `/api/harness` with the reason)."""
+    check_fn: str | None = None
+    """Availability probe `<file>.py:<fn>` (inside the tool folder) or `<pkg.module>:<fn>`:
+    sync, returns True/None (available), False or a reason string (hidden). Cached 30 s."""
+    env_gate: Literal["none", "all", "any"] = "none"
+    """Hide the tool when `requires_env` is unmet (env or secret store): `all` names, `any`
+    one of them. `none` (default) treats `requires_env` as a pass-through allowlist only."""
+    emoji: str = Field(default="", max_length=8)
+    output_schema: dict[str, Any] | None = None
+    """JSON Schema for a structured result (`ToolResult.meta["structured"]`, else the JSON
+    content); a mismatch turns the result into an error the model sees."""
 
     @field_validator("parameters")
     @classmethod
@@ -75,6 +88,15 @@ class ToolManifest(_Strict):
     def _handler_ref(cls, v: str) -> str:
         if not re.fullmatch(r"[A-Za-z0-9_./-]+\.py:[A-Za-z_][A-Za-z0-9_]*", v) or ".." in v:
             raise ValueError("handler must look like 'handler.py:run' inside the tool folder")
+        return v
+
+    @field_validator("check_fn")
+    @classmethod
+    def _check_ref(cls, v: str | None) -> str | None:
+        file_ref = r"[A-Za-z0-9_./-]+\.py:[A-Za-z_][A-Za-z0-9_]*"
+        mod_ref = r"[A-Za-z_][A-Za-z0-9_.]*:[A-Za-z_][A-Za-z0-9_]*"
+        if v is not None and (not re.fullmatch(f"{file_ref}|{mod_ref}", v) or ".." in v):
+            raise ValueError("check_fn must look like 'handler.py:available' or 'pkg.module:fn'")
         return v
 
     @property
@@ -143,6 +165,19 @@ class WorkflowManifest(_Strict):
         return v
 
 
+class McpToolOverride(_Strict):
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+    timeout_ms: int | None = Field(default=None, ge=100, le=3_600_000, alias="timeoutMs")
+
+
+class McpSampling(_Strict):
+    enabled: bool = False
+    max_tokens: int = Field(default=1024, ge=1, le=32_000)
+    """Cap applied to the server's own `maxTokens`."""
+    model: str | None = None
+    """Model/alias for the aux call; unset = aux routing (`auxiliary.tasks.sampling`)."""
+
+
 class McpServerManifest(_Strict):
     """`mcp/<name>.yaml`. Env/header values may be `secret:<name>` references."""
 
@@ -156,6 +191,10 @@ class McpServerManifest(_Strict):
     timeout_ms: int = Field(default=30_000, ge=1_000)
     enabled: bool = True
     exposure: Literal["direct", "deferred"] = "deferred"
+    tools: dict[str, McpToolOverride] = Field(default_factory=dict)
+    """Per remote-tool overrides keyed by the server's tool name (`timeoutMs` / `timeout_ms`)."""
+    sampling: McpSampling = Field(default_factory=lambda: McpSampling())
+    """Server→client `sampling/createMessage` (default off; aux call, approval-gated)."""
 
 
 class BackendManifest(_Strict):
@@ -200,6 +239,7 @@ HookEvent = Literal[
     "PreCompact",
     "PostCompact",
     "Stop",
+    "SubagentStop",
 ]
 
 

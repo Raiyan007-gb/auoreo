@@ -19,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from auoreo.core.db import TeamMemberRow, TeamRow
+from auoreo.runtime.hooks import subagent_stop
 from auoreo.runtime.inbox import RunOptions
 from auoreo.teams.board import Board
 from auoreo.teams.ceiling import CeilingEngine, clamp
@@ -384,6 +385,7 @@ class TeamsService:
         }
         kind = "completed" if status == "completed" else "failed"
         await self.s.emit(m.parent_session_id, f"subagent.{kind}", data)
+        await subagent_stop(self.s, data)
         await self.supervisor.on_finish(m)
         if m.background:
             with contextlib.suppress(Exception):  # the parent may have been deleted

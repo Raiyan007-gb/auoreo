@@ -1,0 +1,18 @@
+name: tool_call
+toolset: core
+emoji: "🧰"
+description: >-
+  Call a deferred tool by name with JSON arguments without loading it first. The call goes
+  through the same validation, permission and approval checks as a direct call. Use
+  tool_describe first to see the tool's parameters.
+parameters:
+  type: object
+  properties:
+    name: {type: string, minLength: 1, maxLength: 64}
+    arguments: {type: object, default: {}}
+  required: [name]
+  additionalProperties: false
+pattern_arg: name
+default_action: allow
+timeout_ms: 3600000
+search_hint: call run deferred tool by name

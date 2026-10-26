@@ -32,6 +32,7 @@ FREE_FAILURE_PREFIXES = (
     "arguments are not valid JSON",
     "arguments must be a JSON object",
     "invalid arguments at ",
+    "InvalidArgumentsError: ",  # G4a: typed stage-1 failures (lossless parse + schema)
 )
 WALL_WRAPUP_AT = 0.8
 TOKEN_WRAPUP_AT = 0.9

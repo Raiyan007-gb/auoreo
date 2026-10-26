@@ -1,0 +1,18 @@
+name: tool_describe
+toolset: core
+emoji: "🔎"
+description: >-
+  Show the full description and JSON parameter schema of a tool by name (e.g. a deferred
+  tool found with tool_search), so you can call it correctly or run it via tool_call.
+parameters:
+  type: object
+  properties:
+    name: {type: string, minLength: 1, maxLength: 64}
+  required: [name]
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 5000
+search_hint: describe tool schema parameters

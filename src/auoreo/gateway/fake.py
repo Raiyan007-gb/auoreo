@@ -83,7 +83,7 @@ class FakeGateway:
         elif request.metadata.get("purpose") == "guardian":  # nor does the smart-mode guardian
             default = os.environ.get("AUOREO_FAKE_GUARDIAN", "ESCALATE")
             item = Scripted(text=self.guardian_script.popleft() if self.guardian_script else default)
-        elif request.metadata.get("purpose") in ("vision", "hyde", "translate"):  # nor do these aux calls
+        elif request.metadata.get("purpose") in ("vision", "hyde", "translate", "sampling"):  # nor do these
             item = self._auto(request)
         else:
             item = self.script.popleft() if self.script else self._auto(request)

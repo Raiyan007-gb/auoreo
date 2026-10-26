@@ -34,6 +34,33 @@ overlay root that shadows a bundled tool must set `override: true`.
 consulted. Use it for argument-level floors a permission pattern cannot express (e.g.
 `computer` key combos); keep the same check in the handler as defence in depth.
 
+## Availability, results and progress (G4a)
+
+```yaml
+is_enabled: true               # false hides the tool (listed in /api/harness with the reason)
+check_fn: handler.py:available # sync probe: True/None = available, False/"reason" = hidden;
+                               # `pkg.module:fn` also works; cached tool_engine.check_fn_ttl_s (30 s)
+requires_env: [EXA_API_KEY]
+env_gate: all                  # none (default: pass-through allowlist only) | all | any —
+                               # hide the tool when env/secret store lacks the names
+emoji: "🔎"
+output_schema: {type: object}  # validates ToolResult.meta["structured"] (else JSON content)
+```
+
+- Arguments are parsed losslessly: duplicate keys, `NaN`/`Infinity`, integers beyond 2^53−1
+  and non-object payloads are refused with `InvalidArgumentsError: <tool>: …` (never
+  coerced). Handlers get their own copy; hooks and audit see a detached snapshot.
+- `await ctx.progress("message", percent=40)` (alias `ctx.on_progress`) emits a
+  `tool.progress` event, at most one per `tool_engine.progress_interval_ms` (a final
+  `percent=100` always goes out).
+- Writers lock every path they touch (sorted, `Semaphore(1)` each): a `path` pattern
+  argument, the file headers of a `patch` argument, or the handler module's optional
+  `touched_paths(args) -> list[str]`.
+- Results over the inline cap spill to `sessions/<id>/tool-results/<call>.txt`, at most
+  `tool_engine.spill_max_bytes` (64 MB); a cut spill is noted in the result.
+- `tool_describe` / `tool_call` reach deferred tools without loading them; `tool_call` runs
+  the target through the same validation, hooks, permission and approval path.
+
 ## Toolsets
 
 `toolset:` groups tools (`files`, `shell`, `planning`, `github`, `coding`, …) for listing and

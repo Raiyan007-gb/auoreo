@@ -19,6 +19,7 @@ def _load(strict: bool = False) -> Harness:
     return Harness(
         default_roots(home_dir(), Path.cwd(), bundled_root(), st.extra_roots),
         strict_overlays=strict,
+        error_on_collision=st.tool_engine.error_on_collision,
     )
 
 
