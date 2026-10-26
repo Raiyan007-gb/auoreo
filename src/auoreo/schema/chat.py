@@ -120,6 +120,10 @@ class UsageRecord(BaseModel):
     cost_usd: float | None
     estimated: bool
     created_at: datetime
+    cache_write_tokens: int = 0
+    reasoning_tokens: int = 0
+    generation_id: str | None = None
+    deployment: str | None = None
 
 
 class UsageTotals(BaseModel):

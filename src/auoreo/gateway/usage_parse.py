@@ -4,7 +4,9 @@ LiteLLM normalises usage to the OpenAI shape, but cache/reasoning detail lives i
 different places per provider:
 - cached prompt tokens: `prompt_tokens_details.cached_tokens` (OpenAI, and Anthropic after
   LiteLLM's mapping) or the raw Anthropic `cache_read_input_tokens`;
-- reasoning tokens: `completion_tokens_details.reasoning_tokens`.
+- reasoning tokens: `completion_tokens_details.reasoning_tokens`;
+- cache writes: Anthropic `cache_creation_input_tokens` or `prompt_tokens_details.cache_write_tokens`;
+- `usage.cost`: OpenRouter's provider-reported USD cost (stored as-is, not estimated).
 Reasoning tokens are part of `completion_tokens`; a provider that reports them separately
 (completion < reasoning) has them added to the total.
 """
@@ -43,12 +45,27 @@ def parse_usage(raw: Any) -> Usage | None:
     reasoning = _int(_get(_get(raw, "completion_tokens_details"), "reasoning_tokens"))
     if completion < reasoning:
         completion += reasoning
+    written = _int(_get(raw, "cache_creation_input_tokens")) or _int(
+        _get(_get(raw, "prompt_tokens_details"), "cache_write_tokens")
+    )
     return Usage(
         prompt,
         completion,
+        cost_usd=_cost(_get(raw, "cost")),
         cached_tokens=min(cached, prompt) if prompt else cached,
         reasoning_tokens=reasoning,
+        cache_write_tokens=written,
     )
+
+
+def _cost(value: Any) -> float | None:
+    """OpenRouter `usage.cost` (USD, provider-reported); None when absent or not a number."""
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 __all__ = ["parse_usage"]

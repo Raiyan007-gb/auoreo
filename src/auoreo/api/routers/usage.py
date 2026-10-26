@@ -31,6 +31,10 @@ async def list_usage(
             cost_usd=r.cost_usd,
             estimated=r.estimated,
             created_at=r.created_at,
+            cache_write_tokens=r.cache_write_tokens or 0,  # --- I2
+            reasoning_tokens=r.reasoning_tokens or 0,
+            generation_id=r.generation_id,
+            deployment=r.deployment,
         )
         for r in rows
     ]

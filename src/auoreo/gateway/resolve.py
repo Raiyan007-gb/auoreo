@@ -25,12 +25,15 @@ def resolve_model(
 
 # Built-in Anthropic aliases (spec §10.2), resolved through whichever provider the `default`
 # group uses so `opus` works with an OpenRouter-only or Anthropic-only key. User `aliases`
-# and routing-group names always win. `opusplan` = Opus (plan-mode model swap).
+# and routing-group names always win. `opusplan` = Opus (plan-mode model swap); `best` = the
+# most capable model. `<alias>[1m]` keeps the marker: `gateway.deploy` strips it from the
+# LiteLLM id and adds the provider's 1M-context beta header (a separate deployment).
 ANTHROPIC_ALIASES: dict[str, str] = {
     "opus": "claude-opus-5-5",
     "sonnet": "claude-sonnet-5-5",
     "haiku": "claude-haiku-5-5",
     "opusplan": "claude-opus-5-5",
+    "best": "claude-opus-5-5",
 }
 _ALIAS_ROUTES: dict[str, Callable[[str], str]] = {
     "openrouter": lambda mid: f"openrouter/anthropic/{_dotted(mid)}",

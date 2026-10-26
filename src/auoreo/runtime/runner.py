@@ -32,6 +32,7 @@ from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_co
 from auoreo.policy.bandit import BanditPolicy, Choice
 from auoreo.runtime.budget import GRACE_NOTE, TurnBudget, all_free
 from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
+from auoreo.runtime.empty import EMPTY_SENTINEL
 from auoreo.runtime.guards import LoopGuards
 from auoreo.runtime.inbox import Inbox, RunOptions
 from auoreo.runtime.liveness import LivenessWatchdog
@@ -328,8 +329,9 @@ class AgentRunner:
                 over_budget = await self.usage.over_budget(sid, self.s.settings.max_cost_usd)
                 if last_step or over_budget:
                     calls = []  # forced final step / budget: no further tool calls
-                await self._commit_assistant(rt, run_id, step, text, calls)
-                turn.text = text or turn.text
+                sentinel = EMPTY_SENTINEL if out.empty and not calls else text  # --- I2: §25.6 L969
+                await self._commit_assistant(rt, run_id, step, sentinel, calls)
+                turn.text = ("" if out.empty else text) or turn.text
                 if exhausted is not None:  # that was the one grace call
                     msg = f"run budget exhausted ({exhausted})"
                     return TurnResult(

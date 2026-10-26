@@ -56,6 +56,11 @@ class UsageLedger:
             estimated=estimated,
             latency_ms=latency_ms,
             outcome=outcome,
+            cache_write_tokens=usage.cache_write_tokens,  # --- I2 (v6)
+            reasoning_tokens=usage.reasoning_tokens,
+            generation_id=usage.generation_id,
+            deployment=usage.deployment,
+            tags=",".join(usage.tags)[:512] or None,
         )
         async with self.db.session() as s:
             s.add(row)

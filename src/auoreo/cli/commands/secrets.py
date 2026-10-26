@@ -108,8 +108,11 @@ def rotate(
         else typer.prompt(f"new value for {name}", hide_input=True)
     )
     kept = store.rotate(name, value, grace_s)
+    # --- I2: audit (name only); a running server hot-reloads on the secrets.db change
+    audit_cli.record(st, "secrets.rotate", {"name": name, "grace_s": grace_s, "kept_previous": kept})
     until = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(time.time() + grace_s))
     typer.echo(f"rotated {name}" + (f" (previous kept as {name}#prev until {until})" if kept else ""))
+    typer.echo("a running server picks the new value up on its next model call (no restart)", err=True)
     if generate:
         typer.echo("the generated value is not shown; back it up with `auoreo secrets export`", err=True)
 

@@ -175,6 +175,11 @@ from .rtc_left import RtcLeft
 from .rtc_offer import RtcOffer
 from .rtc_peer_info import RtcPeerInfo
 from .search_hit import SearchHit
+from .secret_names import SecretNames
+from .secret_rotate import SecretRotate
+from .secret_write import SecretWrite
+from .secret_write_result import SecretWriteResult
+from .secret_write_result_action import SecretWriteResultAction
 from .server_event import ServerEvent
 from .server_event_data import ServerEventData
 from .session_context import SessionContext
@@ -395,6 +400,11 @@ __all__ = (
     "RtcOffer",
     "RtcPeerInfo",
     "SearchHit",
+    "SecretNames",
+    "SecretRotate",
+    "SecretWrite",
+    "SecretWriteResult",
+    "SecretWriteResultAction",
     "ServerEvent",
     "ServerEventData",
     "SessionContext",

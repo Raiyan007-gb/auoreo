@@ -83,6 +83,9 @@ class LLMRequest:
     """Anthropic-family cache breakpoints (also gated by `gateway_tuning.prompt_caching`)."""
     turn_state: str | None = None
     """Per-turn stickiness token sent as `x-auoreo-turn-state`; defaults to `metadata.run_id`."""
+    response_format: Any = None
+    """Structured output: a `{type: json_schema, json_schema: {...}}` dict or a Pydantic model
+    class (normalised to `json_schema` + `strict: true`, spec §25.9)."""
 
 
 @dataclass(frozen=True)
@@ -106,6 +109,24 @@ class ToolCall:
 
 
 @dataclass(frozen=True)
+class ToolCallDelta:
+    """A streamed fragment of a tool call's arguments (spec §25.6 `tool.partial`). Clients may
+    render it but nothing executes until the assembled `ToolCall` is committed."""
+
+    call_id: str
+    name: str
+    arg_delta: str
+    seq: int
+
+
+@dataclass(frozen=True)
+class ToolCallDrop:
+    """Partial tool calls abandoned (stream failed / fallback): UI teardown only."""
+
+    call_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Usage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
@@ -115,6 +136,13 @@ class Usage:
     """Prompt tokens served from the provider's prompt cache (part of `prompt_tokens`)."""
     reasoning_tokens: int = 0
     """Thinking tokens (part of `completion_tokens`)."""
+    cache_write_tokens: int = 0
+    """Prompt tokens written to the provider's prompt cache (Anthropic `cache_creation`)."""
+    generation_id: str | None = None
+    """Provider generation id (OpenRouter `gen-…`), for cost reconciliation."""
+    deployment: str | None = None
+    """The deployment that served the call (budget attribution)."""
+    tags: tuple[str, ...] = ()
 
     def event_data(self) -> dict[str, Any]:
         """Token fields for a `usage` event payload."""
@@ -123,6 +151,7 @@ class Usage:
             "completion_tokens": self.completion_tokens,
             "cached_tokens": self.cached_tokens,
             "reasoning_tokens": self.reasoning_tokens,
+            "cache_write_tokens": self.cache_write_tokens,
             "cost_usd": self.cost_usd,
         }
 
@@ -132,7 +161,7 @@ class Finish:
     reason: str  # stop | tool_calls | length | ...
 
 
-StreamItem = TextDelta | ReasoningDelta | ToolCall | Usage | Finish
+StreamItem = TextDelta | ReasoningDelta | ToolCall | ToolCallDelta | ToolCallDrop | Usage | Finish
 
 
 class Gateway(Protocol):
