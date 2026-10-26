@@ -456,3 +456,6 @@ EXTRA_CHECKS.append(h1b_checks)
 from auoreo.core.diagnostics_i2 import i2_checks  # noqa: E402  --- I2: rotated-key pre-demote probe
 
 EXTRA_CHECKS.append(i2_checks)
+from auoreo.core.diagnostics_i8 import i8_checks  # noqa: E402  --- I8: desktop health_report, LiveKit worker
+
+EXTRA_CHECKS.append(i8_checks)

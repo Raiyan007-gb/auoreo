@@ -1,0 +1,12 @@
+kind: tts
+name: mistral
+description: >-
+  Mistral Voxtral TTS (POST /v1/audio/speech, voxtral-mini-tts-2603, ≤ 4000 chars per request,
+  base64 `audio_data`, mp3). Key MISTRAL_API_KEY from the secret store; needs a saved
+  `voice_id` (i8.tts.mistral_voice or voice_tts_voice). API-only: the weights are CC BY-NC.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: proprietary API (weights CC BY-NC 4.0, never self-hosted here)
+posture: ok

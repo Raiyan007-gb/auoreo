@@ -8,12 +8,18 @@ Besides the navigation policy in `BrowserBackend`, every sub-request the page ma
 routed through the SSRF check (host verdicts cached), so a public page cannot make the
 browser fetch from a private address. Playwright does not route redirect hops, which is
 why the landing URL is re-checked after each navigation.
+
+I8: with `i8.browser.trace` each session's BrowserContext records a Playwright trace
+(screenshots + DOM snapshots) saved on close as `<home>/sessions/<id>/browser-trace-<ts>.zip`
+(open it with `playwright show-trace`). Traces can contain page content: they stay local.
 """
 
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -26,6 +32,7 @@ from auoreo.backends.browser import (
     Snapshot,
     check_navigation,
 )
+from auoreo.core.settings_i8 import i8_of
 from auoreo.tools.context import ToolError
 
 REMEDY = "set PLAYWRIGHT_BROWSERS_PATH or settings.browser_executable_path"
@@ -85,6 +92,8 @@ class Backend(BrowserBackend):
         self._start_lock = asyncio.Lock()
         self._pages: dict[str, tuple[Any, Any]] = {}  # session -> (context, page)
         self._host_ok: dict[str, bool] = {}
+        self._traced: set[str] = set()
+        self.traces: list[Path] = []
 
     # ------------------------------------------------------------- launching
     def _launch_kwargs(self) -> dict[str, Any]:
@@ -149,9 +158,30 @@ class Backend(BrowserBackend):
         context.set_default_navigation_timeout(NAV_TIMEOUT_MS)
         if not self.allow_private:
             await context.route("**/*", self._route)
+        await self._start_trace(session_id, context)
         page = await context.new_page()
         self._pages[session_id] = (context, page)
         return page
+
+    def trace_path(self, session_id: str) -> Path:
+        safe = "".join(c for c in session_id if c.isalnum() or c in "_-") or "anon"
+        return Path(self.settings.home) / "sessions" / safe / f"browser-trace-{int(time.time() * 1000)}.zip"
+
+    async def _start_trace(self, session_id: str, context: Any) -> None:
+        if not i8_of(self.settings).browser.trace:
+            return
+        await context.tracing.start(screenshots=True, snapshots=True, sources=False)
+        self._traced.add(session_id)
+
+    async def _stop_trace(self, session_id: str, context: Any) -> None:
+        if session_id not in self._traced:
+            return
+        self._traced.discard(session_id)
+        path = self.trace_path(session_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with contextlib.suppress(Exception):
+            await context.tracing.stop(path=str(path))
+            self.traces.append(path)
 
     def _get_page(self, session_id: str) -> Any | None:
         entry = self._pages.get(session_id)
@@ -165,6 +195,7 @@ class Backend(BrowserBackend):
     async def _close_page(self, session_id: str) -> None:
         entry = self._pages.pop(session_id, None)
         if entry is not None:
+            await self._stop_trace(session_id, entry[0])
             with contextlib.suppress(Exception):
                 await entry[0].close()
 

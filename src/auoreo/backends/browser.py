@@ -258,9 +258,42 @@ class BrowserBackend(ABC):
             raise ToolError(f"{what} failed: {first}") from exc
 
 
+class _ApprovalGate:
+    """I8: wraps a backend that drives the user's real browser profile (`approval_permission`,
+    e.g. the Chrome CDP bridge): the first page call of a session asks for that permission
+    (pattern = the CDP endpoint), then delegates. Process memory only, per backend + session."""
+
+    GATED = frozenset({"navigate", "snapshot", "click", "type", "select", "screenshot", "back"})
+
+    def __init__(self, inner: BrowserBackend, ctx: Any) -> None:
+        self._inner, self._ctx = inner, ctx
+
+    def __getattr__(self, name: str) -> Any:
+        attr = getattr(self._inner, name)
+        if name not in self.GATED:
+            return attr
+
+        async def gated(*args: Any, **kwargs: Any) -> Any:
+            approved: set[str] = self._inner.__dict__.setdefault("_approved_sessions", set())
+            sid = str(self._ctx.session_id or "")
+            if sid not in approved:
+                perm = str(getattr(self._inner, "approval_permission", "browser"))
+                await self._ctx.authorize(
+                    "browser", perm, str(getattr(self._inner, "approval_pattern", perm)), "ask"
+                )
+                approved.add(sid)
+            return await attr(*args, **kwargs)
+
+        return gated
+
+
 def browser_for(ctx: Any) -> BrowserBackend:
-    """The selected browser backend from a `ToolContext` (raises `ToolError`)."""
+    """The selected browser backend from a `ToolContext` (raises `ToolError`). A backend with
+    `approval_permission` (real-profile bridges) is returned behind a per-session approval gate."""
     inst = ctx.backend("browser")
     if not isinstance(inst, BrowserBackend):
         raise ToolError(f"browser backend {type(inst).__name__} does not implement BrowserBackend")
+    if getattr(inst, "approval_permission", None):
+        gate: Any = _ApprovalGate(inst, ctx)
+        return gate  # type: ignore[no-any-return]
     return inst

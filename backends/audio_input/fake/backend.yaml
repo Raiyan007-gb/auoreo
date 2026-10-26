@@ -1,0 +1,11 @@
+kind: audio_input
+name: fake
+description: >-
+  Test microphone - PCM chunks pushed with `feed()` (or a WAV via `feed_wav()`); silence is
+  never invented, so an idle fake mic simply blocks. Default so tests and demos never open a device.
+impl: impl.py:Backend
+default: true
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

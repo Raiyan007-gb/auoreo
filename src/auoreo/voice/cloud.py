@@ -46,9 +46,13 @@ def _error(provider: str, r: httpx.Response) -> AudioError | VoiceUnavailable:
 
 
 async def post_multipart(
-    provider: str, url: str, key: str, wav: bytes, fields: dict[str, Any]
+    provider: str, url: str, key: str, wav: bytes, fields: dict[str, Any], settings: Any = None
 ) -> dict[str, Any]:
-    """POST `file=audio.wav` + form fields (lists become repeated `name[]` fields)."""
+    """POST `file=audio.wav` + form fields (lists become repeated `name[]` fields). With
+    `settings`, the audio is silence-trimmed / AAC-encoded first (`voice.upload`, I8)."""
+    from auoreo.voice.upload import prepare_upload
+
+    fname, payload, mime = await prepare_upload(wav, settings)
     data: dict[str, str | list[str]] = {}
     for name, value in fields.items():
         if value is None:
@@ -62,7 +66,7 @@ async def post_multipart(
             r = await client.post(
                 url,
                 headers={"Authorization": f"Bearer {key}"},
-                files={"file": ("audio.wav", wav, "audio/wav")},
+                files={"file": (fname, payload, mime)},
                 data=data,
             )
     except httpx.HTTPError as exc:

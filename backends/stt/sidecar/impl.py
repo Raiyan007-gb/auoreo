@@ -19,7 +19,8 @@ class Backend(SttBackend):
         params = {"wav_b64": encode(wav), "language": language, "keyterms": list(keyterms)}
         r = await get_host(self.settings).call("transcribe", params)
         segs = [Segment(float(s["start"]), float(s["end"]), str(s["text"])) for s in r.get("segments") or []]
-        return Transcript(str(r.get("text", "")), segs, r.get("language"), r.get("confidence"))
+        text, lang, conf = str(r.get("text", "")), r.get("language"), r.get("confidence")
+        return Transcript(text, segs, lang, conf, no_speech=bool(r.get("no_speech")))
 
     async def close(self) -> None:
         await get_host(self.settings).close()

@@ -123,12 +123,54 @@ async def normalize(data: bytes, mime: str | None = None) -> bytes:
         raise AudioTooLarge(f"audio is {len(data)} bytes; the limit is {MAX_INPUT_BYTES} bytes (25 MB)")
     if not data:
         raise AudioError("empty audio upload")
+    if is_silk(data):  # --- I8: WeChat/QQ voice notes (ffmpeg has no SILK decoder)
+        data = await asyncio.to_thread(decode_silk, data)
     if (mime or "").split(";")[0].strip() in _WAV_TYPES | {""} and _is_normalized(data):
         info = read_wav(data)
         return wav_from_pcm(info.pcm, SAMPLE_RATE, 1, info.comment)
     out = await run_ffmpeg(data, ("-i", "pipe:0", *FFMPEG_ARGS))
     info = read_wav(out)
     return wav_from_pcm(info.pcm, info.sample_rate, info.channels, info.comment)
+
+
+SILK_MAGIC = b"#!SILK_V3"
+SILK_RATE = 24_000
+SILK_INSTALL = "SILK v3 audio needs a decoder: `uv pip install pilk` (or `pysilk`)"
+
+
+def is_silk(data: bytes) -> bool:
+    return data.startswith(SILK_MAGIC) or data[1:10] == SILK_MAGIC
+
+
+def decode_silk(data: bytes) -> bytes:
+    """SILK v3 → WAV (24 kHz mono s16) with `pilk` or `pysilk`, imported lazily."""
+    import importlib
+    import io
+    import tempfile
+    from pathlib import Path
+
+    for name in ("pilk", "pysilk"):
+        try:
+            mod = importlib.import_module(name)
+        except ImportError:
+            continue
+        try:
+            if name == "pilk":
+                with tempfile.TemporaryDirectory(prefix="auoreo-silk-") as tmp:
+                    src, dst = Path(tmp, "in.silk"), Path(tmp, "out.pcm")
+                    src.write_bytes(data)
+                    mod.decode(str(src), str(dst), pcm_rate=SILK_RATE)
+                    pcm = dst.read_bytes()
+            else:
+                out = io.BytesIO()
+                mod.decode(io.BytesIO(data), out, SILK_RATE)
+                pcm = out.getvalue()
+        except Exception as exc:
+            raise AudioError(f"could not decode SILK audio with {name}: {type(exc).__name__}") from None
+        if not pcm:
+            raise AudioError(f"{name} decoded no SILK audio")
+        return wav_from_pcm(pcm, SILK_RATE)
+    raise AudioError(SILK_INSTALL)
 
 
 async def transcode(data: bytes, fmt: str) -> tuple[bytes, str]:

@@ -11,13 +11,19 @@ Delivery refusals (§24.6) carry a stable code: `bad_delivery_mode` (not backgro
 `foreground_unsupported` (the backend cannot act in the foreground). While an action runs the
 process holds `<home>/computer-use.lock` (`auoreo.tools.cu_lock`: O_EXCL, reentrant per
 session, stale-PID recovery), so two agents never drive the desktop at once.
+
+I8 (`auoreo.tools.cu_safety`): `input_target_mismatch` / `stale_element_token` refusals, sticky
+`pid + window_id`, `mode` som|vision|ax, `capture_after`, moveAndSettle, typeViaClipboard, the
+verify verdict enum (`confirmed → done | unverifiable → verify_fresh_state | suspected_noop →
+escalate`) and screenshots capped at `max_image_dimension` (1456 px).
 """
 
 import re
 
-from auoreo.backends.desktop import MUTATING, DesktopBackend
+from auoreo.backends.desktop import MUTATING, DesktopBackend, downscale_png, no_overlay_default, verdict_of
 from auoreo.core.settings_h5 import h5_of
-from auoreo.tools import cu_lock
+from auoreo.core.settings_i8 import i8_of
+from auoreo.tools import cu_lock, cu_safety
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 from auoreo.tools.images import to_part
 
@@ -111,6 +117,11 @@ def floors(op: str, args: dict) -> None:
         raise ToolError('op=drag needs `to` as "x,y"')
     if op == "focus_app" and not args.get("target"):
         raise ToolError("op=focus_app needs the app name as `target`")
+    if op == "set_value":
+        if not args.get("target") or parse_xy(args.get("target")) is not None or args.get("text") is None:
+            raise ToolError("op=set_value needs an element token as `target` and the value as `text`")
+        if why := text_floor(str(args["text"])):
+            raise ToolError(f"refused: {why}")
 
 
 DELIVERY_MODES = frozenset({"background", "foreground"})
@@ -137,7 +148,7 @@ def pre_check(args: dict) -> str | None:
     op = args.get("op")
     if op == "key" and args.get("key"):
         return key_floor(str(args["key"]), args.get("target"))
-    if op == "type" and args.get("text") is not None:
+    if op in ("type", "set_value") and args.get("text") is not None:
         return text_floor(str(args["text"]))
     return None
 
@@ -159,6 +170,8 @@ async def _audit(ctx: ToolContext, args: dict, outcome: str, detail: dict) -> No
 
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
+    if args.get("op") == "middle":
+        args = {**args, "op": "middle_click"}
     op = args["op"]
     mode = args.get("delivery_mode", "background")
     try:
@@ -188,35 +201,70 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
         cu_lock.release(ctx.home, ctx.session_id)
 
 
+def _opts(ctx: ToolContext, st: cu_safety.CuSession, args: dict) -> dict:
+    cfg = i8_of(ctx).computer_use
+    return {
+        "mode": args.get("mode") or cfg.mode,
+        "window": st.sticky,
+        "value": args.get("text") if args["op"] == "set_value" else None,
+        "capture_after": bool(args.get("capture_after")),
+        "settle_ms": cfg.move_settle_ms,
+        "no_overlay": no_overlay_default() if cfg.no_overlay is None else cfg.no_overlay,
+    }
+
+
 async def _act(ctx: ToolContext, backend: DesktopBackend, op: str, mode: str, args: dict) -> ToolResult:
     target = args.get("target")
-    xy = parse_xy(target) if op != "focus_app" else None
+    xy = parse_xy(target) if op not in ("focus_app", "key", "set_value") else None
+    cfg = i8_of(ctx).computer_use
+    st = cu_safety.state_for(ctx.session_id, backend)
+    cu_safety.set_sticky(st, op, args)
+    if why := await cu_safety.guard(st, backend, op, None if xy else target, cfg.input_target_guard):
+        await _audit(ctx, args, "refused", {"reason": why[:300]})
+        raise ToolError(f"refused: {why}")
+    opts = _opts(ctx, st, args)
     if args.get("bring_to_front") and args.get("app") and op != "focus_app":
         raised = await backend.act("focus_app", target=args["app"], delivery_mode="foreground")
         if not raised.ok:
             raise ToolError(f"bring_to_front: could not raise {args['app']!r}: {raised.detail}")
-    result = await backend.act(
-        op,
-        target=None if xy else target,
-        x=xy[0] if xy else None,
-        y=xy[1] if xy else None,
-        text=args.get("text"),
-        key=args.get("key"),
-        delivery_mode=mode,
-        to=parse_xy(args.get("to")),
-        direction=args.get("direction"),
-        amount=args.get("amount"),
-    )
+    result = None
+    text = args.get("text")
+    if op == "type" and text and cu_safety.wants_clipboard(text, cfg.type_via_clipboard_chars):
+        result = await cu_safety.type_via_clipboard(backend, text, mode, opts)
+    if result is None:
+        result = await backend.act(
+            op,
+            target=None if xy else target,
+            x=xy[0] if xy else None,
+            y=xy[1] if xy else None,
+            text=text,
+            key=args.get("key"),
+            delivery_mode=mode,
+            to=parse_xy(args.get("to")),
+            direction=args.get("direction"),
+            amount=args.get("amount"),
+            opts=opts,
+        )
+    await cu_safety.remember(st, backend, op, result, bool(args.get("capture_after")))
+    svc = ctx.services.get("services")
+    if (watch := getattr(getattr(svc, "ext", {}).get("i8_boot"), "cu_watch", None)) is not None:
+        watch.start()  # turn-end unhide + lock release from now on
     verify = {"matched": result.verify.matched, "score": result.verify.score} if result.verify else None
+    verdict, next_step = verdict_of(result.verify) if op in MUTATING else (None, None)
     await _audit(
-        ctx, args, "ok" if result.ok else "failed", {"verify": verify, "detail": result.detail[:300]}
+        ctx,
+        args,
+        "ok" if result.ok else "failed",
+        {"verify": verify, "verdict": verdict, "detail": result.detail[:300]},
     )
     where = f" at {target}" if target else ""
     front = "+front" if args.get("bring_to_front") else ""
     lines = [f"{op}{where} [{mode}{front}]: {'ok' if result.ok else 'FAILED'} - {result.detail}"]
-    if verify is not None:
-        verdict = "screen changed" if verify["matched"] else "no visible change (suspected no-op)"
-        lines.append(f"verify: matched={verify['matched']} score={verify['score']} ({verdict})")
+    if verdict is not None:
+        matched, score = (verify["matched"], verify["score"]) if verify else (False, 0.0)
+        lines.append(f"verify: matched={matched} score={score} verdict={verdict} next={next_step}")
+    for e in result.data.get("elements") or []:
+        lines.append(f"- [{e.get('token')}] {e.get('role') or ''} {e.get('label') or ''}".rstrip())
     state = result.data.get("state")
     if state:
         lines += [f"displays: {state['display_count']}; apps: {', '.join(state['apps'])}"]
@@ -225,9 +273,11 @@ async def _act(ctx: ToolContext, backend: DesktopBackend, op: str, mode: str, ar
             for w in state["windows"]
         ]
     images = []
-    meta: dict = {"op": op, "ok": result.ok, "verify": verify}
+    meta: dict = {"op": op, "ok": result.ok, "verify": verify, "verdict": verdict, "next": next_step}
     if result.screenshot_png:
-        image, info = await to_part(result.screenshot_png, f"desktop after {op}")
+        png, scale = downscale_png(result.screenshot_png, cfg.max_image_dimension)
+        image, info = await to_part(png, f"desktop after {op}")
+        meta["scale"] = round(scale, 4)
         images.append(image)
         meta["images"] = 1
         lines.append(f"screenshot: {info['width']}x{info['height']} {image.media_type}")

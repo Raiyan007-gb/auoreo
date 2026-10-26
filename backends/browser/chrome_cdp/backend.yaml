@@ -1,0 +1,12 @@
+kind: browser
+name: chrome_cdp
+description: >-
+  Real-profile web flows through a Chrome you launched with --remote-debugging-port
+  (playwright connect_over_cdp to i8.browser.cdp_url, loopback only). One new tab per session in
+  the profile's default context; every session asks for the `browser_cdp` permission first.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok

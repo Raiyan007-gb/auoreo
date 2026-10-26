@@ -51,7 +51,7 @@ class Backend(SttBackend):
         }
         if verbose:
             fields["timestamp_granularities"] = ["segment"]
-        body = await post_multipart("openai", URL, key, wav, fields)
+        body = await post_multipart("openai", URL, key, wav, fields, self.settings)
         segs = [Segment(**s) for s in segments_of(body)]
         return Transcript(str(body.get("text", "")).strip(), segs, body.get("language") or language, None)
 
@@ -69,7 +69,9 @@ class Backend(SttBackend):
             ("prompt", " ".join(keyterms)[:800] or None),
         ]
         parts: list[str] = []
-        async for ev in stream_sse("openai", URL, {"Authorization": f"Bearer {key}"}, wav, fields):
+        async for ev in stream_sse(
+            "openai", URL, {"Authorization": f"Bearer {key}"}, wav, fields, self.settings
+        ):
             kind = ev.get("type")
             if kind == "transcript.text.delta":
                 piece = str(ev.get("delta", ""))

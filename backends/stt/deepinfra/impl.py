@@ -35,6 +35,8 @@ class Backend(SttBackend):
             ("language", language),
             ("prompt", " ".join(keyterms)[:800] or None),
         ]
-        body = await post_form("deepinfra", self.url, {"Authorization": f"Bearer {key}"}, wav, fields)
+        body = await post_form(
+            "deepinfra", self.url, {"Authorization": f"Bearer {key}"}, wav, fields, self.settings
+        )
         segs = [Segment(**s) for s in segments_of(body)]
         return Transcript(str(body.get("text", "")).strip(), segs, body.get("language") or language, None)

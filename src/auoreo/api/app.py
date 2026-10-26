@@ -44,6 +44,7 @@ from auoreo.api.routers import environments as environments_router  # --- W2-B
 from auoreo.api.routers import goals as goals_router
 from auoreo.api.routers import hooks as hooks_router
 from auoreo.api.routers import kanban as kanban_router
+from auoreo.api.routers import livekit as livekit_router  # --- I8
 from auoreo.api.routers import meetings as meetings_router  # --- F4
 from auoreo.api.routers import metrics as metrics_router  # --- G5c
 from auoreo.api.routers import openai_compat as openai_compat_router
@@ -116,6 +117,7 @@ ROUTERS = (
     session_extras_router,  # --- G7: session plan + per-session MCP/plugin toggles
     skills_hub_router,  # --- G6: skill sources + hub approve
     secrets_router,  # --- I2: names-only list, write-through + rotate (hot reload)
+    livekit_router,  # --- I8: POST /api/livekit/token + POST /livekit/webhook
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

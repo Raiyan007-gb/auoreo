@@ -22,8 +22,10 @@ from typing import TYPE_CHECKING, Any
 from auoreo.backends.stt import SttBackend, Transcript
 from auoreo.backends.tts import Audio, TtsBackend, clamp_speed
 from auoreo.backends.vad import VadBackend
+from auoreo.core.settings_i8 import i8_of
 from auoreo.tools.context import ToolError
 from auoreo.voice.audio import NoSpeech, VoiceUnavailable, concat_wavs, duration_s, normalize
+from auoreo.voice.filters import EchoMemory, Verdict, verdict
 from auoreo.voice.text import chunk_text, prepare_spoken_text
 
 if TYPE_CHECKING:
@@ -85,6 +87,9 @@ class VoiceService:
     def __init__(self, services: Services) -> None:
         self.svc = services
         self.bridge: RtcVoiceBridge | None = None
+        self.echo = EchoMemory(i8_of(services.settings).stt.echo_window_s)
+        """I8: what the agent said recently (TTS echo filter, spec §13.3)."""
+        self._corrected: set[tuple[str, str]] = set()
 
     # ------------------------------------------------------------ backends
     def backend_name(self, kind: str) -> str:
@@ -98,6 +103,8 @@ class VoiceService:
             raise VoiceUnavailable(str(exc)) from exc
         if not isinstance(inst, cls):
             raise VoiceUnavailable(f"{kind} backend {type(inst).__name__} does not implement {cls.__name__}")
+        if hasattr(inst, "bind") and getattr(inst, "_svc", None) is None:
+            inst.bind(self.svc)  # I8: stt/local_command runs through the sandbox backend
         return inst
 
     @property
@@ -116,12 +123,46 @@ class VoiceService:
         return vad
 
     # ------------------------------------------------------------ transcribe
+    def keyterms(self, given: Sequence[str] = ()) -> list[str]:
+        """Explicit keyterms, else the project default (basename + branch + recent files)."""
+        if given:
+            return list(given)
+        cfg = i8_of(self.svc.settings).stt
+        if not cfg.keyterms:
+            return []
+        from auoreo.voice.keyterms import default_keyterms
+
+        try:
+            return default_keyterms(self.svc.cwd, cfg.keyterms_max)
+        except OSError:
+            return []
+
+    async def check_model(self, session_id: str | None = None) -> None:
+        """Audit a cross-lane `voice_stt_model` once per (lane, id) (spec §25.1 auto-correct)."""
+        from auoreo.voice.autocorrect import correct
+
+        lane = self.backend_name("stt")
+        fix = correct(lane, self.svc.settings.voice_stt_model)
+        if fix is None or (lane, fix.requested) in self._corrected:
+            return
+        self._corrected.add((lane, fix.requested))
+        await self.svc.emit(session_id or "server", "voice.stt_model_corrected", fix.as_dict())
+        await self.svc.audit.record(
+            actor="server", action="voice.stt_model_corrected", session_id=session_id, detail=fix.as_dict()
+        )
+
+    def judge(self, t: Transcript, session_id: str | None = None) -> Verdict:
+        """Hallucination / no-speech / TTS-echo filter for one transcript."""
+        cfg = i8_of(self.svc.settings).stt
+        return verdict(t.text, cfg, no_speech=t.no_speech, echo=self.echo, session_id=session_id)
+
     async def transcribe_wav(
         self, wav: bytes, *, language: str | None = None, keyterms: Sequence[str] = ()
     ) -> Transcript:
         """STT on an already-normalized WAV (no VAD gate, no event)."""
+        await self.check_model()
         return await self.stt.transcribe(
-            wav, language=language or self.svc.settings.voice_language, keyterms=keyterms
+            wav, language=language or self.svc.settings.voice_language, keyterms=self.keyterms(keyterms)
         )
 
     async def transcribe(
@@ -140,6 +181,9 @@ class VoiceService:
         if not speech:
             raise NoSpeech("no speech detected")
         t = await self.transcribe_wav(wav, language=language, keyterms=keyterms)
+        judged = self.judge(t, session_id)
+        if not judged.keep and judged.reason != "echo":
+            raise NoSpeech(f"no speech detected ({judged.reason})")
         backend = self.backend_name("stt")
         await self.svc.emit(
             session_id or "server",
@@ -174,6 +218,7 @@ class VoiceService:
             audio = Audio(concat_wavs([p.data for p in parts]), "audio/wav", parts[0].sample_rate)
         else:
             audio = Audio(b"".join(p.data for p in parts), parts[0].media_type, parts[0].sample_rate)
+        self.echo.add(session_id, spoken)
         await self.svc.emit(
             session_id or "server", "voice.spoke", {"chars": len(spoken), "backend": self.backend_name("tts")}
         )

@@ -299,7 +299,7 @@ VoiceService ─ stt/tts/vad "sidecar" backends ─┐  python -m auoreo.voice.h
   interpreter, which can be a separate venv you install them into.
 - **Live audio**: per-frame `is_speech` (20–30 ms RTC frames, synchronous) stays local as an
   energy test against `voice_speaking_rms`; the pre-STT silence gate (`speech_segments`),
-  transcription and synthesis go through the sidecar. Wake word is not proxied yet.
+  transcription and synthesis go through the sidecar. Wake word: `backends.wake = "sidecar"` (I8).
 
 ### Pointing it at a GPU venv
 
@@ -339,3 +339,65 @@ base_url, transcription_model}`.
 more sensitive, the opposite of the sherpa threshold). **edge-tts** never loads in the server:
 each chunk runs `<edge_tts_command> --text … --voice … --rate=±N% --write-media <tmp>` with the
 scrubbed child env. **face/sherpa_onnx** is an honest stub (`check()` never reports ready).
+
+## I8: wake daemon, streaming into RTC, filters, more lanes
+
+Settings live under `i8` (`src/auoreo/core/settings_i8.py`, env `AUOREO_I8='{…}'`).
+
+**Wake daemon** (`auoreo.voice.wake`, off by default: `{"i8": {"wake": {"enabled": true}}}`).
+One per home (`<home>/wake.lock`, `O_EXCL` + PID liveness; a second server reports `locked`).
+The microphone is the new `audio_input` backend kind (`fake` default, `sounddevice` lazy:
+`"backends": {"audio_input": "sounddevice"}`). Every `hop_s` (0.5 s) the last `window_s`
+(1.5 s) goes to the selected `wake` backend; `backends.wake = "sidecar"` runs detection in the
+voice media sidecar (`wake` JSON-RPC method, inner backend `i8.wake.host_backend`). A hit routes
+by phrase (`i8.wake.routes = {"hey oreo": {"agent": "build", "title": "kitchen"}}`), then exactly
+one utterance is captured (VAD start ≤ `listen_timeout_s`, endpoint after
+`voice_endpoint_silence_ms`, ≤ `max_utterance_s`), filtered and submitted; detection pauses while
+the routed session's turn runs. Peak ≤ 10 for 10 s → status `dead_mic`. Events `voice.wake`,
+`voice.wake_status`, `voice.transcript{source: "wake"}`.
+
+**Streaming STT into live RTC.** When the STT backend streams (`streaming = True`, e.g.
+`stt/openai`) and `i8.stt.streaming_rtc` (default), each endpointed utterance emits
+`voice.partial{rtc_id, session_id, text, final}` deltas; only the final text becomes the turn.
+
+**Hallucination / echo filter** (`auoreo.voice.filters`, before any steer/inject): blocklist
+(`i8.stt.blocklist`), repeat loops (`repeat_min` = 4), `no_speech` transcripts (re-listen), and
+TTS echo — word similarity ≥ `echo_similarity` (0.6) with what the agent said in the last
+`echo_window_s` (20 s). RTC/wake drops emit `voice.transcript_dropped{reason, score}`;
+push-to-talk answers 422 `no speech detected (blocklist)`.
+
+**faster-whisper**: dual gate per segment (`no_speech_prob > 0.6` AND `avg_logprob < -1.0`,
+also passed to the decoder); all segments gated → `no_speech`. `i8.stt.device = auto` tries CUDA
+(`float16`, checked against `ctranslate2.get_supported_compute_types`) and falls back to CPU
+`int8` when loading fails; the model unloads after `unload_after_idle_s` (300 s).
+
+**Keyterms** default to the project basename + git branch words + recently modified file names
+(≤ 50, `.git/HEAD` read directly) for `/api/voice/transcribe`, RTC and wake utterances.
+
+**Model auto-correct** (`auoreo.voice.autocorrect`): a `voice_stt_model` from another lane is
+remapped to the lane default by the backend; the service emits `voice.stt_model_corrected` and
+audits `{lane, requested, corrected}` once per pair.
+
+| New backend | Notes |
+|---|---|
+| `stt/local_command` | `i8.stt.local_command{template, model, timeout_s, allowlist}`; argv only, `{input}`/`{model}`/`{output_dir}`; executable must be allowlisted; runs through the selected sandbox backend with the scrubbed env; stdout or `*.txt` output; audited `stt.local_command{cmd_sha, duration_s, exit_code}` |
+| `tts/mistral` | `voxtral-mini-tts-2603`, ≤ 4000 chars, `voice_id` from `i8.tts.mistral_voice`; 403 → `moderation_403` |
+| `tts/neutts` | NeuTTS Air (Apache) local, lazy `neuttsair`, reference clip + text; other variants need `neutts_nc_opt_in` |
+| `wake/sidecar` | wake detection in the voice media sidecar |
+| `audio_input/{fake,sounddevice}` | microphone for the wake daemon |
+
+**Cloud upload shaping** (`auoreo.voice.upload`): leading/trailing silence is trimmed before
+every cloud STT upload (`i8.stt.trim_silence`); `i8.stt.cloud_aac` sends 16 kHz mono AAC
+(`audio.m4a`, fragmented MP4) when ffmpeg is present. **SILK** voice notes (`#!SILK_V3`) decode
+with `pilk` or `pysilk` when installed, else 422 with the install hint.
+
+**Barge-in noise floor**: each peer calibrates its background level from the first 400 ms of
+quiet inbound audio (`i8.barge.calibrate_ms`); while the agent speaks a frame must also exceed
+`floor × floor_multiplier` (3) to count, over the `sustain_ms` (300 ms) window.
+
+**WebSocket Realtime fallback**: `openai_realtime` joins carry `extra.fallback{transport:
+websocket, url, protocols?, chain}` (`i8.realtime_ws`), so a browser whose WebRTC fails can open
+`wss://api.openai.com/v1/realtime` with the same ephemeral secret.
+
+Not exercised here: a real microphone, real KWS models, CUDA, Mistral/NeuTTS services, SILK files
+from real apps (a fake `pilk` stands in).

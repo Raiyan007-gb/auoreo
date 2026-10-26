@@ -32,6 +32,7 @@ STARTERS: list[str] = [
     "auoreo.goals:start",  # W0-C → services.ext["goals"]
     "auoreo.suggestions:start",  # W0-C → services.ext["suggestions"] (60 s expiry/delivery sweep)
     "auoreo.core.bus_redis:start",  # W1-E → services.ext["bus_redis"]; no-op unless redis_url is set
+    "auoreo.core.i8_boot:start",  # I8 → ext["i8_boot"]: CU turn-end unhide, wake daemon, LiveKit worker
 ]
 
 

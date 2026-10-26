@@ -9,6 +9,7 @@ import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useEvents } from "@/lib/eventsHub";
+import { LiveKitCall } from "@/lib/livekitCall";
 import { type CallSnapshot, IDLE_CALL, RtcCall } from "@/lib/rtc";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +44,7 @@ export function CallPanel({ sessionId }: { sessionId: string }) {
   const [snap, setSnap] = useState<CallSnapshot>(IDLE_CALL);
   const [caps, setCaps] = useState<RtcCapabilities | null>(null);
   const [allowControl, setAllowControl] = useState(false);
+  const [useLiveKit, setUseLiveKit] = useState(false);
   const [levels, setLevels] = useState<number[]>([]);
   const [speaking, setSpeaking] = useState(false);
   const [agentSpeaking, setAgentSpeaking] = useState(false);
@@ -50,7 +52,7 @@ export function CallPanel({ sessionId }: { sessionId: string }) {
   const [lines, setLines] = useState<TranscriptLine[]>([]);
   const [frames, setFrames] = useState<string[]>([]);
   const [local, setLocal] = useState<MediaStream | null>(null);
-  const call = useRef<RtcCall | null>(null);
+  const call = useRef<RtcCall | LiveKitCall | null>(null);
   const audio = useRef<HTMLAudioElement>(null);
   const bargeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inCall = snap.phase === "connecting" || snap.phase === "connected";
@@ -89,6 +91,18 @@ export function CallPanel({ sessionId }: { sessionId: string }) {
     setLines([]);
     setLevels([]);
     setFrames([]);
+    const onRemoteStream = (s: MediaStream) => {
+      if (audio.current) {
+        audio.current.srcObject = s;
+        void audio.current.play().catch(() => undefined);
+      }
+    };
+    if (caps?.livekit && useLiveKit) {
+      const lk = new LiveKitCall(api, { sessionId, agentName: caps.livekit_agent ?? undefined, onChange: setSnap, onRemoteStream, onLocalVideo: setLocal });
+      call.current = lk;
+      await lk.start();
+      return;
+    }
     const c = new RtcCall(api, {
       sessionId,
       input: Boolean(caps?.teleop_input_enabled && allowControl),
@@ -180,6 +194,19 @@ export function CallPanel({ sessionId }: { sessionId: string }) {
           />
           Allow remote control
         </label>
+        {caps?.livekit && (
+          <label className="flex items-center gap-1.5 text-xs" title="Join through the LiveKit SFU instead of the direct (P2P) connection">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={useLiveKit}
+              disabled={inCall}
+              onChange={(e) => setUseLiveKit(e.target.checked)}
+              data-testid="call-livekit"
+            />
+            LiveKit
+          </label>
+        )}
         <div className="ml-auto flex flex-wrap items-center gap-1.5" aria-label="Call state">
           <span
             aria-label={speaking ? "Voice detected" : "No voice"}

@@ -1,0 +1,11 @@
+kind: wake
+name: sidecar
+description: >-
+  Proxies wake-word detection to the out-of-process voice media sidecar (`wake` JSON-RPC
+  method), which loads i8.wake.host_backend - NC/heavy engines stay out of the server process.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

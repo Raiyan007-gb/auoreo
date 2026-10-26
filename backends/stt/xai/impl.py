@@ -31,6 +31,6 @@ class Backend(SttBackend):
         check_upload(wav)
         key = require_key(self.settings, KEY)
         headers = {"Authorization": f"Bearer {key}"}
-        body = await post_form("xai", cfg.xai_stt_url, headers, wav, [("language", language)])
+        body = await post_form("xai", cfg.xai_stt_url, headers, wav, [("language", language)], self.settings)
         segs = [Segment(**s) for s in segments_of(body)]
         return Transcript(str(body.get("text", "")).strip(), segs, body.get("language") or language, None)

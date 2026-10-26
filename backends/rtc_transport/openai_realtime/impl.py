@@ -9,6 +9,12 @@
    Without an offer the client gets the ephemeral secret and `calls` URL and exchanges itself.
 3. `leave` hangs the call up (`POST {base}/realtime/calls/{id}/hangup`, best effort).
 
+I8: the answer also carries `extra.fallback` — the WebSocket Realtime endpoint
+(`i8.realtime_ws.url?model=…`) and, when the client got the ephemeral secret, the subprotocols
+(`realtime`, `openai-insecure-api-key.<ephemeral>`) a browser uses to open it when WebRTC
+fails (spec §13.7 fallback chain: WebRTC Realtime > WS Realtime > batch > push-to-talk).
+`i8.realtime_ws.enabled: false` drops it.
+
 Only `{session_id, minted_at, model, outcome}` is kept/audited; secrets and SDP never are.
 """
 
@@ -24,6 +30,7 @@ import httpx
 from auoreo.backends import BackendStatus
 from auoreo.backends.rtc_transport import JoinInfo, RtcTransport
 from auoreo.core.settings_g6 import RealtimeSettings
+from auoreo.core.settings_i8 import i8_of
 from auoreo.voice.cloud import key_status, secret
 
 KEY = "OPENAI_API_KEY"
@@ -123,6 +130,20 @@ class Backend(RtcTransport):
         call_id = location.rstrip("/").rsplit("/", 1)[-1] or None
         return answer, call_id
 
+    def ws_fallback(self, ephemeral: str | None) -> dict[str, Any] | None:
+        """WebSocket Realtime fallback descriptor (no secret unless the client already holds it)."""
+        cfg = i8_of(self.settings).realtime_ws
+        if not cfg.enabled:
+            return None
+        out: dict[str, Any] = {
+            "transport": "websocket",
+            "url": f"{cfg.url.rstrip('/')}?model={self.cfg.model}",
+            "chain": ["webrtc", "websocket", "batch", "push_to_talk"],
+        }
+        if ephemeral:
+            out["protocols"] = ["realtime", f"openai-insecure-api-key.{ephemeral}"]
+        return out
+
     async def join(self, *, session_id: str | None, identity: str, offer_sdp: str | None) -> JoinInfo:
         secret_ = await self.mint(session_id)
         join_id = f"rt_{uuid.uuid4().hex[:12]}"
@@ -134,9 +155,13 @@ class Backend(RtcTransport):
         }
         if offer_sdp is None:
             self.calls[join_id] = {"join_id": join_id, "session_id": session_id, "call_id": None}
+            if (fb := self.ws_fallback(secret_["value"])) is not None:
+                extra["fallback"] = fb
             return JoinInfo("openai_realtime", session_id, url=calls_url, token=secret_["value"], extra=extra)
         answer, call_id = await self.exchange(secret_["value"], offer_sdp)
         self.calls[join_id] = {"join_id": join_id, "session_id": session_id, "call_id": call_id}
+        if (fb := self.ws_fallback(None)) is not None:
+            extra["fallback"] = fb
         return JoinInfo("openai_realtime", session_id, sdp=answer, extra={**extra, "call_id": call_id})
 
     async def leave(self, join_id: str) -> None:

@@ -1,0 +1,12 @@
+kind: audio_input
+name: sounddevice
+description: >-
+  Default system microphone through sounddevice/PortAudio (16 kHz mono int16, persistent
+  RawInputStream). `pip install sounddevice` (PortAudio is bundled on macOS/Windows; Linux
+  needs libportaudio2). Imported lazily; check() only queries the default input device.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok

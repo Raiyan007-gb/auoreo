@@ -5,6 +5,13 @@ unknown formats are rejected. `normalize` applies the size ladder before an imag
 sent to a model: EXIF orientation applied and metadata stripped, long edge ≤ 1568 px,
 JPEG at quality 85 → 70 → 50 (then downscaled) until ≤ 256 KB; PNG is kept only for a
 small image with real transparency. `ask_vision` is the one aux vision call.
+
+I8 (spec §14.1): downscaling never takes the short edge below `MIN_SHORT_EDGE` (64 px);
+`ask_vision` runs at temperature 0.1 — natively on the session model when it accepts images
+(`path: native`), else on the `vision` routing group (`path: aux`, 120 s budget) — fails closed
+to aux when a native call errors, and on a provider "image too large" refusal (Anthropic: 5 MB /
+8000 px) downscales the image by half and retries once. `fit_for_provider` pre-shrinks anything
+over 5 MB / 8000 px before it is sent.
 """
 
 from __future__ import annotations
@@ -29,6 +36,12 @@ MAX_EDGE = 1568
 TARGET_BYTES = 256 * 1024
 JPEG_LADDER = (85, 70, 50)
 MIN_EDGE = 256
+MIN_SHORT_EDGE = 64
+PROVIDER_MAX_BYTES = 5 * 1024 * 1024
+PROVIDER_MAX_PX = 8000
+VISION_TEMPERATURE = 0.1
+AUX_TIMEOUT_S = 120.0
+_TOO_LARGE = ("too large", "exceeds", "5 mb", "5mb", "8000", "dimension", "image size", "maximum allowed")
 MEDIA_TYPES = {"png": "image/png", "jpeg": "image/jpeg", "gif": "image/gif", "webp": "image/webp"}
 VISION_GROUP = "vision"
 
@@ -96,6 +109,33 @@ def _encode(img: Image.Image, fmt: str, quality: int = 85) -> bytes:
     return buf.getvalue()
 
 
+def _shrink(img: Image.Image, factor: float) -> Image.Image:
+    """Resize by `factor` but never below `MIN_SHORT_EDGE` on the short side (64 px floor)."""
+    short = min(img.size)
+    if short * factor < MIN_SHORT_EDGE:
+        factor = min(1.0, MIN_SHORT_EDGE / max(short, 1))
+    if factor >= 1.0:
+        return img
+    size = (max(1, round(img.width * factor)), max(1, round(img.height * factor)))
+    return img.resize(size, Image.Resampling.LANCZOS)
+
+
+def fit_for_provider(
+    data: bytes, max_bytes: int = PROVIDER_MAX_BYTES, max_px: int = PROVIDER_MAX_PX, factor: float = 1.0
+) -> tuple[bytes, str]:
+    """Shrink (by `factor`, then until ≤ `max_px` per side and ≤ `max_bytes`) → `(jpeg|png, media_type)`."""
+    img, fmt = _open(data)
+    img = ImageOps.exif_transpose(img)
+    if max(img.size) > max_px:
+        factor = min(factor, max_px / max(img.size))
+    img = _shrink(img, factor) if factor < 1.0 else img
+    out = _encode(img.convert("RGB"), "JPEG", JPEG_LADDER[0])
+    while len(out) > max_bytes and min(img.size) * 3 // 4 >= MIN_SHORT_EDGE:
+        img = _shrink(img, 0.75)
+        out = _encode(img.convert("RGB"), "JPEG", JPEG_LADDER[-1])
+    return out, "image/jpeg"
+
+
 def normalize(data: bytes) -> tuple[bytes, str, dict[str, Any]]:
     """Re-encode `data` for a model: returns `(bytes, media_type, info)`."""
     img, fmt = _open(data)
@@ -103,7 +143,7 @@ def normalize(data: bytes) -> tuple[bytes, str, dict[str, Any]]:
     img = ImageOps.exif_transpose(img)  # copy with orientation applied
     img.info.clear()  # drop EXIF/ICC/text chunks: nothing from the source survives
     if max(img.size) > MAX_EDGE:
-        img.thumbnail((MAX_EDGE, MAX_EDGE), Image.Resampling.LANCZOS)
+        img = _shrink(img, MAX_EDGE / max(img.size))
     meta: dict[str, Any] = {"source_format": fmt, "orig_width": orig[0], "orig_height": orig[1]}
     meta["orig_bytes"] = len(data)
     if _has_alpha(img):
@@ -120,9 +160,9 @@ def normalize(data: bytes) -> tuple[bytes, str, dict[str, Any]]:
             out = _encode(img, "JPEG", q)
             if len(out) <= TARGET_BYTES:
                 break
-        if len(out) <= TARGET_BYTES or max(img.size) <= MIN_EDGE:
+        if len(out) <= TARGET_BYTES or max(img.size) <= MIN_EDGE or min(img.size) * 3 // 4 < MIN_SHORT_EDGE:
             break
-        img = img.resize((max(1, img.width * 3 // 4), max(1, img.height * 3 // 4)), Image.Resampling.LANCZOS)
+        img = _shrink(img, 0.75)
     return (
         out,
         "image/jpeg",
@@ -184,11 +224,19 @@ def vision_model(ctx: ToolContext) -> str:
     )
 
 
-async def ask_vision(
-    ctx: ToolContext, image: ImagePart, question: str, purpose: str = "vision"
-) -> tuple[str, str]:
-    """ONE aux gateway call with the image attached. Returns `(answer, model)`."""
-    model = vision_model(ctx)
+def _too_large(exc: GatewayError) -> bool:
+    text = f"{exc.message} {exc.cause or ''}".lower()
+    return (exc.status in (400, 413) or exc.code in ("INVALID_REQUEST", "PAYLOAD_TOO_LARGE")) and any(
+        k in text for k in _TOO_LARGE
+    )
+
+
+def _halve(image: ImagePart) -> ImagePart:
+    data, media_type = fit_for_provider(base64.b64decode(image.data_b64), factor=0.5)
+    return ImagePart(media_type, base64.b64encode(data).decode("ascii"), f"{image.note} (downscaled)")
+
+
+async def _vision_call(ctx: ToolContext, model: str, image: ImagePart, question: str, purpose: str) -> str:
     svc = ctx.services["services"]
     request = LLMRequest(
         model=model,
@@ -200,16 +248,59 @@ async def ask_vision(
             {"role": "user", "content": [{"type": "text", "text": question}, image.part()]},
         ),
         tool_choice="none",
+        temperature=VISION_TEMPERATURE,
         metadata={"purpose": purpose, "session_id": ctx.session_id},
     )
     parts: list[str] = []
-    try:
+
+    async def collect() -> None:
         async for item in svc.gateway.stream(request):
             if isinstance(item, TextDelta):
                 parts.append(item.text)
-    except GatewayError as exc:
-        raise ToolError(f"vision call to '{model}' failed ({exc.code}): {exc.message}") from exc
-    answer = "".join(parts).strip()
+
+    await asyncio.wait_for(collect(), AUX_TIMEOUT_S)
+    return "".join(parts).strip()
+
+
+async def ask_vision(
+    ctx: ToolContext, image: ImagePart, question: str, purpose: str = "vision"
+) -> tuple[str, str]:
+    """ONE vision call with the image attached (+ at most one size retry or aux fallback).
+    Returns `(answer, model)`; `ctx.state`-free, the path is reported by `vision_path`."""
+    model = vision_model(ctx)
+    svc = ctx.services["services"]
+    raw = base64.b64decode(image.data_b64)
+    if len(raw) > PROVIDER_MAX_BYTES:
+        image = _halve(image)
+    tries: list[str] = [model]
+    if model != VISION_GROUP and VISION_GROUP in svc.settings.models:
+        tries.append(VISION_GROUP)  # fail closed to aux
+    resized = False
+    answer, used, last = "", model, None
+    for candidate in tries:
+        try:
+            answer = await _vision_call(ctx, candidate, image, question, purpose)
+            used = candidate
+            break
+        except GatewayError as exc:
+            last = exc
+            if _too_large(exc) and not resized:
+                resized, image = True, _halve(image)
+                try:
+                    answer = await _vision_call(ctx, candidate, image, question, purpose)
+                    used = candidate
+                    break
+                except GatewayError as exc2:
+                    last = exc2
+        except TimeoutError:
+            last = GatewayError("TIMEOUT", f"no answer within {AUX_TIMEOUT_S:.0f}s")
+    else:
+        assert last is not None
+        raise ToolError(f"vision call to '{model}' failed ({last.code}): {last.message}") from last
     if not answer:
-        raise ToolError(f"vision model '{model}' returned no text")
-    return answer, model
+        raise ToolError(f"vision model '{used}' returned no text")
+    return answer, used
+
+
+def vision_path(model: str) -> str:
+    return "aux" if model == VISION_GROUP else "native"

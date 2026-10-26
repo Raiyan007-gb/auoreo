@@ -100,6 +100,7 @@ class RtcSpeaker:
         agg = peer.session_id or "server"
         base = {"rtc_id": peer.rtc_id, "session_id": peer.session_id}
         gen = peer.speech.generation
+        self.voice.echo.add(peer.session_id, spoken)  # I8: TTS-echo filter reference
         await self.svc.emit(agg, "voice.speaking", {**base, "chars": len(spoken), "truncated": truncated})
         queued, cancelled = 0.0, False
         try:

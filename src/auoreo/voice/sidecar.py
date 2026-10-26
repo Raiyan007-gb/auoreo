@@ -25,14 +25,14 @@ from typing import Any
 from auoreo.backends import BackendStatus
 from auoreo.plugins.protocol import RpcError, RpcPeer
 from auoreo.tools.context import ToolError
-from auoreo.voice.host import DEBUG_ENV, KINDS, MAX_PAYLOAD_BYTES, SETTINGS_ENV, TOOL_ERROR
+from auoreo.voice.host import DEBUG_ENV, KINDS, MAX_PAYLOAD_BYTES, SETTINGS_ENV, TOOL_ERROR, host_names
 
 log = logging.getLogger(__name__)
 
 MAX_RESTARTS = 3
 WINDOW_S = 60.0
 BACKOFF_S = (0.0, 0.25, 0.5, 1.0)
-SETTINGS_FIELDS = ("home", "extra_roots", "backends", "keyring", "offline")
+SETTINGS_FIELDS = ("home", "extra_roots", "backends", "keyring", "offline", "i8")
 _HOSTS: dict[tuple[Any, ...], VoiceHost] = {}
 
 
@@ -56,7 +56,7 @@ def required_env(settings: Any) -> list[str]:
     names: list[str] = []
     try:
         h = Harness(default_roots(settings.home, Path.cwd(), bundled_root(), settings.extra_roots))
-        for kind, name in settings.voice_host_backends.model_dump().items():
+        for kind, name in host_names(settings).items():
             bdef = h.select_backend(kind, name)
             if bdef is not None:
                 names.extend(bdef.manifest.requires_env)
@@ -198,7 +198,7 @@ def get_host(settings: Any) -> VoiceHost:
     """The shared host for this config and event loop (a host from a closed loop is dropped)."""
     key = (
         getattr(settings, "voice_host_python", None),
-        json.dumps(settings.voice_host_backends.model_dump(), sort_keys=True),
+        json.dumps(host_names(settings), sort_keys=True),
         str(settings.home),
     )
     host = _HOSTS.get(key)
