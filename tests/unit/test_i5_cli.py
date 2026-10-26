@@ -148,16 +148,21 @@ def test_secret_detection_from_schema(home: Path) -> None:
 def test_pairing_list_approve_revoke(cli_env: Path, home: Path) -> None:
     code = PairingStore(home, "telegram").request("777", "alice")
     listed = json.loads(runner.invoke(app, ["pairing", "list", "--json"]).stdout)
-    assert listed == [
-        {"platform": "telegram", "allowlist": [], "pending": [{"chat_id": "777", "user": "alice"}]}
-    ]
+    by_platform = {row["platform"]: row for row in listed}  # I7: discord is an inbound connector too
+    assert by_platform["telegram"] == {
+        "platform": "telegram",
+        "allowlist": [],
+        "pending": [{"chat_id": "777", "user": "alice"}],
+    }
+    assert by_platform["discord"]["pending"] == []
     assert code not in json.dumps(listed)  # codes are never printed
     r = runner.invoke(app, ["pairing", "approve", "telegram", code])
     assert r.exit_code == 0 and "paired chat 777" in r.output, r.output
     assert runner.invoke(app, ["pairing", "approve", "telegram", code]).exit_code == 1  # consumed
     assert runner.invoke(app, ["pairing", "revoke", "telegram", "777"]).exit_code == 0
     assert runner.invoke(app, ["pairing", "revoke", "telegram", "777"]).exit_code == 1
-    assert runner.invoke(app, ["pairing", "list", "discord"]).exit_code == 2  # no inbound connector
+    assert runner.invoke(app, ["pairing", "list", "discord"]).exit_code == 0  # I7: inbound connector
+    assert runner.invoke(app, ["pairing", "list", "pigeon"]).exit_code == 2  # no such connector
 
 
 def test_top_level_queue_is_session_queue(cli_env: Path, monkeypatch: pytest.MonkeyPatch) -> None:
