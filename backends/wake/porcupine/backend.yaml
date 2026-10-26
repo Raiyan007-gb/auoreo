@@ -1,0 +1,14 @@
+kind: wake
+name: porcupine
+description: >-
+  Picovoice Porcupine keyword spotting (keyed). Built-in keywords from
+  settings.g6.voice.porcupine_keywords or custom .ppn files (porcupine_keyword_paths, never
+  committed); sensitivity 0..1 where higher = more sensitive. Fails closed without
+  PICOVOICE_ACCESS_KEY (PORCUPINE_ACCESS_KEY accepted) in the secret store. Needs the
+  `wake-porcupine` extra (pvporcupine, imported lazily).
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [PICOVOICE_ACCESS_KEY, PORCUPINE_ACCESS_KEY]
+license: Apache-2.0 SDK (AccessKey + Picovoice terms)
+posture: ok

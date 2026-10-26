@@ -116,3 +116,11 @@ def voice_host(
     ok, detail = asyncio.run(_probe())
     typer.echo(detail)
     raise typer.Exit(0 if ok else 1)
+
+
+# --- G6: skills hub (taps, quarantine, sha256 lockfile, MCP skill sources)
+from auoreo.cli.commands import skills_hub  # noqa: E402
+
+app.add_typer(
+    skills_hub.app, name="skills", help="Skills hub: search, install (quarantined), approve, remove, taps."
+)

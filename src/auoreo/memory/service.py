@@ -411,6 +411,9 @@ class MemoryService:
             parts.append(mem)
         if user:
             parts.append(user)
+        prefs = read_capped(home, "PREFS.md", self.cfg.user_char_limit)  # G6: approved prefs only
+        if "\n- " in prefs:
+            parts.append(prefs)
         hits = await self.search(query, limit=limit, allow_aux=allow_aux)
         if hits:
             budget = self.cfg.auto_inject_tokens * 4

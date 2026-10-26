@@ -459,3 +459,8 @@ class CommandManifest(_Strict):
     description: str = Field(min_length=1)
     handler: Literal["prompt", "compact", "model", "plan"] = "prompt"
     args_hint: str = ""
+    # --- G6: `subtask: true` runs the rendered body as a background child session (`agent`),
+    # optionally in an isolated worktree that carries the working changes (`worktree: true`).
+    subtask: bool = False
+    agent: str | None = Field(default=None, pattern=NAME_RE)
+    worktree: bool = False

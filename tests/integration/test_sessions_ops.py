@@ -177,9 +177,11 @@ async def test_commands_listed(client: httpx.AsyncClient) -> None:
 
 async def test_prompt_command_expands_body(services: Services, gateway: FakeGateway) -> None:
     sess = await services.create_session(title="t")
-    await chat(services, sess.id, "/review src/app.py please")
+    await chat(services, sess.id, "/curator deploys please")  # G6: /review is now a subtask
     hist = await services.coordinator.runner.load_history(sess.id)
-    assert hist[0]["content"] == "Load the `code-review` skill and review: src/app.py please"
+    assert hist[0]["content"].startswith(
+        "Use `knowledge_search` to review what long-term memory holds about: deploys please"
+    )
 
 
 async def test_unknown_slash_word_is_left_alone(services: Services) -> None:

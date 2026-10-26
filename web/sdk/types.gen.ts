@@ -694,6 +694,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/prefs/proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Proposals
+         * @description Newest first; filter with `?status=pending`.
+         */
+        get: operations["list_proposals_api_memory_prefs_proposals_get"];
+        put?: never;
+        /**
+         * Create Proposal
+         * @description A human can queue a proposal too (it still needs an approval to apply).
+         */
+        post: operations["create_proposal_api_memory_prefs_proposals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/prefs/proposals/{proposal_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve */
+        post: operations["approve_api_memory_prefs_proposals__proposal_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/prefs/proposals/{proposal_id}/deny": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deny */
+        post: operations["deny_api_memory_prefs_proposals__proposal_id__deny_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory/search": {
         parameters: {
             query?: never;
@@ -1336,6 +1394,46 @@ export interface paths {
          * @description Public (no password): the token itself is the capability. 404 when unknown or revoked.
          */
         get: operations["shared_api_shared__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/hub/{name}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve
+         * @description Enable a quarantined skill (sha256 re-checked against skills.lock), then reload.
+         */
+        post: operations["approve_api_skills_hub__name__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skills/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sources
+         * @description Configured taps, skills offered by connected MCP servers, and hub-managed installs.
+         */
+        get: operations["sources_api_skills_sources_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2788,6 +2886,43 @@ export interface components {
             /** Routes */
             routes: string[];
         };
+        /** HubInstalledSkill */
+        HubInstalledSkill: {
+            /** Approved At */
+            approved_at?: number | null;
+            /** Files */
+            files?: string[];
+            /**
+             * Has Scripts
+             * @default false
+             */
+            has_scripts: boolean;
+            /** Installed At */
+            installed_at: number;
+            /**
+             * Integrity
+             * @enum {string}
+             */
+            integrity: "ok" | "modified" | "missing";
+            /** Lint */
+            lint?: string[];
+            /** Name */
+            name: string;
+            /** Sha256 */
+            sha256: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "quarantined" | "approved";
+            /** Tap */
+            tap: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+        };
         /** KanbanCreate */
         KanbanCreate: {
             /**
@@ -2873,6 +3008,25 @@ export interface components {
             text: string;
             /** Type */
             type: string;
+        };
+        /** McpSkillSource */
+        McpSkillSource: {
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Name */
+            name: string;
+            /** Server */
+            server: string;
+            /**
+             * Source
+             * @description `mcp:<server>`
+             */
+            source: string;
+            /** Uri */
+            uri: string;
         };
         /** MeetingAttachRequest */
         MeetingAttachRequest: {
@@ -3407,6 +3561,79 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** PrefsDecision */
+        PrefsDecision: {
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /** PrefsProposal */
+        PrefsProposal: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "add" | "replace" | "remove";
+            /**
+             * Actor
+             * @default agent
+             */
+            actor: string;
+            /**
+             * Approval Event Id
+             * @description `seq` of the `prefs.approved` event, also written into the PREFS.md entry
+             */
+            approval_event_id?: number | null;
+            /** Content */
+            content: string;
+            /** Created At */
+            created_at: number;
+            /** Decided At */
+            decided_at?: number | null;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Deny Reason */
+            deny_reason?: string | null;
+            /** Id */
+            id: string;
+            /** Old Text */
+            old_text?: string | null;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "approved" | "denied";
+        };
+        /** PrefsProposalIn */
+        PrefsProposalIn: {
+            /**
+             * Action
+             * @default add
+             * @enum {string}
+             */
+            action: "add" | "replace" | "remove";
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /** Old Text */
+            old_text?: string | null;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
         /** ReloadResult */
         ReloadResult: {
             /** Changes */
@@ -3832,6 +4059,15 @@ export interface components {
             revoked: number;
             /** Session Id */
             session_id: string;
+        };
+        /** SkillSources */
+        SkillSources: {
+            /** Installed */
+            installed: components["schemas"]["HubInstalledSkill"][];
+            /** Mcp */
+            mcp: components["schemas"]["McpSkillSource"][];
+            /** Taps */
+            taps: string[];
         };
         /** SuggestionAccepted */
         SuggestionAccepted: {
@@ -5750,6 +5986,158 @@ export interface operations {
             };
         };
     };
+    list_proposals_api_memory_prefs_proposals_get: {
+        parameters: {
+            query?: {
+                status?: ("pending" | "approved" | "denied") | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrefsProposal"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_proposal_api_memory_prefs_proposals_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrefsProposalIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrefsProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_api_memory_prefs_proposals__proposal_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
+            path: {
+                proposal_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrefsProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    deny_api_memory_prefs_proposals__proposal_id__deny_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
+            path: {
+                proposal_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrefsDecision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrefsProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     search_api_memory_search_get: {
         parameters: {
             query: {
@@ -7215,6 +7603,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SharedSession"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_api_skills_hub__name__approve_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                /** @description UUID; a retry with the same key replays the first response */
+                "idempotency-key"?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubInstalledSkill"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sources_api_skills_sources_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillSources"];
                 };
             };
             /** @description Validation Error */

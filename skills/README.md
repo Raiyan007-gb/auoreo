@@ -33,3 +33,33 @@ near-duplicates, never touches pinned facts and never deletes; every change goes
 `~/.auoreo/memory/.curator_ledger.jsonl` and each pass writes
 `~/.auoreo/logs/curator/<stamp>/REPORT.md` (`auoreo curator report`). The `/curator` slash
 command only asks the agent to review memory with `knowledge_search` and summarize.
+
+## Skills hub (taps, quarantine, lockfile)
+
+`auoreo skills taps add <url>` registers a tap — an HTTP(S) JSON index
+(`{"skills": [{"name", "description", "version", "url", "sha256"}]}`, `url` = raw `SKILL.md`
+or a `.tar.gz`/`.zip` of the folder) or a git repo (`git+https://…`, `….git`; skills under
+`skills/<name>/`). Indexes are cached for `g6.skills.index_ttl_s` (1 h).
+
+```bash
+auoreo skills search lint          # every tap
+auoreo skills install tidy-imports # → ~/.auoreo/skills/.quarantine/tidy-imports (invisible to agents)
+auoreo skills approve tidy-imports # re-hash vs skills.lock + lint, then → ~/.auoreo/skills/
+auoreo skills list | verify | remove <name> | sources
+```
+
+`~/.auoreo/skills.lock` pins each install (`tap, version, sha256, status, files,
+has_scripts, lint`); a pinned index `sha256` must match the download; archives are refused on
+`..`/absolute paths, symlinks or more than `g6.skills.max_skill_bytes`. Every action goes to
+`~/.auoreo/logs/skills_hub.jsonl`. Skills offered by connected MCP servers as
+`skill://<name>` or `<scheme>://skills/<name>` resources are listed as `mcp:<server>` sources
+(`auoreo skills sources`, `GET /api/skills/sources`); `POST /api/skills/hub/{name}/approve`
+approves from the API.
+
+## Preferences (PREFS.md) are proposed, never written
+
+`memory` with `target: prefs` queues a proposal (`<home>/memory/.prefs_proposals.json`);
+the user approves or denies it (`GET /api/memory/prefs/proposals?status=pending`,
+`POST …/{id}/approve|deny`, or Memory → Curator in the UI). Approval emits
+`prefs.approved` and writes `- <pref> <!-- since <date> · approval evt:<seq> · <id> -->`;
+approved preferences join the per-turn memory block.

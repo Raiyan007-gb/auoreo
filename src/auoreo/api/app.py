@@ -49,8 +49,10 @@ from auoreo.api.routers import openai_compat as openai_compat_router
 from auoreo.api.routers import ops as ops_router  # --- W0-B
 from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import policy as policy_router  # --- W1-C
+from auoreo.api.routers import prefs as prefs_router  # --- G6
 from auoreo.api.routers import rtc as rtc_router
 from auoreo.api.routers import sessions_more as sessions_more_router  # --- G5a
+from auoreo.api.routers import skills_hub as skills_hub_router  # --- G6
 from auoreo.api.routers import suggestions as suggestions_router
 from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import voice as voice_router
@@ -105,6 +107,8 @@ ROUTERS = (
     context_router,
     metrics_router,  # --- G5c: GET /metrics
     sessions_more_router,  # --- G5a: rename/share/retry/revert
+    prefs_router,  # --- G6: PREFS.md proposals
+    skills_hub_router,  # --- G6: skill sources + hub approve
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

@@ -20,5 +20,12 @@ Load the `code-review` skill and review: {{args}}
 | `plan` | runs one turn with the `planner` agent; the rendered body (default `{{args}}`) is the message |
 | `compact` | asks the compaction service to summarize older turns now (`run.failed{UNSUPPORTED}` when unavailable) |
 
+`subtask: true` (G6) runs the rendered body as a **background child session** with `agent:`
+(the parent's context stays clean; the result returns as a task-notification). With
+`worktree: true` the child gets an isolated git worktree under `<cwd>/.auoreo/worktrees/`
+(git-ignored) holding HEAD plus the tracked working changes; `{{worktree}}` in the body is
+its path (the cwd otherwise). Without the teams extension the body runs inline. `/review`
+is such a command (agent `reviewer`); `/babysit_pr <n>` loads the `babysit-pr` skill.
+
 Like every other folder kind, `~/.auoreo/commands/` and `<cwd>/.auoreo/commands/` override
 bundled commands of the same name.

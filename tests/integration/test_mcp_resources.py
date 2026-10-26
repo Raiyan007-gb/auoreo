@@ -132,7 +132,9 @@ async def test_prompts(services: Services, settings: Settings, mode: str) -> Non
 
         got = await client.get_prompt("review", {"args": "src/app.py"})
         assert got.messages[0].role == "user"
-        assert got.messages[0].content.text == "Load the `code-review` skill and review: src/app.py"  # type: ignore[union-attr]
+        text = got.messages[0].content.text  # type: ignore[union-attr]
+        assert text.startswith("Load the `code-review` skill and review: src/app.py\n")
+        assert f"worktree at `{services.cwd}`" in text  # G6: no worktree over MCP → the cwd
 
         empty = await client.get_prompt("review")
         assert empty.messages[0].content.text.startswith("Load the")  # type: ignore[union-attr]

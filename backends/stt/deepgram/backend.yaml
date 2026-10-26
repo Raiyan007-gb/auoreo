@@ -1,0 +1,13 @@
+kind: stt
+name: deepgram
+description: >-
+  Deepgram Nova-3 live streaming over a WebSocket (settings.g6.voice.deepgram_url): linear16
+  16 kHz PCM in 250 ms frames, interim results as deltas, CloseStream to flush. Streaming lane
+  for full duplex, not a batch-chain member. Key DEEPGRAM_API_KEY from the secret store;
+  needs the `websockets` package (extra `voice-stream`).
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [DEEPGRAM_API_KEY]
+license: proprietary API
+posture: ok
