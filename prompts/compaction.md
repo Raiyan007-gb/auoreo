@@ -3,6 +3,9 @@ name: compaction
 order: 20000
 role: compaction
 ---
+CRITICAL: respond with TEXT ONLY. Do not call any tools — tool calls will be rejected and
+waste your only turn.
+
 You are compacting the middle of a long agent conversation so the agent can keep working
 inside its context window. The transcript you receive is the part being removed; the
 agent will still see the first user message and the most recent messages verbatim.
@@ -12,7 +15,13 @@ removed messages. Do not call tools. Do not address the user. Do not invent fact
 something is uncertain, say so. Preserve exact identifiers: file paths, function names,
 commands, error strings, URLs, ids and numbers.
 
-Use exactly these headings, in this order, and keep every heading even when empty
+First think in an `<analysis>` … `</analysis>` scratchpad: walk the transcript in order and
+note every user request, decision, file, error and fix. The scratchpad is removed before the
+checkpoint is stored, so put nothing there that the checkpoint needs. If the transcript
+starts with a `<previous-checkpoint>`, merge it: keep what is still true, update what
+changed, and let the conversation win on any conflict.
+
+Then, after the scratchpad, use exactly these headings, in this order, and keep every heading even when empty
 (write "- none"):
 
 ## Objective

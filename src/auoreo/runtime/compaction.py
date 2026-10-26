@@ -21,7 +21,7 @@ import asyncio
 import json
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import select
@@ -31,6 +31,8 @@ from auoreo.core.db import MessageArchiveRow, MessageRow
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import LLMRequest
 from auoreo.harness.manifests import HookEvent
+from auoreo.runtime.compaction_extras import assemble
+from auoreo.runtime.compaction_i4 import PostCompaction, hygiene_due, meter, skill_prune_plan
 from auoreo.runtime.compaction_plan import (
     PRUNABLE_TOOLS,
     PRUNE_HEAD,
@@ -57,8 +59,9 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-Trigger = Literal["pressure", "overflow", "manual", "idle"]
+Trigger = Literal["pressure", "overflow", "manual", "idle", "hygiene"]
 MAX_FAILURES = 3
+DOCTOR_HINT = "compaction stopped after 3 consecutive failures; run `auoreo doctor`"
 
 
 class CompactionError(Exception):
@@ -83,6 +86,9 @@ class CompactionResult:
     pruned: int = 0
     source: str = "summary"  # summary | session_memory | prune
     retries: int = 0
+    summary_model: str | None = None
+    cache_read: int = 0
+    cache_creation: int = 0
 
 
 class CompactionService:
@@ -95,6 +101,9 @@ class CompactionService:
         self.failures: dict[str, int] = {}
         self.committing: set[str] = set()
         """Sessions inside the replace transaction: a foreground claim waits, never cancels."""
+        self.active: set[str] = set()  # recursion guard: never compact inside a compaction
+        self.post = PostCompaction()  # notifyCompaction() + markPostCompaction()
+        self._warned: set[str] = set()
 
     # ---------------------------------------------------------------- meter
     @property
@@ -109,7 +118,12 @@ class CompactionService:
         ratio = (
             loop.compaction_threshold_ratio if "compaction_threshold_ratio" in loop.model_fields_set else None
         )
-        return thresholds(self.s.gateway.context_window(model), max_output, ratio)
+        window = self.s.gateway.context_window(model)
+        return meter(self.s.settings.i4.compaction, window, model, max_output, ratio)
+
+    def guarded(self, rt: SessionRuntime) -> bool:
+        """Recursion guard (S4): no auto-compaction inside a compaction or a subagent."""
+        return rt.subagent or rt.session_id in self.active
 
     def tokens(self, model: str, messages: Any) -> int:
         return self.s.gateway.count_tokens(model, json.dumps(list(messages), default=str))
@@ -117,16 +131,19 @@ class CompactionService:
     async def pre_step(self, rt: SessionRuntime, request: LLMRequest) -> bool:
         """S4(a). True when history changed and the caller must rebuild the request.
         Raises CompactionError only when this failure trips the circuit breaker."""
-        if not self.enabled or self.tripped(rt.session_id):
+        if not self.enabled or self.tripped(rt.session_id) or self.guarded(rt):
             return False
         th = self.thresholds(request.model, request.max_tokens)
         pressure = self.tokens(request.model, request.messages)
-        if pressure < th.auto:
+        await self._warn(rt.session_id, pressure, th)
+        hygiene = hygiene_due(self.s.settings.i4.compaction, th.window, pressure)
+        if pressure < th.auto and not hygiene:
             return False
+        trigger: Trigger = "pressure" if pressure >= th.auto else "hygiene"
         overhead = max(0, pressure - self.tokens(request.model, rt.history))
         try:
             await self.compact(
-                rt.session_id, trigger="pressure", rt=rt, model=request.model, stop_below=th.auto - overhead
+                rt.session_id, trigger=trigger, rt=rt, model=request.model, stop_below=th.auto - overhead
             )
         except CompactionError as exc:
             if exc.tripped:
@@ -137,7 +154,7 @@ class CompactionService:
     async def recover_overflow(self, rt: SessionRuntime, exc: GatewayError, model: str) -> None:
         """S4(b): on a provider CONTEXT error compact with retain=0 so the caller can retry
         once; anything else (or a failed compaction) re-raises the original error."""
-        if exc.code != "CONTEXT" or not self.enabled or self.tripped(rt.session_id):
+        if exc.code != "CONTEXT" or not self.enabled or self.tripped(rt.session_id) or self.guarded(rt):
             raise exc
         try:
             await self.compact(rt.session_id, trigger="overflow", retain_ratio=0, rt=rt, model=model)
@@ -160,6 +177,32 @@ class CompactionService:
         from_: int | None = None,
     ) -> CompactionResult:
         rt = rt or await self.s.coordinator.runtime(session_id)
+        if session_id in self.active:
+            raise NothingToCompact("a compaction is already running for this session")
+        self.active.add(session_id)
+        try:
+            return await self._run(session_id, trigger, retain_ratio, rt, model, stop_below, up_to, from_)
+        finally:
+            self.active.discard(session_id)
+
+    async def _warn(self, sid: str, pressure: int, th: Thresholds) -> None:
+        if pressure < th.warn or sid in self._warned:
+            return
+        self._warned.add(sid)
+        data = {"pressure": pressure, "warn": th.warn, "auto": th.auto, "window": th.window}
+        await self.s.emit(sid, "compaction.warning", data)
+
+    async def _run(
+        self,
+        session_id: str,
+        trigger: Trigger,
+        retain_ratio: float | None,
+        rt: SessionRuntime,
+        model: str | None,
+        stop_below: int | None,
+        up_to: int | None,
+        from_: int | None,
+    ) -> CompactionResult:
         model = model or self._model(rt)
         retain = self.s.settings.loop.compaction_retain_ratio if retain_ratio is None else retain_ratio
         cid = f"cmp_{uuid.uuid4().hex[:12]}"
@@ -182,30 +225,49 @@ class CompactionService:
             cls = exc.failure_class if isinstance(exc, CompactionError) else "crash"
             if not isinstance(exc, CompactionError):
                 log.exception("compaction crashed")
+            if n >= MAX_FAILURES:  # circuit breaker: stop + doctor hint
+                reason = f"{reason} — {DOCTOR_HINT}"
             data = {**base, "reason": reason, "failures": n, "failure_class": cls}
             await self.s.emit(session_id, "compaction.failed", data)
+            obs.count("compaction_failures_total", trigger=trigger, failure_class=cls)
             raise CompactionError(reason, tripped=n >= MAX_FAILURES, failure_class=cls) from exc
         self.failures[session_id] = 0
-        await self.s.emit(
-            session_id,
-            "compaction.completed",
-            {
-                **base,
-                "pre_tokens": res.pre_tokens,
-                "post_tokens": res.post_tokens,
-                "archived": res.archived,
-                "pruned": res.pruned,
-                "summary_chars": res.summary_chars,
-                "source": res.source,
-                "retries": res.retries,
-            },
-        )
+        await self._completed(rt, base, res, model)
         if res.archived:
             await rerun_session_start(self.s, rt, cid)
         await self._hook(
             "PostCompact", rt, {**base, "pre_tokens": res.pre_tokens, "post_tokens": res.post_tokens}
         )
         return res
+
+    async def _completed(
+        self, rt: SessionRuntime, base: dict[str, Any], res: CompactionResult, model: str
+    ) -> None:
+        """`compaction.completed` (spec §11.9 `oreo_compact` fields) + metrics + S7 notify/mark."""
+        th = self.thresholds(model)
+        data = {
+            **base,
+            "pre_tokens": res.pre_tokens,
+            "post_tokens": res.post_tokens,
+            "threshold": th.auto,
+            "window": th.window,
+            "archived": res.archived,
+            "pruned": res.pruned,
+            "summary_chars": res.summary_chars,
+            "source": res.source,
+            "retries": res.retries,
+            "summary_model": res.summary_model,
+            "cache_read": res.cache_read,
+            "cache_creation": res.cache_creation,
+            "failure_class": None,
+        }
+        await self.s.emit(rt.session_id, "compaction.completed", data)
+        obs.count("compaction_completed_total", trigger=base["trigger"], source=res.source)
+        obs.count("compaction_tokens_reclaimed_total", max(0, res.pre_tokens - res.post_tokens))
+        self._warned.discard(rt.session_id)
+        if res.archived or res.pruned:
+            self.post.mark_post_compaction(rt.session_id, base["compaction_id"])
+            await self.post.notify_compaction(rt.session_id, data)
 
     async def _hook(self, event: HookEvent, rt: SessionRuntime, payload: dict[str, Any]) -> None:
         """Pre/PostCompact hooks are informational; a broken hook never fails compaction."""
@@ -245,7 +307,8 @@ class CompactionService:
         default = split_points(history, sizes, retain)
         if bounds is None and (sm := await self._session_memory(rt, cid, trigger, model, sizes, pre)):
             start, end, msg, chars = sm
-            return await self._commit(rt, cid, start, end, msg, pre, model, chars, pruned, "session_memory")
+            meta = CompactionResult(0, 0, 0, cid, chars, pruned, "session_memory")
+            return await self._commit(rt, cid, start, end, msg, pre, model, meta)
         start, end = default if bounds is None else partial_bounds(history, default[1], *bounds)
         if end <= start:
             raise NothingToCompact(f"nothing to compact ({len(history)} messages, all protected)")
@@ -256,9 +319,10 @@ class CompactionService:
         checkpoint = await self._message(rt, cid, trigger, out.text, start, end, pre, model)
         if checkpoint is None:  # shrink proof: never replace with something bigger
             raise CompactionError("summary did not shrink the context", failure_class="no_shrink")
-        return await self._commit(
-            rt, cid, start, end, checkpoint, pre, model, len(out.text), pruned, "summary", out.retries
+        meta = CompactionResult(
+            0, 0, 0, cid, len(out.text), pruned, "summary", out.retries, out.model, out.cache_read
         )
+        return await self._commit(rt, cid, start, end, checkpoint, pre, model, meta)
 
     async def _session_memory(
         self, rt: SessionRuntime, cid: str, trigger: Trigger, model: str, sizes: list[int], pre: int
@@ -296,9 +360,15 @@ class CompactionService:
         the bare summary would not shrink the context."""
         history = rt.history
         head = f'{SUMMARY_TAG} trigger="{trigger}" id="{cid}" archived="{end - start}" source="{source}">'
-        bare = f"{head}\n{summary}\n</compaction-summary>"
-        restored = await restore_block(self.s, rt, history[start:end], history[end:])
-        for content in ([f"{bare}\n{restored}"] if restored else []) + [bare]:
+        middle = history[start:end]
+        full, lean = (
+            f"{head}\n{assemble(summary, middle, rt.session_id, start, full=f)}\n</compaction-summary>"
+            for f in (True, False)
+        )
+        restored = await restore_block(self.s, rt, middle, history[end:])
+        candidates = [f"{full}\n{restored}", f"{lean}\n{restored}"] if restored else []
+        candidates += [full, lean, f"{head}\n{summary}\n</compaction-summary>"]
+        for content in candidates:
             msg = {"role": "user", "content": content}
             if self.tokens(model, [*history[:start], msg, *history[end:]]) < pre:
                 return msg
@@ -313,10 +383,7 @@ class CompactionService:
         msg: dict[str, Any],
         pre: int,
         model: str,
-        chars: int,
-        pruned: int,
-        source: str,
-        retries: int = 0,
+        meta: CompactionResult,
     ) -> CompactionResult:
         history = rt.history
         new = [*history[:start], msg, *history[end:]]
@@ -332,7 +399,7 @@ class CompactionService:
                 await self.s.memory.record_message(rt.session_id, "compaction", str(msg["content"]))
             except Exception:  # indexing must never undo a committed compaction
                 log.exception("failed to index compaction summary")
-        return CompactionResult(pre, post, end - start, cid, chars, pruned, source, retries)
+        return replace(meta, pre_tokens=pre, post_tokens=post, archived=end - start)
 
     async def _rows(self, s: Any, rt: SessionRuntime) -> list[MessageRow]:
         q = select(MessageRow).where(MessageRow.session_id == rt.session_id).order_by(MessageRow.idx)
@@ -343,6 +410,9 @@ class CompactionService:
 
     async def _prune(self, rt: SessionRuntime) -> int:
         changes, reclaimed = prune_plan(rt.history)
+        cfg = self.s.settings.i4.compaction
+        skills, skill_reclaimed = skill_prune_plan(rt.history, cfg.skill_prune_min_chars, cfg.skill_prune_cap)
+        changes, reclaimed = {**changes, **skills}, reclaimed + skill_reclaimed
         if not changes or reclaimed // 4 < PRUNE_MIN_RECLAIM_TOKENS:
             return 0  # hysteresis: tiny reclaims are not worth a cache miss
         async with self.s.db.session() as s:

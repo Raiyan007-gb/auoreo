@@ -51,6 +51,8 @@ class Thresholds:
     effective: int
     auto: int
     blocking: int
+    warn: int = 0
+    """`auto − buffer` (I4 S0): the pressure where a one-time warning is emitted."""
 
 
 def thresholds(window: int, max_output: int | None = None, ratio: float | None = None) -> Thresholds:
@@ -60,7 +62,8 @@ def thresholds(window: int, max_output: int | None = None, ratio: float | None =
     reserve = min(max_output or 8192, 20_000, window // 4)
     effective = window - reserve
     auto = int(window * ratio) if ratio is not None else effective - min(13_000, window // 8)
-    return Thresholds(window, effective, auto, effective - min(3_000, window // 16))
+    blocking = effective - min(3_000, window // 16)
+    return Thresholds(window, effective, auto, blocking, max(0, auto - min(20_000, window // 8)))
 
 
 def is_real_user(m: dict[str, Any]) -> bool:

@@ -21,6 +21,7 @@ from auoreo.runtime.compaction_idle import IdleCompactor
 from auoreo.runtime.hooks import hooks_of
 from auoreo.runtime.inbox import InboxFull, InputKind, RunOptions, TurnRequest
 from auoreo.runtime.runner import AgentRunner, SessionRuntime, TurnResult
+from auoreo.runtime.session_memory import SessionMemoryWriter
 from auoreo.runtime.titles import generate_title
 from auoreo.tools.context import restore_state
 
@@ -48,6 +49,7 @@ class SessionRunCoordinator:
         self._background: set[asyncio.Task[Any]] = set()
         self._compacting: set[str] = set()  # --- I4: manual compaction holds the start lock
         self.idle = IdleCompactor(services, self.runner.compaction)  # --- G2b: S4(c)
+        self.notes = SessionMemoryWriter(services)  # --- I4: S7 session-memory notes
 
     async def runtime(self, session_id: str) -> SessionRuntime:
         rt = self._runtimes.get(session_id)
@@ -155,6 +157,7 @@ class SessionRunCoordinator:
                     log.exception("run %s crashed", req.run_id)
                     result = TurnResult(req.run_id, "failed", "", {"code": "INTERNAL"})
                 self._results[req.run_id] = result
+                await self.notes.record(rt, req.text, result)
                 if needs_title and result.status in {"completed", "max_steps"}:
                     self._spawn(generate_title(self.s, rt.session_id, req.text, result.text))
         finally:

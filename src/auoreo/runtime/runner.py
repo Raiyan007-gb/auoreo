@@ -423,6 +423,7 @@ class AgentRunner:
                 for c in calls
             ]
         await self._persist(rt, assistant)
+        self.compaction.post.clear(rt.session_id)  # --- I4: the post-compaction request went out
         await self.s.emit(
             rt.session_id,
             "message.completed",
@@ -482,7 +483,11 @@ class AgentRunner:
             temperature=temperature,
             omit_fields=tuple(variant.omit_fields) if variant else (),
             reasoning_effort=self.policy.effort(run_id, spec.agent.manifest.effort),
-            metadata={"session_id": rt.session_id, "run_id": run_id},
+            metadata={
+                "session_id": rt.session_id,
+                "run_id": run_id,
+                **self.compaction.post.marks(rt.session_id),
+            },
             variant=variant,
             turn_state=run_id,
         )
