@@ -36,6 +36,7 @@ from auoreo.gateway.types import (
     ToolCallDrop,
     Usage,
 )
+from auoreo.memory.scrubber import StreamingContextScrubber
 from auoreo.runtime.budget import OUT_OF_BAND
 from auoreo.runtime.empty import NOTES, attempts, classify, valid_call
 
@@ -81,6 +82,7 @@ class _Collect:
         self.thoughts: list[str] = []
         self.partial: dict[str, None] = {}  # call ids with streamed fragments
         self.scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
+        self.recall = StreamingContextScrubber()  # §24.3: a leaked <memory-context> never streams
         self.think = StreamRedactor()  # thinking is its own stream (`message.reasoning`, spec §17)
 
     async def emit(self, type_: str, data: dict[str, Any]) -> None:
@@ -90,6 +92,7 @@ class _Collect:
         out = self.out
         match item:
             case TextDelta(text=t):
+                t = self.recall.feed(t)
                 self.parts.append(t)
                 if safe := self.scrub.feed(t):
                     await self.emit("message.delta", {"text": safe})
@@ -125,6 +128,10 @@ class _Collect:
         await self.drop([c for c in self.partial if c not in committed])
         if thought := self.think.flush():
             await self.emit("message.reasoning", {"text": thought})
+        if rest := self.recall.flush():  # a held partial tag that never completed
+            self.parts.append(rest)
+            if safe := self.scrub.feed(rest):
+                await self.emit("message.delta", {"text": safe})
         if tail := self.scrub.flush():
             await self.emit("message.delta", {"text": tail})
         self.out.text = "".join(self.parts)

@@ -216,7 +216,7 @@ class AgentRunner:
             try:
                 top_k = (choice.arm.top_k if choice else None) or 8  # bandit arm may tune recall depth
                 query = await recall_query(self.s, rt, text)  # --- G2b: opt-in rewrite, fail-open
-                memory_block = await self.s.memory.context_block(query, limit=top_k)
+                memory_block = await self.s.memory.context_block(query, limit=top_k, session_id=sid)
             except Exception:  # recall must never fail the turn
                 log.exception("memory recall failed")
         st = self.s.settings
@@ -430,6 +430,7 @@ class AgentRunner:
                 for c in calls
             ]
         await self._persist(rt, assistant)
+        self.compaction.post.clear(rt.session_id)  # --- I4: the post-compaction request went out
         await self.s.emit(
             rt.session_id,
             "message.completed",
@@ -489,7 +490,11 @@ class AgentRunner:
             temperature=temperature,
             omit_fields=tuple(variant.omit_fields) if variant else (),
             reasoning_effort=self.policy.effort(run_id, spec.agent.manifest.effort),
-            metadata={"session_id": rt.session_id, "run_id": run_id},
+            metadata={
+                "session_id": rt.session_id,
+                "run_id": run_id,
+                **self.compaction.post.marks(rt.session_id),
+            },
             variant=variant,
             turn_state=run_id,
         )

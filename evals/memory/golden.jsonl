@@ -1,0 +1,230 @@
+{"allowed_fact_ids": ["f0001"], "as_of": "2026-10-01", "category": "prefs", "id": "q0001", "query": "which code editor does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0003"], "as_of": "2026-10-01", "category": "prefs", "id": "q0002", "query": "what does the user pick for their code editor", "scope": "user"}
+{"allowed_fact_ids": ["f0004"], "as_of": "2026-10-01", "category": "prefs", "id": "q0003", "query": "which terminal emulator does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0006"], "as_of": "2026-10-01", "category": "prefs", "id": "q0004", "query": "what does the user pick for their terminal emulator", "scope": "user"}
+{"allowed_fact_ids": ["f0007"], "as_of": "2026-10-01", "category": "prefs", "id": "q0005", "query": "which login shell does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0009"], "as_of": "2026-10-01", "category": "prefs", "id": "q0006", "query": "what does the user pick for their login shell", "scope": "user"}
+{"allowed_fact_ids": ["f0010"], "as_of": "2026-10-01", "category": "prefs", "id": "q0007", "query": "which browser does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0012"], "as_of": "2026-10-01", "category": "prefs", "id": "q0008", "query": "what does the user pick for their browser", "scope": "user"}
+{"allowed_fact_ids": ["f0013"], "as_of": "2026-10-01", "category": "prefs", "id": "q0009", "query": "which note taking app does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0015"], "as_of": "2026-10-01", "category": "prefs", "id": "q0010", "query": "what does the user pick for their note taking app", "scope": "user"}
+{"allowed_fact_ids": ["f0016"], "as_of": "2026-10-01", "category": "prefs", "id": "q0011", "query": "which keyboard layout does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0018"], "as_of": "2026-10-01", "category": "prefs", "id": "q0012", "query": "what does the user pick for their keyboard layout", "scope": "user"}
+{"allowed_fact_ids": ["f0019"], "as_of": "2026-10-01", "category": "prefs", "id": "q0013", "query": "which window manager does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0021"], "as_of": "2026-10-01", "category": "prefs", "id": "q0014", "query": "what does the user pick for their window manager", "scope": "user"}
+{"allowed_fact_ids": ["f0022"], "as_of": "2026-10-01", "category": "prefs", "id": "q0015", "query": "which git client does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0024"], "as_of": "2026-10-01", "category": "prefs", "id": "q0016", "query": "what does the user pick for their git client", "scope": "user"}
+{"allowed_fact_ids": ["f0025"], "as_of": "2026-10-01", "category": "prefs", "id": "q0017", "query": "which password manager does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0027"], "as_of": "2026-10-01", "category": "prefs", "id": "q0018", "query": "what does the user pick for their password manager", "scope": "user"}
+{"allowed_fact_ids": ["f0028"], "as_of": "2026-10-01", "category": "prefs", "id": "q0019", "query": "which music player does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0030"], "as_of": "2026-10-01", "category": "prefs", "id": "q0020", "query": "what does the user pick for their music player", "scope": "user"}
+{"allowed_fact_ids": ["f0031"], "as_of": "2026-10-01", "category": "prefs", "id": "q0021", "query": "which coffee order does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0033"], "as_of": "2026-10-01", "category": "prefs", "id": "q0022", "query": "what does the user pick for their coffee order", "scope": "user"}
+{"allowed_fact_ids": ["f0034"], "as_of": "2026-10-01", "category": "prefs", "id": "q0023", "query": "which meeting tool does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0036"], "as_of": "2026-10-01", "category": "prefs", "id": "q0024", "query": "what does the user pick for their meeting tool", "scope": "user"}
+{"allowed_fact_ids": ["f0037"], "as_of": "2026-10-01", "category": "prefs", "id": "q0025", "query": "which diagram tool does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0039"], "as_of": "2026-10-01", "category": "prefs", "id": "q0026", "query": "what does the user pick for their diagram tool", "scope": "user"}
+{"allowed_fact_ids": ["f0040"], "as_of": "2026-10-01", "category": "prefs", "id": "q0027", "query": "which color theme does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0042"], "as_of": "2026-10-01", "category": "prefs", "id": "q0028", "query": "what does the user pick for their color theme", "scope": "user"}
+{"allowed_fact_ids": ["f0043"], "as_of": "2026-10-01", "category": "prefs", "id": "q0029", "query": "which font for coding does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0045"], "as_of": "2026-10-01", "category": "prefs", "id": "q0030", "query": "what does the user pick for their font for coding", "scope": "user"}
+{"allowed_fact_ids": ["f0046"], "as_of": "2026-10-01", "category": "prefs", "id": "q0031", "query": "which calendar app does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0048"], "as_of": "2026-10-01", "category": "prefs", "id": "q0032", "query": "what does the user pick for their calendar app", "scope": "user"}
+{"allowed_fact_ids": ["f0049"], "as_of": "2026-10-01", "category": "prefs", "id": "q0033", "query": "which mail client does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0051"], "as_of": "2026-10-01", "category": "prefs", "id": "q0034", "query": "what does the user pick for their mail client", "scope": "user"}
+{"allowed_fact_ids": ["f0052"], "as_of": "2026-10-01", "category": "prefs", "id": "q0035", "query": "which task tracker does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0054"], "as_of": "2026-10-01", "category": "prefs", "id": "q0036", "query": "what does the user pick for their task tracker", "scope": "user"}
+{"allowed_fact_ids": ["f0055"], "as_of": "2026-10-01", "category": "prefs", "id": "q0037", "query": "which laptop does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0057"], "as_of": "2026-10-01", "category": "prefs", "id": "q0038", "query": "what does the user pick for their laptop", "scope": "user"}
+{"allowed_fact_ids": ["f0058"], "as_of": "2026-10-01", "category": "prefs", "id": "q0039", "query": "which phone platform does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0060"], "as_of": "2026-10-01", "category": "prefs", "id": "q0040", "query": "what does the user pick for their phone platform", "scope": "user"}
+{"allowed_fact_ids": ["f0061"], "as_of": "2026-10-01", "category": "prefs", "id": "q0041", "query": "which programming font size does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0063"], "as_of": "2026-10-01", "category": "prefs", "id": "q0042", "query": "what does the user pick for their programming font size", "scope": "user"}
+{"allowed_fact_ids": ["f0064"], "as_of": "2026-10-01", "category": "prefs", "id": "q0043", "query": "which test runner does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0066"], "as_of": "2026-10-01", "category": "prefs", "id": "q0044", "query": "what does the user pick for their test runner", "scope": "user"}
+{"allowed_fact_ids": ["f0067"], "as_of": "2026-10-01", "category": "prefs", "id": "q0045", "query": "which package manager does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0069"], "as_of": "2026-10-01", "category": "prefs", "id": "q0046", "query": "what does the user pick for their package manager", "scope": "user"}
+{"allowed_fact_ids": ["f0070"], "as_of": "2026-10-01", "category": "prefs", "id": "q0047", "query": "which linter does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0072"], "as_of": "2026-10-01", "category": "prefs", "id": "q0048", "query": "what does the user pick for their linter", "scope": "user"}
+{"allowed_fact_ids": ["f0073"], "as_of": "2026-10-01", "category": "prefs", "id": "q0049", "query": "which chat app does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0075"], "as_of": "2026-10-01", "category": "prefs", "id": "q0050", "query": "what does the user pick for their chat app", "scope": "user"}
+{"allowed_fact_ids": ["f0076"], "as_of": "2026-10-01", "category": "prefs", "id": "q0051", "query": "which cloud provider does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0078"], "as_of": "2026-10-01", "category": "prefs", "id": "q0052", "query": "what does the user pick for their cloud provider", "scope": "user"}
+{"allowed_fact_ids": ["f0079"], "as_of": "2026-10-01", "category": "prefs", "id": "q0053", "query": "which database does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0081"], "as_of": "2026-10-01", "category": "prefs", "id": "q0054", "query": "what does the user pick for their database", "scope": "user"}
+{"allowed_fact_ids": ["f0082"], "as_of": "2026-10-01", "category": "prefs", "id": "q0055", "query": "which container runtime does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0084"], "as_of": "2026-10-01", "category": "prefs", "id": "q0056", "query": "what does the user pick for their container runtime", "scope": "user"}
+{"allowed_fact_ids": ["f0085"], "as_of": "2026-10-01", "category": "prefs", "id": "q0057", "query": "which CI service does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0087"], "as_of": "2026-10-01", "category": "prefs", "id": "q0058", "query": "what does the user pick for their CI service", "scope": "user"}
+{"allowed_fact_ids": ["f0088"], "as_of": "2026-10-01", "category": "prefs", "id": "q0059", "query": "which reading device does the user prefer", "scope": "user"}
+{"allowed_fact_ids": ["f0090"], "as_of": "2026-10-01", "category": "prefs", "id": "q0060", "query": "what does the user pick for their reading device", "scope": "user"}
+{"allowed_fact_ids": ["f0091"], "as_of": "2026-10-01", "category": "conventions", "id": "q0061", "query": "what convention do we use for commit messages", "scope": "project"}
+{"allowed_fact_ids": ["f0092"], "as_of": "2026-10-01", "category": "conventions", "id": "q0062", "query": "how should commit messages be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0093"], "as_of": "2026-10-01", "category": "conventions", "id": "q0063", "query": "what convention do we use for Python formatting", "scope": "project"}
+{"allowed_fact_ids": ["f0094"], "as_of": "2026-10-01", "category": "conventions", "id": "q0064", "query": "how should Python formatting be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0095"], "as_of": "2026-10-01", "category": "conventions", "id": "q0065", "query": "what convention do we use for branch names", "scope": "project"}
+{"allowed_fact_ids": ["f0096"], "as_of": "2026-10-01", "category": "conventions", "id": "q0066", "query": "how should branch names be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0097"], "as_of": "2026-10-01", "category": "conventions", "id": "q0067", "query": "what convention do we use for database migrations", "scope": "project"}
+{"allowed_fact_ids": ["f0098"], "as_of": "2026-10-01", "category": "conventions", "id": "q0068", "query": "how should database migrations be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0099"], "as_of": "2026-10-01", "category": "conventions", "id": "q0069", "query": "what convention do we use for API errors", "scope": "project"}
+{"allowed_fact_ids": ["f0100"], "as_of": "2026-10-01", "category": "conventions", "id": "q0070", "query": "how should API errors be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0101"], "as_of": "2026-10-01", "category": "conventions", "id": "q0071", "query": "what convention do we use for feature flags", "scope": "project"}
+{"allowed_fact_ids": ["f0102"], "as_of": "2026-10-01", "category": "conventions", "id": "q0072", "query": "how should feature flags be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0103"], "as_of": "2026-10-01", "category": "conventions", "id": "q0073", "query": "what convention do we use for log lines", "scope": "project"}
+{"allowed_fact_ids": ["f0104"], "as_of": "2026-10-01", "category": "conventions", "id": "q0074", "query": "how should log lines be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0105"], "as_of": "2026-10-01", "category": "conventions", "id": "q0075", "query": "what convention do we use for dates in docs", "scope": "project"}
+{"allowed_fact_ids": ["f0106"], "as_of": "2026-10-01", "category": "conventions", "id": "q0076", "query": "how should dates in docs be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0107"], "as_of": "2026-10-01", "category": "conventions", "id": "q0077", "query": "what convention do we use for dependency upgrades", "scope": "project"}
+{"allowed_fact_ids": ["f0108"], "as_of": "2026-10-01", "category": "conventions", "id": "q0078", "query": "how should dependency upgrades be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0109"], "as_of": "2026-10-01", "category": "conventions", "id": "q0079", "query": "what convention do we use for release tags", "scope": "project"}
+{"allowed_fact_ids": ["f0110"], "as_of": "2026-10-01", "category": "conventions", "id": "q0080", "query": "how should release tags be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0111"], "as_of": "2026-10-01", "category": "conventions", "id": "q0081", "query": "what convention do we use for secrets", "scope": "project"}
+{"allowed_fact_ids": ["f0112"], "as_of": "2026-10-01", "category": "conventions", "id": "q0082", "query": "how should secrets be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0113"], "as_of": "2026-10-01", "category": "conventions", "id": "q0083", "query": "what convention do we use for code review", "scope": "project"}
+{"allowed_fact_ids": ["f0114"], "as_of": "2026-10-01", "category": "conventions", "id": "q0084", "query": "how should code review be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0115"], "as_of": "2026-10-01", "category": "conventions", "id": "q0085", "query": "what convention do we use for frontend state", "scope": "project"}
+{"allowed_fact_ids": ["f0116"], "as_of": "2026-10-01", "category": "conventions", "id": "q0086", "query": "how should frontend state be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0117"], "as_of": "2026-10-01", "category": "conventions", "id": "q0087", "query": "what convention do we use for test fixtures", "scope": "project"}
+{"allowed_fact_ids": ["f0118"], "as_of": "2026-10-01", "category": "conventions", "id": "q0088", "query": "how should test fixtures be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0119"], "as_of": "2026-10-01", "category": "conventions", "id": "q0089", "query": "what convention do we use for time zones", "scope": "project"}
+{"allowed_fact_ids": ["f0120"], "as_of": "2026-10-01", "category": "conventions", "id": "q0090", "query": "how should time zones be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0121"], "as_of": "2026-10-01", "category": "conventions", "id": "q0091", "query": "what convention do we use for SQL style", "scope": "project"}
+{"allowed_fact_ids": ["f0122"], "as_of": "2026-10-01", "category": "conventions", "id": "q0092", "query": "how should SQL style be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0123"], "as_of": "2026-10-01", "category": "conventions", "id": "q0093", "query": "what convention do we use for docstrings", "scope": "project"}
+{"allowed_fact_ids": ["f0124"], "as_of": "2026-10-01", "category": "conventions", "id": "q0094", "query": "how should docstrings be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0125"], "as_of": "2026-10-01", "category": "conventions", "id": "q0095", "query": "what convention do we use for error budgets", "scope": "project"}
+{"allowed_fact_ids": ["f0126"], "as_of": "2026-10-01", "category": "conventions", "id": "q0096", "query": "how should error budgets be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0127"], "as_of": "2026-10-01", "category": "conventions", "id": "q0097", "query": "what convention do we use for on-call handover", "scope": "project"}
+{"allowed_fact_ids": ["f0128"], "as_of": "2026-10-01", "category": "conventions", "id": "q0098", "query": "how should on-call handover be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0129"], "as_of": "2026-10-01", "category": "conventions", "id": "q0099", "query": "what convention do we use for container images", "scope": "project"}
+{"allowed_fact_ids": ["f0130"], "as_of": "2026-10-01", "category": "conventions", "id": "q0100", "query": "how should container images be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0131"], "as_of": "2026-10-01", "category": "conventions", "id": "q0101", "query": "what convention do we use for translations", "scope": "project"}
+{"allowed_fact_ids": ["f0132"], "as_of": "2026-10-01", "category": "conventions", "id": "q0102", "query": "how should translations be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0133"], "as_of": "2026-10-01", "category": "conventions", "id": "q0103", "query": "what convention do we use for benchmarks", "scope": "project"}
+{"allowed_fact_ids": ["f0134"], "as_of": "2026-10-01", "category": "conventions", "id": "q0104", "query": "how should benchmarks be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0135"], "as_of": "2026-10-01", "category": "conventions", "id": "q0105", "query": "what convention do we use for API versioning", "scope": "project"}
+{"allowed_fact_ids": ["f0136"], "as_of": "2026-10-01", "category": "conventions", "id": "q0106", "query": "how should API versioning be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0137"], "as_of": "2026-10-01", "category": "conventions", "id": "q0107", "query": "what convention do we use for design tokens", "scope": "project"}
+{"allowed_fact_ids": ["f0138"], "as_of": "2026-10-01", "category": "conventions", "id": "q0108", "query": "how should design tokens be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0139"], "as_of": "2026-10-01", "category": "conventions", "id": "q0109", "query": "what convention do we use for access reviews", "scope": "project"}
+{"allowed_fact_ids": ["f0140"], "as_of": "2026-10-01", "category": "conventions", "id": "q0110", "query": "how should access reviews be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0141"], "as_of": "2026-10-01", "category": "conventions", "id": "q0111", "query": "what convention do we use for incident reports", "scope": "project"}
+{"allowed_fact_ids": ["f0142"], "as_of": "2026-10-01", "category": "conventions", "id": "q0112", "query": "how should incident reports be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0143"], "as_of": "2026-10-01", "category": "conventions", "id": "q0113", "query": "what convention do we use for cron schedules", "scope": "project"}
+{"allowed_fact_ids": ["f0144"], "as_of": "2026-10-01", "category": "conventions", "id": "q0114", "query": "how should cron schedules be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0145"], "as_of": "2026-10-01", "category": "conventions", "id": "q0115", "query": "what convention do we use for shell scripts", "scope": "project"}
+{"allowed_fact_ids": ["f0146"], "as_of": "2026-10-01", "category": "conventions", "id": "q0116", "query": "how should shell scripts be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0147"], "as_of": "2026-10-01", "category": "conventions", "id": "q0117", "query": "what convention do we use for pull request size", "scope": "project"}
+{"allowed_fact_ids": ["f0148"], "as_of": "2026-10-01", "category": "conventions", "id": "q0118", "query": "how should pull request size be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0149"], "as_of": "2026-10-01", "category": "conventions", "id": "q0119", "query": "what convention do we use for config files", "scope": "project"}
+{"allowed_fact_ids": ["f0150"], "as_of": "2026-10-01", "category": "conventions", "id": "q0120", "query": "how should config files be done here", "scope": "project"}
+{"allowed_fact_ids": ["f0152"], "as_of": "2026-10-01", "category": "temporal", "id": "q0121", "query": "where is the billing service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0154"], "as_of": "2026-10-01", "category": "temporal", "id": "q0122", "query": "which rollout plan does the billing team own", "scope": "project"}
+{"allowed_fact_ids": ["f0156"], "as_of": "2026-10-01", "category": "temporal", "id": "q0123", "query": "where is the search service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0158"], "as_of": "2026-10-01", "category": "temporal", "id": "q0124", "query": "which rollout plan does the search team own", "scope": "project"}
+{"allowed_fact_ids": ["f0160"], "as_of": "2026-10-01", "category": "temporal", "id": "q0125", "query": "where is the checkout service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0162"], "as_of": "2026-10-01", "category": "temporal", "id": "q0126", "query": "which rollout plan does the checkout team own", "scope": "project"}
+{"allowed_fact_ids": ["f0164"], "as_of": "2026-10-01", "category": "temporal", "id": "q0127", "query": "where is the notifications service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0166"], "as_of": "2026-10-01", "category": "temporal", "id": "q0128", "query": "which rollout plan does the notifications team own", "scope": "project"}
+{"allowed_fact_ids": ["f0168"], "as_of": "2026-10-01", "category": "temporal", "id": "q0129", "query": "where is the analytics service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0170"], "as_of": "2026-10-01", "category": "temporal", "id": "q0130", "query": "which rollout plan does the analytics team own", "scope": "project"}
+{"allowed_fact_ids": ["f0172"], "as_of": "2026-10-01", "category": "temporal", "id": "q0131", "query": "where is the auth service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0174"], "as_of": "2026-10-01", "category": "temporal", "id": "q0132", "query": "which rollout plan does the auth team own", "scope": "project"}
+{"allowed_fact_ids": ["f0176"], "as_of": "2026-10-01", "category": "temporal", "id": "q0133", "query": "where is the media service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0178"], "as_of": "2026-10-01", "category": "temporal", "id": "q0134", "query": "which rollout plan does the media team own", "scope": "project"}
+{"allowed_fact_ids": ["f0180"], "as_of": "2026-10-01", "category": "temporal", "id": "q0135", "query": "where is the reporting service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0182"], "as_of": "2026-10-01", "category": "temporal", "id": "q0136", "query": "which rollout plan does the reporting team own", "scope": "project"}
+{"allowed_fact_ids": ["f0184"], "as_of": "2026-10-01", "category": "temporal", "id": "q0137", "query": "where is the ledger service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0186"], "as_of": "2026-10-01", "category": "temporal", "id": "q0138", "query": "which rollout plan does the ledger team own", "scope": "project"}
+{"allowed_fact_ids": ["f0188"], "as_of": "2026-10-01", "category": "temporal", "id": "q0139", "query": "where is the inventory service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0190"], "as_of": "2026-10-01", "category": "temporal", "id": "q0140", "query": "which rollout plan does the inventory team own", "scope": "project"}
+{"allowed_fact_ids": ["f0192"], "as_of": "2026-10-01", "category": "temporal", "id": "q0141", "query": "where is the recommendations service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0194"], "as_of": "2026-10-01", "category": "temporal", "id": "q0142", "query": "which rollout plan does the recommendations team own", "scope": "project"}
+{"allowed_fact_ids": ["f0196"], "as_of": "2026-10-01", "category": "temporal", "id": "q0143", "query": "where is the gateway service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0198"], "as_of": "2026-10-01", "category": "temporal", "id": "q0144", "query": "which rollout plan does the gateway team own", "scope": "project"}
+{"allowed_fact_ids": ["f0200"], "as_of": "2026-10-01", "category": "temporal", "id": "q0145", "query": "where is the exports service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0202"], "as_of": "2026-10-01", "category": "temporal", "id": "q0146", "query": "which rollout plan does the exports team own", "scope": "project"}
+{"allowed_fact_ids": ["f0204"], "as_of": "2026-10-01", "category": "temporal", "id": "q0147", "query": "where is the scheduler service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0206"], "as_of": "2026-10-01", "category": "temporal", "id": "q0148", "query": "which rollout plan does the scheduler team own", "scope": "project"}
+{"allowed_fact_ids": ["f0208"], "as_of": "2026-10-01", "category": "temporal", "id": "q0149", "query": "where is the payouts service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0210"], "as_of": "2026-10-01", "category": "temporal", "id": "q0150", "query": "which rollout plan does the payouts team own", "scope": "project"}
+{"allowed_fact_ids": ["f0212"], "as_of": "2026-10-01", "category": "temporal", "id": "q0151", "query": "where is the geocoding service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0214"], "as_of": "2026-10-01", "category": "temporal", "id": "q0152", "query": "which rollout plan does the geocoding team own", "scope": "project"}
+{"allowed_fact_ids": ["f0216"], "as_of": "2026-10-01", "category": "temporal", "id": "q0153", "query": "where is the webhooks service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0218"], "as_of": "2026-10-01", "category": "temporal", "id": "q0154", "query": "which rollout plan does the webhooks team own", "scope": "project"}
+{"allowed_fact_ids": ["f0220"], "as_of": "2026-10-01", "category": "temporal", "id": "q0155", "query": "where is the catalog service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0222"], "as_of": "2026-10-01", "category": "temporal", "id": "q0156", "query": "which rollout plan does the catalog team own", "scope": "project"}
+{"allowed_fact_ids": ["f0224"], "as_of": "2026-10-01", "category": "temporal", "id": "q0157", "query": "where is the profiles service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0226"], "as_of": "2026-10-01", "category": "temporal", "id": "q0158", "query": "which rollout plan does the profiles team own", "scope": "project"}
+{"allowed_fact_ids": ["f0228"], "as_of": "2026-10-01", "category": "temporal", "id": "q0159", "query": "where is the chat service deployed", "scope": "project"}
+{"allowed_fact_ids": ["f0230"], "as_of": "2026-10-01", "category": "temporal", "id": "q0160", "query": "which rollout plan does the chat team own", "scope": "project"}
+{"allowed_fact_ids": ["f0232"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0161", "query": "when is the platform team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0234"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0162", "query": "when is the payments team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0236"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0163", "query": "when is the growth team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0238"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0164", "query": "when is the mobile team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0240"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0165", "query": "when is the data team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0242"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0166", "query": "when is the security team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0244"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0167", "query": "when is the design team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0246"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0168", "query": "when is the support team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0248"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0169", "query": "when is the infra team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0250"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0170", "query": "when is the research team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0252"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0171", "query": "when is the sales team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0254"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0172", "query": "when is the legal team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0256"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0173", "query": "when is the finance team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0258"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0174", "query": "when is the hiring team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0260"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0175", "query": "when is the devrel team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0262"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0176", "query": "when is the qa team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0264"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0177", "query": "when is the ml team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0266"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0178", "query": "when is the ops team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0268"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0179", "query": "when is the web team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0270"], "as_of": "2026-10-01", "category": "contradiction", "id": "q0180", "query": "when is the api team's daily standup", "scope": "team"}
+{"allowed_fact_ids": ["f0271"], "as_of": "2026-10-01", "category": "scope", "id": "q0181", "query": "what is the team's deploy freeze window", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0273"], "as_of": "2026-10-01", "category": "scope", "id": "q0182", "query": "what is the team's staging database host", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0275"], "as_of": "2026-10-01", "category": "scope", "id": "q0183", "query": "what is the team's on-call pager tool", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0277"], "as_of": "2026-10-01", "category": "scope", "id": "q0184", "query": "what is the team's VPN endpoint", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0279"], "as_of": "2026-10-01", "category": "scope", "id": "q0185", "query": "what is the team's design review day", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0281"], "as_of": "2026-10-01", "category": "scope", "id": "q0186", "query": "what is the team's expense limit", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0283"], "as_of": "2026-10-01", "category": "scope", "id": "q0187", "query": "what is the team's support SLA", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0285"], "as_of": "2026-10-01", "category": "scope", "id": "q0188", "query": "what is the team's default branch", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0287"], "as_of": "2026-10-01", "category": "scope", "id": "q0189", "query": "what is the team's artifact registry", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0289"], "as_of": "2026-10-01", "category": "scope", "id": "q0190", "query": "what is the team's load test tool", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0291"], "as_of": "2026-10-01", "category": "scope", "id": "q0191", "query": "what is the team's status page", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0293"], "as_of": "2026-10-01", "category": "scope", "id": "q0192", "query": "what is the team's demo environment", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0295"], "as_of": "2026-10-01", "category": "scope", "id": "q0193", "query": "what is the team's feature flag service", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0297"], "as_of": "2026-10-01", "category": "scope", "id": "q0194", "query": "what is the team's error tracker", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0299"], "as_of": "2026-10-01", "category": "scope", "id": "q0195", "query": "what is the team's metrics backend", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0301"], "as_of": "2026-10-01", "category": "scope", "id": "q0196", "query": "what is the team's tracing backend", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0303"], "as_of": "2026-10-01", "category": "scope", "id": "q0197", "query": "what is the team's docs site", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0305"], "as_of": "2026-10-01", "category": "scope", "id": "q0198", "query": "what is the team's ticket prefix", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0307"], "as_of": "2026-10-01", "category": "scope", "id": "q0199", "query": "what is the team's release captain", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0309"], "as_of": "2026-10-01", "category": "scope", "id": "q0200", "query": "what is the team's backup schedule", "scope": "user", "session_id": "eval-session"}
+{"allowed_fact_ids": ["f0311"], "as_of": "2026-10-01", "category": "legacy", "id": "q0201", "query": "which editor does the user prefer for coding", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0314"], "as_of": "2026-10-01", "category": "legacy", "id": "q0202", "query": "what is the user's favourite programming language", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0317"], "as_of": "2026-10-01", "category": "legacy", "id": "q0203", "query": "where does the user live", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0320"], "as_of": "2026-10-01", "category": "legacy", "id": "q0204", "query": "what time zone should meetings use", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0323"], "as_of": "2026-10-01", "category": "legacy", "id": "q0205", "query": "how should commit messages be written", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0326"], "as_of": "2026-10-01", "category": "legacy", "id": "q0206", "query": "which database does the project use in production", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0329"], "as_of": "2026-10-01", "category": "legacy", "id": "q0207", "query": "what is the user's dog called", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0332"], "as_of": "2026-10-01", "category": "legacy", "id": "q0208", "query": "what coffee does the user drink", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0335"], "as_of": "2026-10-01", "category": "legacy", "id": "q0209", "query": "which cloud provider hosts the services", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0338"], "as_of": "2026-10-01", "category": "legacy", "id": "q0210", "query": "how does the user like test output formatted", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0341"], "as_of": "2026-10-01", "category": "legacy", "id": "q0211", "query": "what is the user's preferred shell", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0344"], "as_of": "2026-10-01", "category": "legacy", "id": "q0212", "query": "when is the user's birthday", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0347"], "as_of": "2026-10-01", "category": "legacy", "id": "q0213", "query": "what keyboard layout does the user type on", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0350"], "as_of": "2026-10-01", "category": "legacy", "id": "q0214", "query": "which LLM provider should be the default", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0353"], "as_of": "2026-10-01", "category": "legacy", "id": "q0215", "query": "what language should replies be written in", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0356"], "as_of": "2026-10-01", "category": "legacy", "id": "q0216", "query": "how should dates be formatted in reports", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0359"], "as_of": "2026-10-01", "category": "legacy", "id": "q0217", "query": "who is the user's manager", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0362"], "as_of": "2026-10-01", "category": "legacy", "id": "q0218", "query": "which music helps the user focus", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0365"], "as_of": "2026-10-01", "category": "legacy", "id": "q0219", "query": "what is the deploy process", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0368"], "as_of": "2026-10-01", "category": "legacy", "id": "q0220", "query": "does the user have any food allergies", "scope": "user", "subset": "base"}
+{"allowed_fact_ids": ["f0371"], "as_of": "2026-10-01", "category": "legacy", "id": "q0221", "query": "what database does Priya's group rely on", "scope": "user", "subset": "entity_hop"}
+{"allowed_fact_ids": ["f0374"], "as_of": "2026-10-01", "category": "legacy", "id": "q0222", "query": "which city is Tomasz's employer based in", "scope": "user", "subset": "entity_hop"}
+{"allowed_fact_ids": ["f0377"], "as_of": "2026-10-01", "category": "legacy", "id": "q0223", "query": "what pet does Lena's brother own", "scope": "user", "subset": "entity_hop"}
+{"allowed_fact_ids": ["f0380"], "as_of": "2026-10-01", "category": "legacy", "id": "q0224", "query": "what language is the Orion project written in", "scope": "user", "subset": "entity_hop"}
+{"allowed_fact_ids": ["f0383"], "as_of": "2026-10-01", "category": "legacy", "id": "q0225", "query": "when is Dana's manager on vacation", "scope": "user", "subset": "entity_hop"}
+{"allowed_fact_ids": ["f0386"], "as_of": "2026-10-01", "category": "legacy", "id": "q0226", "query": "where did Sam's company hold its offsite", "scope": "user", "subset": "entity_hop"}
+{"allowed_fact_ids": ["f0389"], "as_of": "2026-10-01", "category": "legacy", "id": "q0227", "query": "give me an overall summary of the Atlas migration", "scope": "user", "subset": "global"}
+{"allowed_fact_ids": ["f0392"], "as_of": "2026-10-01", "category": "legacy", "id": "q0228", "query": "summarize everything about the Lisbon flat", "scope": "user", "subset": "global"}
+{"allowed_fact_ids": ["f0395"], "as_of": "2026-10-01", "category": "legacy", "id": "q0229", "query": "favorite hue?", "scope": "user", "subset": "paraphrase"}
+{"allowed_fact_ids": ["f0397"], "as_of": "2026-10-01", "category": "legacy", "id": "q0230", "query": "beverage of choice at dawn", "scope": "user", "subset": "paraphrase"}

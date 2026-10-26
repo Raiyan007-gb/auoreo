@@ -7,6 +7,7 @@ idempotent, so a crash between the DDL and the version bump simply re-runs the s
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from collections.abc import Callable
 
@@ -82,7 +83,74 @@ def _v2(db: sqlite3.Connection) -> None:
     )
 
 
-STEPS: tuple[Callable[[sqlite3.Connection], None], ...] = (_v1, _v2)
+# v3 — I4 (spec §11.1, §24.3, §25.8): scopes + tenants, per-fact decay/expiry, embed_model
+# filtering + resumable re-embed state, CJK trigram FTS mirrors.
+_V3_FACT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("scope", "TEXT NOT NULL DEFAULT 'user'"),
+    ("owner_session", "TEXT"),
+    ("user_id", "TEXT"),
+    ("expires_at", "REAL"),
+    ("half_life_days", "REAL"),
+)
+_V3_CHUNK_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("scope", "TEXT NOT NULL DEFAULT 'user'"),
+    ("owner_session", "TEXT"),
+)
+# (fts table, base table, text column): trigram mirrors for CJK queries (§11.1).
+TRIGRAM: tuple[tuple[str, str, str], ...] = (
+    ("facts_tri", "facts", "content"),
+    ("chunks_tri", "chunks", "text"),
+    ("transcript_tri", "transcript", "text"),
+)
+
+
+def _trigram(db: sqlite3.Connection) -> None:
+    for tri, base, col in TRIGRAM:
+        db.execute(
+            f"CREATE VIRTUAL TABLE IF NOT EXISTS {tri} USING fts5({col}, content='{base}', "
+            f"content_rowid='id', tokenize='trigram')"
+        )
+        db.execute(
+            f"CREATE TRIGGER IF NOT EXISTS {tri}_ai AFTER INSERT ON {base} BEGIN "
+            f"INSERT INTO {tri}(rowid, {col}) VALUES (new.id, new.{col}); END"
+        )
+        db.execute(
+            f"CREATE TRIGGER IF NOT EXISTS {tri}_ad AFTER DELETE ON {base} BEGIN "
+            f"INSERT INTO {tri}({tri}, rowid, {col}) VALUES('delete', old.id, old.{col}); END"
+        )
+        db.execute(
+            f"CREATE TRIGGER IF NOT EXISTS {tri}_au AFTER UPDATE OF {col} ON {base} BEGIN "
+            f"INSERT INTO {tri}({tri}, rowid, {col}) VALUES('delete', old.id, old.{col}); "
+            f"INSERT INTO {tri}(rowid, {col}) VALUES (new.id, new.{col}); END"
+        )
+        db.execute(f"INSERT INTO {tri}({tri}) VALUES('rebuild')")
+
+
+def _v3(db: sqlite3.Connection) -> None:
+    for table, cols in (("facts", _V3_FACT_COLUMNS), ("chunks", _V3_CHUNK_COLUMNS)):
+        have = _columns(db, table)
+        for name, decl in cols:
+            if name not in have:
+                db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+    db.execute("CREATE INDEX IF NOT EXISTS facts_embed_model ON facts(embed_model)")
+    db.execute("CREATE INDEX IF NOT EXISTS chunks_embed_model ON chunks(embed_model)")
+    db.execute("CREATE INDEX IF NOT EXISTS facts_scope ON facts(tenant_id, scope)")
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'local', "
+        "created_at REAL NOT NULL)"
+    )
+    db.execute(f"INSERT OR IGNORE INTO tenants(id, kind, created_at) VALUES ('local', 'local', {_NOW})")
+    db.execute(
+        "CREATE TABLE IF NOT EXISTS reembed_state (id INTEGER PRIMARY KEY CHECK (id = 1), "
+        "embed_model TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'fact', cursor_id INTEGER NOT NULL "
+        "DEFAULT 0, done INTEGER NOT NULL DEFAULT 0, total INTEGER NOT NULL DEFAULT 0, "
+        "state TEXT NOT NULL DEFAULT 'idle', error TEXT, updated_at REAL NOT NULL)"
+    )
+    with contextlib.suppress(sqlite3.OperationalError):  # SQLite < 3.34: no trigram tokenizer
+        _trigram(db)
+
+
+STEPS: tuple[Callable[[sqlite3.Connection], None], ...] = (_v1, _v2, _v3)
 VERSION = len(STEPS)
 
 

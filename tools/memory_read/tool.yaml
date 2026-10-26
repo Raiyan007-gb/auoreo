@@ -1,0 +1,17 @@
+name: memory_read
+toolset: memory
+description: >-
+  Read a long-term memory file in full (the prompt only carries a capped excerpt):
+  MEMORY.md, USER.md, PROJECT.md, PREFS.md or a topic (`topics/<name>.md` or just the
+  topic name). Without `name`, lists the files and topics with their descriptions.
+parameters:
+  type: object
+  properties:
+    name: {type: string, maxLength: 200}
+  additionalProperties: false
+default_action: allow
+is_read_only: true
+is_concurrency_safe: true
+is_search_or_read: true
+timeout_ms: 10000
+search_hint: read memory file topic notes user profile

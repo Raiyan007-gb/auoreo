@@ -839,6 +839,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/reembed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Reembed Status */
+        get: operations["reembed_status_api_memory_reembed_get"];
+        put?: never;
+        /**
+         * Reembed Start
+         * @description Start (or resume) the background re-embed job; returns the current progress.
+         */
+        post: operations["reembed_start_api_memory_reembed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory/search": {
         parameters: {
             query?: never;
@@ -2076,6 +2097,24 @@ export interface paths {
          * @description Record an onboarding step (completed / skipped / dismissed) in the audit log.
          */
         post: operations["welcome_event_api_welcome_event_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workspace/trust": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Trust */
+        get: operations["get_trust_api_workspace_trust_get"];
+        put?: never;
+        /** Set Trust */
+        post: operations["set_trust_api_workspace_trust_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4035,6 +4074,34 @@ export interface components {
              */
             reason: string;
         };
+        /** ReembedStatus */
+        ReembedStatus: {
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
+            /** Embed Model */
+            embed_model: string;
+            /** Error */
+            error?: string | null;
+            /**
+             * Stale
+             * @description rows whose stored embed_model differs from the current one
+             * @default 0
+             */
+            stale: number;
+            /**
+             * State
+             * @description idle | running | done | failed
+             */
+            state: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
         /** ReloadResult */
         ReloadResult: {
             /** Changes */
@@ -5104,6 +5171,35 @@ export interface components {
              * @enum {string}
              */
             step: "doctor" | "credentials" | "model" | "tunnel" | "theme" | "demo" | "wizard";
+        };
+        /** WorkspaceTrust */
+        WorkspaceTrust: {
+            /**
+             * Skipped
+             * @description `kind/name` definitions skipped from `<cwd>/.auoreo` (untrusted)
+             */
+            skipped?: string[];
+            /**
+             * Trust All
+             * @description AUOREO_SECURITY_TRUST_ALL_WORKSPACES is set
+             * @default false
+             */
+            trust_all: boolean;
+            /** Trusted */
+            trusted: boolean;
+            /**
+             * Workspace
+             * @description realpath of the server's working directory
+             */
+            workspace: string;
+        };
+        /** WorkspaceTrustIn */
+        WorkspaceTrustIn: {
+            /**
+             * Revoke
+             * @default false
+             */
+            revoke: boolean;
         };
     };
     responses: never;
@@ -6940,6 +7036,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PrefsProposal"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reembed_status_api_memory_reembed_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReembedStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reembed_start_api_memory_reembed_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReembedStatus"];
                 };
             };
             /** @description Validation Error */
@@ -9836,6 +9998,76 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_trust_api_workspace_trust_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTrust"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_trust_api_workspace_trust_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["WorkspaceTrustIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceTrust"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -152,11 +152,38 @@ class SkillManifest(BaseModel):
     description: str = Field(min_length=1)
 
 
+LOOP_CHECKS = ("completed", "nonempty", "json")
+"""Built-in `loop.until: check:<name>` predicates (never shell commands: workflows are inert)."""
+
+
+class WorkflowLoop(_Strict):
+    """Ralph-lite (spec §9.3): re-run the step until `until` holds or `max_iterations`."""
+
+    until: str = Field(min_length=1)
+    """A regex searched in the step output (multiline), or `check:<completed|nonempty|json>`."""
+    max_iterations: int = Field(default=5, ge=1, le=50)
+
+    @field_validator("until")
+    @classmethod
+    def _until(cls, v: str) -> str:
+        if v.startswith("check:"):
+            if v[6:] not in LOOP_CHECKS:
+                raise ValueError(f"unknown check '{v[6:]}' (one of {', '.join(LOOP_CHECKS)})")
+            return v
+        try:
+            re.compile(v)
+        except re.error as exc:
+            raise ValueError(f"bad until regex: {exc}") from exc
+        return v
+
+
 class WorkflowStep(_Strict):
     id: str = Field(pattern=NAME_RE)
     agent: str = Field(pattern=NAME_RE)
     input: str = "{{input}}"
-    """Template; `{{input}}` and `{{steps.<id>.output}}` are available."""
+    """Template; `{{input}}`, `{{steps.<id>.output}}` and (looping steps)
+    `{{loop.iteration}}` / `{{loop.last}}` are available."""
+    loop: WorkflowLoop | None = None
 
 
 class WorkflowManifest(_Strict):

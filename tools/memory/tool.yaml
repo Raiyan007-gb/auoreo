@@ -2,11 +2,15 @@ name: memory
 toolset: memory
 description: >-
   Save durable, non-obvious knowledge for future sessions. Batch of operations, applied
-  all-or-nothing. target=fact stores a searchable fact; target=user edits USER.md
-  (who the user is); target=memory edits the MEMORY.md index; target=prefs only PROPOSES a
-  PREFS.md change (add/replace/remove) that a human must approve — it is never written
-  directly, so say so to the user and include a short `reason`.
-  Never save secrets, things derivable from the code, or temporary task state.
+  all-or-nothing. target=fact stores a searchable fact (give its `type`: user = who the user
+  is, feedback = how they want you to work, project = facts about this work with absolute
+  dates, reference = pointers to external resources); target=topic writes a
+  memory/topics/<name>.md file (+ its MEMORY.md index line); target=user edits USER.md;
+  target=memory edits the MEMORY.md index; target=prefs only PROPOSES a PREFS.md change
+  that a human must approve — it is never written directly, so say so and include a short
+  `reason`. A successful result is final: do not repeat it. On a miss the result lists
+  `current_entries` to retry with. Never save secrets, things derivable from the code, or
+  temporary task state.
 parameters:
   type: object
   properties:
@@ -24,9 +28,21 @@ parameters:
               Facts are never deleted: remove/forget archive them; replace supersedes the old
               fact. pin keeps a fact from curation; feedback rates a recalled fact (helpful).
               forget, pin, unpin and feedback are fact-only.
-          target: {type: string, enum: [fact, user, memory, prefs]}
+          target: {type: string, enum: [fact, topic, user, memory, prefs]}
           content: {type: string, maxLength: 2000}
           old_text: {type: string, description: Unique substring identifying the entry to change.}
+          type:
+            type: string
+            enum: [user, feedback, project, reference]
+            description: "fact/topic: the closed memory taxonomy (default project)."
+          scope:
+            type: string
+            enum: [session, project, user, team]
+            description: "fact only: who may recall it (default from type: user/feedback → user, project → project, reference → team)."
+          expires_at: {type: string, description: "fact only: YYYY-MM-DD after which the fact is no longer recalled."}
+          half_life_days: {type: number, exclusiveMinimum: 0, description: "fact only: rank decays by half every N days."}
+          name: {type: string, maxLength: 64, description: "topic only: topic name (file topics/<name>.md)."}
+          description: {type: string, maxLength: 150, description: "topic only: the one-line index hook."}
           helpful: {type: boolean, description: "feedback only: was the recalled fact useful?"}
           reason: {type: string, maxLength: 500, description: "prefs only: why you propose this preference."}
         required: [action, target]
@@ -35,4 +51,4 @@ parameters:
   additionalProperties: false
 default_action: allow
 timeout_ms: 30000
-search_hint: remember save fact preference long term memory
+search_hint: remember save fact preference long term memory topic

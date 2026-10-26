@@ -456,3 +456,12 @@ EXTRA_CHECKS.append(h1b_checks)
 from auoreo.core.diagnostics_i2 import i2_checks  # noqa: E402  --- I2: rotated-key pre-demote probe
 
 EXTRA_CHECKS.append(i2_checks)
+
+
+async def _i4_checks(st: Settings) -> list[Check]:  # --- I4: workspace trust, re-embed (lazy: no cycle)
+    from auoreo.core.diagnostics_i4 import i4_checks
+
+    return await i4_checks(st)
+
+
+EXTRA_CHECKS.append(_i4_checks)

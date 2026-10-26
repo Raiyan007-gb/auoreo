@@ -1,0 +1,12 @@
+{
+  "recall@10": 0.9,
+  "p95_ms": 250,
+  "categories": {
+    "contradiction": 0.95,
+    "conventions": 0.9,
+    "legacy": 0.55,
+    "prefs": 0.95,
+    "scope": 0.95,
+    "temporal": 0.95
+  }
+}

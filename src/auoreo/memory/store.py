@@ -14,23 +14,16 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import re
 import time
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from auoreo.core.sqlcipher import open_memory
 from auoreo.memory.migrations import migrate
+from auoreo.memory.store_i4 import I4StoreMixin
+from auoreo.memory.store_search import STOPWORDS, Row, SearchMixin, active, fts_query
 
 log = logging.getLogger(__name__)
-
-STOPWORDS = frozenset(
-    """
-    a an and are as at be by for from has have i in is it its me my of on or our that the
-    this to was we what when where which who why will with you your how do does did
-    """.split()  # noqa: SIM905 — compact word list
-)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS facts (
@@ -71,47 +64,17 @@ CREATE TRIGGER IF NOT EXISTS transcript_ai AFTER INSERT ON transcript BEGIN
 
 FACT_COLUMNS = (
     "id, content, category, trust, created_at, updated_at, archived_at, last_used_at, use_count, "
-    "valid_from, valid_to, supersedes_id, pinned, source"
+    "valid_from, valid_to, supersedes_id, pinned, source, scope, owner_session, user_id, expires_at, "
+    "half_life_days"
 )
 SOURCES = frozenset({"user", "agent", "curator", "ingest"})
-
-
-def active(alias: str = "") -> str:
-    """SQL predicate for retrievable facts; binds one parameter (`now`)."""
-    p = f"{alias}." if alias else ""
-    return f"{p}archived_at IS NULL AND ({p}valid_to IS NULL OR {p}valid_to > ?)"
-
-
-def fts_query(raw: str) -> str | None:
-    """Sanitize free text into a safe FTS5 query: quoted terms OR-joined.
-
-    Returns None when nothing survives — callers then return zero results instead of
-    sending an invalid MATCH expression (never an SQL error)."""
-    terms = [t for t in re.findall(r"\w+", raw.lower()) if len(t) >= 2 and t not in STOPWORDS]
-    if not terms:
-        return None
-    seen: list[str] = []
-    for t in terms:
-        if t not in seen:
-            seen.append(t)
-    return " OR ".join('"' + t.replace('"', '""') + '"' for t in seen[:32])
 
 
 def sha(text: str) -> str:
     return hashlib.sha256(" ".join(text.split()).encode()).hexdigest()
 
 
-@dataclass
-class Row:
-    kind: str  # fact | chunk | transcript
-    id: int
-    text: str
-    source: str | None
-    trust: float
-    extra: dict[str, object]
-
-
-class MemoryStore:
+class MemoryStore(SearchMixin, I4StoreMixin):
     def __init__(
         self, path: Path | str, dims: int, tenant: str = "local", *, encryption: str | None = None
     ) -> None:
@@ -123,6 +86,9 @@ class MemoryStore:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
         migrate(self.db)
+        self.trigram = (
+            self.db.execute("SELECT 1 FROM sqlite_master WHERE name='facts_tri'").fetchone() is not None
+        )
         self.vec_enabled = self._load_vec()
         self.db.commit()
 
@@ -156,12 +122,17 @@ class MemoryStore:
         embedding: list[float] | None,
         embed_model: str | None,
         source: str = "agent",
+        **meta: Any,
     ) -> tuple[int, bool]:
-        """Insert a fact; re-adding a known text revives it when archived or expired."""
+        """Insert a fact; re-adding a known text revives it when archived or expired.
+        `meta`: scope, owner_session, user_id, expires_at, half_life_days (memory.db v3);
+        `expires_at` also sets `valid_to`, so an expired fact ends like a superseded one."""
         now = time.time()
+        expires = meta.get("expires_at")
         cur = self.db.execute(
             "INSERT INTO facts(tenant_id, content, category, trust, embed_model, created_at, "
-            "updated_at, valid_from, source) VALUES (?,?,?,?,?,?,?,?,?) "
+            "updated_at, valid_from, source, scope, owner_session, user_id, expires_at, half_life_days, "
+            "valid_to) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
             "ON CONFLICT(tenant_id, content) DO NOTHING RETURNING id",
             (
                 self.tenant,
@@ -173,6 +144,12 @@ class MemoryStore:
                 now,
                 now,
                 source if source in SOURCES else "agent",
+                meta.get("scope") or "user",
+                meta.get("owner_session"),
+                meta.get("user_id"),
+                expires,
+                meta.get("half_life_days"),
+                expires,
             ),
         )
         row = cur.fetchone()
@@ -348,95 +325,6 @@ class MemoryStore:
         names = [d[0] for d in cur.description]
         return [dict(zip(names, r, strict=True)) for r in cur.fetchall()]
 
-    def active_ids(self, ids: list[int]) -> set[int]:
-        if not ids:
-            return set()
-        marks = ",".join("?" * len(ids))
-        rows = self.db.execute(
-            f"SELECT id FROM facts WHERE tenant_id=? AND id IN ({marks}) AND {active()}",
-            (self.tenant, *ids, time.time()),
-        ).fetchall()
-        return {int(r[0]) for r in rows}
-
-    def fts(self, kind: str, query: str, limit: int, include_archived: bool = False) -> list[int]:
-        q = fts_query(query)
-        if q is None:
-            return []
-        table, base = {"fact": ("facts_fts", "facts"), "chunk": ("chunks_fts", "chunks")}[kind]
-        only_active = kind == "fact" and not include_archived
-        where = f" AND {active('b')}" if only_active else ""
-        args: tuple[Any, ...] = (q, self.tenant, *((time.time(),) if only_active else ()), limit)
-        rows = self.db.execute(
-            f"SELECT f.rowid FROM {table} f JOIN {base} b ON b.id = f.rowid "
-            f"WHERE {table} MATCH ? AND b.tenant_id = ?{where} ORDER BY rank LIMIT ?",
-            args,
-        ).fetchall()
-        return [int(r[0]) for r in rows]
-
-    def knn(self, kind: str, embedding: list[float], limit: int, include_archived: bool = False) -> list[int]:
-        if not self.vec_enabled or len(embedding) != self.dims:
-            return []
-        import sqlite_vec
-
-        table = {"fact": "facts_vec", "chunk": "chunks_vec"}[kind]
-        only_active = kind == "fact" and not include_archived
-        rows = self.db.execute(
-            f"SELECT rowid FROM {table}_{self.dims} WHERE embedding MATCH ? AND k = ? ORDER BY distance",
-            (sqlite_vec.serialize_float32(embedding), limit * 2 if only_active else limit),
-        ).fetchall()
-        ids = [int(r[0]) for r in rows]
-        if only_active:  # over-fetch, then drop archived / expired facts
-            keep = self.active_ids(ids)
-            ids = [i for i in ids if i in keep]
-        return ids[:limit]
-
-    def fetch(self, kind: str, ids: list[int]) -> dict[int, Row]:
-        if not ids:
-            return {}
-        marks = ",".join("?" * len(ids))
-        if kind == "fact":
-            rows = self.db.execute(
-                f"SELECT id, content, category, trust FROM facts WHERE tenant_id=? AND id IN ({marks})",
-                (self.tenant, *ids),
-            ).fetchall()
-            return {int(r[0]): Row("fact", int(r[0]), r[1], r[2], float(r[3]), {}) for r in rows}
-        rows = self.db.execute(
-            "SELECT id, text, source, start_line, end_line, chunk_strategy, span_start, span_end "
-            f"FROM chunks WHERE tenant_id=? AND id IN ({marks})",
-            (self.tenant, *ids),
-        ).fetchall()
-        return {
-            int(r[0]): Row(
-                "chunk",
-                int(r[0]),
-                r[1],
-                r[2],
-                -1.0,
-                {"start": r[3], "end": r[4], "strategy": r[5] or "early"}
-                | {"span_start": r[6], "span_end": r[7]},
-            )
-            for r in rows
-        }
-
-    def search_transcript(self, query: str, limit: int, session_id: str | None) -> list[Row]:
-        q = fts_query(query)
-        if q is None:
-            return []
-        sql = (
-            "SELECT t.id, t.text, t.session_id, t.role FROM transcript_fts f JOIN transcript t "
-            "ON t.id = f.rowid WHERE transcript_fts MATCH ?"
-        )
-        args: list[object] = [q]
-        if session_id:
-            sql += " AND t.session_id = ?"
-            args.append(session_id)
-        sql += " ORDER BY rank LIMIT ?"
-        args.append(limit)
-        return [
-            Row("transcript", int(r[0]), r[1], r[2], -1.0, {"role": r[3]})
-            for r in self.db.execute(sql, args).fetchall()
-        ]
-
     def bump_trust(self, fact_id: int, delta: float) -> float | None:
         self.db.execute(
             "UPDATE facts SET trust = MIN(1.0, MAX(0.0, trust + ?)) WHERE id=? AND tenant_id=?",
@@ -457,3 +345,16 @@ class MemoryStore:
             self.db.execute("SELECT count(*) FROM facts WHERE archived_at IS NOT NULL").fetchone()[0]
         )
         return out
+
+
+__all__ = [
+    "FACT_COLUMNS",
+    "SCHEMA",
+    "SOURCES",
+    "STOPWORDS",
+    "MemoryStore",
+    "Row",
+    "active",
+    "fts_query",
+    "sha",
+]

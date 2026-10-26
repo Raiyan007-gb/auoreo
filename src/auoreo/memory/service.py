@@ -15,19 +15,21 @@ import asyncio
 import functools
 import logging
 import threading
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from auoreo.memory import graph, hyde, ledger
-from auoreo.memory.chunking import Chunk, chunk_text
+from auoreo.memory.chunking import Chunk, chunk_docs, chunk_text, looks_like_docs
 from auoreo.memory.contextual import batches, contextual_inputs
-from auoreo.memory.contradiction import MIN_SHARED, contradicts, top_terms
-from auoreo.memory.files import read_capped
 from auoreo.memory.rerank import RerankStats
 from auoreo.memory.rerank import apply as rerank_hits
+from auoreo.memory.scrubber import sanitize_context
+from auoreo.memory.service_i4 import I4ServiceMixin, decay, visible
 from auoreo.memory.store import MemoryStore, Row, fts_query
+from auoreo.memory.store_search import has_cjk
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -62,6 +64,8 @@ class RecallStats:
 
 
 def is_trivial(query: str) -> bool:
+    if has_cjk(query):  # a 2-character CJK word is a real query
+        return len(query.strip()) < 2
     return fts_query(query) is None or len(query.strip()) < 4
 
 
@@ -78,12 +82,10 @@ def rrf(
 
 def scrub(text: str) -> str:
     """Strip memory-context blocks that leak into user input or model output (§11.7)."""
-    import re
-
-    return re.sub(rf"<{_MEMORY_TAG}>.*?</{_MEMORY_TAG}>", "", text, flags=re.S)
+    return sanitize_context(text)
 
 
-class MemoryService:
+class MemoryService(I4ServiceMixin):
     def __init__(self, services: Services, store: MemoryStore) -> None:
         self.s = services
         self.store = store
@@ -116,6 +118,7 @@ class MemoryService:
         acquired = self._guard.acquire(timeout=10)
         try:
             self._closed = True
+            self.close_tenants()
             self.store.close()
         finally:
             if acquired:
@@ -142,9 +145,13 @@ class MemoryService:
             return None
 
     # -------------------------------------------------------------- writes
-    async def add_fact(self, content: str, category: str = "user", source: str = "agent") -> tuple[int, bool]:
+    async def add_fact(
+        self, content: str, category: str = "user", source: str = "agent", **meta: Any
+    ) -> tuple[int, bool]:
+        """`meta`: scope, owner_session, user_id, expires_at, half_life_days (memory.db v3)."""
         content = scrub(content).strip()[:2000]
         emb = await self._embed([content])
+        meta.setdefault("scope", self.s.settings.i4.memory.default_scope)
         fid, created = await self._run(
             self.store.add_fact,
             content,
@@ -153,6 +160,7 @@ class MemoryService:
             emb[0] if emb else None,
             self.cfg.embed_model,
             source,
+            **meta,
         )
         await self._index(fid, content)
         if created:
@@ -161,28 +169,6 @@ class MemoryService:
             except Exception:  # advisory only: never fail the write
                 log.exception("contradiction check failed for fact %s", fid)
         return fid, created
-
-    async def flag_contradictions(self, fact_id: int, content: str) -> list[int]:
-        """Flag (never overwrite) active facts the new one may contradict (§24.3)."""
-        terms = top_terms(content)
-        if len(terms) < MIN_SHARED:
-            return []
-        ids = [i for i in await self._run(self.store.fts, "fact", " ".join(terms), 20) if i != fact_id]
-        rows = await self._run(self.store.fetch, "fact", ids)
-        hits = [i for i in ids if i in rows and contradicts(content, rows[i].text)]
-        for existing in hits:
-            await self.s.emit("server", "memory.contradiction", {"new_id": fact_id, "existing_id": existing})
-        ledger.append(
-            self.s.settings.home,
-            [
-                {
-                    **ledger.entry("curator", "flag_contradiction", fact_id, "possible contradiction"),
-                    "existing_id": e,
-                }
-                for e in hits
-            ],
-        )
-        return hits
 
     async def replace_fact(self, fact_id: int, content: str) -> int | None:
         """Supersede `fact_id` with `content`; returns the new row's id (None if not active)."""
@@ -257,16 +243,22 @@ class MemoryService:
     async def find_facts(self, substring: str, include_archived: bool = False) -> list[tuple[int, str]]:
         return await self._run(self.store.find_facts, substring, include_archived=include_archived)
 
-    async def ingest(self, text: str, source: str, doc_id: str | None = None) -> int:
-        """Chunk + embed + store a document. Returns the number of new chunks."""
+    async def ingest(
+        self, text: str, source: str, doc_id: str | None = None, *, tier: str = "knowledge"
+    ) -> int:
+        """Chunk + embed + store a document. Returns the number of new chunks.
+        `tier`: knowledge (512/50), docs (heading-aware 900/15%, code kept whole) or auto."""
         doc_id = doc_id or uuid.uuid4().hex
         model = self.s.settings.model or "default"
-        chunks = chunk_text(
-            text,
-            self.cfg.chunk_tokens,
-            self.cfg.chunk_overlap,
-            lambda t: self.s.gateway.count_tokens(model, t),
-        )
+
+        def count(t: str) -> int:
+            return self.s.gateway.count_tokens(model, t)
+
+        i4 = self.s.settings.i4.memory
+        if tier == "docs" or (tier == "auto" and looks_like_docs(text, source)):
+            chunks = chunk_docs(text, i4.docs_chunk_tokens, i4.docs_overlap_ratio, count)
+        else:
+            chunks = chunk_text(text, self.cfg.chunk_tokens, self.cfg.chunk_overlap, count)
         embs = await self._embed_chunks(text, chunks) if chunks else None
         added = 0
         for i, c in enumerate(chunks):
@@ -313,8 +305,11 @@ class MemoryService:
         include_archived: bool = False,
         *,
         allow_aux: bool = True,
+        session_id: str | None = None,
+        scopes: frozenset[str] | None = None,
     ) -> list[Hit]:
-        """`allow_aux=False` (unattended / subagent callers) never spends a HyDE aux call."""
+        """`allow_aux=False` (unattended / subagent callers) never spends a HyDE aux call.
+        `session_id`/`scopes`: scope ACL (a `session` fact is visible to its owner only)."""
         if is_trivial(query):
             return []
         wide = max(limit * 3, 10)
@@ -325,7 +320,9 @@ class MemoryService:
         for kind in kinds:
             rankings.append([(kind, i) for i in fts[kind]])
             if emb:
-                knn = await self._run(self.store.knn, kind, emb[0], wide, include_archived)
+                knn = await self._run(
+                    self.store.knn, kind, emb[0], wide, include_archived, self.cfg.embed_model
+                )
                 rankings.append([(kind, i) for i in knn])
         weights = [1.0] * len(rankings)
         use_graph = self.cfg.graph_enabled and "fact" in kinds
@@ -345,10 +342,13 @@ class MemoryService:
             for rid, fetched in (await self._run(self.store.fetch, kind, ids)).items():
                 rows[(kind, rid)] = fetched
         hits: list[Hit] = []
+        now, use_decay = time.time(), self.s.settings.i4.memory.decay
         for key, score in fused.items():
             row = rows.get(key)
-            if row is None:
+            if row is None or not visible(row, session_id, *([scopes] if scopes else [])):
                 continue
+            if use_decay and row.kind == "fact":
+                score *= decay(row, now)
             trust = row.trust if row.kind == "fact" else self.cfg.default_trust
             if row.kind == "fact" and trust < self.cfg.min_trust:
                 continue
@@ -400,39 +400,6 @@ class MemoryService:
     async def search_sessions(self, query: str, limit: int = 8, session_id: str | None = None) -> list[Hit]:
         rows = await self._run(self.store.search_transcript, query, limit, session_id)
         return [Hit("transcript", r.id, r.text, 0.0, r.source, f"session:{r.source}") for r in rows]
-
-    async def context_block(self, query: str, *, allow_aux: bool = True, limit: int = 8) -> str:
-        """Memory text for the per-turn context snapshot (files + recalled items)."""
-        home = self.s.settings.home
-        parts: list[str] = []
-        mem = read_capped(home, "MEMORY.md", self.cfg.memory_char_limit)
-        user = read_capped(home, "USER.md", self.cfg.user_char_limit)
-        if mem:
-            parts.append(mem)
-        if user:
-            parts.append(user)
-        prefs = read_capped(home, "PREFS.md", self.cfg.user_char_limit)  # G6: approved prefs only
-        if "\n- " in prefs:
-            parts.append(prefs)
-        hits = await self.search(query, limit=limit, allow_aux=allow_aux)
-        if hits:
-            budget = self.cfg.auto_inject_tokens * 4
-            lines, used = [], 0
-            for h in hits:
-                line = f"- [{h.citation}] {h.text.strip()}"
-                if used + len(line) > budget:
-                    break
-                lines.append(line)
-                used += len(line)
-            shown = hits[: len(lines)]
-            n_f = sum(1 for h in shown if h.kind == "fact")
-            n_g = sum(1 for h in shown if h.kind == "community")
-            themes = f" + {n_g} themes" if n_g else ""
-            parts.append(
-                f"🧠 memory — recalled {n_f} facts + {len(lines) - n_f - n_g} chunks{themes}\n"
-                f"<{_MEMORY_TAG}>\n" + "\n".join(lines) + f"\n</{_MEMORY_TAG}>"
-            )
-        return "\n\n".join(parts)
 
     async def stats(self) -> dict[str, object]:
         counts = await self._run(self.store.counts)

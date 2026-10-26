@@ -40,7 +40,7 @@ def test_v1_database_upgrades_in_place(tmp_path: Path) -> None:
     _v1_db(path)
     store = MemoryStore(path, dims=8)
     try:
-        assert migrations.VERSION == 2 and migrations.user_version(store.db) == 2
+        assert migrations.VERSION >= 2 and migrations.user_version(store.db) == migrations.VERSION
         assert {"fact_entities", "fact_entities_entity", "communities"} <= _tables(store.db)
         cols = migrations._columns(store.db, "chunks")
         assert {"chunk_strategy", "span_start", "span_end", "doc_id"} <= cols
@@ -61,7 +61,7 @@ def test_v2_step_is_idempotent_and_reopen_is_a_noop(tmp_path: Path) -> None:
     db = sqlite3.connect(path)
     migrations._v2(db)  # a crash between DDL and the version bump re-runs the step
     db.commit()
-    assert migrations.migrate(db) == 2
+    assert migrations.migrate(db) == migrations.VERSION
     db.close()
 
 

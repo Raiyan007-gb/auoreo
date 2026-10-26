@@ -356,7 +356,9 @@ async def test_runner_uses_rewritten_query_only_when_enabled(
     seen: list[str] = []
 
     class Mem:
-        async def context_block(self, query: str, *, allow_aux: bool = True, limit: int = 8) -> str:
+        async def context_block(
+            self, query: str, *, allow_aux: bool = True, limit: int = 8, **_: object
+        ) -> str:
             seen.append(query)
             return ""
 

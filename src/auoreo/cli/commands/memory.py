@@ -38,12 +38,15 @@ def add(content: str, category: str = "user") -> None:
 
 
 @app.command("ingest")
-def ingest(path: Annotated[Path, typer.Argument(exists=True, dir_okay=False)]) -> None:
+def ingest(
+    path: Annotated[Path, typer.Argument(exists=True, dir_okay=False)],
+    tier: Annotated[str, typer.Option(help="knowledge | docs | auto (markdown → docs tier)")] = "auto",
+) -> None:
     """Chunk, embed and store a text/markdown file as knowledge."""
 
     async def go(svc: Services) -> int:
         assert svc.memory is not None
-        return await svc.memory.ingest(path.read_text(encoding="utf-8"), str(path.resolve()))
+        return await svc.memory.ingest(path.read_text(encoding="utf-8"), str(path.resolve()), tier=tier)
 
     typer.echo(f"{with_services(go)} new chunks")
 
@@ -185,5 +188,24 @@ def graph_show(
             }
             for c in await svc.memory.communities(level)
         ]
+
+    dump_json(with_services(go))
+
+
+@app.command("reembed")
+def reembed(
+    status: Annotated[bool, typer.Option("--status", help="Only show progress; do not run.")] = False,
+    batch: Annotated[int | None, typer.Option(help="Rows per embedding call (default 128).")] = None,
+) -> None:
+    """Re-embed rows written by a previous `memory.embed_model` (resumable; I4 §11.1)."""
+    from auoreo.memory.reembed import ReembedJob
+
+    async def go(svc: Services) -> dict[str, object]:
+        job = svc.ext.get("reembed") or ReembedJob(svc)
+        if status:
+            return (await job.status()).model_dump()
+        if job.running:
+            return (await job.run_or_join()).model_dump()
+        return (await job.run(batch=batch, throttle_s=0)).model_dump()
 
     dump_json(with_services(go))

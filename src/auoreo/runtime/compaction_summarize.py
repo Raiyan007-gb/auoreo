@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 from auoreo.gateway.aux import resolve_aux_model
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Finish, LLMRequest, TextDelta, Usage, tool_schema
+from auoreo.runtime.compaction_extras import prior_checkpoint
 from auoreo.runtime.compaction_plan import drop_oldest_group, render_transcript, text_only
 
 if TYPE_CHECKING:
@@ -36,6 +37,10 @@ WRITE_NOW = "Write the compaction summary now."
 SCOPE_NOTE = (
     "The messages before the <transcript> are the start of the conversation and stay "
     "verbatim; the <transcript> is the part being compacted. Summarize the transcript."
+)
+MERGE_NOTE = (
+    "The transcript starts from an earlier checkpoint (<previous-checkpoint>). Merge it into "
+    "your checkpoint; where it and the conversation disagree, the conversation wins."
 )
 
 
@@ -54,12 +59,14 @@ class Summary:
     model: str
     retries: int
     dropped_groups: int
+    cache_read: int = 0
 
 
 class Summarizer:
     def __init__(self, services: Services, ledger: UsageLedger | None = None) -> None:
         self.s = services
         self.ledger = ledger
+        self._cache_read: dict[str, int] = {}
 
     def _prefix(self, rt: SessionRuntime, model: str) -> tuple[str | None, tuple[dict[str, Any], ...]]:
         """The agent's system prompt + tool schemas (None/() when the agent cannot be built)."""
@@ -86,15 +93,20 @@ class Summarizer:
         if prompt is None or prompt.section.role != "compaction":
             raise SummaryError("prompts/compaction.md (role: compaction) is missing", "config")
         system, tools = self._prefix(rt, model)
-        transcript = {"role": "user", "content": f"<transcript>\n{render_transcript(middle)}\n</transcript>"}
+        body = f"<transcript>\n{render_transcript(middle)}\n</transcript>"
+        template = prompt.template
+        if (prior := prior_checkpoint(middle)) is not None:  # S5: merge the prior checkpoint
+            body = f"<previous-checkpoint>\n{prior}\n</previous-checkpoint>\n\n{body}"
+            template = f"{template}\n\n{MERGE_NOTE}"
+        transcript = {"role": "user", "content": body}
         if system is None:
             messages: tuple[dict[str, Any], ...] = (
-                {"role": "system", "content": prompt.template},
+                {"role": "system", "content": template},
                 transcript,
                 {"role": "user", "content": WRITE_NOW},
             )
         else:
-            instruction = f"{prompt.template}\n\n{SCOPE_NOTE}\n\n{WRITE_NOW}"
+            instruction = f"{template}\n\n{SCOPE_NOTE}\n\n{WRITE_NOW}"
             messages = (
                 {"role": "system", "content": system},
                 *(text_only(m) for m in head),
@@ -119,8 +131,10 @@ class Summarizer:
                 parts.append(item.text)
             elif isinstance(item, Finish):
                 finish = item.reason
-            elif isinstance(item, Usage) and self.ledger is not None:
-                await self.ledger.record(sid, cid, request.model, item)
+            elif isinstance(item, Usage):
+                self._cache_read[cid] = self._cache_read.get(cid, 0) + item.cached_tokens
+                if self.ledger is not None:
+                    await self.ledger.record(sid, cid, request.model, item)
         return "".join(parts).strip(), finish
 
     async def summarize(
@@ -159,7 +173,7 @@ class Summarizer:
                 raise SummaryError(reason, "length")
             if not text:
                 raise SummaryError("summarizer returned no text", "empty")
-            return Summary(text, group, rung + dropped, dropped)
+            return Summary(text, group, rung + dropped, dropped, self._cache_read.pop(cid, 0))
 
 
 __all__ = ["SUMMARY_MAX_TOKENS", "WRITE_NOW", "Summarizer", "Summary", "SummaryError"]

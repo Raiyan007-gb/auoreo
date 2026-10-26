@@ -5,11 +5,19 @@ async def run(args: dict, ctx: ToolContext) -> str:
     mem = ctx.services.get("memory")
     if mem is None:
         raise ToolError("memory store is disabled")
+    tenant = args.get("tenant")
+    if tenant:  # cross-tenant reads are refused + audited (tenant-deny)
+        try:
+            await mem.authorize_tenant(tenant, session_id=ctx.session_id, tool="knowledge_search")
+        except PermissionError as exc:
+            raise ToolError(str(exc)) from None
+        mem = mem.for_tenant(tenant)
     hits = await mem.search(
         args["query"],
         limit=int(args.get("limit", 8)),
         include_archived=bool(args.get("include_archived")),
         allow_aux=ctx.interactive,  # no HyDE aux call from unattended (job/webhook) sessions
+        session_id=ctx.session_id,
     )
     if not hits:
         return "no results"

@@ -17,6 +17,8 @@ import logging
 from functools import partial
 from typing import TYPE_CHECKING
 
+from auoreo.runtime.compaction_i4 import hygiene_due
+
 if TYPE_CHECKING:
     from auoreo.core.services import Services
     from auoreo.runtime.compaction import CompactionService
@@ -30,6 +32,8 @@ class IdleCompactor:
         self.s = services
         self.comp = compaction
         self._tasks: dict[str, asyncio.Task[None]] = {}
+        self._needed: set[str] = set()
+        """Sessions whose idle compaction runs at ≥ hygiene pressure (I4 10 s turn-hold)."""
 
     @property
     def after_s(self) -> float | None:
@@ -58,7 +62,10 @@ class IdleCompactor:
         task = self._tasks.get(sid)
         if task is None or task.done():
             return
-        if sid not in self.comp.committing:
+        hold = self.s.settings.i4.compaction.hygiene_hold_s
+        if sid in self._needed and sid not in self.comp.committing and hold > 0:
+            await asyncio.wait({task}, timeout=hold)  # turn-hold: the compaction is needed anyway
+        if not task.done() and sid not in self.comp.committing:
             task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await task
@@ -70,10 +77,17 @@ class IdleCompactor:
         if rt.running or rt.inbox.next_turn or self.comp.tripped(rt.session_id):
             return
         model = self.comp._model(rt)
-        if self.comp.tokens(model, rt.history) < self.s.settings.compaction.idle_min_tokens:
+        tokens = self.comp.tokens(model, rt.history)
+        if tokens < self.s.settings.compaction.idle_min_tokens:
             return
-        with contextlib.suppress(CompactionError):  # failures are emitted + counted by the service
-            await self.comp.compact(rt.session_id, trigger="idle", rt=rt, model=model)
+        window = self.s.gateway.context_window(model)
+        if hygiene_due(self.s.settings.i4.compaction, window, tokens):
+            self._needed.add(rt.session_id)
+        try:
+            with contextlib.suppress(CompactionError):  # failures are emitted + counted by the service
+                await self.comp.compact(rt.session_id, trigger="idle", rt=rt, model=model)
+        finally:
+            self._needed.discard(rt.session_id)
 
     async def shutdown(self) -> None:
         tasks = list(self._tasks.values())

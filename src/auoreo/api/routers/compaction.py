@@ -7,6 +7,7 @@ from sqlalchemy import select
 from auoreo.api.deps import AUTH, ServicesDep
 from auoreo.core.db import MessageArchiveRow
 from auoreo.runtime.compaction import CompactionError
+from auoreo.runtime.coordinator import SessionBusy
 from auoreo.schema.chat import ArchivedMessage, CompactionOut, CompactRequest
 
 router = APIRouter(prefix="/api/sessions", tags=["compaction"], dependencies=AUTH)
@@ -16,13 +17,18 @@ router = APIRouter(prefix="/api/sessions", tags=["compaction"], dependencies=AUT
 async def compact(session_id: str, svc: ServicesDep, body: CompactRequest | None = None) -> CompactionOut:
     if await svc.get_session(session_id) is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "session not found")
-    if svc.coordinator.is_running(session_id):
-        raise HTTPException(status.HTTP_409_CONFLICT, "session is running; compact when idle")
     try:
         body = body or CompactRequest()
-        res = await svc.coordinator.runner.compaction.compact(
-            session_id, trigger="manual", retain_ratio=body.retain_ratio, up_to=body.up_to, from_=body.from_
-        )
+        async with svc.coordinator.compaction_lock(session_id):  # S4(d): idle only, start lock held
+            res = await svc.coordinator.runner.compaction.compact(
+                session_id,
+                trigger="manual",
+                retain_ratio=body.retain_ratio,
+                up_to=body.up_to,
+                from_=body.from_,
+            )
+    except SessionBusy as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "session is running; compact when idle") from exc
     except CompactionError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exc.reason) from exc
     return CompactionOut(

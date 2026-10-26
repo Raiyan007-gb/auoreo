@@ -60,6 +60,7 @@ from auoreo.api.routers import suggestions as suggestions_router
 from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import voice as voice_router
 from auoreo.api.routers import webhooks as webhooks_router
+from auoreo.api.routers import workspace as workspace_router  # --- I4
 from auoreo.api.teardown import teardown  # --- H5
 from auoreo.automation.webhooks import enforce_secrets  # --- G1a
 from auoreo.core import logjson  # --- G5c
@@ -116,6 +117,7 @@ ROUTERS = (
     session_extras_router,  # --- G7: session plan + per-session MCP/plugin toggles
     skills_hub_router,  # --- G6: skill sources + hub approve
     secrets_router,  # --- I2: names-only list, write-through + rotate (hot reload)
+    workspace_router,  # --- I4: workspace trust
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

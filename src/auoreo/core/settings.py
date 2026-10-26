@@ -32,6 +32,7 @@ from auoreo.core.settings_h5 import H5Settings  # --- H5
 from auoreo.core.settings_http import HttpSecuritySettings, WebhookSettings  # --- G1a
 from auoreo.core.settings_i2 import I2Settings  # --- I2
 from auoreo.core.settings_i3 import I3Settings  # --- I3
+from auoreo.core.settings_i4 import I4Settings  # --- I4
 from auoreo.core.settings_models import (
     LiveKitSettings,
     LiveKitSipSettings,
@@ -96,6 +97,7 @@ class Settings(BaseSettings):
     memory: MemorySettings = Field(default_factory=MemorySettings)
     loop: LoopSettings = Field(default_factory=LoopSettings)
     compaction: CompactionSettings = Field(default_factory=CompactionSettings)  # --- G2b
+    i4: I4Settings = Field(default_factory=I4Settings)  # --- I4
     extra_roots: list[Path] = Field(default_factory=list)
     """Additional definition roots (lowest precedence after bundled), e.g. `.claude`."""
     max_cost_usd: float | None = None
