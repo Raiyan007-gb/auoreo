@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import func, select
 
+from auoreo.core import logjson
 from auoreo.core import observability as obs
 from auoreo.core.db import MessageRow
 from auoreo.core.permissions import PermissionEngine
@@ -232,7 +233,10 @@ class AgentRunner:
             emit=emit,
             services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec},
         )
-        with obs.span("agent.run", model=spec.model, agent=spec.name) as span:  # --- W0-D
+        with (
+            obs.span("agent.run", model=spec.model, agent=spec.name) as span,  # --- W0-D
+            logjson.bound(session_id=sid, run_id=run_id),  # --- G5c: JSON log linkage
+        ):
             result = await self._watched(rt, spec, engine, ctx, run_id, context, turn_msg, options, turn)
             span.set("status", result.status)
             obs.count("run_completed_total", status=result.status)

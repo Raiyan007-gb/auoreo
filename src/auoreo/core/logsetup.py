@@ -44,6 +44,9 @@ class JsonLineFormatter(logging.Formatter):
 
 def _log_format(settings: Settings | None) -> str:
     sec = getattr(settings, "security", None)
+    obs = getattr(settings, "logging", None)  # G5c `logging.format=json` selects JSON lines too
+    if str(getattr(obs, "format", "text")) == "json":
+        return "json"
     return str(getattr(sec, "log_format", "text"))
 
 

@@ -44,6 +44,7 @@ from auoreo.api.routers import goals as goals_router
 from auoreo.api.routers import hooks as hooks_router
 from auoreo.api.routers import kanban as kanban_router
 from auoreo.api.routers import meetings as meetings_router  # --- F4
+from auoreo.api.routers import metrics as metrics_router  # --- G5c
 from auoreo.api.routers import openai_compat as openai_compat_router
 from auoreo.api.routers import ops as ops_router  # --- W0-B
 from auoreo.api.routers import plugins as plugins_router
@@ -54,6 +55,7 @@ from auoreo.api.routers import teams as teams_router
 from auoreo.api.routers import voice as voice_router
 from auoreo.api.routers import webhooks as webhooks_router
 from auoreo.automation.webhooks import enforce_secrets  # --- G1a
+from auoreo.core import logjson  # --- G5c
 from auoreo.core import observability as obs
 from auoreo.core.paths import web_dist_dir
 from auoreo.core.services import Services
@@ -100,6 +102,7 @@ ROUTERS = (
     meetings_router,
     # --- G5b
     context_router,
+    metrics_router,  # --- G5c: GET /metrics
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h
@@ -148,6 +151,7 @@ def create_app(
     web_dist: Path | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
+    logjson.configure(settings)  # --- G5c: no-op unless logging.format = json
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

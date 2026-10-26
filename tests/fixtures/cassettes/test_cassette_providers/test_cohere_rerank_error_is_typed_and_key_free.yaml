@@ -1,0 +1,34 @@
+interactions:
+- request:
+    body: '{"model":"rerank-v9-missing","query":"q","documents":["a"],"top_n":1}'
+    headers:
+      accept:
+      - '*/*'
+      accept-encoding:
+      - gzip, deflate
+      authorization:
+      - REDACTED
+      connection:
+      - keep-alive
+      content-length:
+      - '70'
+      content-type:
+      - application/json
+      host:
+      - api.cohere.com
+      user-agent:
+      - python-httpx/0.28.1
+    method: POST
+    uri: https://api.cohere.com/v2/rerank
+  response:
+    body:
+      string: '{"id":"0d6c8a52-7e2b-4f1a-b3c9-1e5d7f9a2b40","message":"model ''rerank-v9-missing'' not found, make sure the correct model ID was used and that you have access to the model."}'
+    headers:
+      content-type:
+      - application/json
+      date:
+      - Sun, 25 Oct 2026 12:00:01 GMT
+    status:
+      code: 404
+      message: Not Found
+version: 1

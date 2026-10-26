@@ -1,0 +1,7 @@
+# pre-commit hooks (`pre-commit install`). Append new repos below; keep existing entries.
+repos:
+  # --- G5c: secret scan of staged changes (config + allowlists in .gitleaks.toml)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks

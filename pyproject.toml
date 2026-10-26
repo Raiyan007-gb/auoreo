@@ -34,6 +34,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.1.6,<2.2",
     "sqlite-vec==0.1.*",
     "starlark-pyo3>=2026.1.3",
+    "structlog>=25.4,<26",
     "typer>=0.27.3,<0.28",
     "uvicorn[standard]>=0.54.0,<0.55",
 ]
@@ -116,11 +117,14 @@ dev = [
     "paho-mqtt>=2.1,<3",  # W2-D: plugins/mqtt is imported in process by its unit tests
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7",
     "pytest-httpx>=0.36.2",
+    "pytest-recording>=0.13",
     "ruff>=0.17.2",
     "types-croniter>=6.2.4.20261006",
     "types-jsonschema>=4.26.0.20261006",
     "types-pyyaml>=6.0.12",
+    "vcrpy>=7",
 ]
 
 [tool.ruff]
@@ -156,3 +160,13 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 addopts = "-q"
 filterwarnings = ["ignore:Item .* is using the `ReadOnly` qualifier:UserWarning"]
+
+# --- G5c: coverage gate (scripts/coverage.sh + the `coverage` CI job; not in default addopts)
+[tool.coverage.run]
+source = ["auoreo"]
+omit = ["*/auoreo/_bundled/*"]
+
+[tool.coverage.report]
+fail_under = 0  # the global floor lives in scripts/coverage.sh (COV_FLOOR) so CI and local agree
+skip_empty = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "@(abc\\.)?abstractmethod"]

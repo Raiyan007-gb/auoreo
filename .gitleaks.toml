@@ -1,0 +1,36 @@
+# gitleaks config (G5c): the built-in rules plus allowlists for deliberate fake secrets.
+# Used by .github/workflows/secret-scan.yml and the pre-commit hook in .pre-commit-config.yaml.
+# Never allowlist a path outside tests/ or generated files: real code must stay scanned.
+title = "auoreo"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "test fixtures, cassettes and test modules (fake keys exercise redaction/filters)"
+paths = [
+  '''^tests/fixtures/''',
+  '''^tests/.*\.py$''',
+  '''^web/e2e/''',
+  '''^plugins/[^/]+/tests/''',
+]
+
+[[allowlists]]
+description = "lockfiles and generated contracts (hashes and schema examples, no secrets)"
+paths = [
+  '''(^|/)uv\.lock$''',
+  '''(^|/)package-lock\.json$''',
+  '''^web/sdk/openapi\.json$''',
+  '''^web/sdk/types\.gen\.ts$''',
+  '''^sdk/python/auoreo_client/''',
+]
+
+[[allowlists]]
+description = "placeholders and already-redacted values"
+regexTarget = "match"
+regexes = [
+  '''REDACTED''',
+  '''«redacted[^»]*»''',
+  '''(?i)(placeholder|example|dummy|changeme|your[-_]?(api[-_]?)?key)''',
+  '''\*\*\*''',
+]
