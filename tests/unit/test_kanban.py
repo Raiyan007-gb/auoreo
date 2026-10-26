@@ -70,7 +70,7 @@ async def test_auto_block_after_two_failures(services: Services) -> None:
     second = await kb.block(task.id, "still failing", "w2")
     assert second.status == "blocked" and second.failures == 2
     assert await kb.claim("b4", "w3") is None
-    blocked = [d for t, d in await server_events(services) if t == "kanban.task_blocked"]
+    blocked = [d for t, d in await server_events(services) if t == "kanban.blocked"]
     assert blocked == [{"id": task.id, "board": "b4", "worker": "w2"}]
     assert [c.text for c in await kb.comments(task.id)] == ["blocked: tests fail", "blocked: still failing"]
 
@@ -99,4 +99,4 @@ async def test_kanban_tools_round_trip(services: Services) -> None:
     assert not err and text == "no ready task on this board"
     text, err = await call_tool(services, ctx, "kanban_block", {"task_id": 999, "reason": "x"})
     assert err and "unknown kanban task 999" in text
-    assert any(t == "kanban.task_done" for t, _ in await server_events(services))
+    assert any(t == "kanban.done" for t, _ in await server_events(services))

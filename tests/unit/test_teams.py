@@ -56,7 +56,7 @@ async def test_foreground_delegate_runs_child_and_returns_task_notification(
     assert len(child_rows) == 1 and child_rows[0].agent == "planner" and child_rows[0].title == "kid"
     assert f"<task-id>{child_rows[0].id}</task-id>" in note
     kinds = [t for t, _ in await events_of(services, parent) if t.startswith("subagent.")]
-    assert kinds == ["subagent.spawn_requested", "subagent.started", "subagent.completed"]
+    assert kinds == ["subagent.spawn_requested", "subagent.start", "subagent.complete"]
 
     team = await teams_of(services).team_of(parent)
     assert team is not None and team.lead_session_id == parent and team.name == team.id
@@ -121,7 +121,7 @@ async def test_concurrency_cap_queues_the_fourth_child(services: Services, gatew
         )
     await asyncio.sleep(0.2)
     assert [m.status for m in members] == ["running", "running", "running", "queued"]
-    assert teams._running[parent] == 3
+    assert teams.fleet.running[parent] == 3
     queued = [d for t, d in await events_of(services, parent) if t == "subagent.queued"]
     assert queued == [
         {
@@ -139,7 +139,7 @@ async def test_concurrency_cap_queues_the_fourth_child(services: Services, gatew
         await teams.wait(team.id, m.name, 10_000)
     assert [m.status for m in members] == ["completed"] * 4
     assert [m.text for m in members] == [f"slow {i} done" for i in range(4)]
-    assert teams._running[parent] == 0 and teams._fleet == 0
+    assert teams.fleet.running[parent] == 0 and teams.fleet.total == 0
 
 
 async def test_output_schema_mismatch_retries_once_then_succeeds(
@@ -222,7 +222,9 @@ async def test_wait_agent_returns_when_child_finishes(services: Services, gatewa
     await teams.spawn(parent, agent="default", prompt="CHILD-WAIT", name="slow", background=True)
     ctx = tool_ctx(services, parent)
     text, err = await call_tool(services, ctx, "wait_agent", {"name": "slow", "timeout_ms": 10})
-    assert not err and "timed_out=True" in text and "running=True" in text  # clamped to 1 s
+    assert err and "timeout_ms" in text  # schema bounds 1000..300000 ms
+    text, err = await call_tool(services, ctx, "wait_agent", {"name": "slow", "timeout_ms": 1000})
+    assert not err and "timed_out=True" in text and "running=True" in text
     gate.set()
     text, err = await call_tool(services, ctx, "wait_agent", {"name": "slow", "timeout_ms": 10_000})
     assert not err and "status=completed" in text and "finished work" in text

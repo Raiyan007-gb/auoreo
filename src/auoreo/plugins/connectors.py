@@ -4,6 +4,9 @@ final answer goes back through the plugin's delivery.
 
 State lives in files under `<home>/plugins/<name>/` (and the allowlist in `settings.json`) so
 `auoreo plugin pair` works from another process while the server is running.
+
+`/approve`, `/deny [reason]`, `/approve all` and `/pending` from a paired owner chat answer
+pending approvals instead of starting a run (`plugins.chat_approvals`, spec §19.9).
 """
 
 from __future__ import annotations
@@ -124,11 +127,23 @@ class InboundRouter:
         chat_id, text = str(params.get("chat_id", "")), str(params.get("text", ""))
         if not chat_id or not text.strip():
             return {"ok": False, "detail": "empty message"}
+        from auoreo.plugins.chat_approvals import ApprovalNotifier, handle_command, is_command
+
+        meta = {"reply_to": params.get("reply_to"), "connector": params.get("name")}
+        if is_command(text):
+            answer = await handle_command(self.s, self.plugin, chat_id, text)
+            receipt = await send(chat_id, answer, meta)
+            return {"ok": bool(receipt.get("ok")), "command": True, "detail": receipt.get("detail")}
         sid = await self.session_for(chat_id, str(params.get("user", "")), agent)
-        run_id = await self.s.coordinator.submit(sid, text, interactive=False)
+        interactive = bool(self.s.settings.teams2.chat_approvals)
+        run_id = await self.s.coordinator.submit(sid, text, interactive=interactive)
         reply = "(done)"
         if run_id is not None:
-            await self.s.coordinator.wait(sid, self.timeout_s)
+            if interactive:
+                async with ApprovalNotifier(self.s, sid, chat_id, send):
+                    await self.s.coordinator.wait(sid, self.timeout_s)
+            else:
+                await self.s.coordinator.wait(sid, self.timeout_s)
             result = self.s.coordinator.result(run_id)
             if result is None:
                 reply = "(no answer)"
@@ -136,8 +151,7 @@ class InboundRouter:
                 reply = result.text or "(empty answer)"
             else:
                 reply = f"(run {result.status}: {(result.error or {}).get('message', '')})".strip()
-        meta = {"reply_to": params.get("reply_to"), "session_id": sid, "connector": params.get("name")}
-        receipt = await send(chat_id, reply, meta)
+        receipt = await send(chat_id, reply, {**meta, "session_id": sid})
         return {
             "ok": bool(receipt.get("ok")),
             "session_id": sid,

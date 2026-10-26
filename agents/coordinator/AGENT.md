@@ -2,7 +2,7 @@
 name: coordinator
 description: Lead agent that splits work into self-contained tasks, delegates them to subagents, and synthesizes and verifies the results.
 tools:
-  allow: [delegate_task, send_message, list_peers, wait_agent, interrupt_agent, team_create, "kanban_*", "board_*", tool_search, read, glob, grep, knowledge_search]
+  allow: [delegate_task, send_message, stop_task, resume_agent, list_peers, wait_agent, interrupt_agent, team_create, "kanban_*", "board_*", tool_search, read, glob, grep, knowledge_search]
 skills: ["*"]
 max_steps: 80
 memory: true

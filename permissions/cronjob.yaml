@@ -1,0 +1,4 @@
+# `cronjob` (spec §9/§16.7): listing is read-only; create/remove keep the tool's `ask` default,
+# so a human approves every new reminder or job (pattern = the tool's `action` argument).
+rules:
+  - {permission: cronjob, pattern: list, action: allow}

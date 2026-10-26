@@ -1,0 +1,26 @@
+name: cronjob
+toolset: automation
+description: >-
+  Schedule work for later: create a reminder ("in 20m", an ISO time) or a recurring job
+  ("0 9 * * 1-5", "every 2h") that runs an agent with a prompt in its own session and
+  delivers the result; list jobs; remove one you created. dry_run=true validates and
+  shows the next 5 fire times without saving. Creating a job asks the user first.
+parameters:
+  type: object
+  properties:
+    action: {type: string, enum: [create, list, remove], default: list}
+    name: {type: string, pattern: "^[a-z][a-z0-9_]{0,63}$", description: "create/remove: job name."}
+    schedule: {type: string, minLength: 1, maxLength: 200, description: "create: 5-field cron | every <n>m|h|d | in <n>m|h|d | ISO datetime."}
+    prompt: {type: string, minLength: 1, maxLength: 20000, description: "create: what the agent should do; {{now}} and {{job}} are available."}
+    description: {type: string, maxLength: 500}
+    tz: {type: string, maxLength: 64, description: IANA time zone for cron schedules.}
+    agent: {type: string, pattern: "^[a-z][a-z0-9_]*$", default: default}
+    deliver: {type: array, items: {type: string, minLength: 1, maxLength: 200}, maxItems: 5, description: "Delivery targets (default [log])."}
+    timeout_s: {type: integer, minimum: 10, maximum: 86400, description: Hard interrupt for each run (default 180s).}
+    dry_run: {type: boolean, default: false}
+  additionalProperties: false
+pattern_arg: action
+default_action: ask
+interactive_only: false
+timeout_ms: 60000
+search_hint: cron schedule reminder remind later recurring job timer

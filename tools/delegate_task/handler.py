@@ -1,8 +1,12 @@
-"""delegate_task: one subagent (`goal`) or a batch (`tasks[]`, spec §16.1) run with at most
-`settings.tools.delegate_batch_concurrency` (3) children at a time; a foreground batch joins
-every child's <task-notification> into one result, in task order."""
+"""delegate_task (spec §16.1/§16.2/§25.11): `action=spawn` (default) runs one subagent (`goal`)
+or a batch (`tasks[]`, at most `settings.tools.delegate_batch_concurrency` (3) at a time; a
+foreground batch joins every child's <task-notification> into one result, in task order).
+`mode=fork` seeds the child with a summary of this conversation; `budget{max_tokens,max_usd,
+timeout_ms}` bounds it. `action=list|steer|stop` manage this session's children; they are
+synchronous and bypass the pause switch and the depth limit."""
 
 import asyncio
+import json
 import uuid
 from typing import Any
 
@@ -19,7 +23,9 @@ def _prompt(task: dict[str, Any]) -> str:
     return prompt
 
 
-async def _spawn(teams: Any, ctx: ToolContext, task: dict[str, Any], name: str, background: bool) -> Any:
+async def _spawn(
+    teams: Any, ctx: ToolContext, task: dict[str, Any], name: str, background: bool, args: dict
+) -> Any:
     return await attempt(
         teams.spawn(
             ctx.session_id,
@@ -30,6 +36,8 @@ async def _spawn(teams: Any, ctx: ToolContext, task: dict[str, Any], name: str, 
             model=task.get("model"),
             output_schema=task.get("output_schema"),
             role=task.get("role"),
+            mode=task.get("mode") or args.get("mode") or "spawn",
+            budget=task.get("budget") or args.get("budget"),
         )
     )
 
@@ -37,8 +45,15 @@ async def _spawn(teams: Any, ctx: ToolContext, task: dict[str, Any], name: str, 
 async def _single(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     name = args.get("name") or f"task_{uuid.uuid4().hex[:6]}"
     background = bool(args.get("background", False))
-    member = await _spawn(teams, ctx, args, name, background)
-    meta = {"task_id": member.task_id, "name": name, "agent": member.agent, "team": member.team_id}
+    member = await _spawn(teams, ctx, args, name, background, args)
+    meta = {
+        "task_id": member.task_id,
+        "subagent_id": member.task_id,
+        "name": name,
+        "agent": member.agent,
+        "team": member.team_id,
+        "role": member.role,
+    }
     if background:
         return ToolResult(
             f"Started background task '{name}' (task-id {member.task_id}, agent {member.agent}). "
@@ -78,7 +93,7 @@ async def _batch(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     async def one(task: dict[str, Any], name: str) -> tuple[str, Any]:
         async with gate:
             try:
-                return name, await _spawn(teams, ctx, task, name, background)
+                return name, await _spawn(teams, ctx, task, name, background, args)
             except ToolError as exc:
                 return name, exc
 
@@ -104,14 +119,57 @@ async def _batch(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     return ToolResult("\n\n".join([head, *parts]), is_error=done == 0, meta={"tasks": rows})
 
 
-async def run(args: dict, ctx: ToolContext) -> ToolResult:
-    teams = teams_for(ctx)
+def _ref(args: dict) -> str:
+    ref = args.get("subagent_id") or args.get("name")
+    if not ref:
+        raise ToolError(f"action={args.get('action')} needs subagent_id (task id or name)")
+    return str(ref)
+
+
+async def _list(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
+    rows = await attempt(teams.control.children(ctx.session_id))
+    lines = [
+        f"- {r['name']} ({r['agent']}, {r['role'] or '?'}) id={r['subagent_id']} "
+        f"status={r['status']} running={r['running']}"
+        for r in rows
+    ]
+    paused = " (delegation is paused)" if teams.control.paused else ""
+    head = f"{len(rows)} subagent(s){paused}"
+    return ToolResult(
+        "\n".join([head, *lines]), meta={"subagents": json.loads(json.dumps(rows, default=str))}
+    )
+
+
+async def _steer(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
+    if not args.get("message"):
+        raise ToolError("action=steer needs message")
+    out = await attempt(teams.control.steer(ctx.session_id, _ref(args), str(args["message"])))
+    return ToolResult(f"steered {out['name']}: the message arrives at its next step", meta=out)
+
+
+async def _stop(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
+    out = await attempt(teams.control.stop(ctx.session_id, _ref(args)))
+    text = f"stopped {out['name']}" if out["stopped"] else f"{out['name']} was not running"
+    return ToolResult(text, meta=out)
+
+
+async def _spawn_action(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     depth = await teams.depth(ctx.session_id)
     if depth >= teams.max_depth:
         raise ToolError(
             f"delegate_task is not available to leaf agents (depth {depth} >= "
             f"teams_max_depth={teams.max_depth}); do the task yourself"
         )
+    if teams.roles.get(ctx.session_id) == "leaf":
+        raise ToolError("delegate_task is not available to leaf subagents; do the task yourself")
     if bool(args.get("goal")) == bool(args.get("tasks")):
         raise ToolError("give either goal (one task) or tasks[] (a batch), not both")
     return await (_batch(teams, ctx, args) if args.get("tasks") else _single(teams, ctx, args))
+
+
+ACTIONS = {"spawn": _spawn_action, "list": _list, "steer": _steer, "stop": _stop}
+
+
+async def run(args: dict, ctx: ToolContext) -> ToolResult:
+    teams = teams_for(ctx)
+    return await ACTIONS[str(args.get("action") or "spawn")](teams, ctx, args)

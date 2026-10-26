@@ -14,6 +14,9 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from auoreo.harness.manifests_webhook import WebhookFilter as WebhookFilter  # re-export
+from auoreo.harness.manifests_webhook import WebhookManifest as WebhookManifest  # re-export
+
 NAME_RE = r"^[a-z][a-z0-9_]*$"
 SLUG_RE = r"^[a-z0-9][a-z0-9._-]*$"
 
@@ -240,6 +243,7 @@ HookEvent = Literal[
     "PostCompact",
     "Stop",
     "SubagentStop",
+    "transform",
 ]
 
 
@@ -292,50 +296,9 @@ class JobManifest(_Strict):
     enabled: bool = True
     catch_up: bool = True
     """Fire once if a run was missed while the server was down (within half a period, max 2h)."""
-    timeout_s: int = Field(default=900, ge=10, le=86_400)
+    timeout_s: int | None = Field(default=None, ge=10, le=86_400)
+    """Hard interrupt per run; default `teams2.job_timeout_s` (spec §16.7: 3 minutes)."""
     max_steps: int | None = Field(default=None, ge=1, le=500)
-
-
-class WebhookFilter(_Strict):
-    field: str
-    """Dotted path into the normalized payload, e.g. `action` or `pull_request.draft`."""
-    equals: str | None = None
-    contains: str | None = None
-    regex: str | None = None
-    exists: bool | None = None
-
-
-class WebhookManifest(_Strict):
-    """`webhooks/<route>.yaml` → `POST /hooks/<route>`. Verified (HMAC) and enqueued before
-    202 is returned; the agent runs in its own session afterwards."""
-
-    name: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
-    description: str = Field(min_length=1)
-    provider: Literal["github", "generic", "gitlab", "svix"] = "generic"
-    """github: `X-Hub-Signature-256` body HMAC · generic: V2 `HMAC("<unix-sec>.<body>")` +
-    `X-Timestamp` ±300 s · gitlab: `X-Gitlab-Token` · svix: `svix-*` triple (`whsec_` secret)."""
-    secret: str = Field(min_length=1)
-    """`secret:<name>` reference resolved through the secret store (never the value);
-    `<name>#prev` keeps verifying for 24 h after `auoreo webhook rotate`."""
-    events: list[str] = Field(default_factory=list)
-    """Provider event names to accept (`X-GitHub-Event`, `X-Gitlab-Event`, payload `type`/`event`);
-    empty = all."""
-    filters: list[WebhookFilter] = Field(default_factory=list)
-    agent: str = Field(default="default", pattern=NAME_RE)
-    workflow: str | None = None
-    prompt: str = Field(min_length=1)
-    """Template over `{{event.*}}` (dotted paths, missing → literal), `{{route}}`, `{{delivery_id}}`."""
-    deliver: list[str] = Field(default_factory=lambda: ["log"])
-    enabled: bool = True
-    rate_limit_per_minute: int = Field(default=30, ge=1, le=10_000)
-    max_body_bytes: int = Field(default=1_048_576, ge=1_024, le=50 * 1_048_576)
-    max_steps: int | None = Field(default=None, ge=1, le=500)
-    challenge: bool = False
-    """Answer provider verification challenges before HMAC: `GET ?challenge=<v>` echo and
-    Slack-style `{"type": "url_verification", "challenge": <v>}`."""
-    deliver_only: bool = False
-    """Deliver the rendered `prompt` straight to `deliver` targets (no agent run): 200 once
-    delivered, 502 when every target failed."""
 
 
 class PluginManifest(_Strict):

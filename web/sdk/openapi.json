@@ -1039,6 +1039,102 @@
         "title": "CompactionOut",
         "type": "object"
       },
+      "CronCreate": {
+        "properties": {
+          "agent": {
+            "default": "default",
+            "pattern": "^[a-z][a-z0-9_]*$",
+            "title": "Agent",
+            "type": "string"
+          },
+          "catch_up": {
+            "default": true,
+            "title": "Catch Up",
+            "type": "boolean"
+          },
+          "deliver": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Deliver",
+            "type": "array"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "dry_run": {
+            "default": false,
+            "description": "Validate and preview; nothing is saved",
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "name": {
+            "pattern": "^[a-z][a-z0-9_]{0,63}$",
+            "title": "Name",
+            "type": "string"
+          },
+          "prompt": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Prompt",
+            "type": "string"
+          },
+          "schedule": {
+            "description": "5-field cron | every <n>m|h|d | in <n>m|h|d | ISO datetime",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schedule",
+            "type": "string"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "maximum": 86400.0,
+                "minimum": 10.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
+          },
+          "tz": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tz"
+          }
+        },
+        "required": [
+          "name",
+          "schedule",
+          "prompt"
+        ],
+        "title": "CronCreate",
+        "type": "object"
+      },
       "CronJobInfo": {
         "properties": {
           "agent": {
@@ -1149,6 +1245,60 @@
           "paused"
         ],
         "title": "CronPaused",
+        "type": "object"
+      },
+      "CronPlan": {
+        "properties": {
+          "catch_up": {
+            "description": "Catch-up class for a missed fire",
+            "title": "Catch Up",
+            "type": "string"
+          },
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "kind": {
+            "description": "cron | interval | date",
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_fires": {
+            "description": "Next (up to) 5 fire times, ISO-8601",
+            "items": {
+              "type": "string"
+            },
+            "title": "Next Fires",
+            "type": "array"
+          },
+          "schedule": {
+            "title": "Schedule",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "schedule",
+          "kind",
+          "tz",
+          "next_fires",
+          "catch_up",
+          "dry_run",
+          "created"
+        ],
+        "title": "CronPlan",
         "type": "object"
       },
       "CronRunAccepted": {
@@ -1394,6 +1544,51 @@
           "markdown"
         ],
         "title": "CuratorReportText",
+        "type": "object"
+      },
+      "DelegationPause": {
+        "properties": {
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused"
+        ],
+        "title": "DelegationPause",
+        "type": "object"
+      },
+      "DelegationState": {
+        "properties": {
+          "paused": {
+            "description": "True: new spawns are refused (list/steer/stop still work)",
+            "title": "Paused",
+            "type": "boolean"
+          },
+          "queued": {
+            "description": "Children waiting for a slot",
+            "title": "Queued",
+            "type": "integer"
+          },
+          "running": {
+            "description": "Children running right now (process-wide)",
+            "title": "Running",
+            "type": "integer"
+          },
+          "source": {
+            "description": "settings | api",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paused",
+          "source",
+          "running",
+          "queued"
+        ],
+        "title": "DelegationState",
         "type": "object"
       },
       "DeliveryInfo": {
@@ -5221,6 +5416,61 @@
         "title": "SkillSources",
         "type": "object"
       },
+      "SubagentInfo": {
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "depth": {
+            "title": "Depth",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subagent_id": {
+            "title": "Subagent Id",
+            "type": "string"
+          },
+          "usage": {
+            "additionalProperties": true,
+            "title": "Usage",
+            "type": "object"
+          }
+        },
+        "required": [
+          "subagent_id",
+          "name",
+          "agent",
+          "depth",
+          "role",
+          "status",
+          "running"
+        ],
+        "title": "SubagentInfo",
+        "type": "object"
+      },
       "SuggestionAccepted": {
         "properties": {
           "run_id": {
@@ -7030,6 +7280,98 @@
         "tags": [
           "cron"
         ]
+      },
+      "post": {
+        "description": "Create `<home>/jobs/<name>.yaml` (a reminder for `in 20m`); `dry_run` only previews the\nnext 5 fires. 409 when the name is taken, 422 for an invalid schedule or field.",
+        "operationId": "create_job_api_cron_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "description": "UUID; a retry with the same key replays the first response",
+            "in": "header",
+            "name": "idempotency-key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "UUID; a retry with the same key replays the first response",
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CronCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CronPlan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Job",
+        "tags": [
+          "cron"
+        ]
       }
     },
     "/api/cron/{name}/pause": {
@@ -7358,6 +7700,147 @@
         "summary": "Job Runs",
         "tags": [
           "cron"
+        ]
+      }
+    },
+    "/api/delegation": {
+      "get": {
+        "operationId": "delegation_state_api_delegation_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelegationState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delegation State",
+        "tags": [
+          "teams"
+        ]
+      }
+    },
+    "/api/delegation/pause": {
+      "put": {
+        "description": "Flip `delegation.pause` at runtime (audited); new spawns are refused while paused.",
+        "operationId": "set_pause_api_delegation_pause_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DelegationPause"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DelegationState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Pause",
+        "tags": [
+          "teams"
         ]
       }
     },
@@ -8882,6 +9365,101 @@
         "summary": "Create Task",
         "tags": [
           "kanban"
+        ]
+      }
+    },
+    "/api/mailbox": {
+      "get": {
+        "description": "Alias of `GET /api/teams/{team_id}/mailbox` (spec \u00a716.8 endpoint name).",
+        "operationId": "mailbox_api_mailbox_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "team_id",
+            "required": true,
+            "schema": {
+              "title": "Team Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "member",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Member"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MailMessage"
+                  },
+                  "title": "Response Mailbox Api Mailbox Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mailbox",
+        "tags": [
+          "teams"
         ]
       }
     },
@@ -13209,6 +13787,84 @@
         "summary": "Put Sources",
         "tags": [
           "sessions"
+        ]
+      }
+    },
+    "/api/sessions/{session_id}/subagents": {
+      "get": {
+        "operationId": "subagents_api_sessions__session_id__subagents_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SubagentInfo"
+                  },
+                  "title": "Response Subagents Api Sessions  Session Id  Subagents Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Subagents",
+        "tags": [
+          "teams"
         ]
       }
     },

@@ -12,6 +12,9 @@ stdin) and folds the stdout replies into one `HookOutcome`:
 - `UserPromptSubmit`: modify{text} | deny{message};
 - `Stop`: {block, reason} (the first block wins);
 - `SubagentStop` (a delegated child run ended; matcher = child agent): informational;
+- `transform` (matcher = a payload kind such as `webhook:<route>`): `{"payload": {...}}`
+  replaces the payload for the next hook, `{"drop": true}` drops it, `{}` keeps it
+  (`HookRunner.transform` folds the chain; webhook ingress uses it after `script:`);
 - everything else is informational.
 
 A crash, non-zero exit, timeout or invalid JSON follows the hook's `on_error`: `warn`
@@ -133,14 +136,28 @@ def _fold_info(out: HookOutcome, reply: dict[str, Any], name: str) -> bool:
     return False
 
 
+def _fold_transform(out: HookOutcome, reply: dict[str, Any], name: str) -> bool:
+    if reply.get("drop") is True:
+        out.decision, out.message = "deny", str(reply.get("reason") or f"dropped by hook '{name}'")
+        return True
+    if "payload" in reply:
+        new = reply["payload"]
+        if not isinstance(new, dict):
+            raise HookError("'payload' must be an object")
+        out.decision, out.input = "modify", new
+    return False
+
+
 _FOLD = {
     "PreToolUse": _fold_tool,
     "PostToolUse": _fold_tool,
     "PermissionRequest": _fold_permission,
     "UserPromptSubmit": _fold_prompt,
     "Stop": _fold_stop,
+    "transform": _fold_transform,
 }
 _ERROR_DECISION: dict[str, Decision] = {
+    "transform": "deny",
     "PreToolUse": "deny",
     "PostToolUse": "deny",
     "PermissionRequest": "deny",
@@ -180,7 +197,7 @@ class HookRunner:
         try:
             for hook in selected:
                 if out.input is not None:
-                    body["arguments"] = out.input
+                    body["payload" if event == "transform" else "arguments"] = out.input
                 if out.text is not None:
                     body["text"] = out.text
                 stop = await self._one(hook, event, session_id, body, out, fold)
@@ -285,6 +302,18 @@ class HookRunner:
         if not isinstance(reply, dict):
             raise HookError("stdout JSON must be an object")
         return reply
+
+    async def transform(
+        self, kind: str, payload: dict[str, Any], *, session_id: str = "server"
+    ) -> dict[str, Any] | None:
+        """Fold `payload` through the enabled `transform` hooks matching `kind` (name order).
+        Returns the final payload, or None when a hook dropped it."""
+        out = await self.run(
+            "transform", session_id=session_id, payload={"kind": kind, "payload": payload}, match_key=kind
+        )
+        if out.denied:
+            return None
+        return out.input if out.input is not None else payload
 
     # ------------------------------------------------------- session lifecycle
     def remember_agent(self, session_id: str, agent: str) -> None:

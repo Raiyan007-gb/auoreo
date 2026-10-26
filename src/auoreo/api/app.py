@@ -36,6 +36,7 @@ from auoreo.api.routers import (
 from auoreo.api.routers import commands as commands_router
 from auoreo.api.routers import context as context_router  # --- G5b
 from auoreo.api.routers import cron as cron_router
+from auoreo.api.routers import delegation as delegation_router  # --- H2
 from auoreo.api.routers import deliveries as deliveries_router
 from auoreo.api.routers import environments as environments_router  # --- W2-B
 
@@ -88,6 +89,7 @@ ROUTERS = (
     deliveries_router,
     teams_router,
     kanban_router,
+    delegation_router,  # --- H2
     plugins_router,  # M5e
     openai_compat_router,  # M5h
     acp_router,  # M5h

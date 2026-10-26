@@ -1,0 +1,14 @@
+name: stop_task
+toolset: teams
+description: 'Coordinator: stop one of your running (or queued) subagents by task id or name.'
+parameters:
+  type: object
+  properties:
+    task_id: {type: string, minLength: 1, maxLength: 64, description: Task id (or name) of your subagent.}
+    reason: {type: string, maxLength: 1000}
+  required: [task_id]
+  additionalProperties: false
+default_action: allow
+interactive_only: false
+timeout_ms: 30000
+search_hint: stop cancel kill subagent child task

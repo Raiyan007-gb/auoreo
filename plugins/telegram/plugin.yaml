@@ -11,6 +11,10 @@ config_schema:
       type: array
       items: {type: string}
       description: Chat ids allowed to talk to the agent (added by `auoreo plugin pair telegram <code>`).
+    owners:
+      type: array
+      items: {type: string}
+      description: Paired chat ids allowed to /approve and /deny (default = every paired chat).
     agent:
       type: string
       description: Agent for Telegram sessions (default agent when unset).

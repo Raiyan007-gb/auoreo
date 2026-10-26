@@ -329,7 +329,7 @@ def outbox_of(services: Services) -> Outbox:
     return worker.outbox if isinstance(worker, DeliveryWorker) else Outbox(services)
 
 
-UNATTENDED_DENY: tuple[str, ...] = ("memory", "delegate_task", "plugin_*")
+UNATTENDED_DENY: tuple[str, ...] = ("memory", "delegate_task", "plugin_*", "cronjob")
 
 
 def unattended_options(services: Any, kind: str, source: str) -> RunOptions:

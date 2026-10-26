@@ -3,7 +3,11 @@
 A delegated task is a child session (`sessions.parent_id`) in the parent's team. Its
 prompt is submitted non-interactively-as-the-parent through the coordinator; its result
 is the child's final text plus usage summed from the child's `usage` rows. Children are
-capped per parent (`teams_max_children`) and per process (`FLEET_CAP`); extra spawns queue.
+capped per parent (`teams_max_children`) and per process (`FLEET_CAP`, `teams.fleet`);
+extra spawns queue. Roles are depth-derived (`teams.ceiling.role_for`): a leaf's engine
+denies `LEAF_DENIED`. Child spend counts toward the root's `max_cost_usd`. A running turn
+is watched by `teams.monitor.ChildMonitor` (live log, heartbeat, staleness, budget);
+control verbs (wait/stop/steer/resume/pause) live in `teams.control`.
 """
 
 from __future__ import annotations
@@ -22,7 +26,10 @@ from auoreo.core.db import TeamMemberRow, TeamRow
 from auoreo.runtime.hooks import subagent_stop
 from auoreo.runtime.inbox import RunOptions
 from auoreo.teams.board import Board
-from auoreo.teams.ceiling import CeilingEngine, clamp
+from auoreo.teams.ceiling import CeilingEngine, clamp, leaf_permissions, role_for
+from auoreo.teams.control import WAIT_DEFAULT_MS, WAIT_MAX_MS, WAIT_MIN_MS, Control
+from auoreo.teams.fleet import FLEET_CAP, Fleet
+from auoreo.teams.fork import fork_seed
 from auoreo.teams.format import (
     SCHEMA_MISMATCH,
     check_output,
@@ -33,17 +40,26 @@ from auoreo.teams.format import (
 )
 from auoreo.teams.kanban import KanbanStore
 from auoreo.teams.mailbox import LEAD, Mailbox, TeamsError
+from auoreo.teams.monitor import BUDGET_EXCEEDED, Budget, ChildMonitor
 from auoreo.teams.scope import workflow_team
 from auoreo.teams.supervisor import Supervisor
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
 
-__all__ = ["FLEET_CAP", "Member", "TeamsError", "TeamsService", "start"]
+__all__ = [
+    "FLEET_CAP",
+    "WAIT_DEFAULT_MS",
+    "WAIT_MAX_MS",
+    "WAIT_MIN_MS",
+    "Member",
+    "TeamsError",
+    "TeamsService",
+    "start",
+]
 
-FLEET_CAP = 9
 TASK_NAME_RE = re.compile(r"^[a-z0-9_]{1,64}$")
-WAIT_MIN_MS, WAIT_MAX_MS, WAIT_DEFAULT_MS = 1_000, 300_000, 30_000
+MODES = ("spawn", "fork")
 _FINAL = {"completed": "done", "max_steps": "done", "stopped": "stopped"}
 
 
@@ -62,6 +78,11 @@ class Member:
     text: str = ""
     error: dict[str, Any] | None = None
     usage: dict[str, Any] = field(default_factory=dict)
+    role: str = "leaf"
+    model: str | None = None
+    schema: dict[str, Any] | None = None
+    interactive: bool = False
+    budget: Budget = field(default_factory=Budget)
 
     @property
     def task_id(self) -> str:
@@ -84,9 +105,10 @@ class TeamsService:
         self.join_lock = asyncio.Lock()  # workflow steps joining a team (teams.scope)
         self.members_live: dict[str, Member] = {}  # by child session id
         self._tasks: dict[str, asyncio.Task[Member]] = {}
-        self._running: dict[str, int] = {}
-        self._fleet = 0
-        self._waiters: list[tuple[str, asyncio.Future[None]]] = []
+        self.fleet = Fleet(self)
+        self.control = Control(self)
+        self.roles: dict[str, str] = {}  # child session id → orchestrator | leaf
+        self.last_activity: dict[str, float] = {}  # parent session id → last child heartbeat
 
     @property
     def max_depth(self) -> int:
@@ -235,13 +257,18 @@ class TeamsService:
         timeout_s: float | None = None,
         output_schema: dict[str, Any] | None = None,
         role: str | None = None,
+        mode: str = "spawn",
+        budget: dict[str, Any] | None = None,
     ) -> Member:
         parent = await self.s.get_session(parent_session_id)
         if parent is None:
             raise TeamsError(f"unknown parent session '{parent_session_id}'")
+        await self.check_can_spawn(parent_session_id)
         self.supervisor.check_spawn(parent_session_id, parent.agent, role, output_schema)
         if not TASK_NAME_RE.fullmatch(name):
             raise TeamsError(f"invalid task name '{name}': use [a-z0-9_]+ (≤64 chars)")
+        if mode not in MODES:
+            raise TeamsError(f"unknown mode '{mode}' (known: {', '.join(MODES)})")
         depth = await self.depth(parent_session_id) + 1
         if depth > self.max_depth:
             raise TeamsError(
@@ -275,26 +302,62 @@ class TeamsService:
         except IntegrityError as exc:
             raise TeamsError(f"name '{name}' is already taken in team {team.name}") from exc
 
-        # Permission ceiling: the child can never run with more power than its parent.
+        # Permission ceiling: the child can never run with more power than its parent;
+        # a leaf additionally loses the LEAF_DENIED tools (executor floor, spec §16.3).
+        child_role = role_for(self.s.settings.teams_orchestrator_enabled, depth)
+        denied = leaf_permissions(self.s.harness.tools) if child_role == "leaf" else frozenset()
         parent_mode = self._mode_of(parent_session_id, parent.agent)
         child_mode = child_manifest.permission_mode or self.s.settings.permission_mode
         crt = await self.s.coordinator.runtime(child.id)
         crt.engine = CeilingEngine(
-            parent_mode, [], [], clamp(child_mode, parent_mode), str(self.s.cwd / ".auoreo" / "plans")
+            parent_mode,
+            [],
+            [],
+            clamp(child_mode, parent_mode),
+            str(self.s.cwd / ".auoreo" / "plans"),
+            denied=denied,
         )
         prt = await self.s.coordinator.runtime(parent_session_id)
+        if mode == "fork":
+            prompt = fork_seed(prt.history, self.s.settings.teams2.delegation.fork_seed_max_chars) + prompt
+        plan = Budget.of(budget)
         member = Member(team.id, name, agent, child.id, parent_session_id, depth, background)
+        member.role, member.model, member.schema = child_role, model, output_schema
+        member.interactive, member.budget = prt.interactive, plan
         self.members_live[child.id] = member
+        self.roles[child.id] = child_role
         await self.supervisor.on_spawn(member, parent.agent, role, prompt)
-        timeout = float(timeout_s or self.s.settings.teams_child_timeout_s)
-        task = asyncio.create_task(
-            self._run(member, prompt, timeout, prt.interactive, model, output_schema),
-            name=f"subagent:{child.id}",
-        )
-        self._tasks[child.id] = task
-        if background:
-            return member
+        ms = plan.timeout_ms
+        timeout = ms / 1000 if ms else float(timeout_s or self.s.settings.teams_child_timeout_s)
+        return await self.launch(member, prompt, timeout)
+
+    async def launch(self, m: Member, prompt: str, timeout: float) -> Member:
+        """Run one turn of `m` as a task; foreground awaits it, background returns at once."""
+        task = asyncio.create_task(self._run(m, prompt, timeout), name=f"subagent:{m.session_id}")
+        self._tasks[m.session_id] = task
+        if m.background:
+            return m
         return await task
+
+    async def check_can_spawn(self, parent_session_id: str) -> None:
+        """Refusals that apply to every new child: pause switch, leaf parent, spent budget."""
+        if self.control.paused:
+            raise TeamsError("delegation is paused (delegation.pause); new spawns are refused")
+        if self.roles.get(parent_session_id) == "leaf":
+            raise TeamsError("delegate_task is not available to leaf subagents; do the task yourself")
+        cap = self.s.settings.max_cost_usd
+        if await self.s.coordinator.runner.usage.over_budget(parent_session_id, cap):
+            raise TeamsError(f"BUDGET: the session tree reached max_cost_usd={cap}; no new children")
+
+    def member_from_row(self, row: TeamMemberRow, parent: str) -> Member:
+        """A `Member` for a child known only from the database (e.g. after a restart)."""
+        m = Member(row.team_id, row.name, row.agent, row.session_id, parent, row.depth)
+        m.role = self.roles.get(row.session_id) or role_for(
+            self.s.settings.teams_orchestrator_enabled, row.depth
+        )
+        m.status = row.status
+        self.members_live[row.session_id] = m
+        return m
 
     def _mode_of(self, session_id: str, agent: str) -> str:
         engine = self.s.coordinator.engine_for(session_id)
@@ -303,32 +366,23 @@ class TeamsService:
         manifest = self.s.harness.agent(agent).manifest
         return manifest.permission_mode or self.s.settings.permission_mode
 
-    async def _run(
-        self,
-        m: Member,
-        prompt: str,
-        timeout: float,
-        interactive: bool,
-        model: str | None,
-        schema: dict[str, Any] | None,
-    ) -> Member:
+    async def _run(self, m: Member, prompt: str, timeout: float) -> Member:
         base = {"parent": m.parent_session_id, "child": m.session_id, "name": m.name, "agent": m.agent}
+        schema = m.schema
         try:
-            await self._acquire(m)
+            await self.fleet.acquire(m)
         except asyncio.CancelledError:
             await self._finish(m, "stopped", "", {"code": "CANCELLED", "message": "interrupted while queued"})
             raise
         try:
             m.status = "running"
             await self._set_status(m, "running")
-            await self.s.emit(m.parent_session_id, "subagent.started", base)
+            await self.s.emit(m.parent_session_id, "subagent.start", {**base, "role": m.role})
             text = prompt + ("\n\n" + schema_instruction(schema) if schema else "")
-            status, out, error = await self._turn(m, text, timeout, interactive, model)
+            status, out, error = await self._turn(m, text, timeout)
             if schema and status == "completed" and (problem := check_output(out, schema)) is not None:
                 await self.s.emit(m.parent_session_id, "subagent.retry", {**base, "error": problem})
-                status, out, error = await self._turn(
-                    m, retry_instruction(problem, schema), timeout, interactive, model
-                )
+                status, out, error = await self._turn(m, retry_instruction(problem, schema), timeout)
                 if status == "completed" and (problem := check_output(out, schema)) is not None:
                     status, error = "failed", {"code": SCHEMA_MISMATCH, "message": problem}
         except asyncio.CancelledError:
@@ -338,34 +392,44 @@ class TeamsService:
         except Exception as exc:  # a teams bug must not leave the member "running"
             status, out, error = "failed", "", {"code": "INTERNAL", "message": f"{type(exc).__name__}: {exc}"}
         finally:
-            self._release(m.parent_session_id)
+            self.fleet.release(m.parent_session_id)
         await self._finish(m, status, out, error)
         return m
 
-    async def _turn(
-        self, m: Member, text: str, timeout: float, interactive: bool, model: str | None
-    ) -> tuple[str, str, dict[str, Any] | None]:
+    async def _turn(self, m: Member, text: str, timeout: float) -> tuple[str, str, dict[str, Any] | None]:
         coord = self.s.coordinator
-        run_id = await coord.submit(
-            m.session_id,
-            text,
-            "followup",
-            agent=m.agent,
-            model=model,
-            interactive=interactive,
-            options=RunOptions(skip_memory=True),  # subagents run without memory (spec §16.1)
-        )
-        if run_id is None:  # handled by a slash command (e.g. `/model`)
-            return "completed", "", None
-        try:
-            await coord.wait(m.session_id, timeout)
-        except TimeoutError:
-            await coord.cancel(m.session_id)
-            return "failed", "", {"code": "TIMEOUT", "message": f"child exceeded {timeout:.0f}s"}
+        cap = self.s.settings.max_cost_usd
+        if await coord.runner.usage.over_budget(m.session_id, cap):  # spec §25.15: root's cap
+            msg = f"the session tree reached max_cost_usd={cap}; child turn blocked"
+            return "failed", "", {"code": "BUDGET", "message": msg}
+        deny = tuple(sorted(leaf_permissions(self.s.harness.tools))) if m.role == "leaf" else ()
+        options = RunOptions(skip_memory=True, tools_deny=deny)  # no memory for subagents (§16.1)
+        async with ChildMonitor(self, m, m.budget) as monitor:
+            run_id = await coord.submit(
+                m.session_id,
+                text,
+                "followup",
+                agent=m.agent,
+                model=m.model,
+                interactive=m.interactive,
+                options=options,
+            )
+            if run_id is None:  # handled by a slash command (e.g. `/model`)
+                return "completed", "", None
+            try:
+                await coord.wait(m.session_id, timeout)
+            except TimeoutError:
+                await coord.cancel(m.session_id)
+                return "failed", "", {"code": "TIMEOUT", "message": f"child exceeded {timeout:.0f}s"}
         result = coord.result(run_id)
+        if monitor.verdict is not None:
+            return "failed", result.text if result else "", monitor.verdict
         if result is None:
             return "stopped", "", {"code": "CANCELLED", "message": "interrupted"}
         status = "completed" if result.status in {"completed", "max_steps"} else "failed"
+        if monitor.budget_hit is not None:  # the grace reply is kept; the run still overran
+            msg = f"delegation budget exceeded ({monitor.budget_hit})"
+            return "failed", result.text, {"code": BUDGET_EXCEEDED, "message": msg}
         return status, result.text, result.error
 
     async def _finish(self, m: Member, status: str, text: str, error: dict[str, Any] | None) -> None:
@@ -383,7 +447,7 @@ class TeamsService:
             "usage": m.usage,
             **({"error": error} if error else {}),
         }
-        kind = "completed" if status == "completed" else "failed"
+        kind = "complete" if status == "completed" else "failed"
         await self.s.emit(m.parent_session_id, f"subagent.{kind}", data)
         await subagent_stop(self.s, data)
         await self.supervisor.on_finish(m)
@@ -404,91 +468,12 @@ class TeamsService:
         rt = await self.s.coordinator.runtime(session_id)
         await self.s.coordinator.submit(session_id, text, "inject", interactive=rt.interactive)
 
-    # ------------------------------------------------------------ concurrency
-    def _can_start(self, parent: str) -> bool:
-        return self._running.get(parent, 0) < self.s.settings.teams_max_children and self._fleet < FLEET_CAP
-
-    def _take(self, parent: str) -> None:
-        self._running[parent] = self._running.get(parent, 0) + 1
-        self._fleet += 1
-
-    async def _acquire(self, m: Member) -> None:
-        parent = m.parent_session_id
-        if not self._waiters and self._can_start(parent):
-            self._take(parent)
-            return
-        fut: asyncio.Future[None] = asyncio.get_running_loop().create_future()
-        self._waiters.append((parent, fut))
-        position = sum(1 for p, _ in self._waiters if p == parent)
-        await self.s.emit(
-            parent,
-            "subagent.queued",
-            {"parent": parent, "child": m.session_id, "name": m.name, "agent": m.agent, "position": position},
-        )
-        try:
-            await fut
-        except asyncio.CancelledError:
-            if fut.done() and not fut.cancelled():  # slot was handed over: give it back
-                self._release(parent)
-            with contextlib.suppress(ValueError):
-                self._waiters.remove((parent, fut))
-            raise
-
-    def _release(self, parent: str) -> None:
-        self._running[parent] = max(0, self._running.get(parent, 0) - 1)
-        self._fleet = max(0, self._fleet - 1)
-        for entry in list(self._waiters):
-            p, fut = entry
-            if fut.done():
-                self._waiters.remove(entry)
-                continue
-            if self._can_start(p):
-                self._waiters.remove(entry)
-                self._take(p)
-                fut.set_result(None)
-
-    # ------------------------------------------------------------ control
+    # ------------------------------------------------------------ control (teams.control)
     async def wait(self, team_id: str, name: str, timeout_ms: int | None = None) -> dict[str, Any]:
-        """Long-poll until `name`'s current run finishes (clamped 1 s–300 s, default 30 s)."""
-        team = await self.get_team(team_id)
-        if team is None:
-            raise TeamsError(f"unknown team '{team_id}'")
-        sid = await self.session_for(team, name)
-        ms = max(WAIT_MIN_MS, min(WAIT_MAX_MS, timeout_ms or WAIT_DEFAULT_MS))
-        task = self._tasks.get(sid)
-        timed_out = False
-        if task is not None and not task.done():  # spawned run (also covers queued)
-            await asyncio.wait({task}, timeout=ms / 1000)
-            timed_out = not task.done()
-        else:  # a later run, e.g. woken by mail
-            try:
-                await self.s.coordinator.wait(sid, ms / 1000)
-            except TimeoutError:
-                timed_out = True
-        m = self.members_live.get(sid)
-        return {
-            "name": name,
-            "session_id": sid,
-            "timed_out": timed_out,
-            "running": self.is_running(sid),
-            "status": m.status if m else ("running" if self.is_running(sid) else "idle"),
-            "result": m.text if m else "",
-        }
+        return await self.control.wait(team_id, name, timeout_ms)
 
     async def interrupt(self, team_id: str, name: str) -> bool:
-        team = await self.get_team(team_id)
-        if team is None:
-            raise TeamsError(f"unknown team '{team_id}'")
-        sid = await self.session_for(team, name)
-        cancelled = await self.s.coordinator.cancel(sid)
-        task = self._tasks.get(sid)
-        if task is not None and not task.done():
-            if not cancelled:  # still queued: stop it before it starts
-                task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await asyncio.wait_for(asyncio.shield(task), 5)
-            cancelled = True
-        return cancelled
+        return await self.control.interrupt(team_id, name)
 
 
 async def start(services: Services) -> TeamsService:
