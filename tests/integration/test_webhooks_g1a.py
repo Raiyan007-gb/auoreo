@@ -65,7 +65,10 @@ ROUTES = {
 
 @pytest.fixture
 def settings(home: Path) -> Settings:
-    return Settings(home=home, gateway="fake", automation_start_delay_s=60)
+    # The fixture routes include `nosecret` on purpose: exercise the non-strict 403 path.
+    return Settings(
+        home=home, gateway="fake", automation_start_delay_s=60, webhooks={"strict_secrets": False}
+    )
 
 
 def _write_routes(workdir: Path) -> None:
@@ -170,6 +173,10 @@ async def test_missing_secret_is_403_and_startup_warns(client: httpx.AsyncClient
     assert "webhook.secret.missing" in await audit_actions(services)  # startup warning row
     rows = doctor_rows(services.settings, services)
     assert [(c, lvl) for c, lvl, _, _ in rows] == [("webhook:nosecret", "error")]
+
+
+def test_strict_secrets_is_the_default() -> None:
+    assert Settings().webhooks.strict_secrets is True  # §19.11 missing secret → fail closed
 
 
 async def test_strict_secrets_refuse_to_start(settings: Settings, services: Services) -> None:

@@ -20,6 +20,7 @@ parameters:
   required: [session_id]
   additionalProperties: false
 permission: terminal_pty
+shell_args: [chars]
 pattern_arg: session_id
 default_action: allow
 is_destructive: true

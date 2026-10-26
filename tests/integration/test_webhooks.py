@@ -62,7 +62,12 @@ enabled: false
 @pytest.fixture
 def settings(home: Path) -> Settings:
     return Settings(
-        home=home, gateway="fake", approval_timeout_s=5, automation_start_delay_s=0, automation_poll_s=0.2
+        home=home,
+        gateway="fake",
+        approval_timeout_s=5,
+        automation_start_delay_s=0,
+        automation_poll_s=0.2,
+        webhooks={"strict_secrets": False},  # a route without a secret is part of the fixture
     )
 
 

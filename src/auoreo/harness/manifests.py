@@ -48,6 +48,10 @@ class ToolManifest(_Strict):
     """Permission name checked by the policy engine; defaults to the tool name."""
     pattern_arg: str | None = None
     """Argument whose value forms the permission pattern (e.g. `command`, `path`)."""
+    shell_args: list[str] = Field(default_factory=list)
+    """Arguments holding shell text (`monitor.cmd`, `write_stdin.chars`): the hardline/secret
+    floors and the oversized-payload guard run on them before permission (§19.4, §19.7).
+    A `bash`-permission tool's `pattern_arg` is always included."""
     default_action: Action = "ask"
     """Action used when no permission rule matches this tool."""
     exposure: Literal["direct", "deferred", "hidden"] = "direct"

@@ -160,6 +160,15 @@ def registered_patterns() -> dict[str, int]:
     return {k: len(v) for k, v in _EXTRA.items()}
 
 
+REDACTION_VERSION = "1"
+_STRUCTURAL_PASSES = 10  # PEM, telegram, JSON, YAML, assign, ENV key, auth, DSN, weak, phone
+
+
+def pattern_count() -> int:
+    """Prefixes + structural passes + registered extras (the debug-bundle manifest, §24.9)."""
+    return len(ALL_PREFIXES) + _STRUCTURAL_PASSES + sum(len(v) for v in _EXTRA.values())
+
+
 # ---------------------------------------------------------------------- redact
 def _assign(mode: RedactMode) -> Callable[[re.Match[str]], str]:
     def sub(m: re.Match[str]) -> str:
@@ -168,8 +177,9 @@ def _assign(mode: RedactMode) -> Callable[[re.Match[str]], str]:
     return sub
 
 
-def redact(text: str, mode: RedactMode = "mask") -> str:
-    if not ENABLED or not text or mode == "off":
+def redact(text: str, mode: RedactMode = "mask", *, force: bool = False) -> str:
+    """`force=True` (debug bundles, §24.9) redacts even when `AUOREO_REDACT_SECRETS` is off."""
+    if not (ENABLED or force) or not text or mode == "off":
         return text
     if any(p in text for p in ALL_PREFIXES):
         text = _PREFIX_RE.sub(lambda m: _hide(m.group(0), mode), text)

@@ -1,4 +1,4 @@
-"""Secret resolution: process env → OS keyring → encrypted `secrets.db` (spec §7).
+"""Secret resolution: process env → OS keyring → encrypted `secrets.db` → `.env` (spec §7).
 
 `secrets.db` is a JSON map encrypted with Fernet. The Fernet key lives in the OS keyring;
 if no usable keyring exists and `AUOREO_KEYRING=allow-file`, the key falls back to a
@@ -18,10 +18,21 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from auoreo.core.dotenv import from_dotenv
+
+try:
+    import fcntl
+except ImportError:  # Windows: single-writer only
+    fcntl = None  # type: ignore[assignment]
+
 log = logging.getLogger(__name__)
 SERVICE = "auoreo"
 KEY_NAME = "secrets-key"
-ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "LC_ALL", "TZ", "TERM", "USER", "SHELL", "TMPDIR")
+ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "TZ")
+"""Closed global allowlist (spec §24.9 §7): PATH/HOME/LANG/TZ + `AUOREO_TELEMETRY_*`. Anything
+else a tool needs comes from its manifest `requires_env`; tools that need a terminal type set
+`TERM` themselves (terminal_pty's `term` argument), so it is not inherited from the host."""
+ENV_ALLOWED_PREFIXES = ("AUOREO_TELEMETRY_",)
 
 
 class SecretStoreError(RuntimeError):
@@ -130,18 +141,34 @@ class SecretStore:
         tmp.replace(self.path)
 
     # ------------------------------------------------------------------- API
+    @contextlib.contextmanager
+    def _locked(self) -> Iterator[None]:
+        """Cross-process exclusive lock around read-modify-write (spec §7 `flock`)."""
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.path.with_name(self.path.name + ".lock"), os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            if fcntl is not None:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            yield
+        finally:
+            if fcntl is not None:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
+
     def set(self, name: str, value: str) -> None:
-        data = self._load()
-        data[name] = value
-        self._save(data)
+        with self._locked():
+            data = self._load()
+            data[name] = value
+            self._save(data)
 
     def delete(self, name: str) -> bool:
-        data = self._load()
-        if name not in data:
-            return False
-        del data[name]
-        self._save(data)
-        return True
+        with self._locked():
+            data = self._load()
+            if name not in data:
+                return False
+            del data[name]
+            self._save(data)
+            return True
 
     def names(self) -> list[str]:
         return sorted(self._load())
@@ -172,20 +199,24 @@ class SecretStore:
             log.exception("secret audit hook failed")
 
     def _resolve(self, name: str) -> str | None:
-        if (v := os.environ.get(name)) is not None:
-            return v
+        """Real env → keyring → secrets.db → values a `.env` file supplied (spec §7)."""
+        env = os.environ.get(name)
+        if env is not None and not from_dotenv(name):
+            return env
         if (v := _keyring_get(name)) is not None:
             return v
         try:
-            return self._load().get(name)
+            if (v := self._load().get(name)) is not None:
+                return v
         except SecretStoreError as exc:
             log.warning("secret store unavailable: %s", exc)
-            return None
+        return env
 
 
 def child_env(requires: list[str], secrets: SecretStore | None) -> dict[str, str]:
     """Scrubbed environment for subprocesses: allowlist + the tool's declared needs."""
     env = {k: os.environ[k] for k in ENV_ALLOWLIST if k in os.environ}
+    env.update({k: v for k, v in os.environ.items() if k.startswith(ENV_ALLOWED_PREFIXES)})
     for name in requires:
         value = secrets._resolve(name) if secrets else os.environ.get(name)
         if value is not None:

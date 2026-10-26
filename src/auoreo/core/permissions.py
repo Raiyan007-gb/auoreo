@@ -23,6 +23,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
+from auoreo.core import floors
 from auoreo.harness.manifests import Rule
 
 if TYPE_CHECKING:
@@ -37,28 +38,9 @@ REASONS: tuple[str, ...] = ("floor", "policy", "rule", "mode", "default", "sessi
 # Frozen at import: a prompt-injected runtime change cannot turn yolo on (§19.3).
 YOLO_FROZEN: bool = os.environ.get("AUOREO_YOLO", "").lower() in {"1", "true", "yes"}
 
-_HARDLINE: tuple[re.Pattern[str], ...] = tuple(
-    re.compile(p)
-    for p in (
-        r"\brm\s+(-[a-z]*\s+)*-[a-z]*[rf][a-z]*\s+(-[a-z]*\s+)*(/|/\*|~|~/|\$HOME)(\s|$)",
-        r"\bmkfs(\.\w+)?\b",
-        r"\bdd\b[^|;&]*\bof=/dev/",
-        r">\s*/dev/(sd|nvme|hd|disk)",
-        r":\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:",
-        r"\bkill\s+-9?\s*-1\b",
-        r"\b(shutdown|reboot|halt|poweroff)\b",
-        r"\binit\s+[06]\b",
-        r"\bsystemctl\s+(poweroff|reboot|halt|kexec)\b",
-        r"\bsudo\s+(-[a-zA-Z]*S|--stdin|-[a-zA-Z]*A)\b",
-        r"\bchmod\s+(-R\s+)?[0-7]*777\s+/(\s|$)",
-        r"\bdocker\b[^|;&]*\s--privileged\b",  # docker never runs privileged (§25.10)
-        r"\bpodman\b[^|;&]*\s--privileged\b",
-    )
-)
 # `sudo` (§25.10): `-n` / `--non-interactive` never prompts; anything else may wait for a password.
 _SUDO = re.compile(r"(^|[\s;&|(`])sudo(\s+(?P<flags>(-[a-zA-Z-]+\s*)*))?")
 _SUDO_NONINTERACTIVE = re.compile(r"(^|\s)(-[a-zA-Z]*n[a-zA-Z]*|--non-interactive)(\s|$)")
-_SECRET_PATH = re.compile(r"(^|/)(\.env(\.[^/]*)?|secrets\.db)$")
 _COMPOUND = re.compile(r"[;&|`<>]|\$\(")
 _FILE_PERMISSIONS = frozenset({"read", "edit"})
 
@@ -186,9 +168,7 @@ def _normalize(cmd: str) -> list[str]:
 
 
 def _secret_target(value: str) -> bool:
-    if value.endswith(".env.example"):
-        return False
-    return bool(_SECRET_PATH.search(value))
+    return floors.is_secret_path(value)
 
 
 def sudo_kind(command: str) -> Literal["bare", "noninteractive"] | None:
@@ -205,6 +185,13 @@ def sudo_kind(command: str) -> Literal["bare", "noninteractive"] | None:
 
 def _names_sudo(pattern: str) -> bool:
     return pattern.lstrip().startswith("sudo")
+
+
+def _explicit(hit: _Compiled | None, marker: str) -> bool:
+    """An ask floor passes only on an `always` grant or an allow rule naming the command."""
+    if hit is None or hit.rule.action != "allow":
+        return False
+    return hit.layer == "approved" or (bool(marker) and hit.prefix.startswith(marker))
 
 
 @dataclass(frozen=True)
@@ -399,8 +386,10 @@ class PermissionEngine:
         if permission in _FILE_PERMISSIONS and _secret_target(pattern):
             return "secret files are never readable or writable by tools"
         if permission == "bash":
+            if (why := floors.hardline(pattern)) is not None:
+                return f"blocked by {why}"
             for variant in _normalize(pattern):
-                if any(rx.search(variant) for rx in _HARDLINE):
+                if any(rx.search(variant) for rx in floors.BACKSTOP):
                     return "blocked by hardline floor (destructive system command)"
                 if any(fnmatch.fnmatchcase(variant, g) for g in self.floors):
                     return "blocked by a configured floor"
@@ -467,6 +456,10 @@ class PermissionEngine:
             decision = self._apply_mode(decision, permission, pattern)
         if sudo == "bare" and decision.action == "allow":
             return Decision("ask", "floor", decision.rule, note="bare sudo always asks")
+        if permission == "bash" and decision.action == "allow":
+            ask = floors.ask_floor(pattern)  # destructive-but-recoverable: asks even under yolo
+            if ask is not None and not _explicit(hit, ask.marker):
+                return Decision("ask", "floor", decision.rule, note=ask.reason, rule_id=decision.rule_id)
         if permission == "edit" and decision.action != "deny" and is_sensitive_write(pattern):
             return Decision("ask", "floor", decision.rule, note=SENSITIVE_NOTE, rule_id=decision.rule_id)
         return decision

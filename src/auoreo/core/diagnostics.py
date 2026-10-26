@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from auoreo.core import sandbox_boot
 from auoreo.core.paths import bundled_root
 from auoreo.core.settings import ModelGroup, Settings
 from auoreo.harness.discovery import default_roots
@@ -104,6 +105,8 @@ def sandbox_detail(st: Settings, inst: object, ok: bool, detail: str) -> tuple[L
     caps: dict[str, bool] = getattr(inst, "capabilities", dict)()
     enforced = ok and any(caps.values())
     detail = f"{detail}; enforced={enforced}; policy={st.sandbox_policy}"
+    if ok and not enforced and getattr(inst, "name", "") == "none":
+        return "warn", detail + " → no isolation: install bubblewrap (Linux) or set backends.sandbox"
     if ok:
         return "ok", detail
     if st.sandbox_policy == "fail":
@@ -118,7 +121,8 @@ async def backend_checks(st: Settings, h: Harness, services: Services | None = N
     kinds = sorted({d.manifest.kind for d in h.snapshot.backends.values()})
     for kind in kinds:
         try:
-            bdef = h.select_backend(kind, st.backends.get(kind))
+            chosen = sandbox_boot.configured(st, h) if kind == "sandbox" else st.backends.get(kind)
+            bdef = h.select_backend(kind, chosen)
         except KeyError as exc:
             out.append(Check(f"backend:{kind}", "error", str(exc), "fix settings.backends"))
             continue
