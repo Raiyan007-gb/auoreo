@@ -124,3 +124,48 @@ from auoreo.cli.commands import skills_hub  # noqa: E402
 app.add_typer(
     skills_hub.app, name="skills", help="Skills hub: search, install (quarantined), approve, remove, taps."
 )
+
+
+# --- H4: global --profile, completion, messaging, kanban, mcp, model/agent/command/lsp,
+# loop/heartbeat, login, new-feature, worktree gc, eval memory
+from auoreo.cli.commands import (  # noqa: E402
+    catalog,
+    completion,
+    evals,
+    kanban,
+    login,
+    loop,
+    lsp,
+    mcp,
+    messaging,
+    models,
+    worktree,
+)
+from auoreo.cli.profiles import ENV as PROFILE_ENV  # noqa: E402
+from auoreo.cli.profiles import apply_profile  # noqa: E402
+
+
+@app.callback()
+def _global(
+    profile: str | None = typer.Option(
+        None, "--profile", "-p", envvar=PROFILE_ENV, help="Use ~/.auoreo/profiles/<name>/ as the home."
+    ),
+) -> None:
+    """AUOREO — filesystem-native agent harness."""
+    apply_profile(profile)
+
+
+app.command("completion")(completion.completion)
+app.command("messaging")(messaging.messaging)
+app.add_typer(kanban.app, name="kanban", help="Kanban board: list, add, show, move, done, block.")
+app.add_typer(mcp.app, name="mcp", help="MCP servers: list, add (with a connection check), rm, test.")
+app.add_typer(models.app, name="model", help="Models: list routing groups, set the default, test one.")
+app.add_typer(catalog.agent_app, name="agent", help="Agents: list, show, scaffold a new one.")
+app.add_typer(catalog.command_app, name="command", help="Slash commands: list, show.")
+app.add_typer(lsp.app, name="lsp", help="Language servers for the lsp tool: status, start, stop.")
+app.command("loop")(loop.loop)
+app.command("heartbeat")(loop.heartbeat)
+app.command("login")(login.login)
+app.command("new-feature")(worktree.new_feature)
+app.add_typer(worktree.app, name="worktree", help="Feature worktrees under .auoreo/worktrees: gc.")
+app.add_typer(evals.app, name="eval", help="Evals: memory retrieval (recall@10, nDCG, p95).")

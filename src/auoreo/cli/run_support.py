@@ -78,6 +78,7 @@ class RunPlan:
     auto: bool = False
     rules: list[Rule] = field(default_factory=list)
     options: RunOptions | None = None
+    share: bool = False  # --- H4: mint a read-only share link after the run
 
     @property
     def local_only(self) -> bool:
@@ -214,9 +215,20 @@ async def run_in_process(st: Settings, plan: RunPlan, pretty: Any) -> int:
             text = await asyncio.to_thread(_ask, "> ")
             if text is None or text.strip() in EXIT_WORDS:
                 break
+        if plan.share:
+            await _share_local(svc, st, sid)
         return 0 if status in {"completed", "max_steps"} else 1
     finally:
         await svc.close()
+
+
+async def _share_local(svc: Services, st: Settings, sid: str) -> None:
+    from auoreo.cli.target import local_url
+    from auoreo.core.sessions_more import create_share
+
+    token = await create_share(svc, sid)
+    url = (st.cli.share_base_url or local_url(st)).rstrip("/") + f"/api/shared/{token}"
+    err_console.print(f"share: {url}  [dim](read-only; anyone holding it can read this session)[/dim]")
 
 
 # ------------------------------------------------------------------ --attach <url>
@@ -230,7 +242,7 @@ def run_attached(url: str, plan: RunPlan, pretty: Any) -> int:
     try:
         with client_for(url, timeout=None) as c:
             sid = _remote_session(c, plan)
-            return run_over_client(
+            code = run_over_client(
                 c,
                 url,
                 plan.prompt,
@@ -243,6 +255,10 @@ def run_attached(url: str, plan: RunPlan, pretty: Any) -> int:
                 note=lambda msg: err_console.print(f"[dim]{msg}[/dim]"),
                 final_text=lambda text: print(text, flush=True),
             )
+            if plan.share and sid:
+                link = c.post(f"/api/sessions/{sid}/share").raise_for_status().json()
+                err_console.print(f"share: {link['url']}  [dim](read-only)[/dim]")
+            return code
     except httpx.HTTPError as exc:
         err_console.print(f"[red]--attach {url}: {exc}[/red]")
         return 1
@@ -256,7 +272,7 @@ def _remote_session(c: Any, plan: RunPlan) -> str | None:
         if not rows:
             raise RunUsageError("--continue: there is no previous session on that server")
         return str(rows[0]["id"])
-    if plan.session or not plan.title:
+    if plan.session or not (plan.title or plan.share):  # --share needs a known session id
         return plan.session
     body = {"title": plan.title, "agent": plan.agent, "workflow": plan.workflow, "model": plan.model}
     created = c.post("/api/sessions", json={k: v for k, v in body.items() if v is not None})

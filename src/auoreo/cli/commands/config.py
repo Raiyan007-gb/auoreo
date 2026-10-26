@@ -40,3 +40,12 @@ def set_(key: str, value: str) -> None:
     except json.JSONDecodeError:
         parsed = value
     print(write_settings_value(home_dir(), key, parsed))
+
+
+# --- H4: `config edit` (spec §18): $EDITOR on a copy, validate, then replace atomically
+@app.command("edit")
+def edit() -> None:
+    """Open settings.json in $EDITOR; an invalid result is refused and the file is left unchanged."""
+    from auoreo.cli.config_edit import edit_settings
+
+    edit_settings(home_dir())
