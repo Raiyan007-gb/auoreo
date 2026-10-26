@@ -48,6 +48,7 @@ from auoreo.mcp.elicitation import (
 )
 from auoreo.mcp.sampling import SamplingHandler
 from auoreo.tools.context import CURRENT_SESSION, ToolContext, ToolResult
+from auoreo.tools.egress import session_proxy
 from mcp import Client, StdioServerParameters
 
 if TYPE_CHECKING:
@@ -140,12 +141,18 @@ class McpBridge:
             return StdioServerParameters(command=m.command or "", args=m.args, env=env or None)
         if m.transport == "sse":
             return sse_target(m.url or "", {k: self._resolve(v) for k, v in m.headers.items()})
-        if m.headers:
+        routed = session_proxy(f"mcp:{m.name}") if m.net == "proxy" else None  # --- I9 egress proxy
+        if m.headers or routed is not None:
             import httpx2
             from mcp.client.streamable_http import streamable_http_client
 
             headers = {k: self._resolve(v) for k, v in m.headers.items()}
-            return streamable_http_client(m.url or "", http_client=httpx2.AsyncClient(headers=headers))
+            proxy = None
+            if routed is not None:
+                p = routed[0]
+                proxy = p["server"].replace("http://", f"http://{p['username']}:{p['password']}@", 1)
+            client = httpx2.AsyncClient(headers=headers, proxy=proxy, trust_env=False)
+            return streamable_http_client(m.url or "", http_client=client)
         return m.url
 
     def _resolve(self, value: str) -> str:
@@ -154,6 +161,9 @@ class McpBridge:
         return value
 
     async def start(self) -> None:
+        from auoreo.tools.egress import ensure
+
+        await ensure(self.s)  # --- I9: remote `net: proxy` servers connect through it
         await self.sync()
 
     async def sync(self) -> None:
@@ -224,7 +234,7 @@ class McpBridge:
                 exposure=manifest.exposure,
                 timeout_ms=timeout_ms,
                 search_hint=f"{manifest.name} {t.name}",
-                net="proxy",
+                net=manifest.net,
             )
             loader = self._make_loader(manifest.name, t.name, timeout_ms / 1000)
             try:

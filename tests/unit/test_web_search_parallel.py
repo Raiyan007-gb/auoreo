@@ -41,7 +41,8 @@ async def test_parallel_backend(services: Services, workdir: Path, httpx_mock: H
     assert text.startswith("- Parallel A — https://p.example/a\n  one two")
     body = json.loads(httpx_mock.get_requests()[0].content)
     assert body["objective"] == "agent harness" and body["search_queries"] == ["agent harness"]
-    assert body["max_results"] == 2 and body["mode"] == "fast"
+    # I9: modes advanced|basic|turbo (default basic); max_results lives in advanced_settings
+    assert body["advanced_settings"]["max_results"] == 2 and body["mode"] == "basic"
 
 
 async def test_exa_failure_falls_to_parallel(

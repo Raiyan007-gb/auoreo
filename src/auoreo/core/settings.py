@@ -34,6 +34,7 @@ from auoreo.core.settings_i2 import I2Settings  # --- I2
 from auoreo.core.settings_i3 import I3Settings  # --- I3
 from auoreo.core.settings_i4 import I4Settings  # --- I4
 from auoreo.core.settings_i6 import I6Settings  # --- I6
+from auoreo.core.settings_i9 import I9Settings  # --- I9
 from auoreo.core.settings_models import (
     LiveKitSettings,
     LiveKitSipSettings,
@@ -422,6 +423,8 @@ class Settings(BaseSettings):
     i2: I2Settings = Field(default_factory=I2Settings)  # --- I2
     i3: I3Settings = Field(default_factory=I3Settings)  # --- I3
     i6: I6Settings = Field(default_factory=I6Settings)  # --- I6
+    i9: I9Settings = Field(default_factory=I9Settings)  # --- I9
+    smart_timeout: float | None = Field(default=None, gt=0, le=120)  # --- I9: AUOREO_SMART_TIMEOUT
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):

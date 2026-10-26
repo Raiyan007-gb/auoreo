@@ -36,6 +36,25 @@ NOT_ENFORCED_NOTE = "[sandbox: not enforced — backend '{name}']"
 _RO_DENIED = re.compile(r"read-only file system|EROFS", re.I)
 
 
+def current_proxy_port() -> int | None:
+    """The egress proxy port of the tool call running in this task (None outside one)."""
+    from auoreo.tools.context import CURRENT_EXEC
+
+    policy = CURRENT_EXEC.get()
+    return policy.proxy_port if policy is not None and policy.net == "proxy" else None
+
+
+def proxy_confinement(net: str, proxy_port: int | None, landlock_abi: int) -> str:
+    """Honest one-liner: how `net: proxy` is enforced for a backend with Landlock `landlock_abi`."""
+    if net != "proxy":
+        return "n/a"
+    if proxy_port is None:
+        return "no proxy running: network unshared (no egress)"
+    if landlock_abi >= 4:
+        return f"Landlock CONNECT_TCP limited to the proxy port {proxy_port}"
+    return f"proxy env only (Landlock ABI {landlock_abi} < 4 cannot restrict TCP): not enforced"
+
+
 def mode_rank(mode: str) -> int:
     return MODES.index(mode)
 
@@ -61,6 +80,11 @@ class ExecSpec:
     readable: list[Path] = field(default_factory=list)
     merge_stderr: bool = False
     """Send stderr into stdout (interleaved), like `2>&1`; `stderr` is then empty."""
+    proxy_port: int | None = field(default_factory=lambda: current_proxy_port())
+    """I9: loopback egress-proxy port a `net: proxy` child may reach (the running tool call's,
+    by default). Backends confine `proxy` to it where they can: Landlock CONNECT_TCP (ABI >= 4)
+    under bwrap/none, a port-scoped seatbelt rule; docker gets no network (it cannot reach
+    the host loopback). Without a port, `proxy` runs with no network at all."""
 
     def outside_cwd(self) -> list[Path]:
         """Extra mounts that are not inside `cwd` (they need `danger-full-access`)."""

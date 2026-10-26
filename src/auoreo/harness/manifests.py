@@ -12,7 +12,7 @@ from __future__ import annotations
 import re
 from typing import Any, Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from auoreo.harness.manifests_mcp import McpRoots as McpRoots  # re-export
 from auoreo.harness.manifests_mcp import McpSampling as McpSampling  # re-export
@@ -25,6 +25,11 @@ NAME_RE = r"^[a-z][a-z0-9_]*$"
 SLUG_RE = r"^[a-z0-9][a-z0-9._-]*$"
 
 Action = Literal["allow", "ask", "deny"]
+NET_JUSTIFICATION = {  # --- I9: injected into `net: direct` tools (checked by tools/netstage.py)
+    "type": "string",
+    "maxLength": 500,
+    "description": "Why this call must bypass the egress proxy (net: direct; a human reviews it).",
+}
 
 
 class _Strict(BaseModel):
@@ -133,6 +138,13 @@ class ToolManifest(_Strict):
         if v is not None and (not re.fullmatch(f"{file_ref}|{mod_ref}", v) or ".." in v):
             raise ValueError("check_fn must look like 'handler.py:available' or 'pkg.module:fn'")
         return v
+
+    @model_validator(mode="after")
+    def _net_direct(self) -> ToolManifest:
+        if self.net == "direct":  # I9 (§25.10): direct egress is approval + justification
+            props = self.parameters.setdefault("properties", {})
+            props.setdefault("net_justification", dict(NET_JUSTIFICATION))
+        return self
 
     @property
     def permission_name(self) -> str:

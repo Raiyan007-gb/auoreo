@@ -88,7 +88,7 @@ async def test_bash_audit_records_net(services: Services, workdir: Path) -> None
     ctx = ToolContext(session_id="s1", cwd=workdir, home=services.settings.home)
     await bash(services, ctx, "true")
     rows = await audit_rows(services, "tool.call")
-    assert rows[-1].detail["net"] == "none"
+    assert rows[-1].detail["net"]["mode"] == "none"  # I9: net{mode, host, port, grant_id}
 
 
 # ------------------------------------------------------------------ bwrap
@@ -104,6 +104,7 @@ async def test_bwrap_argv(services: Services, workdir: Path, mode: str, net: str
         net=net,
         readable=[ro],
         writable=[rw],  # type: ignore[arg-type]
+        proxy_port=3128 if net == "proxy" else None,
     )
     argv = impl.build_argv(spec, "/usr/bin/bwrap")
     assert argv[:4] == ["/usr/bin/bwrap", "--ro-bind", "/usr", "/usr"]
@@ -181,7 +182,7 @@ def docker_with(services: Services, monkeypatch: pytest.MonkeyPatch, client: Any
     [
         ("read-only", "none", "none", True),
         ("workspace-write", "none", "none", False),
-        ("workspace-write", "proxy", "bridge", False),
+        ("workspace-write", "proxy", "none", False),  # I9: the loopback proxy is unreachable
         ("danger-full-access", "direct", "bridge", False),
     ],
 )

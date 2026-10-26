@@ -1,0 +1,10 @@
+kind: search
+name: searxng
+description: >-
+  SearXNG GET <settings.searxng_url>/search?format=json (keyless, localhost-only instance recommended; pin 2026.9.5, 15 s timeout).
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: client code in this repo; SearXNG itself AGPL-3.0 (separate service)
+posture: ok

@@ -37,6 +37,17 @@ class ExecPolicy:
     mode: str = "workspace-write"
     net: str = "none"
     grant_id: str | None = None
+    proxy_url: str | None = None  # --- I9: `net: proxy` → this call's loopback egress proxy URL
+    net_grant_id: str | None = None  # --- I9: one-shot `net: direct` grant
+
+    @property
+    def proxy_port(self) -> int | None:
+        """Loopback port of the egress proxy this call may reach (`net: proxy` only)."""
+        if not self.proxy_url:
+            return None
+        from urllib.parse import urlsplit
+
+        return urlsplit(self.proxy_url).port
 
 
 CURRENT_EXEC: ContextVar[ExecPolicy | None] = ContextVar("auoreo_current_exec", default=None)

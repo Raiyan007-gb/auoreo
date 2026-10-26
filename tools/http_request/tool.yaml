@@ -20,4 +20,4 @@ default_action: ask
 timeout_ms: 60000
 exposure: deferred
 search_hint: call REST API http request post json
-net: direct
+net: proxy

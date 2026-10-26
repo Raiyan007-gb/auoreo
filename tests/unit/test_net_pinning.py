@@ -170,6 +170,8 @@ async def test_web_fetch_caps_body_and_blocks_rebinding(
     monkeypatch.setattr(
         net, "PinnedTransport", lambda inner=None, *, allow_private=False: real(httpx.MockTransport(handler))
     )
+    # I9: web_fetch is `net: proxy` → the client talks to the egress proxy (mocked here)
+    monkeypatch.setattr(net, "proxy_transport", lambda url: httpx.MockTransport(handler))
     services.settings.tools.fetch_max_bytes = 64 * 1024
     ctx = ToolContext(session_id="s1", cwd=workdir, home=services.settings.home)
     rules = PermissionEngine([Rule(permission="webfetch", pattern="*", action="allow")])

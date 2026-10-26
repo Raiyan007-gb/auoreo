@@ -12,13 +12,13 @@ from __future__ import annotations
 
 import asyncio
 import copy
-import hashlib
 import logging
 import uuid
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from auoreo.backends.sandbox import escalation_request
+from auoreo.core import justifications
 from auoreo.core import observability as obs
 from auoreo.core.guardian import guardian_verdict
 from auoreo.core.redaction import redact_tool_output
@@ -45,6 +45,7 @@ from auoreo.tools.context import (
 )
 from auoreo.tools.gates import external_dir_gate, risk_tier, secret_names, unattended_gate
 from auoreo.tools.locks import PathLocks, touched_paths
+from auoreo.tools.netstage import net_stage, split_justification
 from auoreo.tools.stages import agent_of as _agent
 from auoreo.tools.stages import check_output, prune
 from auoreo.tools.stages import detail as _detail
@@ -113,6 +114,7 @@ class ToolExecutor:
             validate_args(tool.name, args, tool.manifest.parameters)
         except InvalidArgumentsError as exc:
             return self._err(call, str(exc))
+        justification = split_justification(tool, args, logged)  # --- I9: never seen by the handler
 
         hooks = hooks_of(self.s)
         if hooks is not None:
@@ -182,7 +184,7 @@ class ToolExecutor:
             "permission": permission,
             "pattern": pattern[:500],
             "call_id": call.id,
-            "net": tool.manifest.net,
+            "net": {"mode": tool.manifest.net},
         }
         reason = decision.detail
         literal = gates_literal.scan(self, tool, args)  # --- H1b: literal secrets -> masked, human-only
@@ -217,12 +219,22 @@ class ToolExecutor:
             if refused is not None:
                 return refused
             mode = wider
+        # --- I9: per-tool egress (net: none | proxy | direct grant), spec §25.10
+        refused, egress = await net_stage(self, call, tool, args, ctx, engine, audit, justification)
+        if refused is not None:
+            return refused
 
         # Execute.
-        ctx.env = child_env(tool.manifest.requires_env, self.s.secrets)
+        ctx.env = {**child_env(tool.manifest.requires_env, self.s.secrets), **egress.env}
         ctx.services.setdefault("services", self.s)
         ctx.services.setdefault("executor", self)  # `tool_call` re-enters the pipeline
-        policy = ExecPolicy(mode=mode, net=tool.manifest.net, grant_id=grant_id)
+        policy = ExecPolicy(
+            mode=mode,
+            net=tool.manifest.net,
+            grant_id=grant_id,
+            proxy_url=egress.proxy_url,
+            net_grant_id=egress.grant_id,
+        )
         engine_cfg = self.s.settings.tool_engine
         info = CallInfo(
             call.id,
@@ -243,6 +255,7 @@ class ToolExecutor:
                         )
                         raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
             finally:
+                audit["net"] = egress.finish()
                 CURRENT_CALL.reset(call_token)
                 CURRENT_EXEC.reset(exec_token)
                 CURRENT_SESSION.reset(session_token)
@@ -259,6 +272,7 @@ class ToolExecutor:
             log.exception("tool %s crashed", tool.name)
             result = ToolResult(f"tool crashed: {type(exc).__name__}: {exc}", is_error=True)
 
+        audit["net"] = egress.finish()  # idempotent; also covers a handler that failed to load
         text = redact_tool_output(
             result.content,
             mode=tool.manifest.redaction,
@@ -436,7 +450,9 @@ class ToolExecutor:
                 **audit,
                 "fromMode": from_mode,
                 "toMode": to_mode,
-                "justificationHash": hashlib.sha256(justification.encode()).hexdigest()[:16],
+                "justificationHash": justifications.store(
+                    self.s.settings.home, grant_id, justification, kind="sandbox_escalate", tool=tool.name
+                ),
                 "grantId": grant_id,
             },
         )

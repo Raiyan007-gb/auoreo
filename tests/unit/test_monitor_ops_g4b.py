@@ -28,11 +28,13 @@ async def call(
             events.append((event_type, data))
 
     ctx = ToolContext(session_id="s1", cwd=workdir, home=services.settings.home, emit=emit)
+    if services.harness.tools[name].manifest.net == "direct":  # I9: justification + net_direct grant
+        args = {**args, "net_justification": "probe reachability of the host named in the task"}
     out = await services.coordinator.runner.executor.run(
         ToolCall("c1", name, json.dumps(args)),
         tools=services.harness.tools,
         ctx=ctx,
-        engine=PermissionEngine(ALLOW_BASH),
+        engine=PermissionEngine([*ALLOW_BASH, Rule(permission="net_direct", pattern="*", action="allow")]),
     )
     return out.result.content, out.result.is_error, out.result.meta
 

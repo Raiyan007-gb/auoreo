@@ -104,8 +104,12 @@ def test_bwrap_wraps_long_lived_with_the_same_profile(services: Services, tmp_pa
     assert ["--bind", str(tmp_path), str(tmp_path)] == piped[
         piped.index(str(tmp_path)) - 1 : piped.index(str(tmp_path)) + 2
     ]
-    proxy = backend.wrap_long_lived(ExecSpec(argv=["x"], cwd=tmp_path, net="proxy"), tty=False)
+    proxy = backend.wrap_long_lived(
+        ExecSpec(argv=["x"], cwd=tmp_path, net="proxy", proxy_port=3128), tty=False
+    )
     assert proxy is not None and "--unshare-net" not in proxy[0]
+    no_proxy = backend.wrap_long_lived(ExecSpec(argv=["x"], cwd=tmp_path, net="proxy"), tty=False)
+    assert no_proxy is not None and "--unshare-net" in no_proxy[0]  # I9: no proxy → no network
 
 
 class _CannotWrap:

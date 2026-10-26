@@ -2,8 +2,9 @@ name: web_fetch
 toolset: web
 description: >-
   Fetch a public http(s) URL and return its content (HTML converted to markdown).
-  Private, loopback and link-local addresses are blocked (DNS resolved once and pinned);
-  redirects are re-validated; bodies over 5 MiB are cut.
+  Private, loopback and link-local addresses are blocked (DNS resolved once and pinned by the
+  egress proxy); redirects are re-validated; bodies over 5 MiB are cut; robots.txt is respected.
+  JavaScript-only pages fall back to a reader or end with a hint to use the browser tools.
 parameters:
   type: object
   properties:
@@ -17,7 +18,8 @@ default_action: ask
 is_read_only: true
 is_concurrency_safe: true
 is_search_or_read: true
-timeout_ms: 60000
+timeout_ms: 90000
+requires_env: [JINA_API_KEY, FIRECRAWL_API_KEY]  # reader fallback keys (scoped reads)
 search_hint: fetch download web page url http
-net: direct
+net: proxy
 activity_hint: "Fetching {url}"
