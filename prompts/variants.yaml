@@ -6,6 +6,22 @@
 # low|medium|high|max → provider value; a missing level clamps to the nearest weaker one;
 # unset = built-in: max→high except Opus-class), thinking_display (hidden|summary|full),
 # block_binding (keep|strip prior thinking blocks), interleaved_field, rename_fields.
+#
+# toolOrder (spec §12): order of the prompt's tool list and of the request's tool schemas.
+# Must contain `<unlisted-tools>` exactly once; every tool not named here takes that slot in
+# its default order (bundled tools by name, then dynamic/MCP tools by name). Byte-stable.
+toolOrder:
+  - read
+  - grep
+  - glob
+  - codebase_map
+  - edit
+  - str_replace
+  - write
+  - apply_patch
+  - bash
+  - "<unlisted-tools>"
+  - tool_search
 variants:
   # OpenRouter free SKUs rarely support reasoning params: fail safe.
   - provider: openrouter

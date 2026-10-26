@@ -71,7 +71,7 @@ class _Coordinator:
 
 @pytest.fixture
 async def rig(home: Path, workdir: Path, gateway: FakeGateway) -> AsyncIterator[dict[str, Any]]:
-    st = Settings(home=home, gateway="fake", backends=dict(FAKES))
+    st = Settings(home=home, gateway="fake", backends=dict(FAKES), voice_endpoint_silence_ms=700)
     svc = await Services.create(st, cwd=workdir, gateway=gateway, with_mcp=False)
     real = svc.coordinator
     sess = await svc.create_session(title="barge")

@@ -27,7 +27,14 @@ FAKES = {"stt": "fake", "tts": "fake", "vad": "fake", "wake": "fake"}
 
 @pytest.fixture
 def settings(home: Path) -> Settings:
-    return Settings(home=home, gateway="fake", approval_timeout_s=5, backends=dict(FAKES), rtc_ice_servers=[])
+    return Settings(
+        home=home,
+        gateway="fake",
+        approval_timeout_s=5,
+        backends=dict(FAKES),
+        rtc_ice_servers=[],
+        voice_endpoint_silence_ms=700,  # the 1 s gaps of `gappy_track` end utterances
+    )
 
 
 @pytest.fixture
@@ -124,7 +131,7 @@ async def _feed(bridge: RtcVoiceBridge, pcm: bytes, session_id: str | None, chun
 
 async def test_bridge_barge_in_and_steer(home: Path, workdir: Path, gateway: FakeGateway) -> None:
     pytest.importorskip("numpy")
-    st = Settings(home=home, gateway="fake", backends=dict(FAKES))
+    st = Settings(home=home, gateway="fake", backends=dict(FAKES), voice_endpoint_silence_ms=700)
     svc = await Services.create(st, cwd=workdir, gateway=gateway, with_mcp=False)
     real = svc.coordinator
     try:

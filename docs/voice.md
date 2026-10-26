@@ -23,7 +23,7 @@ upload (wav/webm/ogg/mp3/m4a, ≤ 25 MB)
 text (≤ 5000 chars) ─ prepare_spoken_text ─ sentence chunks ≤ chunk_limit ─ TTS backend
                                                   └─ concatenate (WAV exact; else first chunk's type)
 
-WebRTC audio ─ on_audio_frames ─ VAD per chunk ─ speech ≥ 100 ms … silence ≥ 700 ms
+WebRTC audio ─ on_audio_frames ─ VAD per chunk ─ speech ≥ 100 ms … silence ≥ 1250 ms
                                      └─ utterance WAV → STT → voice.transcript → steer/followup
 ```
 
@@ -73,7 +73,7 @@ uv pip install https://github.com/KittenML/KittenTTS/releases/download/<ver>/kit
   "voice_language": "en",
   "voice_tts_voice": "Jasper",
   "voice_stt_model": "whisper-large-v3",
-  "voice_endpoint_silence_ms": 700,
+  "voice_endpoint_silence_ms": 1250,
   "voice_speaking_rms": 0.02
 }
 ```

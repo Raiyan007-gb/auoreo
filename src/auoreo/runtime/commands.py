@@ -12,7 +12,7 @@ import re
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from auoreo.harness.loader import CommandDef
 from auoreo.harness.orchestrator import render
@@ -93,8 +93,23 @@ async def _compact(inv: Invocation) -> Expanded:
     else:
         # the service already emitted compaction.skipped / compaction.failed
         with contextlib.suppress(CompactionError):
-            await comp.compact(sid, trigger="manual")
+            await comp.compact(sid, trigger="manual", **compact_args(inv.args))
     return Expanded(inv.text, handled=True)
+
+
+_COMPACT_ARG = re.compile(r"(up_to|from|retain)=(\S+)")
+_COMPACT_KEYS = {"up_to": "up_to", "from": "from_", "retain": "retain_ratio"}
+
+
+def compact_args(args: str) -> dict[str, Any]:
+    """`/compact up_to=40`, `/compact from=12`, `/compact retain=0.1` (unparsable values ignored)."""
+    out: dict[str, Any] = {}
+    for key, raw in _COMPACT_ARG.findall(args):
+        with contextlib.suppress(ValueError):
+            value: float = float(raw) if key == "retain" else int(raw)
+            if value >= 0:
+                out[_COMPACT_KEYS[key]] = value
+    return out
 
 
 HANDLERS: dict[str, Callable[[Invocation], Awaitable[Expanded]]] = {

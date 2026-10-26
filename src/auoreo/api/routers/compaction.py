@@ -1,4 +1,5 @@
-"""Manual compaction (spec §11.9 S4c) and the soft-archive of compacted messages."""
+"""Manual compaction (spec §11.9 S4d; optional partial `up_to` / `from` bounds) and the
+soft-archive of compacted messages."""
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
@@ -18,8 +19,9 @@ async def compact(session_id: str, svc: ServicesDep, body: CompactRequest | None
     if svc.coordinator.is_running(session_id):
         raise HTTPException(status.HTTP_409_CONFLICT, "session is running; compact when idle")
     try:
+        body = body or CompactRequest()
         res = await svc.coordinator.runner.compaction.compact(
-            session_id, trigger="manual", retain_ratio=body.retain_ratio if body else None
+            session_id, trigger="manual", retain_ratio=body.retain_ratio, up_to=body.up_to, from_=body.from_
         )
     except CompactionError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, exc.reason) from exc
@@ -30,6 +32,7 @@ async def compact(session_id: str, svc: ServicesDep, body: CompactRequest | None
         archived=res.archived,
         pruned=res.pruned,
         summary_chars=res.summary_chars,
+        source=res.source,
     )
 
 

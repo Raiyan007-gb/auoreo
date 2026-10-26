@@ -2,20 +2,25 @@
 
 S0 meter     — thresholds from the model's context window; pressure = token count of the
                assembled request.
-S2 prune     — shorten old, bulky read-type tool results in place (no LLM).
-S5 summarize — one tool-free call to the `small` routing group with `prompts/compaction.md`.
-S6 replace   — keep the first user message and a tail that starts at a real user message;
-               swap the middle for one `<compaction-summary>` user message and move the
-               replaced rows to `messages_archive`.
-Triggers (S4) live in the runner: pre-step pressure, provider CONTEXT overflow, manual.
+S2 prune     — shorten old, bulky shell/read/web/edit tool results in place (no LLM).
+S5 summarize — one tool-free aux call (`runtime.compaction_summarize`): KV-friendly prefix
+               replay, PTL retries, timeout ladder, `finish_reason=length` aborts.
+S6 replace   — keep the head (through the first user message) and a tail that starts at a
+               real user message; swap the middle for one `<compaction-summary>` user message
+               and move the replaced rows to `messages_archive`.
+S7 restore   — session-memory compaction first (no LLM) when notes exist; the summary
+               message carries restored files/skills/plan/metadata; SessionStart re-runs.
+Triggers (S4): pre-step pressure + provider CONTEXT overflow (runner), idle
+(`runtime.compaction_idle`), manual `/compact` + API with optional `up_to` / `from` bounds.
+Pure helpers live in `runtime.compaction_plan` and are re-exported here.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -23,10 +28,26 @@ from sqlalchemy import select
 
 from auoreo.core import observability as obs
 from auoreo.core.db import MessageArchiveRow, MessageRow
-from auoreo.gateway.aux import resolve_aux_model
 from auoreo.gateway.errors import GatewayError
-from auoreo.gateway.types import LLMRequest, TextDelta, Usage
+from auoreo.gateway.types import LLMRequest
 from auoreo.harness.manifests import HookEvent
+from auoreo.runtime.compaction_plan import (
+    PRUNABLE_TOOLS,
+    PRUNE_HEAD,
+    PRUNE_MIN_RECLAIM_TOKENS,
+    PRUNE_TAIL,
+    SUMMARY_TAG,
+    Thresholds,
+    partial_bounds,
+    prune_plan,
+    render_transcript,
+    session_memory_split,
+    split_points,
+    thresholds,
+    turn_index,
+)
+from auoreo.runtime.compaction_restore import read_session_memory, rerun_session_start, restore_block
+from auoreo.runtime.compaction_summarize import Summarizer, SummaryError
 from auoreo.runtime.hooks import hooks_of
 
 if TYPE_CHECKING:
@@ -36,39 +57,20 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-Trigger = Literal["pressure", "overflow", "manual"]
-
-PRUNABLE_TOOLS = frozenset({"bash", "read", "grep", "glob", "web_fetch", "codebase_map"})
-PRUNE_MIN_CHARS = 8000
-PRUNE_HEAD = 4096
-PRUNE_TAIL = 1024
-PRUNE_KEEP_RECENT = 10
-PRUNE_MIN_RECLAIM_TOKENS = 4096
-TAIL_MIN_MESSAGES = 20
-SUMMARY_INPUT_CHARS = 160_000
-SUMMARY_MAX_TOKENS = 8192
+Trigger = Literal["pressure", "overflow", "manual", "idle"]
 MAX_FAILURES = 3
-SUMMARY_TAG = "<compaction-summary"
-WRITE_NOW = "Write the compaction summary now."
 
 
 class CompactionError(Exception):
-    def __init__(self, reason: str, *, tripped: bool = False) -> None:
+    def __init__(self, reason: str, *, tripped: bool = False, failure_class: str = "error") -> None:
         super().__init__(reason)
         self.reason = reason
         self.tripped = tripped
+        self.failure_class = failure_class
 
 
 class NothingToCompact(CompactionError):
     """Benign: every message is protected (head/tail). Not a failure, never trips the breaker."""
-
-
-@dataclass(frozen=True)
-class Thresholds:
-    window: int
-    effective: int
-    auto: int
-    blocking: int
 
 
 @dataclass(frozen=True)
@@ -79,118 +81,8 @@ class CompactionResult:
     compaction_id: str
     summary_chars: int
     pruned: int = 0
-
-
-def thresholds(window: int, max_output: int | None = None, ratio: float | None = None) -> Thresholds:
-    """`effective = window − min(max_output, 20k)`, `auto = effective − 13k`,
-    `blocking = effective − 3k`. Reserves are capped at a fraction of the window so tiny
-    windows (tests, local models) still get positive thresholds; unchanged for ≥ 104k."""
-    reserve = min(max_output or 8192, 20_000, window // 4)
-    effective = window - reserve
-    auto = int(window * ratio) if ratio is not None else effective - min(13_000, window // 8)
-    return Thresholds(window, effective, auto, effective - min(3_000, window // 16))
-
-
-def is_real_user(m: dict[str, Any]) -> bool:
-    content = m.get("content")
-    return m.get("role") == "user" and not (isinstance(content, str) and content.startswith(SUMMARY_TAG))
-
-
-def turn_index(history: list[dict[str, Any]], turn_msg: dict[str, Any]) -> int:
-    """S7: index of this turn's user message, searched from the end by identity (indices
-    move when compaction replaces the middle). Falls back to the last real user message."""
-    for i in range(len(history) - 1, -1, -1):
-        if history[i] is turn_msg:
-            return i
-    return next((i for i in range(len(history) - 1, -1, -1) if is_real_user(history[i])), -1)
-
-
-def split_points(history: list[dict[str, Any]], sizes: list[int], retain_ratio: float) -> tuple[int, int]:
-    """Return `(head_end, tail_start)`; the middle `history[head_end:tail_start]` is replaced.
-
-    Head = through the first user message. Tail = last ≥ TAIL_MIN_MESSAGES messages holding
-    ≥ retain_ratio of the tokens, extended back so it starts at a real user message (which
-    also guarantees no tool_call/result pair is split)."""
-    n = len(history)
-    head_end = next((i + 1 for i, m in enumerate(history) if m.get("role") == "user"), 0)
-    start = max(head_end, n - (TAIL_MIN_MESSAGES if retain_ratio > 0 else 0))
-    if retain_ratio > 0:
-        target = retain_ratio * sum(sizes)
-        kept = sum(sizes[start:])
-        while start > head_end and kept < target:
-            start -= 1
-            kept += sizes[start]
-    while start > head_end and (start >= n or not is_real_user(history[start])):
-        start -= 1
-    return head_end, start
-
-
-def prune_plan(history: list[dict[str, Any]]) -> tuple[dict[int, dict[str, Any]], int]:
-    """S2: old bulky read-type tool results → head + marker + tail. Returns (changes, chars)."""
-    names = {
-        tc.get("id"): (tc.get("function") or {}).get("name")
-        for m in history
-        if m.get("role") == "assistant"
-        for tc in m.get("tool_calls") or []
-    }
-    changes: dict[int, dict[str, Any]] = {}
-    reclaimed = 0
-    for i, m in enumerate(history[: max(0, len(history) - PRUNE_KEEP_RECENT)]):
-        content = m.get("content")
-        if m.get("role") != "tool" or not isinstance(content, str) or len(content) <= PRUNE_MIN_CHARS:
-            continue
-        if names.get(m.get("tool_call_id")) not in PRUNABLE_TOOLS:
-            continue
-        cut = len(content) - PRUNE_HEAD - PRUNE_TAIL
-        new = f"{content[:PRUNE_HEAD]}\n… [pruned {cut} chars] …\n{content[-PRUNE_TAIL:]}"
-        changes[i] = {**m, "content": new}
-        reclaimed += len(content) - len(new)
-    return changes, reclaimed
-
-
-def _parts_text(content: Any) -> str:
-    """Flatten list content for the summarizer; images become short placeholders, never base64."""
-    if not content:
-        return ""
-    if not isinstance(content, list):
-        return json.dumps(content)
-    out: list[str] = []
-    for part in content:
-        if not isinstance(part, dict):
-            out.append(str(part))
-        elif part.get("type") == "text":
-            out.append(str(part.get("text", "")))
-        elif part.get("type") == "image_url":
-            out.append("[image]")
-        else:
-            out.append(json.dumps(part)[:200])
-    return "\n".join(out)
-
-
-def render_transcript(messages: list[dict[str, Any]], cap: int = SUMMARY_INPUT_CHARS) -> str:
-    """Plain-text transcript for the summarizer; oldest entries are dropped past `cap`."""
-    entries: list[str] = []
-    for m in messages:
-        content = m.get("content")
-        text = content if isinstance(content, str) else _parts_text(content)
-        if m.get("role") == "tool":
-            entries.append(f"[tool result {m.get('tool_call_id', '')}]\n{text}")
-            continue
-        entry = f"[{m.get('role')}]\n{text}".rstrip()
-        for tc in m.get("tool_calls") or []:
-            fn = tc.get("function") or {}
-            entry += f"\n-> {fn.get('name')}({str(fn.get('arguments', ''))[:2000]})"
-        entries.append(entry)
-    total = sum(len(e) + 2 for e in entries)
-    first = 0
-    while first < len(entries) - 1 and total > cap:
-        total -= len(entries[first]) + 2
-        first += 1
-    kept = entries[first:]
-    if kept and len(kept[0]) > cap:
-        kept[0] = kept[0][-cap:]
-    note = [f"[... {first} older messages omitted ...]"] if first else []
-    return "\n\n".join(note + kept)
+    source: str = "summary"  # summary | session_memory | prune
+    retries: int = 0
 
 
 class CompactionService:
@@ -199,7 +91,10 @@ class CompactionService:
     def __init__(self, services: Services, ledger: UsageLedger | None = None) -> None:
         self.s = services
         self.ledger = ledger
+        self.summarizer = Summarizer(services, ledger)
         self.failures: dict[str, int] = {}
+        self.committing: set[str] = set()
+        """Sessions inside the replace transaction: a foreground claim waits, never cancels."""
 
     # ---------------------------------------------------------------- meter
     @property
@@ -261,57 +156,54 @@ class CompactionService:
         rt: SessionRuntime | None = None,
         model: str | None = None,
         stop_below: int | None = None,
+        up_to: int | None = None,
+        from_: int | None = None,
     ) -> CompactionResult:
         rt = rt or await self.s.coordinator.runtime(session_id)
         model = model or self._model(rt)
         retain = self.s.settings.loop.compaction_retain_ratio if retain_ratio is None else retain_ratio
         cid = f"cmp_{uuid.uuid4().hex[:12]}"
-        await self.s.emit(session_id, "compaction.started", {"trigger": trigger, "compaction_id": cid})
+        base = {"trigger": trigger, "compaction_id": cid}
+        await self.s.emit(session_id, "compaction.started", base)
         obs.count("compaction_runs_total")  # --- W0-D
-        await self._hook("PreCompact", rt, {"trigger": trigger, "compaction_id": cid})
+        await self._hook("PreCompact", rt, base)
+        bounds = (up_to, from_) if up_to is not None or from_ is not None else None
         try:
-            res = await self._compact(rt, cid, trigger, retain, model, stop_below)
+            res = await self._compact(rt, cid, trigger, retain, model, stop_below, bounds)
         except NothingToCompact as exc:
-            await self.s.emit(
-                session_id,
-                "compaction.skipped",
-                {"trigger": trigger, "compaction_id": cid, "reason": exc.reason},
-            )
+            await self.s.emit(session_id, "compaction.skipped", {**base, "reason": exc.reason})
+            raise
+        except asyncio.CancelledError:  # a foreground claim pre-empted a background compaction
+            await self.s.emit(session_id, "compaction.failed", {**base, "reason": "cancelled", "failures": 0})
             raise
         except Exception as exc:
             n = self.failures[session_id] = self.failures.get(session_id, 0) + 1
             reason = exc.reason if isinstance(exc, CompactionError) else f"{type(exc).__name__}: {exc}"
+            cls = exc.failure_class if isinstance(exc, CompactionError) else "crash"
             if not isinstance(exc, CompactionError):
                 log.exception("compaction crashed")
-            await self.s.emit(
-                session_id,
-                "compaction.failed",
-                {"trigger": trigger, "compaction_id": cid, "reason": reason, "failures": n},
-            )
-            raise CompactionError(reason, tripped=n >= MAX_FAILURES) from exc
+            data = {**base, "reason": reason, "failures": n, "failure_class": cls}
+            await self.s.emit(session_id, "compaction.failed", data)
+            raise CompactionError(reason, tripped=n >= MAX_FAILURES, failure_class=cls) from exc
         self.failures[session_id] = 0
         await self.s.emit(
             session_id,
             "compaction.completed",
             {
-                "trigger": trigger,
-                "compaction_id": cid,
+                **base,
                 "pre_tokens": res.pre_tokens,
                 "post_tokens": res.post_tokens,
                 "archived": res.archived,
                 "pruned": res.pruned,
                 "summary_chars": res.summary_chars,
+                "source": res.source,
+                "retries": res.retries,
             },
         )
+        if res.archived:
+            await rerun_session_start(self.s, rt, cid)
         await self._hook(
-            "PostCompact",
-            rt,
-            {
-                "trigger": trigger,
-                "compaction_id": cid,
-                "pre_tokens": res.pre_tokens,
-                "post_tokens": res.post_tokens,
-            },
+            "PostCompact", rt, {**base, "pre_tokens": res.pre_tokens, "post_tokens": res.post_tokens}
         )
         return res
 
@@ -342,35 +234,105 @@ class CompactionService:
         retain: float,
         model: str,
         stop_below: int | None,
+        bounds: tuple[int | None, int | None] | None,
     ) -> CompactionResult:
         history = rt.history
         pre = self.tokens(model, history)
         pruned = await self._prune(rt)
         if pruned and stop_below is not None and (now := self.tokens(model, history)) < stop_below:
-            return CompactionResult(pre, now, 0, cid, 0, pruned)
+            return CompactionResult(pre, now, 0, cid, 0, pruned, "prune")
         sizes = [self.tokens(model, [m]) for m in history]
-        head_end, tail_start = split_points(history, sizes, retain)
-        if tail_start <= head_end:
+        default = split_points(history, sizes, retain)
+        if bounds is None and (sm := await self._session_memory(rt, cid, trigger, model, sizes, pre)):
+            start, end, msg, chars = sm
+            return await self._commit(rt, cid, start, end, msg, pre, model, chars, pruned, "session_memory")
+        start, end = default if bounds is None else partial_bounds(history, default[1], *bounds)
+        if end <= start:
             raise NothingToCompact(f"nothing to compact ({len(history)} messages, all protected)")
-        middle = history[head_end:tail_start]
-        summary = await self._summarize(rt.session_id, cid, model, middle)
-        msg = {
-            "role": "user",
-            "content": f'{SUMMARY_TAG} trigger="{trigger}" id="{cid}" archived="{len(middle)}">\n'
-            f"{summary}\n</compaction-summary>",
-        }
-        new = [*history[:head_end], msg, *history[tail_start:]]
+        try:
+            out = await self.summarizer.summarize(rt, cid, model, history[:start], history[start:end])
+        except SummaryError as exc:
+            raise CompactionError(exc.reason, failure_class=exc.failure_class) from exc
+        checkpoint = await self._message(rt, cid, trigger, out.text, start, end, pre, model)
+        if checkpoint is None:  # shrink proof: never replace with something bigger
+            raise CompactionError("summary did not shrink the context", failure_class="no_shrink")
+        return await self._commit(
+            rt, cid, start, end, checkpoint, pre, model, len(out.text), pruned, "summary", out.retries
+        )
+
+    async def _session_memory(
+        self, rt: SessionRuntime, cid: str, trigger: Trigger, model: str, sizes: list[int], pre: int
+    ) -> tuple[int, int, dict[str, Any], int] | None:
+        """S7: LLM-free compaction from the session notes file when it exists and shrinks."""
+        cfg = self.s.settings.compaction
+        notes = read_session_memory(self.s.settings.home, rt.session_id) if cfg.session_memory else None
+        if notes is None:
+            return None
+        start, end = session_memory_split(
+            rt.history,
+            sizes,
+            cfg.session_memory_min_tokens,
+            cfg.session_memory_min_messages,
+            cfg.session_memory_max_tokens,
+        )
+        if end <= start:
+            return None
+        msg = await self._message(rt, cid, trigger, notes, start, end, pre, model, source="session_memory")
+        return (start, end, msg, len(notes)) if msg is not None else None
+
+    async def _message(
+        self,
+        rt: SessionRuntime,
+        cid: str,
+        trigger: Trigger,
+        summary: str,
+        start: int,
+        end: int,
+        pre: int,
+        model: str,
+        source: str = "summary",
+    ) -> dict[str, Any] | None:
+        """The checkpoint message (+ S7 restore block when it still fits) or None when even
+        the bare summary would not shrink the context."""
+        history = rt.history
+        head = f'{SUMMARY_TAG} trigger="{trigger}" id="{cid}" archived="{end - start}" source="{source}">'
+        bare = f"{head}\n{summary}\n</compaction-summary>"
+        restored = await restore_block(self.s, rt, history[start:end], history[end:])
+        for content in ([f"{bare}\n{restored}"] if restored else []) + [bare]:
+            msg = {"role": "user", "content": content}
+            if self.tokens(model, [*history[:start], msg, *history[end:]]) < pre:
+                return msg
+        return None
+
+    async def _commit(
+        self,
+        rt: SessionRuntime,
+        cid: str,
+        start: int,
+        end: int,
+        msg: dict[str, Any],
+        pre: int,
+        model: str,
+        chars: int,
+        pruned: int,
+        source: str,
+        retries: int = 0,
+    ) -> CompactionResult:
+        history = rt.history
+        new = [*history[:start], msg, *history[end:]]
         post = self.tokens(model, new)
-        if post >= pre:  # shrink proof: never replace with something bigger
-            raise CompactionError(f"summary did not shrink the context ({pre} -> {post} tokens)")
-        await self._replace(rt, cid, head_end, tail_start, msg)
-        history[:] = new  # same list object: the runner and coordinator keep their reference
+        self.committing.add(rt.session_id)
+        try:
+            await self._replace(rt, cid, start, end, msg)
+            history[:] = new  # same list object: the runner and coordinator keep their reference
+        finally:
+            self.committing.discard(rt.session_id)
         if self.s.memory is not None:
             try:
-                await self.s.memory.record_message(rt.session_id, "compaction", summary)
+                await self.s.memory.record_message(rt.session_id, "compaction", str(msg["content"]))
             except Exception:  # indexing must never undo a committed compaction
                 log.exception("failed to index compaction summary")
-        return CompactionResult(pre, post, len(middle), cid, len(summary), pruned)
+        return CompactionResult(pre, post, end - start, cid, chars, pruned, source, retries)
 
     async def _rows(self, s: Any, rt: SessionRuntime) -> list[MessageRow]:
         q = select(MessageRow).where(MessageRow.session_id == rt.session_id).order_by(MessageRow.idx)
@@ -392,68 +354,38 @@ class CompactionService:
             rt.history[i] = m
         return len(changes)
 
-    async def _replace(
-        self, rt: SessionRuntime, cid: str, head_end: int, tail_start: int, msg: dict[str, Any]
-    ) -> None:
+    async def _replace(self, rt: SessionRuntime, cid: str, start: int, end: int, msg: dict[str, Any]) -> None:
         async with self.s.db.session() as s:
             rows = await self._rows(s, rt)
-            for r in rows[head_end:tail_start]:
+            for r in rows[start:end]:
                 s.add(
                     MessageArchiveRow(
                         session_id=rt.session_id, compaction_id=cid, idx=r.idx, message=r.message
                     )
                 )
-            kept = [(dict(r.message), r.created_at) for r in rows[tail_start:]]
-            for r in rows[head_end:]:
+            kept = [(dict(r.message), r.created_at) for r in rows[end:]]
+            for r in rows[start:]:
                 await s.delete(r)
             await s.flush()  # deletes before inserts: (session_id, idx) is unique
-            base = rows[head_end - 1].idx + 1 if head_end else 0
+            base = rows[start - 1].idx + 1 if start else 0
             s.add(MessageRow(session_id=rt.session_id, idx=base, message=msg))
             for j, (m, created) in enumerate(kept, start=1):
                 s.add(MessageRow(session_id=rt.session_id, idx=base + j, message=m, created_at=created))
             await s.commit()
 
-    async def _summarize(self, sid: str, cid: str, model: str, middle: list[dict[str, Any]]) -> str:
-        prompt = self.s.harness.snapshot.prompts.get("compaction")
-        if prompt is None or prompt.section.role != "compaction":
-            raise CompactionError("prompts/compaction.md (role: compaction) is missing")
-        group = resolve_aux_model(self.s.settings, "compaction", gateway=self.s.gateway, main=model)
-        request = LLMRequest(
-            model=group,
-            messages=(
-                {"role": "system", "content": prompt.template},
-                {"role": "user", "content": f"<transcript>\n{render_transcript(middle)}\n</transcript>"},
-                {"role": "user", "content": WRITE_NOW},
-            ),
-            tool_choice="none",
-            temperature=0,
-            max_tokens=SUMMARY_MAX_TOKENS,
-            metadata={"session_id": sid, "purpose": "compaction", "compaction_id": cid},
-        )
-        parts: list[str] = []
-        record: Callable[..., Any] | None = self.ledger.record if self.ledger else None
-        try:
-            async for item in self.s.gateway.stream(request):  # no compaction can recurse from here
-                if isinstance(item, TextDelta):
-                    parts.append(item.text)
-                elif isinstance(item, Usage) and record is not None:
-                    await record(sid, cid, group, item)
-        except GatewayError as exc:
-            raise CompactionError(f"summarizer call failed: {exc.code}: {exc.message[:300]}") from exc
-        text = "".join(parts).strip()
-        if not text:
-            raise CompactionError("summarizer returned no text")
-        return text
-
 
 __all__ = [
+    "PRUNABLE_TOOLS",
+    "PRUNE_HEAD",
+    "PRUNE_TAIL",
     "CompactionError",
     "CompactionResult",
     "CompactionService",
+    "NothingToCompact",
     "Thresholds",
     "prune_plan",
     "render_transcript",
     "split_points",
-    "turn_index",
     "thresholds",
+    "turn_index",
 ]

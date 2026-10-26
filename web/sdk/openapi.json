@@ -955,6 +955,18 @@
       "CompactRequest": {
         "additionalProperties": false,
         "properties": {
+          "from": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From"
+          },
           "retain_ratio": {
             "anyOf": [
               {
@@ -967,6 +979,18 @@
               }
             ],
             "title": "Retain Ratio"
+          },
+          "up_to": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Up To"
           }
         },
         "title": "CompactRequest",
@@ -993,6 +1017,11 @@
           "pruned": {
             "title": "Pruned",
             "type": "integer"
+          },
+          "source": {
+            "default": "summary",
+            "title": "Source",
+            "type": "string"
           },
           "summary_chars": {
             "title": "Summary Chars",

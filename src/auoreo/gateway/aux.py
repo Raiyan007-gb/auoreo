@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from auoreo.core.settings import Settings
 
 AUX_TASKS: tuple[str, ...] = ("title", "compaction", "guardian", "hyde", "translate", "summary")
-BACKGROUND_PURPOSES: frozenset[str] = frozenset({*AUX_TASKS, "curator", "vision"})
+BACKGROUND_PURPOSES: frozenset[str] = frozenset({*AUX_TASKS, "curator", "vision", "memory_query"})
 """`metadata.purpose` values that fail fast (no retry, no 529 fallback streak)."""
 
 _failures: dict[str, float] = {}

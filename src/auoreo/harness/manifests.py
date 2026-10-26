@@ -344,6 +344,9 @@ class PromptSection(_Strict):
     role: Literal["section", "compaction", "guardian"] = "section"
     """`section` joins the agent's system prompt; `compaction` is the summarizer instruction;
     `guardian` is the smart-mode permission policy. Only `section` reaches the agent."""
+    complete: bool = False
+    """A `complete: true` section is the whole system prompt: it shadows every other section
+    and family overlay (at most one may exist across all roots)."""
 
 
 class PromptFamily(_Strict):
@@ -352,6 +355,9 @@ class PromptFamily(_Strict):
     name: str = Field(pattern=NAME_RE)
     match: list[str] = Field(default_factory=list)
     """Regexes over the resolved model id. Empty = fallback family."""
+    mode: str | None = None
+    """A mode reminder (e.g. `plan`): never picked by model id; its text rides the per-turn
+    context block while the session is in that permission mode (cache-safe)."""
 
 
 class Variant(_Strict):
@@ -382,8 +388,24 @@ class Variant(_Strict):
         return {str(x): str(x) for x in v} if isinstance(v, list) else v
 
 
+UNLISTED_TOOLS = "<unlisted-tools>"
+
+
 class VariantsFile(_Strict):
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
     variants: list[Variant] = Field(default_factory=list)
+    tool_order: list[str] = Field(default_factory=lambda: [UNLISTED_TOOLS], alias="toolOrder")
+    """Tool order for the prompt's tool list and the request's tool schemas (spec §12). Must
+    contain `<unlisted-tools>` exactly once: every tool not named here goes there, by name."""
+
+    @field_validator("tool_order")
+    @classmethod
+    def _one_placeholder(cls, v: list[str]) -> list[str]:
+        if v.count(UNLISTED_TOOLS) != 1:
+            raise ValueError(f"toolOrder must contain '{UNLISTED_TOOLS}' exactly once")
+        if len(set(v)) != len(v):
+            raise ValueError("toolOrder lists a tool more than once")
+        return v
 
 
 class CommandManifest(_Strict):

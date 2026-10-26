@@ -125,11 +125,18 @@ class UsageSummary(BaseModel):
 
 
 class CompactRequest(_In):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
     retain_ratio: float | None = Field(default=None, ge=0, le=1)
+    up_to: int | None = Field(default=None, ge=0)
+    """Partial compaction: replace messages before this history index, keep the rest."""
+    from_: int | None = Field(default=None, ge=0, alias="from")
+    """Partial compaction: replace messages from this history index to the end."""
 
 
 class CompactionOut(BaseModel):
     compaction_id: str
+    source: str = "summary"
+    """`summary` (LLM), `session_memory` (notes file, no LLM) or `prune` (S2 only)."""
     pre_tokens: int
     post_tokens: int
     archived: int
