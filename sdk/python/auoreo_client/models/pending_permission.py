@@ -6,6 +6,8 @@ from typing import Any, TypeVar
 from attrs import define as _attrs_define
 from attrs import field as _attrs_field
 
+from ..types import UNSET, Unset
+
 T = TypeVar("T", bound="PendingPermission")
 
 
@@ -19,6 +21,8 @@ class PendingPermission:
         request_id (str):
         session_id (str):
         tool (str):
+        one_shot (bool | Unset): No `always`: single-use (e.g. sandbox escalation). Default: False.
+        risk (str | Unset):  Default: 'medium'.
     """
 
     detail: str
@@ -27,6 +31,8 @@ class PendingPermission:
     request_id: str
     session_id: str
     tool: str
+    one_shot: bool | Unset = False
+    risk: str | Unset = "medium"
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -42,6 +48,10 @@ class PendingPermission:
 
         tool = self.tool
 
+        one_shot = self.one_shot
+
+        risk = self.risk
+
         field_dict: dict[str, Any] = {}
         field_dict.update(self.additional_properties)
         field_dict.update(
@@ -54,6 +64,10 @@ class PendingPermission:
                 "tool": tool,
             }
         )
+        if one_shot is not UNSET:
+            field_dict["one_shot"] = one_shot
+        if risk is not UNSET:
+            field_dict["risk"] = risk
 
         return field_dict
 
@@ -72,6 +86,10 @@ class PendingPermission:
 
         tool = d.pop("tool")
 
+        one_shot = d.pop("one_shot", UNSET)
+
+        risk = d.pop("risk", UNSET)
+
         pending_permission = cls(
             detail=detail,
             pattern=pattern,
@@ -79,6 +97,8 @@ class PendingPermission:
             request_id=request_id,
             session_id=session_id,
             tool=tool,
+            one_shot=one_shot,
+            risk=risk,
         )
 
         pending_permission.additional_properties = d

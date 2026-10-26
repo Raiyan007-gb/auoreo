@@ -20,6 +20,8 @@ class ApprovalOutcome:
     reply: Reply | None
     message: str | None = None
     timed_out: bool = False
+    request_id: str | None = None
+    """Links the decision to its `permission.*` events and audit row."""
 
 
 @dataclass
@@ -37,6 +39,8 @@ class Pending:
     """Persist scope for an `always` reply; must be a subset of `patterns`."""
     cwd: str | None = None
     risk: str = "medium"
+    one_shot: bool = False
+    """No `always` (sandbox escalation, single-use grants): an `always` reply counts as `once`."""
 
 
 class ScopeError(ValueError):
@@ -104,6 +108,7 @@ class ApprovalBroker:
         always: list[str] | None = None,
         cwd: str | None = None,
         risk: str = "medium",
+        one_shot: bool = False,
     ) -> ApprovalOutcome:
         try:
             checked, persist = validate_scope(pattern, patterns, always)
@@ -121,6 +126,7 @@ class ApprovalBroker:
             persist,
             cwd,
             risk,
+            one_shot,
         )
         self._pending[p.request_id] = p
         await self._emit(
@@ -132,13 +138,17 @@ class ApprovalBroker:
                 "permission": permission,
                 "pattern": pattern,
                 "detail": detail,
+                "one_shot": one_shot,
+                "risk": risk,
             },
         )
         try:
-            return await asyncio.wait_for(asyncio.shield(p.future), timeout=self.timeout_s)
+            outcome = await asyncio.wait_for(asyncio.shield(p.future), timeout=self.timeout_s)
+            outcome.request_id = p.request_id
+            return outcome
         except TimeoutError:
             # Silence is never consent (§19.2).
-            return ApprovalOutcome(False, None, timed_out=True)
+            return ApprovalOutcome(False, None, timed_out=True, request_id=p.request_id)
         finally:
             self._pending.pop(p.request_id, None)
 
@@ -154,6 +164,8 @@ class ApprovalBroker:
         p = self._pending.get(request_id)
         if p is None or p.future.done():
             return False
+        if reply == "always" and p.one_shot:
+            reply = "once"  # single-use requests never persist a grant
         p.future.set_result(ApprovalOutcome(reply != "reject", reply, message))
         await self._emit(p.session_id, "permission.replied", {"request_id": request_id, "reply": reply})
         if reply == "reject":
@@ -165,7 +177,7 @@ class ApprovalBroker:
                         "permission.replied",
                         {"request_id": other.request_id, "reply": "reject", "cascade": True},
                     )
-        elif reply == "always" and on_always is not None:
+        elif reply == "always" and on_always is not None and not p.one_shot:
             for rid in on_always(p):
                 auto = self._pending.get(rid)
                 if auto and not auto.future.done():
@@ -177,6 +189,26 @@ class ApprovalBroker:
                     )
         return True
 
+    async def cascade(self, request_id: str) -> list[str]:
+        """Approve (`once`) every other pending request in the same approval group as
+        `request_id` (spec §17 bulk approve; group = §25.10 key). Returns the approved ids."""
+        p = self._pending.get(request_id)
+        if p is None:
+            return []
+        key = group_key(p)
+        done: list[str] = []
+        for other in list(self._pending.values()):
+            if other.request_id == request_id or other.future.done() or group_key(other) != key:
+                continue
+            other.future.set_result(ApprovalOutcome(True, "once"))
+            await self._emit(
+                other.session_id,
+                "permission.replied",
+                {"request_id": other.request_id, "reply": "once", "cascade": True, "via": request_id},
+            )
+            done.append(other.request_id)
+        return done
+
 
 EngineLookup = Callable[[str], "PermissionEngine | None"]
 
@@ -187,9 +219,13 @@ async def reply_with_grants(
     request_id: str,
     reply: Reply,
     message: str | None = None,
+    cascade: bool = False,
 ) -> bool:
     """Shared by REST and WS: resolve a request; on `always`, persist the grant in the
-    session's permission engine and auto-resolve pendings it now allows."""
+    session's permission engine and auto-resolve pendings it now allows. `cascade` with a
+    `once` reply also approves the rest of the request's approval group."""
+    if cascade and reply == "once" and any(p.request_id == request_id for p in broker.pending()):
+        await broker.cascade(request_id)
 
     def grant_and_scan(granted: Pending) -> list[str]:
         engine = engine_for(granted.session_id)
@@ -217,6 +253,8 @@ def pending_dict(p: Pending) -> dict[str, Any]:
         "permission": p.permission,
         "pattern": p.pattern,
         "detail": p.detail,
+        "one_shot": p.one_shot,
+        "risk": p.risk,
     }
 
 

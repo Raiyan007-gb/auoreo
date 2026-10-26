@@ -30,6 +30,8 @@ export type WsPermissionReply = {
   kind: "permission";
   reply: PermissionReplyKind;
   message?: string | null;
+  /** With `once`: also approve the rest of the request's approval group. */
+  cascade?: boolean;
 };
 export type WsQuestionAnswer = { kind: "question"; responses: Record<string, unknown>[] };
 export interface WsControlResponse {

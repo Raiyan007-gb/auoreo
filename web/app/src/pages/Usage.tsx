@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
 import { ContextCell } from "@/components/ContextGauge";
+import { BudgetCard, UsageCharts } from "@/components/UsageCharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -149,6 +150,7 @@ function PolicyCard() {
 export function UsagePage() {
   const [days, setDays] = useState(7);
   const summary = useAsync(() => api.usageSummary(days), [days]);
+  const series = useAsync(() => api.usageTimeseries(days), [days]); // --- G7: charts + budget guards
   const sessions = useAsync(
     () =>
       api
@@ -171,7 +173,15 @@ export function UsagePage() {
               <option value={30}>Last 30 days</option>
               <option value={365}>Last year</option>
             </NativeSelect>
-            <Button variant="outline" size="icon" aria-label="Refresh usage" onClick={summary.reload}>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Refresh usage"
+              onClick={() => {
+                summary.reload();
+                series.reload();
+              }}
+            >
               <RefreshCwIcon />
             </Button>
           </>
@@ -191,6 +201,12 @@ export function UsagePage() {
               <Stat label="Cost" testId="usage-total-cost" value={fmtUsd(s.total.cost_usd)} />
               <Stat label="Calls" testId="usage-total-calls" value={s.total.calls.toLocaleString()} />
             </div>
+            {series.data && (
+              <div className="grid gap-3 xl:grid-cols-[2fr_1fr]">
+                <UsageCharts series={series.data} />
+                <BudgetCard series={series.data} sessions={sessions.data} />
+              </div>
+            )}
             <section className="space-y-2">
               <h2 className="text-sm font-medium">By model</h2>
               {s.by_model.length === 0 ? (

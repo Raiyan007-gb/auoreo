@@ -29,6 +29,7 @@ from auoreo.plugins.bridge import (
     PluginSkill,
     make_tool,
     parse_skills,
+    plugin_skill_defs,
     register_delivery,
     tool_prefix,
     unregister_delivery,
@@ -236,6 +237,7 @@ class PluginHost:
         st.deliveries = [str(d) for d in info.get("deliveries", [])]
         st.connectors = [str(c) for c in info.get("connectors", [])]
         st.skills = parse_skills(st.name, list(info.get("skills", [])))
+        self.s.harness.register_skills(f"plugin:{st.name}", plugin_skill_defs(st.name, st.skills))
         st.registered = []
         for dname in st.deliveries:
             adapter = PluginDelivery(st.name, dname, self._sender(st))
@@ -259,6 +261,7 @@ class PluginHost:
                     await peer.request("connector.stop", {"name": conn}, timeout=5)
         await self._cleanup(st)
         self.s.harness.unregister_dynamic(tool_prefix(st.name))
+        self.s.harness.unregister_skills(f"plugin:{st.name}")
         for dname in st.deliveries:
             adapter = self.deliveries.get(dname)
             if adapter is not None and adapter.plugin == st.name:

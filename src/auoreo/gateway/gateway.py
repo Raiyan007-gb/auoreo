@@ -44,6 +44,7 @@ from auoreo.gateway.resolve import expand_alias, primary_deployment
 from auoreo.gateway.types import (
     Finish,
     LLMRequest,
+    ReasoningDelta,
     StreamItem,
     TextDelta,
     ToolCall,
@@ -51,7 +52,7 @@ from auoreo.gateway.types import (
     prompt_chars,
     shrink_data_urls,
 )
-from auoreo.gateway.usage_parse import parse_usage
+from auoreo.gateway.usage_parse import parse_usage, reasoning_of
 
 log = logging.getLogger(__name__)
 litellm.suppress_debug_info = True
@@ -331,6 +332,8 @@ class LiteLLMGateway:
                     continue
                 choice = chunk.choices[0]
                 delta = choice.delta
+                for thought in reasoning_of(delta):
+                    yield ReasoningDelta(thought)
                 if delta is not None and delta.content:
                     got_any = True
                     text_len += len(delta.content)

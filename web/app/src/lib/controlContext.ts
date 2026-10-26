@@ -8,7 +8,12 @@ export interface ControlApi {
   /** Last `connected` frame (pending permissions/questions re-sent on (re)connect). */
   connected: WsConnected | null;
   /** WS `control_response` first; falls back to `POST /api/permissions/{id}/reply`. */
-  replyPermission: (requestId: string, reply: PermissionReplyKind, message?: string) => Promise<"ws" | "rest">;
+  replyPermission: (
+    requestId: string,
+    reply: PermissionReplyKind,
+    message?: string,
+    cascade?: boolean,
+  ) => Promise<"ws" | "rest">;
   /** WS `control_response{question}` first; falls back to `POST /api/questions/{id}/answer`. */
   answerQuestion: (requestId: string, responses: Record<string, unknown>[]) => Promise<"ws" | "rest">;
   /** WS `control_request{steer}`; falls back to `POST /api/chat {mode: "steer"}`. */

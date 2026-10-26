@@ -52,3 +52,19 @@ def parse_usage(raw: Any) -> Usage | None:
 
 
 __all__ = ["parse_usage"]
+
+
+def reasoning_of(delta: Any) -> list[str]:
+    """Thinking text in one LiteLLM stream delta: `reasoning_content` (OpenAI-style, DeepSeek,
+    OpenRouter) or Anthropic `thinking_blocks[].thinking`; `[]` when the chunk has none."""
+    if delta is None:
+        return []
+    text = getattr(delta, "reasoning_content", None)
+    if isinstance(text, str) and text:
+        return [text]
+    out: list[str] = []
+    for block in getattr(delta, "thinking_blocks", None) or []:
+        thought = block.get("thinking") if isinstance(block, dict) else getattr(block, "thinking", None)
+        if isinstance(thought, str) and thought:
+            out.append(thought)
+    return out

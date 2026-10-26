@@ -326,6 +326,7 @@ class ToolExecutor:
             _detail(tool, args),
             cwd=str(ctx.cwd),
             risk=risk_tier(tool),
+            one_shot=not sticky,
         )
         await self.s.audit.record(
             actor="human",
@@ -333,7 +334,7 @@ class ToolExecutor:
             session_id=ctx.session_id,
             decision=outcome.reply or "timeout",
             reason=reason,
-            detail=audit,
+            detail={**audit, "request_id": outcome.request_id},
         )
         if not outcome.granted:
             if outcome.message:

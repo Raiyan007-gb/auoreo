@@ -170,3 +170,16 @@ def parse_skills(plugin: str, raw: list[Any]) -> list[PluginSkill]:
                 )
             )
     return out
+
+
+def plugin_skill_defs(plugin: str, skills: list[PluginSkill]) -> list[Any]:
+    """Plugin skills as harness `ExternalSkill`s (`plugin:<name>` source); invalid names are skipped."""
+    from auoreo.harness.skill_sources import make_skill
+
+    out: list[Any] = []
+    for s in skills:
+        try:
+            out.append(make_skill(f"plugin:{plugin}", s.name, s.description, text=s.body))
+        except ValueError as exc:
+            log.warning("%s", exc)
+    return out

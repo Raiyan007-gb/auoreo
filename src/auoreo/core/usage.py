@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import AsyncIterator, Callable
-from datetime import timedelta
+from datetime import UTC, timedelta
 from typing import Any, TypeVar
 
 from sqlalchemy import func, select
@@ -161,6 +161,51 @@ class UsageLedger:
             "cost_usd": sum(r["cost_usd"] for r in by_model),
         }
         return {"days": days, "total": total, "by_model": by_model, "by_session": by_session}
+
+    async def series(self, days: int = 7, bucket: str = "day") -> list[dict[str, Any]]:
+        """Tokens/cost per hour or day (UTC), oldest first, empty buckets filled with zeros."""
+        now = utcnow()
+        since = now - timedelta(days=max(days, 0) or 1)
+        q = select(
+            UsageRow.created_at, UsageRow.prompt_tokens, UsageRow.completion_tokens, UsageRow.cost_usd
+        ).where(UsageRow.created_at >= since)
+        async with self.db.session() as s:
+            rows = (await s.execute(q)).all()
+        step = timedelta(hours=1) if bucket == "hour" else timedelta(days=1)
+
+        def floor(ts: Any) -> Any:
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+            ts = ts.replace(minute=0, second=0, microsecond=0)
+            return ts if bucket == "hour" else ts.replace(hour=0)
+
+        out: dict[Any, dict[str, Any]] = {}
+        cur = floor(since)
+        while cur <= now:
+            out[cur] = {
+                "bucket": cur,
+                "calls": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cost_usd": 0.0,
+            }
+            cur += step
+        for ts, p, c, cost in rows:
+            pt = out.setdefault(
+                floor(ts),
+                {
+                    "bucket": floor(ts),
+                    "calls": 0,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                    "cost_usd": 0.0,
+                },
+            )
+            pt["calls"] += 1
+            pt["prompt_tokens"] += int(p or 0)
+            pt["completion_tokens"] += int(c or 0)
+            pt["cost_usd"] += float(cost or 0.0)
+        return [out[k] for k in sorted(out)]
 
 
 class UsageMeter:

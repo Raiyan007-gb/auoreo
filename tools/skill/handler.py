@@ -1,22 +1,21 @@
+from auoreo.harness.skill_sources import find_skill, skill_message
 from auoreo.tools.context import ToolContext, ToolError
 
 
 async def run(args: dict, ctx: ToolContext) -> str:
     spec = ctx.services.get("spec")
-    allowed = (
-        {s.name: s for s in spec.skills} if spec is not None else (ctx.harness.skills if ctx.harness else {})
-    )
-    skill = allowed.get(args["name"])
+    skill = find_skill(spec, ctx.harness, args["name"])
     if skill is None:
-        raise ToolError(f"unknown skill '{args['name']}'. Available: {', '.join(sorted(allowed)) or 'none'}")
-    files = sorted(
-        str(p.relative_to(skill.path.parent))
-        for p in skill.path.parent.rglob("*")
-        if p.is_file() and p.name != "SKILL.md"
-    )[:50]
-    extra = f"\nSupporting files in {skill.path.parent}: {', '.join(files)}" if files else ""
+        names = (
+            [s.name for s in spec.skills]
+            if spec is not None
+            else list(ctx.harness.all_skills if ctx.harness else {})
+        )
+        raise ToolError(f"unknown skill '{args['name']}'. Available: {', '.join(sorted(names)) or 'none'}")
+    try:
+        message = await skill_message(skill)
+    except Exception as exc:  # e.g. the MCP server that offers it went away
+        raise ToolError(f"could not load skill '{skill.name}' from {skill.source}: {exc}") from exc
     # Skills are injected as user messages (never system edits) to keep the prompt cache-stable.
-    ctx.state.pending_user_messages.append(
-        f'<skill name="{skill.name}">\n{skill.body().strip()}{extra}\n</skill>'
-    )
-    return f"Loaded skill '{skill.name}'. Its instructions follow as a message."
+    ctx.state.pending_user_messages.append(message)
+    return f"Loaded skill '{skill.name}' ({skill.source}). Its instructions follow as a message."

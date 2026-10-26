@@ -122,6 +122,9 @@ async def test_install_start_register_and_round_trip(svc: Services, workdir: Pat
 
     assert any(name.startswith("echo") for name in DYNAMIC)
     assert [s.name for s in host.skills("echo")] == ["echo-usage"]
+    # Plugin skills join the agent skill catalog (spec §15) under the `plugin:<name>` source.
+    merged = svc.harness.all_skills["echo-usage"]
+    assert merged.source == "plugin:echo" and merged.body() == "Call echo."
     # bundled telegram/discord are discovered but disabled by default
     statuses = {r["name"]: r["status"] for r in host.rows()}
     assert statuses["telegram"] == "disabled" and statuses["discord"] == "disabled"
@@ -173,6 +176,7 @@ async def test_dead_plugin_tools_answer_with_an_error(svc: Services, workdir: Pa
     await host.stop_plugin("echo")
     assert host.plugins["echo"].status == "stopped"
     assert "plugin__echo__echo" not in svc.harness.tools
+    assert "echo-usage" not in svc.harness.all_skills  # a stopped plugin's skills leave the catalog
     await host.start_plugin("echo")
     peer = host.plugins["echo"].peer
     assert peer is not None and peer.proc is not None

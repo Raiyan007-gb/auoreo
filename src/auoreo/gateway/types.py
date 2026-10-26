@@ -91,6 +91,14 @@ class TextDelta:
 
 
 @dataclass(frozen=True)
+class ReasoningDelta:
+    """A chunk of the model's thinking (LiteLLM `reasoning_content` / `thinking_blocks`).
+    Shown in the UI's collapsible "Thinking" block; never part of the answer text."""
+
+    text: str
+
+
+@dataclass(frozen=True)
 class ToolCall:
     id: str
     name: str
@@ -124,7 +132,7 @@ class Finish:
     reason: str  # stop | tool_calls | length | ...
 
 
-StreamItem = TextDelta | ToolCall | Usage | Finish
+StreamItem = TextDelta | ReasoningDelta | ToolCall | Usage | Finish
 
 
 class Gateway(Protocol):

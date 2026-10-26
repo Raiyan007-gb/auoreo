@@ -56,6 +56,18 @@ has_scripts, lint`); a pinned index `sha256` must match the download; archives a
 (`auoreo skills sources`, `GET /api/skills/sources`); `POST /api/skills/hub/{name}/approve`
 approves from the API.
 
+## Plugin and MCP skills join the agent catalog
+
+Skills a running plugin returns (`plugin:<name>`) and `skill://` resources of connected MCP
+servers (`mcp:<server>`) are merged into the catalog every agent sees (`harness.all_skills`,
+`src/auoreo/harness/skill_sources.py`): they appear in the system prompt's skill index and load
+through the `skill` tool. Precedence is folder roots (runtime → project → bundled → extra) →
+plugins → MCP; a name clash keeps the higher source and the loser stays loadable by its
+qualified name (`plugin:demo:review`, `mcp:docs:style-guide`). A user message that mentions
+`@skill-name` loads that skill for the turn (event `skill.loaded`, `via: mention`). A session
+can switch a plugin or MCP server off (`PUT /api/sessions/{id}/sources`, Plugins page), which
+also drops its skills for that session.
+
 ## Preferences (PREFS.md) are proposed, never written
 
 `memory` with `target: prefs` queues a proposal (`<home>/memory/.prefs_proposals.json`);

@@ -16,14 +16,19 @@ class PermissionReply:
     """
     Attributes:
         reply (PermissionReplyReply):
+        cascade (bool | Unset): With `once`: also approve every pending request in the same approval group (permission,
+            cwd, risk tier, tool) across sessions. Default: False.
         message (None | str | Unset):
     """
 
     reply: PermissionReplyReply
+    cascade: bool | Unset = False
     message: None | str | Unset = UNSET
 
     def to_dict(self) -> dict[str, Any]:
         reply = self.reply.value
+
+        cascade = self.cascade
 
         message: None | str | Unset
         if isinstance(self.message, Unset):
@@ -38,6 +43,8 @@ class PermissionReply:
                 "reply": reply,
             }
         )
+        if cascade is not UNSET:
+            field_dict["cascade"] = cascade
         if message is not UNSET:
             field_dict["message"] = message
 
@@ -47,6 +54,8 @@ class PermissionReply:
     def from_dict(cls: type[T], src_dict: Mapping[str, Any]) -> T:
         d = dict(src_dict)
         reply = PermissionReplyReply(d.pop("reply"))
+
+        cascade = d.pop("cascade", UNSET)
 
         def _parse_message(data: object) -> None | str | Unset:
             if data is None:
@@ -59,6 +68,7 @@ class PermissionReply:
 
         permission_reply = cls(
             reply=reply,
+            cascade=cascade,
             message=message,
         )
 

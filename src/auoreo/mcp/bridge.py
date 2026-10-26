@@ -162,7 +162,16 @@ class McpBridge:
                 log.error("MCP server '%s': %s", manifest.name, exc)
                 continue
             names.append(name)
+        await self.sync_skills(manifest.name)
         return names
+
+    async def sync_skills(self, server: str) -> int:
+        """Register the server's `skill://…` resources in the agent skill catalog (spec §15)."""
+        from auoreo.harness.skill_sources import mcp_skill_defs
+
+        skills = await mcp_skill_defs(self, server)
+        self.s.harness.register_skills(f"mcp:{server}", skills)
+        return len(skills)
 
     def _make_loader(self, server: str, remote: str, timeout_s: float | None = None) -> Any:
         async def handler(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
@@ -208,6 +217,7 @@ class McpBridge:
     async def disconnect(self, name: str) -> None:
         conn = self._conns.pop(name, None)
         self.s.harness.unregister_dynamic(f"{PREFIX}{name}__")
+        self.s.harness.unregister_skills(f"mcp:{name}")
         if conn is None:
             return
         conn.stop.set()

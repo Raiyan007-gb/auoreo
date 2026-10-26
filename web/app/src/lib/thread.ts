@@ -9,6 +9,7 @@ import type {
   CompactionFailedData,
   CompactionSkippedData,
   PermissionRequestedData,
+  PlanUpdatedData,
   QuestionAskedData,
   RunErrorData,
 } from "@sdk/events";
@@ -18,6 +19,8 @@ export type ToolStatus = "pending" | "running" | "completed" | "error";
 export type Item =
   | { kind: "user"; key: string; text: string; steer?: boolean }
   | { kind: "assistant"; key: string; text: string; streaming: boolean; runId?: string }
+  /** `message.reasoning` deltas: the model's thinking (collapsible, hidden by the toggle). */
+  | { kind: "reasoning"; key: string; text: string; streaming: boolean; runId: string }
   | {
       kind: "tool";
       key: string;
@@ -56,6 +59,10 @@ export interface ThreadState {
   questions: Record<string, QuestionAskedData>;
   /** Latest `policy.choice` (model/effort bandit): the "why this model" chip. */
   policy?: PolicyChoiceData;
+  /** Latest `plan.updated` (update_plan todo list) for the PlanPanel. */
+  plan?: PlanUpdatedData;
+  /** `plan.mode` events: true while the session is in plan mode. */
+  planMode?: boolean;
 }
 
 export const emptyThread = (): ThreadState => ({
@@ -117,7 +124,9 @@ type Handler = (s: ThreadState, d: Record<string, unknown>, e: ServerEvent) => T
 function finishRun(s: ThreadState, d: Record<string, unknown>, e: ServerEvent): ThreadState {
   const runId = str(d.run_id);
   let items = s.items.map((it) =>
-    it.kind === "assistant" && it.streaming && it.runId === runId ? { ...it, streaming: false } : it,
+    (it.kind === "assistant" || it.kind === "reasoning") && it.streaming && it.runId === runId
+      ? { ...it, streaming: false }
+      : it,
   );
   items = items.map((it) =>
     it.kind === "tool" && it.runId === runId && (it.status === "pending" || it.status === "running")
@@ -174,10 +183,25 @@ const HANDLERS: Record<string, Handler> = {
       items: [...s.items, { kind: "assistant", key: `a${e.seq}`, text: str(d.text), streaming: true, runId }],
     };
   },
+  "message.reasoning": (s, d, e) => {
+    const runId = str(d.run_id);
+    const last = s.items[s.items.length - 1];
+    if (last?.kind === "reasoning" && last.runId === runId && last.streaming) {
+      return { ...s, items: replaceAt(s.items, s.items.length - 1, { ...last, text: last.text + str(d.text) }) };
+    }
+    return {
+      ...s,
+      items: [...s.items, { kind: "reasoning", key: `r${e.seq}`, text: str(d.text), streaming: true, runId }],
+    };
+  },
+  "plan.updated": (s, d) => ({ ...s, plan: d as unknown as PlanUpdatedData }),
+  "plan.mode": (s, d) => ({ ...s, planMode: d.active === true }),
+  "skill.loaded": (s, d, e) => notice(s, e, "info", `Skill loaded: ${str(d.name)}${d.via === "mention" ? " (@mention)" : ""}`, "skill.loaded"),
   "message.completed": (s, d, e) => {
     const runId = str(d.run_id);
     const content = str(d.content);
     let items = s.items;
+    items = items.map((it) => (it.kind === "reasoning" && it.runId === runId && it.streaming ? { ...it, streaming: false } : it));
     const i = lastStreaming(items, runId);
     const cur = i >= 0 ? items[i] : undefined;
     if (cur?.kind === "assistant") {

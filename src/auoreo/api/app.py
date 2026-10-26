@@ -51,6 +51,7 @@ from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import policy as policy_router  # --- W1-C
 from auoreo.api.routers import prefs as prefs_router  # --- G6
 from auoreo.api.routers import rtc as rtc_router
+from auoreo.api.routers import session_extras as session_extras_router  # --- G7: plan + sources
 from auoreo.api.routers import sessions_more as sessions_more_router  # --- G5a
 from auoreo.api.routers import skills_hub as skills_hub_router  # --- G6
 from auoreo.api.routers import suggestions as suggestions_router
@@ -108,6 +109,7 @@ ROUTERS = (
     metrics_router,  # --- G5c: GET /metrics
     sessions_more_router,  # --- G5a: rename/share/retry/revert
     prefs_router,  # --- G6: PREFS.md proposals
+    session_extras_router,  # --- G7: session plan + per-session MCP/plugin toggles
     skills_hub_router,  # --- G6: skill sources + hub approve
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [

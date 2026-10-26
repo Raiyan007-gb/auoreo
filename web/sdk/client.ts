@@ -10,6 +10,7 @@ import { opsMethods } from "./ops";
 import { statusMethods } from "./ops2"; // --- W0-B
 import { g5bMethods } from "./ops3"; // --- G5b
 import { g6Methods } from "./ops4"; // --- G6
+import { g7Methods } from "./ops5"; // --- G7
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -75,6 +76,7 @@ export const EVENT_TYPES = [
   "step.started",
   "message.created",
   "message.delta",
+  "message.reasoning",
   "message.completed",
   "tool.started",
   "tool.progress",
@@ -84,6 +86,10 @@ export const EVENT_TYPES = [
   "permission.replied",
   "question.asked",
   "question.answered",
+  "plan.updated",
+  "plan.mode",
+  "skill.loaded",
+  "session.sources_changed",
   "workflow.started",
   "workflow.step",
   "workflow.completed",
@@ -232,9 +238,9 @@ export function createClient(opts: ClientOptions = {}) {
       request<PendingPermission[]>("GET", "/api/permissions/pending", {
         query: { session_id: sessionId },
       }),
-    replyPermission: (requestId: string, reply: PermissionReplyKind, message?: string | null) =>
+    replyPermission: (requestId: string, reply: PermissionReplyKind, message?: string | null, cascade = false) =>
       request<Record<string, boolean>>("POST", `/api/permissions/${enc(requestId)}/reply`, {
-        body: { reply, message: message ?? null } satisfies PermissionReplyBody,
+        body: { reply, message: message ?? null, cascade } satisfies PermissionReplyBody,
       }),
     pendingQuestions: (sessionId?: string) =>
       request<PendingQuestion[]>("GET", "/api/questions/pending", {
@@ -267,6 +273,7 @@ export function createClient(opts: ClientOptions = {}) {
     // --- end W0-A
     ...g5bMethods(request), // --- G5b: rtc call client + context gauge (./ops3.ts)
     ...g6Methods(request), // --- G6: PREFS.md proposals + skills hub (./ops4.ts)
+    ...g7Methods(request), // --- G7: session plan/sources + usage timeseries (./ops5.ts)
   };
 }
 
@@ -361,6 +368,7 @@ export * from "./ops";
 export type * from "./ops2"; // --- W0-B
 export type * from "./ops3"; // --- G5b
 export type * from "./ops4"; // --- G6
+export type * from "./ops5"; // --- G7
 
 // =================================================================== --- W0-C goals + suggestions
 export type GoalInfo = S["GoalInfo"];

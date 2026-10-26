@@ -27,7 +27,7 @@ async def pending(request: Request, svc: ServicesDep, session_id: str | None = N
 @router.post("/{request_id}/reply")
 async def reply(request_id: str, body: PermissionReply, svc: ServicesDep) -> dict[str, bool]:
     ok = await reply_with_grants(
-        svc.approvals, svc.coordinator.engine_for, request_id, body.reply, body.message
+        svc.approvals, svc.coordinator.engine_for, request_id, body.reply, body.message, body.cascade
     )
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no pending request with that id")

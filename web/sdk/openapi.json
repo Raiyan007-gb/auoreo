@@ -3627,6 +3627,12 @@
             "title": "Detail",
             "type": "string"
           },
+          "one_shot": {
+            "default": false,
+            "description": "No `always`: single-use (e.g. sandbox escalation).",
+            "title": "One Shot",
+            "type": "boolean"
+          },
           "pattern": {
             "title": "Pattern",
             "type": "string"
@@ -3637,6 +3643,11 @@
           },
           "request_id": {
             "title": "Request Id",
+            "type": "string"
+          },
+          "risk": {
+            "default": "medium",
+            "title": "Risk",
             "type": "string"
           },
           "session_id": {
@@ -3661,6 +3672,17 @@
       },
       "PendingQuestionOut": {
         "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
           "questions": {
             "items": {
               "additionalProperties": true,
@@ -3676,6 +3698,17 @@
           "session_id": {
             "title": "Session Id",
             "type": "string"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
           }
         },
         "required": [
@@ -3689,6 +3722,12 @@
       "PermissionReply": {
         "additionalProperties": false,
         "properties": {
+          "cascade": {
+            "default": false,
+            "description": "With `once`: also approve every pending request in the same approval group (permission, cwd, risk tier, tool) across sessions.",
+            "title": "Cascade",
+            "type": "boolean"
+          },
           "message": {
             "anyOf": [
               {
@@ -3715,6 +3754,41 @@
           "reply"
         ],
         "title": "PermissionReply",
+        "type": "object"
+      },
+      "PlanStep": {
+        "additionalProperties": true,
+        "properties": {
+          "done_when": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Done When"
+          },
+          "status": {
+            "default": "pending",
+            "enum": [
+              "pending",
+              "in_progress",
+              "completed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "title": "Step",
+            "type": "string"
+          }
+        },
+        "required": [
+          "step"
+        ],
+        "title": "PlanStep",
         "type": "object"
       },
       "PluginInfo": {
@@ -4870,6 +4944,33 @@
         "title": "SessionInfo",
         "type": "object"
       },
+      "SessionPlan": {
+        "description": "The newest `update_plan` steps of a session (from `plan.updated` events).",
+        "properties": {
+          "explanation": {
+            "default": "",
+            "title": "Explanation",
+            "type": "string"
+          },
+          "plan_mode": {
+            "default": false,
+            "title": "Plan Mode",
+            "type": "boolean"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/PlanStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "title": "SessionPlan",
+        "type": "object"
+      },
       "SessionRename": {
         "additionalProperties": false,
         "properties": {
@@ -4884,6 +4985,140 @@
           "title"
         ],
         "title": "SessionRename",
+        "type": "object"
+      },
+      "SessionSource": {
+        "properties": {
+          "enabled": {
+            "description": "Enabled for this session (sources are on unless disabled here)",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "`mcp:<server>` | `plugin:<name>`",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mcp",
+              "plugin"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "skills": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skills",
+            "type": "array"
+          },
+          "status": {
+            "description": "Global state: connected/running/disabled/\u2026",
+            "title": "Status",
+            "type": "string"
+          },
+          "tools": {
+            "default": 0,
+            "title": "Tools",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "enabled",
+          "status"
+        ],
+        "title": "SessionSource",
+        "type": "object"
+      },
+      "SessionSources": {
+        "properties": {
+          "disabled": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Disabled",
+            "type": "array"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "sources",
+          "disabled"
+        ],
+        "title": "SessionSources",
+        "type": "object"
+      },
+      "SessionSourcesIn": {
+        "additionalProperties": false,
+        "properties": {
+          "disabled": {
+            "description": "Sources switched off for this session (replaces the list)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Disabled",
+            "type": "array"
+          }
+        },
+        "required": [
+          "disabled"
+        ],
+        "title": "SessionSourcesIn",
+        "type": "object"
+      },
+      "SessionSpend": {
+        "properties": {
+          "blocked": {
+            "default": false,
+            "title": "Blocked",
+            "type": "boolean"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "cost / max_cost_usd (None without a cap)",
+            "title": "Ratio"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "session_id",
+          "cost_usd"
+        ],
+        "title": "SessionSpend",
         "type": "object"
       },
       "ShareCreated": {
@@ -5395,6 +5630,81 @@
         "title": "TeamMemberInfo",
         "type": "object"
       },
+      "UsageBudget": {
+        "description": "Budget guards from settings: per-session spend cap and per-turn limits.",
+        "properties": {
+          "max_cost_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cost Usd"
+          },
+          "run_budget_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Budget Seconds"
+          },
+          "token_budget": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Budget"
+          }
+        },
+        "title": "UsageBudget",
+        "type": "object"
+      },
+      "UsagePoint": {
+        "properties": {
+          "bucket": {
+            "description": "Start of the bucket (UTC)",
+            "format": "date-time",
+            "title": "Bucket",
+            "type": "string"
+          },
+          "calls": {
+            "title": "Calls",
+            "type": "integer"
+          },
+          "completion_tokens": {
+            "title": "Completion Tokens",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "prompt_tokens": {
+            "title": "Prompt Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bucket",
+          "calls",
+          "prompt_tokens",
+          "completion_tokens",
+          "cost_usd"
+        ],
+        "title": "UsagePoint",
+        "type": "object"
+      },
       "UsageRecord": {
         "properties": {
           "cached_tokens": {
@@ -5459,6 +5769,48 @@
           "created_at"
         ],
         "title": "UsageRecord",
+        "type": "object"
+      },
+      "UsageSeries": {
+        "properties": {
+          "bucket": {
+            "enum": [
+              "hour",
+              "day"
+            ],
+            "title": "Bucket",
+            "type": "string"
+          },
+          "budget": {
+            "$ref": "#/components/schemas/UsageBudget"
+          },
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/UsagePoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "sessions": {
+            "description": "Top spenders in range",
+            "items": {
+              "$ref": "#/components/schemas/SessionSpend"
+            },
+            "title": "Sessions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "days",
+          "bucket",
+          "points",
+          "budget"
+        ],
+        "title": "UsageSeries",
         "type": "object"
       },
       "UsageSummary": {
@@ -12298,6 +12650,80 @@
         ]
       }
     },
+    "/api/sessions/{session_id}/plan": {
+      "get": {
+        "operationId": "get_plan_api_sessions__session_id__plan_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPlan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Plan",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
     "/api/sessions/{session_id}/retry": {
       "post": {
         "description": "Cut the last user turn (recorded as `session.reverted`) and queue its text again.",
@@ -12624,6 +13050,163 @@
           }
         },
         "summary": "Share",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
+    "/api/sessions/{session_id}/sources": {
+      "get": {
+        "operationId": "get_sources_api_sessions__session_id__sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSources"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Sources",
+        "tags": [
+          "sessions"
+        ]
+      },
+      "put": {
+        "description": "Replace the session's disabled list; applies from the session's next turn.",
+        "operationId": "put_sources_api_sessions__session_id__sources_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SessionSourcesIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSources"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Sources",
         "tags": [
           "sessions"
         ]
@@ -14013,6 +14596,102 @@
           }
         },
         "summary": "Summary",
+        "tags": [
+          "usage"
+        ]
+      }
+    },
+    "/api/usage/timeseries": {
+      "get": {
+        "description": "Token/cost chart data plus the budget guards (`max_cost_usd`, per-turn loop budgets).",
+        "operationId": "timeseries_api_usage_timeseries_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 7,
+              "title": "Days",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "bucket",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "hour",
+                    "day"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Bucket"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageSeries"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Timeseries",
         "tags": [
           "usage"
         ]
