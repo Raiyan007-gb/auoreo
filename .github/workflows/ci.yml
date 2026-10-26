@@ -24,6 +24,7 @@ jobs:
       - run: uv run mypy src
       - run: uv run auoreo harness validate
       - run: uv run python scripts/verify_tool_catalog.py --check
+      - run: uv run python scripts/gen_env_example.py --check
       - run: ./scripts/run_tests.sh
   ty:
     # spec §25.15 L1090: `ty check` alongside mypy. ty is pre-1.0 (0.0.x), so the job is

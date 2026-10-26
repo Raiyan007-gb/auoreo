@@ -60,6 +60,20 @@ PROVIDER_SAMPLES = {
     "TOGETHERAI_API_KEY": "tgp_v1_AbCdEfGhIjKlMnOpQrStUvWxYz",
     "FIREWORKS_AI_API_KEY": "fw-AbCdEfGhIjKlMnOpQrStUv",
     "AZURE_API_KEY": "0123456789abcdef0123456789abcdef",
+    # tool / backend keys (search, rerank, voice, environments, LiveKit)
+    "COHERE_API_KEY": "Zx9Kq2Lm4Np6Rt8Vw0Yb3Dc5Fg7Hj1Ks9Qa2We4",
+    "EXA_API_KEY": "3f2a9c1e-7b4d-4e8a-9c2f-1a6b5d8e0f3c",
+    "PARALLEL_API_KEY": "pk7Qw2Er4Ty6Ui8Op0As3Df5Gh7Jk9Lz",
+    "BRAVE_API_KEY": "BSAq1W2e3R4t5Y6u7I8o9P0aSdFgHjKl",
+    "TAVILY_API_KEY": "tvly-dev-AbCdEfGhIjKlMnOpQrStUvWx",
+    "JINA_API_KEY": "jina_0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5dAbCdEf",
+    "FIRECRAWL_API_KEY": "fc-0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d",
+    "DEEPGRAM_API_KEY": "0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b",
+    "DEEPINFRA_API_KEY": "Dq3Wr5Ty7Ui9Op1As3Df5Gh7Jk9Lz2Xc",
+    "ELEVENLABS_API_KEY": "sk_0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f",
+    "E2B_API_KEY": "e2b_0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b",
+    "DAYTONA_API_KEY": "dtn_0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b",
+    "LIVEKIT_API_KEY": "APIq1W2e3R4t5Y6u",
 }
 KEYISH = re.compile(r"\b([A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|_KEY))\b")
 

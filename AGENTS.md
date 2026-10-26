@@ -68,6 +68,7 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run
 uv run auoreo harness validate
 uv run python scripts/check_openapi.py --check
 uv run python scripts/verify_tool_catalog.py --check   # --write after adding/changing a tool
+uv run python scripts/gen_env_example.py --check      # --write after adding a setting or key
 ./scripts/run_tests.sh [--per-file]                     # hermetic: env -i, fresh HOME
 cd web && npm ci && npm run typecheck && npm run lint && npm run build && npm run e2e
 AUOREO_GATEWAY=fake uv run auoreo web --port 0       # keyless live run with the UI
