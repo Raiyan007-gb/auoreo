@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Any
 from auoreo.core import observability as obs
 from auoreo.core.redaction import StreamRedactor
 from auoreo.gateway.errors import GatewayError
-from auoreo.gateway.types import Finish, LLMRequest, TextDelta, ToolCall, Usage
+from auoreo.gateway.types import Finish, LLMRequest, ReasoningDelta, TextDelta, ToolCall, Usage
 from auoreo.runtime.budget import OUT_OF_BAND
 
 if TYPE_CHECKING:
@@ -63,6 +63,7 @@ async def stream(
     out = StepOutput()
     parts: list[str] = []
     scrub = StreamRedactor()  # deltas are redacted as one stream, never chunk by chunk
+    think = StreamRedactor()  # thinking is its own stream (`message.reasoning`, spec §17)
     purpose = str(request.metadata.get("purpose", "turn"))
     meter = runner.usage.meter(sid, run_id, request.model)  # latency + outcome per call
     async for item in meter.wrap(
@@ -75,6 +76,9 @@ async def stream(
                 parts.append(t)
                 if safe := scrub.feed(t):
                     await s.emit(sid, "message.delta", {"run_id": run_id, "text": safe})
+            case ReasoningDelta(text=t):
+                if safe := think.feed(t):
+                    await s.emit(sid, "message.reasoning", {"run_id": run_id, "text": safe})
             case ToolCall():
                 out.calls.append(item)
             case Usage():
@@ -88,6 +92,8 @@ async def stream(
                 )
             case Finish(reason=reason):
                 out.finish = reason
+    if thought := think.flush():
+        await s.emit(sid, "message.reasoning", {"run_id": run_id, "text": thought})
     if tail := scrub.flush():
         await s.emit(sid, "message.delta", {"run_id": run_id, "text": tail})
     out.text = "".join(parts)

@@ -58,6 +58,11 @@ class MessageOut(BaseModel):
 class PermissionReply(_In):
     reply: Literal["once", "always", "reject"]
     message: str | None = Field(default=None, max_length=4000)
+    cascade: bool = Field(
+        default=False,
+        description="With `once`: also approve every pending request in the same approval group "
+        "(permission, cwd, risk tier, tool) across sessions.",
+    )
 
 
 class PendingPermission(BaseModel):
@@ -67,6 +72,8 @@ class PendingPermission(BaseModel):
     permission: str
     pattern: str
     detail: str
+    one_shot: bool = Field(default=False, description="No `always`: single-use (e.g. sandbox escalation).")
+    risk: str = "medium"
 
 
 class HarnessEntry(BaseModel):

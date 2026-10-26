@@ -1,8 +1,10 @@
 name: ask_user_question
 toolset: interaction
 description: >-
-  Ask the user 1–5 questions, each optionally with 2–4 options (an "Other" free-text
-  answer is always allowed). Use only when you cannot proceed with a sensible default.
+  Ask the user 1–5 questions in one form, each optionally with 2–4 options (put the
+  recommended option first). A free-text answer is allowed unless `allowCustom: false`.
+  Unanswered after `timeout_s` (default 60) → `timed_out: true`; then pick a sensible default.
+  Use only when you cannot proceed with a sensible default.
 parameters:
   type: object
   properties:
@@ -27,8 +29,18 @@ parameters:
               required: [label]
               additionalProperties: false
           multiSelect: {type: boolean, default: false}
+          allowCustom:
+            type: boolean
+            default: true
+            description: Allow a free-text answer (returned as customText); false = options only.
         required: [question]
         additionalProperties: false
+    timeout_s:
+      type: integer
+      minimum: 5
+      maximum: 600
+      default: 60
+      description: Seconds to wait for the user before returning timed_out.
   required: [questions]
   additionalProperties: false
 default_action: allow

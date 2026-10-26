@@ -9,8 +9,11 @@ import { INSERT_COMMAND_EVENT } from "@/components/CommandPalette";
 import { ErrorNote } from "@/components/AppShell";
 import { QuestionForm } from "@/components/QuestionForm";
 import { MarkdownText } from "@/components/MarkdownLazy";
+import { PlanPanel } from "@/components/PlanPanel";
 import { PolicyChip } from "@/components/PolicyChip";
 import { SessionActions } from "@/components/SessionActions";
+import { SkillMention } from "@/components/SkillMention";
+import { ThinkingBlock, ThinkingToggle } from "@/components/ThinkingBlock";
 import { ToolCard } from "@/components/ToolCard";
 import { VoiceButton } from "@/components/VoiceButton";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +26,7 @@ import { useControl } from "@/lib/controlContext";
 import { compactSession, type OpNotice, RUN_COMPACT_EVENT } from "@/lib/sessionOps";
 import { STATUS_VARIANT } from "@/lib/status";
 import type { Item } from "@/lib/thread";
+import { useShowThinking } from "@/lib/thinking";
 import { cn, errorText, fmtTokens, fmtUsd } from "@/lib/utils";
 
 const CallPanel = lazy(() => import("@/components/call/CallPanel").then((m) => ({ default: m.CallPanel }))); // --- G5b
@@ -51,6 +55,8 @@ function ItemView({ item, awaiting }: { item: Item; awaiting: boolean }) {
           )}
         </div>
       );
+    case "reasoning":
+      return <ThinkingBlock text={item.text} streaming={item.streaming} />;
     case "tool":
       return <ToolCard tool={item} awaitingApproval={awaiting} />;
     case "notice":
@@ -93,8 +99,9 @@ function SessionPage({ id }: { id: string }) {
   const didInitialScroll = useRef(false);
   const [atEnd, setAtEnd] = useState(true);
   const [callOpen, setCallOpen] = useState(false); // --- G5b
+  const [showThinking, setShowThinking] = useShowThinking(); // --- G7: per-user thinking toggle
 
-  const items = t.items;
+  const items = showThinking ? t.items : t.items.filter((it) => it.kind !== "reasoning");
   const pendingPerms = Object.values(t.state.permissions);
   const pendingQs = Object.values(t.state.questions);
   const waitingTools = new Set(pendingPerms.map((p) => p.tool));
@@ -258,6 +265,7 @@ function SessionPage({ id }: { id: string }) {
           </Tip>
           <ContextGauge sessionId={id} refreshKey={`${running}:${t.state.usage.prompt}:${items.length}`} />
           {!t.streamOk && <Badge variant="warning">stream reconnecting</Badge>}
+          <ThinkingToggle on={showThinking} onChange={setShowThinking} />
           <Button
             size="sm"
             variant={callOpen ? "secondary" : "outline"}
@@ -331,12 +339,17 @@ function SessionPage({ id }: { id: string }) {
       <footer className="space-y-2 border-t px-4 py-3">
         <div className="mx-auto w-full max-w-4xl space-y-2">
           <ErrorNote error={t.error ?? err} />
+          <PlanPanel sessionId={id} plan={t.state.plan} planMode={t.state.planMode} />
           {pendingPerms.map((p) => (
             <ApprovalCard key={p.request_id} request={p} onDone={() => t.dismissPermission(p.request_id)} />
           ))}
           {pendingQs.map((q) => (
             <QuestionForm key={q.request_id} request={q} onDone={() => t.dismissQuestion(q.request_id)} />
           ))}
+          <SkillMention text={text} onPick={(next) => {
+              setText(next);
+              inputRef.current?.focus();
+            }} />
           <form
             className="flex items-end gap-2"
             onSubmit={(e) => {

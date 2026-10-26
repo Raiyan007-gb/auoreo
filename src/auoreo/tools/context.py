@@ -154,7 +154,8 @@ _RESTORERS: dict[str, Callable[[SessionState, str, str], None]] = {
 AskFn = Callable[[str, str, str], Awaitable[bool]]
 """ask(permission, pattern, detail) -> granted."""
 EmitFn = Callable[[str, dict[str, Any]], Awaitable[None]]
-QuestionFn = Callable[[list[dict[str, Any]]], Awaitable[dict[str, Any]]]
+QuestionFn = Callable[..., Awaitable[dict[str, Any]]]
+"""`question(questions, timeout_s=None)` → `{responses, timed_out}`."""
 
 
 async def _no_ask(permission: str, pattern: str, detail: str) -> bool:
@@ -165,7 +166,7 @@ async def _no_emit(event_type: str, data: dict[str, Any]) -> None:
     return None
 
 
-async def _no_question(questions: list[dict[str, Any]]) -> dict[str, Any]:
+async def _no_question(questions: list[dict[str, Any]], timeout_s: float | None = None) -> dict[str, Any]:
     return {"responses": [], "timed_out": True}
 
 

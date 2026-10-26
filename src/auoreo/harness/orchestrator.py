@@ -17,6 +17,7 @@ from auoreo.core.permissions import visible_tools
 from auoreo.harness.loader import VAR_RE, AgentDef, FamilyDef, SkillDef, ToolDef
 from auoreo.harness.manifests import UNLISTED_TOOLS, Rule, Variant
 from auoreo.harness.registry import Harness
+from auoreo.harness.skill_sources import ExternalSkill
 
 
 class TemplateError(ValueError):
@@ -46,7 +47,7 @@ class AgentSpec:
     model: str
     tools: tuple[ToolDef, ...]
     deferred: tuple[ToolDef, ...]
-    skills: tuple[SkillDef, ...]
+    skills: tuple[SkillDef | ExternalSkill, ...]
     system_prompt: str  # tier: stable — byte-stable for the session
     context_template: str  # tier: context — rendered each turn
     rules: tuple[Rule, ...]
@@ -63,7 +64,7 @@ def _tools_list(tools: list[ToolDef]) -> str:
     return "\n".join(f"- `{t.name}` — {t.manifest.description.strip()}" for t in tools) or "(none)"
 
 
-def _skills_index(skills: list[SkillDef]) -> str:
+def _skills_index(skills: list[SkillDef | ExternalSkill]) -> str:
     if not skills:
         return "(no skills installed)"
     return "\n".join(f"- `{s.name}` — {s.manifest.description.strip()}" for s in skills)

@@ -1,6 +1,6 @@
 import type { PermissionReplyKind } from "@sdk/client";
 import type { PermissionRequestedData } from "@sdk/events";
-import { CheckIcon, ShieldAlertIcon, ShieldCheckIcon, XIcon } from "lucide-react";
+import { CheckCheckIcon, CheckIcon, ShieldAlertIcon, ShieldCheckIcon, XIcon } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
@@ -10,16 +10,20 @@ import { cn, errorText } from "@/lib/utils";
 
 /**
  * Approve once / Always (confirmed) / Reject (optional message). Prefers the WS
- * `control_response`; falls back to `POST /api/permissions/{id}/reply`.
+ * `control_response`; falls back to `POST /api/permissions/{id}/reply`. One-shot requests
+ * (sandbox escalation) have no "Always". `matching` > 1 adds "Approve all N" (cascade).
  */
 export function ApprovalCard({
   request,
   onDone,
   compact = false,
+  matching = 1,
 }: {
   request: PermissionRequestedData;
-  onDone?: (reply: PermissionReplyKind) => void;
+  onDone?: (reply: PermissionReplyKind, cascade?: boolean) => void;
   compact?: boolean;
+  /** Pending requests in this request's approval group (permission, cwd, risk, tool). */
+  matching?: number;
 }) {
   const control = useControl();
   const [busy, setBusy] = useState(false);
@@ -28,12 +32,12 @@ export function ApprovalCard({
   const [confirmAlways, setConfirmAlways] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const send = async (reply: PermissionReplyKind) => {
+  const send = async (reply: PermissionReplyKind, cascade = false) => {
     setBusy(true);
     setErr(null);
     try {
-      await control.replyPermission(request.request_id, reply, reply === "reject" ? message || undefined : undefined);
-      onDone?.(reply);
+      await control.replyPermission(request.request_id, reply, reply === "reject" ? message || undefined : undefined, cascade);
+      onDone?.(reply, cascade);
     } catch (e) {
       setErr(errorText(e));
     } finally {
@@ -46,6 +50,7 @@ export function ApprovalCard({
       role="group"
       aria-label={`Permission request for ${request.tool}`}
       data-testid="approval-card"
+      data-one-shot={request.one_shot === true}
       className={cn("rounded-lg border border-warning/50 bg-warning/5", compact ? "p-2" : "p-3")}
     >
       <div className="flex items-start gap-2">
@@ -95,9 +100,20 @@ export function ApprovalCard({
           <Button size="sm" disabled={busy} onClick={() => void send("once")} autoFocus={!compact}>
             <CheckIcon aria-hidden /> Approve once
           </Button>
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmAlways(true)}>
-            <ShieldCheckIcon aria-hidden /> Always
-          </Button>
+          {matching > 1 && (
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => void send("once", true)} data-testid="approve-all">
+              <CheckCheckIcon aria-hidden /> Approve all {matching}
+            </Button>
+          )}
+          {request.one_shot ? (
+            <span className="self-center text-xs text-muted-foreground" data-testid="one-shot-note">
+              One-time request — no “Always”
+            </span>
+          ) : (
+            <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmAlways(true)}>
+              <ShieldCheckIcon aria-hidden /> Always
+            </Button>
+          )}
           <Button size="sm" variant="outline" disabled={busy} onClick={() => setRejecting(true)}>
             <XIcon aria-hidden /> Reject
           </Button>

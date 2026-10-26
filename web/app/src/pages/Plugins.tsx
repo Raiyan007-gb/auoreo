@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } f
 import { Input, Label } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { SessionSourcesCard } from "@/components/SessionSourcesCard";
 import { Tip } from "@/components/ui/tooltip";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
@@ -32,7 +33,11 @@ function PluginSkillsDialog({ name, onClose }: { name: string | null; onClose: (
     <Dialog open={name !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogTitle>Skills provided by {name}</DialogTitle>
-        <DialogDescription>Plugin skills are offered to agents alongside the folder skills.</DialogDescription>
+        <DialogDescription>
+          Merged into the agent skill catalog as <code>plugin:{name}</code>: agents load them with the <code>skill</code>{" "}
+          tool or an <code>@name</code> mention. A folder skill with the same name wins; the plugin one stays reachable as{" "}
+          <code>plugin:{name}:&lt;skill&gt;</code>.
+        </DialogDescription>
         {skills.error ? (
           <ErrorNote error={skills.error} />
         ) : skills.loading || !skills.data ? (
@@ -249,7 +254,8 @@ function McpTab() {
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <p className="flex-1 text-xs text-muted-foreground">
-          MCP servers from <code>mcp/&lt;name&gt;.yaml</code>; their tools register as <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>.
+          MCP servers from <code>mcp/&lt;name&gt;.yaml</code>; their tools register as <code>mcp__&lt;server&gt;__&lt;tool&gt;</code> and
+          their <code>skill://</code> resources join the skill catalog.
         </p>
         <RefreshButton onClick={state.reload} busy={state.loading} label="Refresh MCP servers" />
       </div>
@@ -375,7 +381,10 @@ export function PluginsPage() {
             </TabsContent>
           </Tabs>
         </div>
-        <ReloadLog />
+        <div className="space-y-4">
+          <SessionSourcesCard />
+          <ReloadLog />
+        </div>
       </div>
     </div>
   );

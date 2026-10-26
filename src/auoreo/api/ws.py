@@ -422,10 +422,20 @@ class WsConnection:
         r = frame.response
         if isinstance(r, WsPermissionReply):
             ok = await reply_with_grants(
-                self.svc.approvals, self.svc.coordinator.engine_for, frame.request_id, r.reply, r.message
+                self.svc.approvals,
+                self.svc.coordinator.engine_for,
+                frame.request_id,
+                r.reply,
+                r.message,
+                r.cascade,
             )
-        else:
+            await self.ack(frame.request_id, ok, None if ok else "no pending request with that id")
+            return
+        try:
             ok = await self.svc.questions.answer(frame.request_id, r.responses)
+        except ValueError as exc:  # InvalidAnswer: the question stays open
+            await self.ack(frame.request_id, False, str(exc))
+            return
         await self.ack(frame.request_id, ok, None if ok else "no pending request with that id")
 
     async def _on_control_request(self, frame: WsControlRequest) -> None:

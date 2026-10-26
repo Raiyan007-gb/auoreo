@@ -44,11 +44,11 @@ export function ControlProvider({ children }: { children: React.ReactNode }) {
     return {
       state,
       connected,
-      async replyPermission(requestId, reply, message) {
+      async replyPermission(requestId, reply, message, cascade = false) {
         const c = ws();
-        if (c && (await c.respond(requestId, { kind: "permission", reply, message: message ?? null })))
+        if (c && (await c.respond(requestId, { kind: "permission", reply, message: message ?? null, cascade })))
           return "ws";
-        await api.replyPermission(requestId, reply, message ?? null);
+        await api.replyPermission(requestId, reply, message ?? null, cascade);
         return "rest";
       },
       async answerQuestion(requestId, responses) {

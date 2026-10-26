@@ -1304,6 +1304,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sessions/{session_id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plan */
+        get: operations["get_plan_api_sessions__session_id__plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sessions/{session_id}/retry": {
         parameters: {
             query?: never;
@@ -1360,6 +1377,27 @@ export interface paths {
         post: operations["share_api_sessions__session_id__share_post"];
         /** Unshare */
         delete: operations["unshare_api_sessions__session_id__share_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sessions/{session_id}/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Sources */
+        get: operations["get_sources_api_sessions__session_id__sources_get"];
+        /**
+         * Put Sources
+         * @description Replace the session's disabled list; applies from the session's next turn.
+         */
+        put: operations["put_sources_api_sessions__session_id__sources_put"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1635,6 +1673,26 @@ export interface paths {
         };
         /** Summary */
         get: operations["summary_api_usage_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/usage/timeseries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Timeseries
+         * @description Token/cost chart data plus the budget guards (`max_cost_usd`, per-turn loop budgets).
+         */
+        get: operations["timeseries_api_usage_timeseries_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3472,12 +3530,23 @@ export interface components {
         PendingPermission: {
             /** Detail */
             detail: string;
+            /**
+             * One Shot
+             * @description No `always`: single-use (e.g. sandbox escalation).
+             * @default false
+             */
+            one_shot: boolean;
             /** Pattern */
             pattern: string;
             /** Permission */
             permission: string;
             /** Request Id */
             request_id: string;
+            /**
+             * Risk
+             * @default medium
+             */
+            risk: string;
             /** Session Id */
             session_id: string;
             /** Tool */
@@ -3485,6 +3554,8 @@ export interface components {
         };
         /** PendingQuestionOut */
         PendingQuestionOut: {
+            /** Expires At */
+            expires_at?: number | null;
             /** Questions */
             questions: {
                 [key: string]: unknown;
@@ -3493,9 +3564,17 @@ export interface components {
             request_id: string;
             /** Session Id */
             session_id: string;
+            /** Timeout S */
+            timeout_s?: number | null;
         };
         /** PermissionReply */
         PermissionReply: {
+            /**
+             * Cascade
+             * @description With `once`: also approve every pending request in the same approval group (permission, cwd, risk tier, tool) across sessions.
+             * @default false
+             */
+            cascade: boolean;
             /** Message */
             message?: string | null;
             /**
@@ -3503,6 +3582,21 @@ export interface components {
              * @enum {string}
              */
             reply: "once" | "always" | "reject";
+        };
+        /** PlanStep */
+        PlanStep: {
+            /** Done When */
+            done_when?: string | null;
+            /**
+             * Status
+             * @default pending
+             * @enum {string}
+             */
+            status: "pending" | "in_progress" | "completed";
+            /** Step */
+            step: string;
+        } & {
+            [key: string]: unknown;
         };
         /** PluginInfo */
         PluginInfo: {
@@ -4026,10 +4120,94 @@ export interface components {
             /** Workflow */
             workflow: string;
         };
+        /**
+         * SessionPlan
+         * @description The newest `update_plan` steps of a session (from `plan.updated` events).
+         */
+        SessionPlan: {
+            /**
+             * Explanation
+             * @default
+             */
+            explanation: string;
+            /**
+             * Plan Mode
+             * @default false
+             */
+            plan_mode: boolean;
+            /** Steps */
+            steps: components["schemas"]["PlanStep"][];
+        };
         /** SessionRename */
         SessionRename: {
             /** Title */
             title: string;
+        };
+        /** SessionSource */
+        SessionSource: {
+            /**
+             * Enabled
+             * @description Enabled for this session (sources are on unless disabled here)
+             */
+            enabled: boolean;
+            /**
+             * Id
+             * @description `mcp:<server>` | `plugin:<name>`
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "mcp" | "plugin";
+            /** Name */
+            name: string;
+            /** Skills */
+            skills?: string[];
+            /**
+             * Status
+             * @description Global state: connected/running/disabled/…
+             */
+            status: string;
+            /**
+             * Tools
+             * @default 0
+             */
+            tools: number;
+        };
+        /** SessionSources */
+        SessionSources: {
+            /** Disabled */
+            disabled: string[];
+            /** Session Id */
+            session_id: string;
+            /** Sources */
+            sources: components["schemas"]["SessionSource"][];
+        };
+        /** SessionSourcesIn */
+        SessionSourcesIn: {
+            /**
+             * Disabled
+             * @description Sources switched off for this session (replaces the list)
+             */
+            disabled: string[];
+        };
+        /** SessionSpend */
+        SessionSpend: {
+            /**
+             * Blocked
+             * @default false
+             */
+            blocked: boolean;
+            /** Cost Usd */
+            cost_usd: number;
+            /**
+             * Ratio
+             * @description cost / max_cost_usd (None without a cap)
+             */
+            ratio?: number | null;
+            /** Session Id */
+            session_id: string;
         };
         /** ShareCreated */
         ShareCreated: {
@@ -4280,6 +4458,35 @@ export interface components {
              */
             status: string;
         };
+        /**
+         * UsageBudget
+         * @description Budget guards from settings: per-session spend cap and per-turn limits.
+         */
+        UsageBudget: {
+            /** Max Cost Usd */
+            max_cost_usd?: number | null;
+            /** Run Budget Seconds */
+            run_budget_seconds?: number | null;
+            /** Token Budget */
+            token_budget?: number | null;
+        };
+        /** UsagePoint */
+        UsagePoint: {
+            /**
+             * Bucket
+             * Format: date-time
+             * @description Start of the bucket (UTC)
+             */
+            bucket: string;
+            /** Calls */
+            calls: number;
+            /** Completion Tokens */
+            completion_tokens: number;
+            /** Cost Usd */
+            cost_usd: number;
+            /** Prompt Tokens */
+            prompt_tokens: number;
+        };
         /** UsageRecord */
         UsageRecord: {
             /** Cached Tokens */
@@ -4305,6 +4512,24 @@ export interface components {
             run_id: string;
             /** Session Id */
             session_id: string;
+        };
+        /** UsageSeries */
+        UsageSeries: {
+            /**
+             * Bucket
+             * @enum {string}
+             */
+            bucket: "hour" | "day";
+            budget: components["schemas"]["UsageBudget"];
+            /** Days */
+            days: number;
+            /** Points */
+            points: components["schemas"]["UsagePoint"][];
+            /**
+             * Sessions
+             * @description Top spenders in range
+             */
+            sessions?: components["schemas"]["SessionSpend"][];
         };
         /** UsageSummary */
         UsageSummary: {
@@ -7390,6 +7615,41 @@ export interface operations {
             };
         };
     };
+    get_plan_api_sessions__session_id__plan_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     retry_api_sessions__session_id__retry_post: {
         parameters: {
             query?: never;
@@ -7537,6 +7797,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SharesRevoked"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_sources_api_sessions__session_id__sources_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSources"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_sources_api_sessions__session_id__sources_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SessionSourcesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionSources"];
                 };
             };
             /** @description Validation Error */
@@ -8145,6 +8479,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UsageSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    timeseries_api_usage_timeseries_get: {
+        parameters: {
+            query?: {
+                days?: number;
+                bucket?: ("hour" | "day") | null;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageSeries"];
                 };
             };
             /** @description Validation Error */

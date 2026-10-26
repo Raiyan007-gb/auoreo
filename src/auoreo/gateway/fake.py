@@ -13,7 +13,9 @@ with a one-sentence hypothetical fact built from the query's words; `"translate"
 Guardian calls (`purpose == "guardian"`) pop `guardian_script`; when it is empty they
 answer `$AUOREO_FAKE_GUARDIAN` (default `ESCALATE`).
 `Scripted.finish` overrides the finish reason (`"length"` scripts an output-token cut) and
-`Scripted.delay_s` stalls before streaming.
+`Scripted.delay_s` stalls before streaming. `Scripted.reasoning` streams `ReasoningDelta`s
+before the text; a user message `/think <text>` answers `echo: <text>` after a deterministic
+thought (keyless demo of the UI's Thinking block).
 Every request is kept in `requests` (with its `reasoning_effort`); `efforts` lists the effort
 of each main-turn call (no `metadata.purpose`) in order.
 """
@@ -34,6 +36,7 @@ from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import (
     Finish,
     LLMRequest,
+    ReasoningDelta,
     StreamItem,
     TextDelta,
     ToolCall,
@@ -54,6 +57,7 @@ class Scripted:
     error: GatewayError | None = None
     finish: str | None = None  # finish reason override (e.g. "length"); default stop/tool_calls
     delay_s: float = 0.0  # sleep before streaming (liveness tests)
+    reasoning: str = ""  # streamed as ReasoningDelta chunks before the text
 
 
 class FakeGateway:
@@ -93,6 +97,8 @@ class FakeGateway:
             await asyncio.sleep(item.delay_s)
         if item.error:
             raise item.error
+        for thought in _chunks(item.reasoning):
+            yield ReasoningDelta(thought)
         for word in _chunks(item.text):
             yield TextDelta(word)
         for name, args in item.tool_calls:
@@ -133,6 +139,11 @@ class FakeGateway:
             except json.JSONDecodeError:
                 args = {}
             return Scripted(tool_calls=[(name, args)])
+        if user.startswith("/think "):
+            topic = user[7:].strip()
+            return Scripted(
+                text=f"echo: {topic}", reasoning=f"Thinking about '{topic}': restate it, then answer."
+            )
         return Scripted(text=f"echo: {user}")
 
     async def embed(self, model: str, texts: list[str], dims: int) -> list[list[float]]:

@@ -28,6 +28,7 @@ from auoreo.harness.loader import (
     ToolDef,
 )
 from auoreo.harness.manifests import AgentManifest
+from auoreo.harness.skill_sources import ExternalSkill, SkillCatalog
 from auoreo.tools.availability import Availability
 
 log = logging.getLogger(__name__)
@@ -169,6 +170,7 @@ class Harness:
         self._snap = _load_snapshot(roots, strict_overlays, error_on_collision)
         self._dynamic: dict[str, ToolDef] = {}  # e.g. MCP tools, keyed by name
         self._dynamic_errors: list[LoadError] = []
+        self._ext_skills = SkillCatalog()  # plugin + MCP skills (spec §15 7-source catalog)
         self.availability = Availability()
         """`is_enabled` / `env_gate` / `check_fn` verdicts (services wires the secret store)."""
         self.generation = 1
@@ -191,7 +193,19 @@ class Harness:
 
     @property
     def skills(self) -> dict[str, SkillDef]:
+        """Folder skills only (they have a `SKILL.md` path); see `all_skills`."""
         return self._snap.skills
+
+    @property
+    def all_skills(self) -> dict[str, SkillDef | ExternalSkill]:
+        """Folder skills merged with plugin/MCP skills (folder roots win a name clash)."""
+        with self._lock:
+            return self._ext_skills.merged(dict(self._snap.skills))[0]
+
+    @property
+    def skill_collisions(self) -> list[dict[str, str]]:
+        with self._lock:
+            return self._ext_skills.merged(dict(self._snap.skills))[1]
 
     @property
     def workflows(self) -> dict[str, Loaded]:
@@ -257,6 +271,36 @@ class Harness:
             self._dynamic[tool.name] = tool
             self.generation += 1
 
+    def register_skills(self, source: str, skills: list[ExternalSkill]) -> list[dict[str, str]]:
+        """Replace every skill of `source` (`plugin:<name>` | `mcp:<server>`); returns the
+        name collisions this source loses (still reachable as `<source>:<name>`)."""
+        with self._lock:
+            self._ext_skills.set(source, skills)
+            self.generation += 1
+            lost = [c for c in self._ext_skills.merged(dict(self._snap.skills))[1] if c["loser"] == source]
+        for c in lost:
+            log.warning("skill '%s' from %s is shadowed by %s", c["name"], source, c["winner"])
+        return lost
+
+    def unregister_skills(self, source: str) -> None:
+        with self._lock:
+            if self._ext_skills.drop(source):
+                self.generation += 1
+
+    def resolve_skill(self, name: str) -> SkillDef | ExternalSkill | None:
+        """Bare name (merged catalog) or qualified `<source>:<name>` (also shadowed ones)."""
+        with self._lock:
+            merged = self._ext_skills.merged(dict(self._snap.skills))[0]
+            if name in merged:
+                found: SkillDef | ExternalSkill = merged[name]
+                return found
+            hit = self._ext_skills.get(name)
+            if hit is not None:
+                return hit
+            src, _, bare = name.rpartition(":")
+            folder = self._snap.skills.get(bare)
+            return folder if folder is not None and folder.source == src else None
+
     def unregister_dynamic(self, prefix: str) -> None:
         with self._lock:
             for name in [n for n in self._dynamic if n.startswith(prefix)]:
@@ -293,10 +337,10 @@ class Harness:
             out.append(tool)
         return out
 
-    def select_skills(self, agent: AgentManifest) -> list[SkillDef]:
+    def select_skills(self, agent: AgentManifest) -> list[SkillDef | ExternalSkill]:
         return [
             s
-            for n, s in sorted(self._snap.skills.items())
+            for n, s in sorted(self.all_skills.items())
             if any(fnmatch.fnmatchcase(n, g) for g in agent.skills)
         ]
 
@@ -342,7 +386,7 @@ class Harness:
             row("agent", a.name, a.source, a.path, a.manifest.description) for a in self.agents.values()
         ]
         out["skills"] = [
-            row("skill", s.name, s.source, s.path, s.manifest.description) for s in self.skills.values()
+            row("skill", s.name, s.source, s.path, s.manifest.description) for s in self.all_skills.values()
         ]
         out["workflows"] = [
             row("workflow", n, w.source, w.path, w.manifest.description) for n, w in self.workflows.items()

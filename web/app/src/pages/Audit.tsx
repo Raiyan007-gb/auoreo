@@ -1,7 +1,7 @@
 import type { AuditEntry, AuditQuery } from "@sdk/client";
 import { RefreshCwIcon, ShieldAlertIcon, ShieldCheckIcon } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,9 +80,16 @@ function RowDetail({ row, onClose }: { row: AuditEntry | null; onClose: () => vo
 }
 
 export function AuditPage() {
-  const [sessionId, setSessionId] = useState("");
-  const [action, setAction] = useState("");
-  const [query, setQuery] = useState<AuditQuery>({ newest_first: true, limit: PAGE });
+  // `?session_id=&action=` deep links (e.g. the Approvals page's per-decision audit link).
+  const [params] = useSearchParams();
+  const [sessionId, setSessionId] = useState(params.get("session_id") ?? "");
+  const [action, setAction] = useState(params.get("action") ?? "");
+  const [query, setQuery] = useState<AuditQuery>({
+    newest_first: true,
+    limit: PAGE,
+    session_id: params.get("session_id") || undefined,
+    action: params.get("action") || undefined,
+  });
   const [selected, setSelected] = useState<AuditEntry | null>(null);
   const page = useAsync(() => api.audit(query), [query]);
 

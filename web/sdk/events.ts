@@ -13,6 +13,9 @@ export interface PermissionRequestedData {
   readonly permission: string;
   readonly pattern: string;
   readonly detail: string;
+  /** Single-use request (e.g. sandbox escalation): no "Always" option. */
+  readonly one_shot?: boolean;
+  readonly risk?: string;
 }
 
 export interface QuestionItem {
@@ -20,12 +23,34 @@ export interface QuestionItem {
   readonly header?: string;
   readonly options?: readonly { readonly label: string; readonly description?: string }[];
   readonly multiSelect?: boolean;
+  /** Free-text answer allowed (default true); returned as `customText`. */
+  readonly allowCustom?: boolean;
+  /** `exit_plan_mode`: the plan to review, as Markdown. */
+  readonly plan?: string;
 }
 
 /** `question.asked` */
 export interface QuestionAskedData {
   readonly request_id: string;
   readonly questions: readonly QuestionItem[];
+  /** Seconds the agent waits before `timed_out` (ask_user_question default 60). */
+  readonly timeout_s?: number;
+  /** Unix seconds when the question expires. */
+  readonly expires_at?: number;
+}
+
+/** One `update_plan` step (`plan.updated` → `steps[]`). */
+export interface PlanStepData {
+  readonly step: string;
+  readonly status: "pending" | "in_progress" | "completed";
+  readonly done_when?: string;
+}
+
+/** `plan.updated` */
+export interface PlanUpdatedData {
+  readonly run_id?: string;
+  readonly steps: readonly PlanStepData[];
+  readonly explanation?: string;
 }
 
 /** `run.blocked` / `run.failed` → `data.error` (run.failed may carry top-level code/message). */

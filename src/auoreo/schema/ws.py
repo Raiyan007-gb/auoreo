@@ -52,6 +52,7 @@ class WsPermissionReply(_Frame):
     kind: Literal["permission"]
     reply: Literal["once", "always", "reject"]
     message: str | None = None
+    cascade: bool = False
 
 
 class WsQuestionAnswer(_Frame):

@@ -40,6 +40,7 @@ from auoreo.runtime.nudges import MemoryNudge, recall_query
 from auoreo.runtime.recovery import model_step
 from auoreo.runtime.run_overrides import apply_run_options  # --- G5a
 from auoreo.runtime.sequence import repair
+from auoreo.runtime.session_sources import apply_session_sources, inject_mentions
 from auoreo.runtime.stopgates import StopGates, prompt_hook
 from auoreo.runtime.tool_round import ABORTED_BEFORE_DISPATCH, tool_round
 from auoreo.tools.context import SessionState, ToolContext
@@ -177,6 +178,7 @@ class AgentRunner:
         try:
             choice = await self.policy.begin(sid, agent, model or rt.model, run_id, text)
             spec = apply_run_options(self.s.harness, self._spec(rt, agent, model, choice), options)
+            spec = await apply_session_sources(self.s, sid, spec)  # per-session MCP/plugin toggles
         except (KeyError, ValueError) as exc:
             await self.s.emit(sid, "run.failed", {"run_id": run_id, "code": "CONFIG", "message": str(exc)})
             return TurnResult(run_id, "failed", "", {"code": "CONFIG", "message": str(exc)})
@@ -201,6 +203,7 @@ class AgentRunner:
         await self._persist(rt, user_msg)
         await self.s.emit(sid, "message.created", {"run_id": run_id, "role": "user", "content": text})
         turn_msg = rt.history[-1]  # located by identity each step: compaction moves indices
+        await inject_mentions(self, rt, spec, text, run_id)  # `@skill` loads that skill for the turn
         if self.s.memory is not None:
             await self.s.memory.record_message(sid, "user", text)
 
@@ -220,8 +223,8 @@ class AgentRunner:
         rt.generation += 1  # the liveness watchdog is bound to this turn's generation
         turn = Turn(TurnBudget.for_turn(st.loop, subagent=rt.subagent), LivenessWatchdog(self.s, rt, run_id))
 
-        async def question(qs: list[dict[str, Any]]) -> dict[str, Any]:
-            return await self.s.questions.ask(sid, qs)
+        async def question(qs: list[dict[str, Any]], timeout_s: float | None = None) -> dict[str, Any]:
+            return await self.s.questions.ask(sid, qs, timeout_s)
 
         async def emit(event_type: str, data: dict[str, Any]) -> None:
             turn.watchdog.touch()  # tool progress counts as liveness
