@@ -8,7 +8,18 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-AuxTask = Literal["title", "compaction", "guardian", "hyde", "translate", "summary", "vision", "curator"]
+AuxTask = Literal[
+    "title",
+    "compaction",
+    "guardian",
+    "hyde",
+    "translate",
+    "summary",
+    "vision",
+    "curator",
+    "sampling",
+    "memory_query",
+]
 
 
 class AuxSettings(BaseModel):

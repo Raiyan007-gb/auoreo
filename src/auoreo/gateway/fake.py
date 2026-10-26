@@ -44,7 +44,7 @@ from auoreo.gateway.types import (
     text_of,
 )
 
-AUTO_PURPOSES = ("vision", "hyde", "translate", "memory_query")
+AUTO_PURPOSES = ("vision", "hyde", "translate", "memory_query", "sampling")
 
 
 @dataclass

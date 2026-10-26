@@ -2643,8 +2643,12 @@ export interface components {
         };
         /** HarnessEntry */
         HarnessEntry: {
+            /** Available */
+            available?: boolean | null;
             /** Description */
             description: string;
+            /** Emoji */
+            emoji?: string | null;
             /** Kind */
             kind: string;
             /** Name */
@@ -2653,6 +2657,8 @@ export interface components {
             path: string | null;
             /** Source */
             source: string;
+            /** Unavailable Reason */
+            unavailable_reason?: string | null;
         };
         /** HarnessListing */
         HarnessListing: {

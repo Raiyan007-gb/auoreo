@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import time
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -14,6 +15,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from auoreo.gateway.types import ImagePart
+from auoreo.schema.events import ToolProgress
 
 if TYPE_CHECKING:
     from auoreo.harness.registry import Harness
@@ -35,6 +37,21 @@ class ExecPolicy:
 
 
 CURRENT_EXEC: ContextVar[ExecPolicy | None] = ContextVar("auoreo_current_exec", default=None)
+
+
+@dataclass
+class CallInfo:
+    """The tool call running in this task (set by the executor): who `ctx.progress()` reports
+    for, and its rate-limit state."""
+
+    call_id: str
+    tool: str
+    interval_s: float = 0.5
+    last: float = 0.0
+
+
+CURRENT_CALL: ContextVar[CallInfo | None] = ContextVar("auoreo_current_call", default=None)
+_PHASES = frozenset({"starting", "running", "waiting", "finishing"})
 
 
 @dataclass
@@ -166,6 +183,40 @@ class ToolContext:
     services: dict[str, Any] = field(default_factory=dict)
     env: dict[str, str] = field(default_factory=dict)
     """Scrubbed environment for child processes (allowlist + tool `requires_env`)."""
+
+    async def progress(
+        self,
+        message: str = "",
+        *,
+        percent: float | None = None,
+        phase: str = "running",
+        cancellable: bool = False,
+    ) -> bool:
+        """Emit a `tool.progress` event for the running call (spec §25.7). Rate-limited per
+        call; returns False when dropped (no call running, or within the interval)."""
+        call = CURRENT_CALL.get()
+        if call is None:
+            return False
+        now = time.monotonic()
+        final = percent is not None and percent >= 100
+        if not final and call.last and now - call.last < call.interval_s:
+            return False
+        call.last = now
+        data = ToolProgress(
+            call_id=call.call_id,
+            tool=call.tool,
+            phase=phase if phase in _PHASES else "running",
+            message=message[:500],
+            percent=None if percent is None else max(0.0, min(100.0, float(percent))),
+            cancellable=cancellable,
+        )
+        await self.emit("tool.progress", data.model_dump(exclude_none=True, exclude={"run_id"}))
+        return True
+
+    @property
+    def on_progress(self) -> Callable[..., Awaitable[bool]]:
+        """`onProgress` spelling of `progress` for handlers ported from TS tools."""
+        return self.progress
 
     @property
     def exec_policy(self) -> ExecPolicy:

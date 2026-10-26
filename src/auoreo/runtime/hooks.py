@@ -11,6 +11,7 @@ stdin) and folds the stdout replies into one `HookOutcome`:
   allow grants this one call, deny{message} refuses it, no reply / `{}` defers to the human;
 - `UserPromptSubmit`: modify{text} | deny{message};
 - `Stop`: {block, reason} (the first block wins);
+- `SubagentStop` (a delegated child run ended; matcher = child agent): informational;
 - everything else is informational.
 
 A crash, non-zero exit, timeout or invalid JSON follows the hook's `on_error`: `warn`
@@ -351,3 +352,15 @@ async def start(services: Services) -> HookRunner | None:
     runner = HookRunner(services)
     runner.ensure_watch()
     return runner
+
+
+async def subagent_stop(services: Any, data: dict[str, Any]) -> None:
+    """Fire `SubagentStop` (informational; matcher = child agent name) when a delegated child
+    run ends, on the parent session. Never raises into the caller."""
+    hooks = hooks_of(services)
+    if hooks is None:
+        return
+    try:
+        await hooks.run("SubagentStop", session_id=data["parent"], payload=data, match_key=data["agent"])
+    except Exception:
+        log.exception("SubagentStop hooks failed for %s", data.get("child"))

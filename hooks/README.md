@@ -8,6 +8,7 @@ name: lint-after-edit          # must match the file name
 description: Run ruff on edited Python files.
 event: PostToolUse             # PreToolUse | PostToolUse | PermissionRequest | UserPromptSubmit
                                # | SessionStart | SessionEnd | PreCompact | PostCompact | Stop
+                               # | SubagentStop (a delegated child run ended; matcher = child agent)
 matcher: "edit|write"          # fnmatch over the tool name (or agent name for session events)
 command: ["./scripts/lint-hook.sh"]   # argv, no shell; cwd = session cwd; scrubbed env
 timeout_ms: 5000

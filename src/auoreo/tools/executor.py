@@ -1,43 +1,54 @@
 """Run one tool call through the full pipeline (spec §9.4–9.6).
 
-parse → validate (JSON Schema) → PreToolUse hooks (deny / modify → re-validate) →
+availability → lossless parse → validate (JSON Schema, typed `InvalidArgumentsError`) →
+PreToolUse hooks (deny / modify → re-validate) →
 interactive gate → tool `pre_check` floor →
 permission (floors, rules, mode, smart-mode guardian, human approval)
-→ scrubbed env → handler with timeout (per-path lock for writers)
-→ redact → prune/spill → audit → PostToolUse hooks.
+→ scrubbed env → handler with timeout (per-path locks for writers, sorted; `ctx.progress()`)
+→ `output_schema` → redact → prune/spill (capped) → audit → PostToolUse hooks.
 """
 
 from __future__ import annotations
 
 import asyncio
+import copy
 import hashlib
-import inspect
-import json
 import logging
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
-
-import jsonschema
 
 from auoreo.backends.sandbox import escalation_request
 from auoreo.core import observability as obs
 from auoreo.core.guardian import guardian_verdict
-from auoreo.core.redaction import redact, redact_tool_output
+from auoreo.core.redaction import redact_tool_output
 from auoreo.core.secrets import child_env, secret_scope
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import LoadError, ToolDef
 from auoreo.runtime.hooks import RESULT_PREVIEW_CHARS, hooks_of
+from auoreo.tools.args import (
+    InvalidArgumentsError,
+    format_validation_error,
+    snapshot_json_value,
+    validate_args,
+)
 from auoreo.tools.context import (
+    CURRENT_CALL,
     CURRENT_EXEC,
     CURRENT_SESSION,
+    CallInfo,
     ExecPolicy,
     ToolContext,
     ToolError,
     ToolResult,
 )
 from auoreo.tools.gates import external_dir_gate, risk_tier, secret_names, unattended_gate
+from auoreo.tools.locks import PathLocks, touched_paths
+from auoreo.tools.stages import agent_of as _agent
+from auoreo.tools.stages import check_output, prune
+from auoreo.tools.stages import detail as _detail
+from auoreo.tools.stages import policy_context as _policy_context
+from auoreo.tools.stages import pre_check as _pre_check
 
 if TYPE_CHECKING:
     from auoreo.core.permissions import PermissionEngine
@@ -54,35 +65,17 @@ class ToolOutcome:
     meta: dict[str, Any] = field(default_factory=dict)
 
 
-def format_validation_error(err: jsonschema.ValidationError) -> str:
-    where = "/".join(str(p) for p in err.absolute_path) or "(root)"
-    return f"invalid arguments at {where}: {err.message}"
-
-
-def prune(text: str, limit: int, spill_dir: Path, call_id: str) -> tuple[str, dict[str, Any]]:
-    """Keep results under `limit` chars; spill the full text to disk (spec §9.3)."""
-    if len(text) <= limit:
-        return text, {}
-    spill_dir.mkdir(parents=True, exist_ok=True)
-    path = spill_dir / f"{call_id}.txt"
-    path.write_text(text, encoding="utf-8")
-    head = text[: limit * 3 // 4]
-    tail = text[-limit // 8 :]
-    note = f"\n… [{len(text) - len(head) - len(tail)} chars truncated; full output: {path}] …\n"
-    return head + note + tail, {"truncated": True, "output_path": str(path)}
+__all__ = ["ToolExecutor", "ToolOutcome", "format_validation_error", "prune"]
 
 
 class ToolExecutor:
     def __init__(self, services: Services) -> None:
         self.s = services
-        self._path_locks: dict[str, asyncio.Lock] = {}
+        self.path_locks = PathLocks()
 
-    def _lock_for(self, tool: ToolDef, args: dict[str, Any], ctx: ToolContext) -> asyncio.Lock | None:
-        arg = tool.manifest.pattern_arg
-        if tool.manifest.is_read_only or not arg or arg != "path" or not isinstance(args.get(arg), str):
-            return None
-        key = str(ctx.resolve_path(args[arg]))
-        return self._path_locks.setdefault(key, asyncio.Lock())
+    def _unavailable(self, tool: ToolDef) -> str | None:
+        availability = getattr(getattr(self.s, "harness", None), "availability", None)
+        return availability.reason(tool) if availability is not None else None
 
     def _pattern(self, tool: ToolDef, args: dict[str, Any], ctx: ToolContext) -> str:
         arg = tool.manifest.pattern_arg
@@ -106,34 +99,33 @@ class ToolExecutor:
             known = ", ".join(sorted(tools)) or "none"
             return self._err(call, f"unknown tool '{call.name}'. Available: {known}")
 
-        # Stage 1: shape.
+        if (why := self._unavailable(tool)) is not None:
+            return self._err(call, f"tool '{call.name}' is unavailable: {why}")
+
+        # Stage 1: lossless shape. `args` is dispatched; `logged` is what hooks/audit see.
         try:
-            args = json.loads(call.arguments or "{}")
-        except json.JSONDecodeError as exc:
-            return self._err(call, f"arguments are not valid JSON: {exc.msg}")
-        if not isinstance(args, dict):
-            return self._err(call, "arguments must be a JSON object")
-        try:
-            jsonschema.validate(args, tool.manifest.parameters)
-        except jsonschema.ValidationError as exc:
-            return self._err(call, format_validation_error(exc))
+            snap = snapshot_json_value(tool.name, call.arguments)
+            args, logged = snap.dispatched, snap.logged
+            validate_args(tool.name, args, tool.manifest.parameters)
+        except InvalidArgumentsError as exc:
+            return self._err(call, str(exc))
 
         hooks = hooks_of(self.s)
         if hooks is not None:
             pre = await hooks.run(
                 "PreToolUse",
                 session_id=ctx.session_id,
-                payload={"agent": _agent(ctx), "tool": tool.name, "arguments": args},
+                payload={"agent": _agent(ctx), "tool": tool.name, "arguments": logged},
                 match_key=tool.name,
             )
             if pre.denied:
                 return self._err(call, f"blocked by a PreToolUse hook: {pre.message}")
             if pre.input is not None:  # modified arguments must pass the schema again
-                args = pre.input
+                args, logged = pre.input, copy.deepcopy(pre.input)
                 try:
-                    jsonschema.validate(args, tool.manifest.parameters)
-                except jsonschema.ValidationError as exc:
-                    return self._err(call, f"a PreToolUse hook produced {format_validation_error(exc)}")
+                    validate_args(tool.name, args, tool.manifest.parameters)
+                except InvalidArgumentsError as exc:  # not the model's fault: never refunded
+                    return self._err(call, f"a PreToolUse hook produced {exc.detail}")
 
         if tool.manifest.interactive_only and not ctx.interactive:
             return self._err(call, f"'{tool.name}' needs a human and this run is non-interactive")
@@ -202,26 +194,27 @@ class ToolExecutor:
         # Execute.
         ctx.env = child_env(tool.manifest.requires_env, self.s.secrets)
         ctx.services.setdefault("services", self.s)
+        ctx.services.setdefault("executor", self)  # `tool_call` re-enters the pipeline
         policy = ExecPolicy(mode=mode, net=tool.manifest.net, grant_id=grant_id)
-        lock = self._lock_for(tool, args, ctx)
+        engine_cfg = self.s.settings.tool_engine
+        info = CallInfo(call.id, tool.name, engine_cfg.progress_interval_ms / 1000)
         try:
             handler = tool.handler()
             session_token = CURRENT_SESSION.set(ctx.session_id)
             exec_token = CURRENT_EXEC.set(policy)
+            call_token = CURRENT_CALL.set(info)
             try:
                 with secret_scope(tool.name, secret_names(tool, self.s.settings, self.s.harness)):
-                    coro = obs.traced(
-                        handler(args, ctx), "tool.call", tool=tool.name, decision=decision.action
-                    )
-                    if lock is not None:
-                        async with lock:
-                            raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
-                    else:
+                    async with self.path_locks.hold(touched_paths(tool, args, ctx)):
+                        coro = obs.traced(
+                            handler(args, ctx), "tool.call", tool=tool.name, decision=decision.action
+                        )
                         raw = await asyncio.wait_for(coro, tool.manifest.timeout_ms / 1000)
             finally:
+                CURRENT_CALL.reset(call_token)
                 CURRENT_EXEC.reset(exec_token)
                 CURRENT_SESSION.reset(session_token)
-            result = raw if isinstance(raw, ToolResult) else ToolResult(str(raw))
+            result = check_output(tool, raw if isinstance(raw, ToolResult) else ToolResult(str(raw)))
         except ToolError as exc:
             result = ToolResult(str(exc), is_error=True)
         except TimeoutError:
@@ -242,7 +235,7 @@ class ToolExecutor:
         )
         limit = min(tool.manifest.max_result_size_chars, self.s.settings.loop.tool_result_inline_chars)
         spill = self.s.settings.home / "sessions" / ctx.session_id / "tool-results"
-        text, prune_meta = prune(text, limit, spill, call.id)
+        text, prune_meta = prune(text, limit, spill, call.id, engine_cfg.spill_max_bytes)
         result = ToolResult(text, result.is_error, {**result.meta, **prune_meta}, images=result.images)
         await self.s.audit.record(
             actor="agent",
@@ -259,7 +252,7 @@ class ToolExecutor:
                 payload={
                     "agent": _agent(ctx),
                     "tool": tool.name,
-                    "arguments": args,
+                    "arguments": logged,
                     "result": result.content[:RESULT_PREVIEW_CHARS],
                     "is_error": result.is_error,
                 },
@@ -419,35 +412,3 @@ class ToolExecutor:
     @staticmethod
     def _err(call: ToolCall, message: str) -> ToolOutcome:
         return ToolOutcome(call, ToolResult(message, is_error=True))
-
-
-def _pre_check(tool: ToolDef, args: dict[str, Any]) -> str | None:
-    """The handler module's optional `pre_check(args) -> str | None` (folder tools only): a
-    non-None reason refuses the call before permission evaluation, so a floor-blocked call
-    never raises an approval prompt. Import failures are left to the execute stage."""
-    if tool.path is None:
-        return None
-    try:
-        module = inspect.getmodule(tool.handler())
-    except LoadError:
-        return None
-    check = getattr(module, "pre_check", None)
-    return check(args) if callable(check) else None
-
-
-def _agent(ctx: ToolContext) -> str:
-    spec = ctx.services.get("spec")
-    return str(getattr(spec, "name", "") or "")
-
-
-def _policy_context(tool: ToolDef, ctx: ToolContext) -> dict[str, Any]:
-    """The per-call fields of the exec-policy `req` (spec §2.10)."""
-    out: dict[str, Any] = {"tool": tool.name, "session_id": ctx.session_id, "cwd": str(ctx.cwd)}
-    if agent := _agent(ctx):
-        out["agent"] = agent
-    return out
-
-
-def _detail(tool: ToolDef, args: dict[str, Any]) -> str:
-    text = json.dumps(args, ensure_ascii=False)
-    return redact(text if len(text) < 2000 else text[:2000] + "…")

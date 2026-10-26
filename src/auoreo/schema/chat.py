@@ -75,6 +75,10 @@ class HarnessEntry(BaseModel):
     source: str
     path: str | None
     description: str
+    available: bool | None = None
+    """Tools only: false when hidden by `is_enabled`, `env_gate` or `check_fn`."""
+    unavailable_reason: str | None = None
+    emoji: str | None = None
 
 
 class HarnessListing(BaseModel):

@@ -8,6 +8,8 @@ Resources are exposed through `list_resources` / `read_resource` (used by the
 `list_mcp_resources` / `read_mcp_resource` tools). Elicitation (`mcp/elicitation.py`):
 form mode becomes a question to the user of the session whose tool call is running;
 URL mode is announced and declined — the user completes it in a browser, never us.
+Sampling (`mcp/sampling.py`) is offered only to servers with `sampling.enabled`. A
+per-tool `tools.<name>.timeoutMs` overrides the server's `timeout_ms`.
 """
 
 from __future__ import annotations
@@ -22,7 +24,9 @@ from mcp.server import MCPServer, Server
 
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.manifests import McpServerManifest, ToolManifest
+from auoreo.harness.registry import ToolCollisionError
 from auoreo.mcp.elicitation import make_elicitation_callback
+from auoreo.mcp.sampling import SamplingHandler
 from auoreo.tools.context import CURRENT_SESSION, ToolContext, ToolResult
 from mcp import Client, StdioServerParameters
 
@@ -53,6 +57,7 @@ class _Connection:
         self.manifest = manifest
         self.target = target
         self.elicit = elicit
+        self.sample: Any = None
         self.last_session: str | None = None
         """Session of the latest tool call on this server (elicitation fallback when the
         server's request arrives in a task that does not carry `CURRENT_SESSION`)."""
@@ -68,7 +73,9 @@ class _Connection:
             # (elicitation) on the legacy handshake; real transports negotiate (`auto`).
             in_process = isinstance(self.target, (MCPServer, Server))
             mode = "legacy" if in_process else "auto"
-            async with Client(self.target, mode=mode, elicitation_callback=self.elicit) as client:
+            async with Client(
+                self.target, mode=mode, elicitation_callback=self.elicit, sampling_callback=self.sample
+            ) as client:
                 self.client = client
                 self.ready.set()
                 await self.stop.wait()
@@ -117,6 +124,8 @@ class McpBridge:
     async def connect(self, manifest: McpServerManifest, target: Any, timeout: float = 20.0) -> list[str]:
         conn = _Connection(manifest, target)
         conn.elicit = make_elicitation_callback(self.s, manifest.name, lambda: conn.last_session)
+        if manifest.sampling.enabled:
+            conn.sample = SamplingHandler(self.s, manifest, lambda: conn.last_session)
         conn.task = asyncio.create_task(conn.run(), name=f"mcp:{manifest.name}")
         self._conns[manifest.name] = conn
         try:
@@ -132,6 +141,8 @@ class McpBridge:
             name = tool_name(manifest.name, t.name)
             schema = dict(t.input_schema or {"type": "object", "properties": {}})
             schema.setdefault("type", "object")
+            override = manifest.tools.get(t.name)
+            timeout_ms = (override.timeout_ms if override else None) or manifest.timeout_ms
             tm = ToolManifest(
                 name=name,
                 description=(t.description or t.name)[:1024],
@@ -140,23 +151,26 @@ class McpBridge:
                 permission=name,
                 default_action="ask",
                 exposure=manifest.exposure,
-                timeout_ms=manifest.timeout_ms,
+                timeout_ms=timeout_ms,
                 search_hint=f"{manifest.name} {t.name}",
                 net="proxy",
             )
-            self.s.harness.register_dynamic(
-                ToolDef(tm, f"mcp:{manifest.name}", None, self._make_loader(manifest.name, t.name))
-            )
+            loader = self._make_loader(manifest.name, t.name, timeout_ms / 1000)
+            try:
+                self.s.harness.register_dynamic(ToolDef(tm, f"mcp:{manifest.name}", None, loader))
+            except ToolCollisionError as exc:  # error_on_collision: skip, listed in harness errors
+                log.error("MCP server '%s': %s", manifest.name, exc)
+                continue
             names.append(name)
         return names
 
-    def _make_loader(self, server: str, remote: str) -> Any:
+    def _make_loader(self, server: str, remote: str, timeout_s: float | None = None) -> Any:
         async def handler(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
             conn = self._conns.get(server)
             if conn is None or conn.client is None:
                 return ToolResult(f"MCP server '{server}' is not connected", is_error=True)
             conn.last_session = CURRENT_SESSION.get() or ctx.session_id
-            result = await conn.client.call_tool(remote, args)
+            result = await conn.client.call_tool(remote, args, read_timeout_seconds=timeout_s)
             return ToolResult(_render_content(result), is_error=bool(result.is_error))
 
         return lambda: handler

@@ -28,6 +28,7 @@ from auoreo.harness.loader import (
     ToolDef,
 )
 from auoreo.harness.manifests import AgentManifest
+from auoreo.tools.availability import Availability
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +49,10 @@ NAMED_KINDS = (
     "plugins",
     "policies",
 )
+
+
+class ToolCollisionError(Exception):
+    """`error_on_collision`: two definitions of one tool name (spec §9.3)."""
 
 
 class HarnessError(Exception):
@@ -88,13 +93,13 @@ class Snapshot:
     shadowed: list[Shadowed] = field(default_factory=list)
 
 
-def _load_snapshot(roots: list[Root], strict_overlays: bool) -> Snapshot:
+def _load_snapshot(roots: list[Root], strict_overlays: bool, error_on_collision: bool = False) -> Snapshot:
     snap = Snapshot()
     fatal: list[LoadError] = []
 
-    def record(err: LoadError, source: str) -> None:
+    def record(err: LoadError, source: str, collision: bool = False) -> None:
         snap.errors.append(err)
-        if source == "bundled" or strict_overlays:
+        if source == "bundled" or strict_overlays or (collision and error_on_collision):
             fatal.append(err)
         else:
             log.warning("skipping overlay definition: %s", err)
@@ -118,8 +123,11 @@ def _load_snapshot(roots: list[Root], strict_overlays: bool) -> Snapshot:
                             f"tool '{name}' shadows a {cand.root.source} tool; set 'override: true' to allow",
                         ),
                         winner.source,
+                        collision=True,
                     )
                     target[name] = item  # keep the lower-precedence original
+                elif kind == "tools":
+                    log.warning("tool '%s' (%s) overrides the %s one", name, winner.source, cand.root.source)
                 continue
             target[name] = item
 
@@ -151,12 +159,18 @@ def _load_snapshot(roots: list[Root], strict_overlays: bool) -> Snapshot:
 class Harness:
     """Thread-safe holder of the current snapshot plus runtime-registered tools."""
 
-    def __init__(self, roots: list[Root], strict_overlays: bool = False) -> None:
+    def __init__(
+        self, roots: list[Root], strict_overlays: bool = False, error_on_collision: bool = False
+    ) -> None:
         self.roots = roots
         self.strict_overlays = strict_overlays
+        self.error_on_collision = error_on_collision
         self._lock = threading.RLock()
-        self._snap = _load_snapshot(roots, strict_overlays)
+        self._snap = _load_snapshot(roots, strict_overlays, error_on_collision)
         self._dynamic: dict[str, ToolDef] = {}  # e.g. MCP tools, keyed by name
+        self._dynamic_errors: list[LoadError] = []
+        self.availability = Availability()
+        """`is_enabled` / `env_gate` / `check_fn` verdicts (services wires the secret store)."""
         self.generation = 1
 
     # ------------------------------------------------------------------ views
@@ -209,12 +223,13 @@ class Harness:
 
     @property
     def errors(self) -> list[LoadError]:
-        return self._snap.errors
+        return [*self._snap.errors, *self._dynamic_errors]
 
     # -------------------------------------------------------------- mutation
     def reload(self) -> dict[str, Any]:
         """Re-discover everything. A failed reload keeps the previous snapshot."""
-        new = _load_snapshot(self.roots, self.strict_overlays)
+        new = _load_snapshot(self.roots, self.strict_overlays, self.error_on_collision)
+        self.availability.invalidate()
         with self._lock:
             old = self._snap
             self._snap = new
@@ -229,7 +244,16 @@ class Harness:
         return diff
 
     def register_dynamic(self, tool: ToolDef) -> None:
+        """Builtins win on a name clash; with `error_on_collision` a clash raises
+        `ToolCollisionError` (and is listed in `errors`) instead of a warning."""
         with self._lock:
+            prev = self._snap.tools.get(tool.name) or self._dynamic.get(tool.name)
+            if prev is not None and prev.source != tool.source:
+                msg = f"{tool.source} tool '{tool.name}' collides with the {prev.source} one"
+                if self.error_on_collision:
+                    self._dynamic_errors.append(LoadError(Path(tool.source), msg))
+                    raise ToolCollisionError(msg)
+                log.warning("%s; %s", msg, "builtin wins" if tool.name in self._snap.tools else "replaced")
             self._dynamic[tool.name] = tool
             self.generation += 1
 
@@ -260,7 +284,7 @@ class Harness:
         )
         out: list[ToolDef] = []
         for tool in [*builtins, *dynamic]:
-            if tool.manifest.exposure == "hidden":
+            if tool.manifest.exposure == "hidden" or self.availability.reason(tool) is not None:
                 continue
             if not any(fnmatch.fnmatchcase(tool.name, g) for g in sel.allow):
                 continue
@@ -307,11 +331,13 @@ class Harness:
                 "description": desc,
             }
 
+        def tool_row(t: ToolDef) -> dict[str, Any]:
+            why = self.availability.reason(t)
+            extra = {"available": why is None, "unavailable_reason": why, "emoji": t.manifest.emoji}
+            return {**row("tool", t.name, t.source, t.path, t.manifest.description), **extra}
+
         out: dict[str, list[dict[str, Any]]] = {}
-        out["tools"] = [
-            row("tool", t.name, t.source, t.path, t.manifest.description)
-            for t in sorted(self.tools.values(), key=lambda t: t.name)
-        ]
+        out["tools"] = [tool_row(t) for t in sorted(self.tools.values(), key=lambda t: t.name)]
         out["agents"] = [
             row("agent", a.name, a.source, a.path, a.manifest.description) for a in self.agents.values()
         ]
