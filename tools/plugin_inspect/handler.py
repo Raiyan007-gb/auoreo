@@ -8,6 +8,7 @@ async def run(args: dict, ctx: ToolContext) -> str:
     try:
         require_opt_in(ctx, "plugin_inspect")
         mgr = manager(services_of(ctx))
+        mgr.mark_inspected(ctx.session_id)  # inspect before define (spec §15)
     except CreatorError as exc:
         raise ToolError(str(exc)) from exc
     defs = mgr.list(ctx.session_id, args.get("query"))

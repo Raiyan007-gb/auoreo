@@ -60,6 +60,7 @@ async def test_define_run_call_stop_undefine(services: Services, workdir: Path) 
         return True
 
     ctx = make_ctx(services, workdir, ask=ask)
+    await call(services, ctx, "plugin_inspect", {})
     res = await call(
         services,
         ctx,
@@ -75,7 +76,8 @@ async def test_define_run_call_stop_undefine(services: Services, workdir: Path) 
 
     res = await call(services, ctx, "plugin_run", {"name": "adder"})
     assert not res.is_error, res.content
-    assert asked and asked[0][:2] == ("plugin_run", "adder") and "async def run" in asked[0][2]
+    assert asked and asked[0][0] == "plugin_run" and asked[0][1].startswith("adder@")
+    assert "async def run" in asked[0][2]
     td = services.harness.tools[tool]
     assert td.manifest.default_action == "ask" and tool in ctx.state.loaded_tools
 
@@ -108,6 +110,7 @@ async def test_define_run_call_stop_undefine(services: Services, workdir: Path) 
 
 async def test_run_without_approval_is_refused(services: Services, workdir: Path) -> None:
     ctx = make_ctx(services, workdir, interactive=False)
+    await call(services, ctx, "plugin_inspect", {})
     await call(services, ctx, "plugin_define", {"name": "adder", "description": "adds", "code": CODE})
     res = await call(services, ctx, "plugin_run", {"name": "adder"})
     assert res.is_error and "not approved" in res.content
@@ -116,6 +119,7 @@ async def test_run_without_approval_is_refused(services: Services, workdir: Path
 
 async def test_run_asks_through_the_approval_broker(services: Services, workdir: Path) -> None:
     ctx = make_ctx(services, workdir, interactive=True)
+    await call(services, ctx, "plugin_inspect", {})
     await call(services, ctx, "plugin_define", {"name": "adder", "description": "adds", "code": CODE})
 
     async def approve_when_pending() -> None:
@@ -134,6 +138,7 @@ async def test_run_asks_through_the_approval_broker(services: Services, workdir:
 
 async def test_bad_code_and_non_creator_agents_are_rejected(services: Services, workdir: Path) -> None:
     ctx = make_ctx(services, workdir)
+    await call(services, ctx, "plugin_inspect", {})
     res = await call(
         services, ctx, "plugin_define", {"name": "bad", "description": "x", "code": "def nope(:"}
     )
@@ -160,6 +165,7 @@ async def test_nothing_persists_across_a_restart(settings: Settings, workdir: Pa
         return True
 
     ctx = make_ctx(svc, workdir, ask=ask)
+    await call(svc, ctx, "plugin_inspect", {})
     await call(svc, ctx, "plugin_define", {"name": "adder", "description": "adds", "code": CODE})
     assert not (await call(svc, ctx, "plugin_run", {"name": "adder"})).is_error
     await svc.close()
