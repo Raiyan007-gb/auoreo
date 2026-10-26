@@ -141,14 +141,15 @@ class SamplingHandler:
         finish: str | None = None
         try:
             async for item in self.s.gateway.stream(request):
-                if isinstance(item, TextDelta):
-                    parts.append(item.text)
-                elif isinstance(item, ToolCall) and not last:
-                    calls.append(item)
-                elif isinstance(item, Usage):
-                    usage = item
-                elif isinstance(item, Finish):
-                    finish = item.reason
+                match item:
+                    case TextDelta(text=t):
+                        parts.append(t)
+                    case ToolCall() if not last:
+                        calls.append(item)
+                    case Usage():
+                        usage = item
+                    case Finish(reason=reason):
+                        finish = reason
         except Exception as exc:
             log.info("MCP sampling for %s failed: %s", self.m.name, exc)
             return ErrorData(code=REJECTED, message=f"sampling failed: {type(exc).__name__}")
