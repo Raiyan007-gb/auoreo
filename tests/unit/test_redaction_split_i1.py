@@ -21,7 +21,7 @@ def _split(s: str, sep: str, every: int = 5) -> str:
     return sep.join(s[i : i + every] for i in range(0, len(s), every))
 
 
-@pytest.mark.parametrize("sep", ["​", "‌", "‍", "⁠", "﻿", "\x00", "\x1b", "\x7f"])
+@pytest.mark.parametrize("sep", ["\u200b", "\u200c", "\u200d", "\u2060", "\ufeff", "\x00", "\x1b", "\x7f"])
 def test_split_secret_is_redacted(sep: str) -> None:
     text = f"key: {_split(KEY, sep)} end"
     out = redact(text)
@@ -30,21 +30,21 @@ def test_split_secret_is_redacted(sep: str) -> None:
 
 
 def test_invisible_chars_outside_the_secret_are_preserved() -> None:
-    text = f"he​llo {_split(KEY, chr(0x200B))} wo⁠rld"
+    text = f"he\u200bllo {_split(KEY, chr(0x200B))} wo\u2060rld"
     out = redact(text)
-    assert out.startswith("he​llo ") and out.endswith(" wo⁠rld")
-    assert BODY[4:-4] not in out.replace("​", "")
+    assert out.startswith("he\u200bllo ") and out.endswith(" wo\u2060rld")
+    assert BODY[4:-4] not in out.replace("\u200b", "")
 
 
 def test_env_assignment_split_by_zero_width() -> None:
     secret = "hunter2-very-secret-value"
-    out = redact(f"DB_PASSWORD=hun​ter2-very-sec‍ret-value")
-    assert secret not in out.replace("​", "").replace("‍", "")
+    out = redact("DB_PASSWORD=hun\u200bter2-very-sec\u200dret-value")
+    assert secret not in out.replace("\u200b", "").replace("\u200d", "")
     assert out.startswith("DB_PASSWORD=")
 
 
 def test_plain_text_with_invisible_chars_is_unchanged() -> None:
-    text = "nothing​ secret\x07 here﻿"
+    text = "nothing\u200b secret\x07 here\ufeff"
     assert redact(text) == text
 
 
