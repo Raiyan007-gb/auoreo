@@ -56,7 +56,7 @@ def parse(text: str, known: dict[str, CommandDef]) -> tuple[CommandDef, str] | N
 
 def _render(inv: Invocation) -> str:
     template = inv.command.template or "{{args}}"
-    return render(template, {"args": inv.args, "input": inv.text}).strip()
+    return render(template, {"args": inv.args, "input": inv.text, "worktree": str(inv.coord.s.cwd)}).strip()
 
 
 async def _prompt(inv: Invocation) -> Expanded:
@@ -126,4 +126,8 @@ async def expand(coord: SessionRunCoordinator, rt: SessionRuntime, text: str, ag
         return Expanded(text, agent)
     command, args = parsed
     inv = Invocation(coord, rt, command, args, text, agent)
+    if command.manifest.subtask:  # --- G6: background child session (+ isolated worktree)
+        from auoreo.runtime.subtask import run_subtask
+
+        return await run_subtask(inv)
     return await HANDLERS[command.manifest.handler](inv)

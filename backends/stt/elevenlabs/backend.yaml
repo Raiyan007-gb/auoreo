@@ -1,0 +1,11 @@
+kind: stt
+name: elevenlabs
+description: >-
+  ElevenLabs /v1/speech-to-text (scribe_v2; word timestamps grouped into sentence segments,
+  keyterms as repeated fields). Key ELEVENLABS_API_KEY from the secret store; 25 MB cap first.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [ELEVENLABS_API_KEY]
+license: proprietary API
+posture: ok

@@ -28,7 +28,12 @@ Every kind ships a `fake` backend used by tests and by `AUOREO_GATEWAY=fake` dem
 
 Kinds today: `capture`, `browser`, `sandbox` (none · docker · bwrap; `sandbox_policy:
 warn|fail` decides what happens when the selected one is unavailable), `stt`, `tts`,
-`vad`, `wake`, `desktop`, `rerank` (none · fake · cross_encoder · cohere; fail-open), `environment` (local · docker ·
+`vad`, `wake` (fake · sherpa_onnx · openwakeword · porcupine), `desktop`, `rerank` (none · fake · cross_encoder · cohere; fail-open), `environment` (local · docker ·
 ssh · e2b · modal · daytona), `detection` / `face` / `sensor` (fake defaults; faces off unless
-`faces_enabled`), `rtc_transport`, `diarize` (fake · sherpa_onnx · pyannote). Real voice/desktop libraries are imported lazily; their
+`faces_enabled`), `rtc_transport` (aiortc · livekit · openai_realtime), `diarize` (fake · sherpa_onnx · pyannote). Real voice/desktop libraries are imported lazily; their
 `check()` reports what is missing, and the `fake` sibling keeps tests and demos keyless.
+
+G6 voice lanes: `stt/{mistral,elevenlabs,deepinfra,xai,deepgram}` (httpx / WebSocket,
+contract-tested with pytest-httpx and a fake WebSocket server), `rtc_transport/openai_realtime`,
+`wake/porcupine`, `tts/edge_tts` (subprocess only) and the `face/sherpa_onnx` stub; see
+`docs/voice.md`. STT backends may override `stream()` to yield partial deltas.

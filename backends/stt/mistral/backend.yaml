@@ -1,0 +1,12 @@
+kind: stt
+name: mistral
+description: >-
+  Mistral /v1/audio/transcriptions (voxtral-mini-latest). Keyterms go out as repeated
+  context_bias fields (≤ 100); segment timestamps are preferred over `language` (the API
+  refuses both together). Key MISTRAL_API_KEY from the secret store; 25 MB cap checked first.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [MISTRAL_API_KEY]
+license: proprietary API
+posture: ok

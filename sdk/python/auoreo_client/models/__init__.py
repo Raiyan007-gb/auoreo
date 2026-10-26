@@ -84,15 +84,22 @@ from .hook_ack import HookAck
 from .hook_ack_status import HookAckStatus
 from .hooks_health import HooksHealth
 from .http_validation_error import HTTPValidationError
+from .hub_installed_skill import HubInstalledSkill
+from .hub_installed_skill_integrity import HubInstalledSkillIntegrity
+from .hub_installed_skill_status import HubInstalledSkillStatus
 from .kanban_create import KanbanCreate
 from .kanban_task import KanbanTask
 from .kanban_task_status import KanbanTaskStatus
 from .latest_seq import LatestSeq
 from .list_goals_api_goals_get_status_type_0 import ListGoalsApiGoalsGetStatusType0
+from .list_proposals_api_memory_prefs_proposals_get_status_type_0 import (
+    ListProposalsApiMemoryPrefsProposalsGetStatusType0,
+)
 from .list_suggestions_api_suggestions_get_status_type_0 import ListSuggestionsApiSuggestionsGetStatusType0
 from .list_tasks_api_kanban_get_status_type_0 import ListTasksApiKanbanGetStatusType0
 from .login_request import LoginRequest
 from .mail_message import MailMessage
+from .mcp_skill_source import McpSkillSource
 from .meeting_attach_request import MeetingAttachRequest
 from .meeting_chunk_info import MeetingChunkInfo
 from .meeting_detail import MeetingDetail
@@ -133,6 +140,12 @@ from .plugin_info_verify import PluginInfoVerify
 from .plugin_pair import PluginPair
 from .plugin_paired import PluginPaired
 from .plugin_skill_info import PluginSkillInfo
+from .prefs_decision import PrefsDecision
+from .prefs_proposal import PrefsProposal
+from .prefs_proposal_action import PrefsProposalAction
+from .prefs_proposal_in import PrefsProposalIn
+from .prefs_proposal_in_action import PrefsProposalInAction
+from .prefs_proposal_status import PrefsProposalStatus
 from .reload_result import ReloadResult
 from .reload_result_changes import ReloadResultChanges
 from .reload_result_changes_additional_property import ReloadResultChangesAdditionalProperty
@@ -158,6 +171,7 @@ from .session_create import SessionCreate
 from .session_deleted import SessionDeleted
 from .session_detail import SessionDetail
 from .session_info import SessionInfo
+from .skill_sources import SkillSources
 from .suggestion_accepted import SuggestionAccepted
 from .suggestion_create import SuggestionCreate
 from .suggestion_create_action import SuggestionCreateAction
@@ -265,15 +279,20 @@ __all__ = (
     "HookAckStatus",
     "HooksHealth",
     "HTTPValidationError",
+    "HubInstalledSkill",
+    "HubInstalledSkillIntegrity",
+    "HubInstalledSkillStatus",
     "KanbanCreate",
     "KanbanTask",
     "KanbanTaskStatus",
     "LatestSeq",
     "ListGoalsApiGoalsGetStatusType0",
+    "ListProposalsApiMemoryPrefsProposalsGetStatusType0",
     "ListSuggestionsApiSuggestionsGetStatusType0",
     "ListTasksApiKanbanGetStatusType0",
     "LoginRequest",
     "MailMessage",
+    "McpSkillSource",
     "MeetingAttachRequest",
     "MeetingChunkInfo",
     "MeetingDetail",
@@ -314,6 +333,12 @@ __all__ = (
     "PluginPair",
     "PluginPaired",
     "PluginSkillInfo",
+    "PrefsDecision",
+    "PrefsProposal",
+    "PrefsProposalAction",
+    "PrefsProposalIn",
+    "PrefsProposalInAction",
+    "PrefsProposalStatus",
     "ReloadResult",
     "ReloadResultChanges",
     "ReloadResultChangesAdditionalProperty",
@@ -337,6 +362,7 @@ __all__ = (
     "SessionDeleted",
     "SessionDetail",
     "SessionInfo",
+    "SkillSources",
     "SuggestionAccepted",
     "SuggestionCreate",
     "SuggestionCreateAction",

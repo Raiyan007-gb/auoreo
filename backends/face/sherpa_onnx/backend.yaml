@@ -1,0 +1,13 @@
+kind: face
+name: sherpa_onnx
+description: >-
+  "sherpa-face" fallback slot (spec §22): sherpa-onnx ships no face model API yet, so this is a
+  STUB. check() reports honestly what is missing (the sherpa-onnx package, a model folder in
+  settings.g6.voice.sherpa_face_model_dir) and that detection is not implemented; faces()
+  always refuses. Use face/mediapipe for real local detection.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: Apache-2.0
+posture: ok

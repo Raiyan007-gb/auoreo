@@ -38,16 +38,23 @@ doctor` prints the selected backend of every kind with its readiness and posture
 | stt | `faster_whisper` | yes | `pip install faster-whisper`; model `base` cached or `voice_download_models` | MIT | ok |
 | stt | `openai` | | `OPENAI_API_KEY` (gpt-4o-transcribe; whisper-1 gives segments) | API | ok |
 | stt | `groq` | | `GROQ_API_KEY` (whisper-large-v3-turbo) | API | ok |
+| stt | `mistral` | | `MISTRAL_API_KEY` (voxtral-mini-latest; keyterms → `context_bias`) | API | ok |
+| stt | `elevenlabs` | | `ELEVENLABS_API_KEY` (scribe_v2, word timestamps → segments) | API | ok |
+| stt | `deepinfra` | | `DEEPINFRA_API_KEY` (OpenAI-compatible, openai/whisper-large-v3-turbo) | API | ok |
+| stt | `xai` | | `XAI_API_KEY` + `g6.voice.xai_experimental: true` (experimental endpoint) | API | ok |
+| stt | `deepgram` | | `DEEPGRAM_API_KEY` + extra `voice-stream` (Nova-3 WebSocket streaming) | API | ok |
 | stt | `fake` | | — (WAV `ICMT` comment or "fake transcript (N.N s)") | MIT | ok |
 | tts | `kittentts` | yes | KittenTTS wheel; `nano-int8` model cached or `voice_download_models` | Apache-2.0 | ok |
 | tts | `openai` | | `OPENAI_API_KEY` (gpt-4o-mini-tts, ≤ 4096 chars, mp3) | API | ok |
 | tts | `elevenlabs` | | `ELEVENLABS_API_KEY` (eleven_flash_v2_5, opus_48000_64) | API | ok |
 | tts | `piper` | | stub only — must run as a subprocess | GPL-3.0 | **gpl-isolated** |
+| tts | `edge_tts` | | `edge-tts` CLI out of process (`g6.voice.edge_tts_command`); unofficial service, opt-in | LGPL-3.0 | **gpl-isolated** |
 | tts | `fake` | | — (440 Hz tone, len(text)/15 s, text in `ICMT`) | MIT | ok |
 | vad | `fake` | yes | — (RMS > `voice_speaking_rms` per 30 ms frame) | MIT | ok |
 | vad | `silero` | | `pip install silero-vad onnxruntime` (pulls torch) | MIT | ok |
 | wake | `fake` | yes | — (phrase in the fake transcript) | MIT | ok |
 | wake | `sherpa_onnx` | | `pip install sherpa-onnx` + KWS model folder | Apache-2.0 | ok |
+| wake | `porcupine` | | extra `wake-porcupine` + `PICOVOICE_ACCESS_KEY` (fail-closed without it) | Apache SDK + Picovoice terms | ok |
 | wake | `openwakeword` | | stub only — NC weights need an explicit opt-in | Apache code / NC weights | **nc-opt-in** |
 
 The fakes are the default only for `vad` and `wake`, where no local default is installable
@@ -306,3 +313,29 @@ auoreo voice-host --check     # starts the sidecar, prints `voice-host pid N (st
 The sidecar imports `auoreo` itself (for the backend ABCs and discovery), so its venv needs the
 same auoreo version. `voice_host_backends.*` cannot be `sidecar` (refused: it would recurse).
 A PyInstaller build has no `-m`; point `voice_host_python` at a real interpreter there.
+
+## G6: streaming STT, OpenAI Realtime, more lanes
+
+**Streaming deltas.** `SttBackend.stream(wav, language, keyterms)` yields
+`TranscriptDelta{text, final, done, language}`; the last item has `done=True` and the full
+text. The default wraps `transcribe` (one item); `stt/openai` streams with `stream=true`
+(`transcript.text.delta` / `.done` server-sent events; whisper-1 falls back to
+`gpt-4o-transcribe`), `stt/deepgram` streams over a raw WebSocket
+(`g6.voice.deepgram_url`, linear16 16 kHz in 250 ms frames, interim results, `CloseStream`
+to flush). Deepgram is a streaming lane, not a member of the batch chain.
+
+**OpenAI Realtime over WebRTC** (`"backends": {"rtc_transport": "openai_realtime"}`):
+`POST /api/rtc/join` mints a short-lived client secret server-side
+(`POST /v1/realtime/client_secrets`, `OpenAI-Safety-Identifier` = hashed session id). With an
+`sdp` offer the server exchanges it at `/v1/realtime/calls` and returns the answer (call id
+from `Location`); without one the response carries the ephemeral `token` and the `calls`
+`url` for the browser to exchange itself. Only `{session_id, minted_at, model, outcome}` is
+kept (`rtc.realtime_minted` event); secrets and SDP are never persisted or logged.
+`DELETE /api/rtc/join/{id}` hangs the call up. Settings: `g6.voice.realtime.{model, voice,
+base_url, transcription_model}`.
+
+**Wake word: porcupine** — `g6.voice.porcupine_keywords` (built-ins) or
+`porcupine_keyword_paths` (custom `.ppn`, never committed), `porcupine_sensitivity` (higher =
+more sensitive, the opposite of the sherpa threshold). **edge-tts** never loads in the server:
+each chunk runs `<edge_tts_command> --text … --voice … --rate=±N% --write-media <tmp>` with the
+scrubbed child env. **face/sherpa_onnx** is an honest stub (`check()` never reports ready).

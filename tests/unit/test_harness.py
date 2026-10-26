@@ -168,6 +168,7 @@ def test_bundled_commands_are_valid(tmp_path: Path) -> None:
     h = Harness(default_roots(tmp_path / "h", tmp_path, REPO))
     handlers = {n: c.manifest.handler for n, c in h.commands.items()}
     assert handlers == {
+        "babysit_pr": "prompt",  # G6
         "compact": "compact",
         "curator": "prompt",
         "goal": "prompt",

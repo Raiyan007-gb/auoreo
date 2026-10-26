@@ -83,6 +83,12 @@ ops = [  # G4b: tools/ops_gpu (NVML) + tools/ops_ping (ICMP; TCP-connect fallbac
 tabular = [  # G4b: sheet_read pandas opt-in (`settings.tools.tabular_pandas`)
     "pandas>=2.3",
 ]
+voice-stream = [  # G6: backends/stt/deepgram (raw WebSocket streaming STT)
+    "websockets>=15,<18",
+]
+wake-porcupine = [  # G6: backends/wake/porcupine (keyed; PICOVOICE_ACCESS_KEY)
+    "pvporcupine>=3",
+]
 code = [
     "tree-sitter>=0.26.0",
     "tree-sitter-go>=0.25.0",

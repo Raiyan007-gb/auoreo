@@ -368,7 +368,7 @@ def load_family(c: Candidate) -> FamilyDef:
     return FamilyDef(fam, body.strip(), c.root.source, c.path)
 
 
-COMMAND_VARS = {"args", "input"}
+COMMAND_VARS = {"args", "input", "worktree"}  # worktree: G6 subtask commands
 
 
 def load_command(c: Candidate) -> CommandDef:

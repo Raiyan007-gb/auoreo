@@ -1,0 +1,13 @@
+kind: tts
+name: edge_tts
+description: >-
+  Microsoft Edge online voices via the edge-tts CLI, run strictly out of process
+  (settings.g6.voice.edge_tts_command, default `edge-tts`; e.g. a separate venv's
+  `python -m edge_tts`). Never imported by the server. Opt-in only: unofficial endpoint;
+  mp3 output, 5000 chars per chunk, speed → --rate. Install it yourself (`uv tool install edge-tts`).
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: LGPL-3.0 (edge-tts; isolated) / Microsoft service terms
+posture: gpl-isolated

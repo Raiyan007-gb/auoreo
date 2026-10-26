@@ -9,6 +9,7 @@ import { opsMethods } from "./ops";
 // --- end W0-A
 import { statusMethods } from "./ops2"; // --- W0-B
 import { g5bMethods } from "./ops3"; // --- G5b
+import { g6Methods } from "./ops4"; // --- G6
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -265,6 +266,7 @@ export function createClient(opts: ClientOptions = {}) {
     ...opsMethods(request),
     // --- end W0-A
     ...g5bMethods(request), // --- G5b: rtc call client + context gauge (./ops3.ts)
+    ...g6Methods(request), // --- G6: PREFS.md proposals + skills hub (./ops4.ts)
   };
 }
 
@@ -358,6 +360,7 @@ export * from "./ops";
 // --- end W0-A
 export type * from "./ops2"; // --- W0-B
 export type * from "./ops3"; // --- G5b
+export type * from "./ops4"; // --- G6
 
 // =================================================================== --- W0-C goals + suggestions
 export type GoalInfo = S["GoalInfo"];

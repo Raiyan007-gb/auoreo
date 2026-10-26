@@ -4,6 +4,7 @@ import { ArchiveIcon, PinIcon, PinOffIcon, PlayIcon, RefreshCwIcon, ThumbsDownIc
 import { useState } from "react";
 import { EmptyState, ErrorNote } from "@/components/AppShell";
 import { MarkdownText } from "@/components/MarkdownLazy";
+import { PrefsPanel } from "@/components/PrefsPanel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -260,6 +261,7 @@ export function CuratorPanel() {
           <EmptyState title="No curator report yet">Use “Run now” to write one.</EmptyState>
         )}
       </Card>
+      <PrefsPanel />
     </section>
   );
 }

@@ -236,7 +236,8 @@ class McpCatalog:
         args = str((params.arguments or {}).get("args", "")).strip()
         text = f"/{params.name} {args}".strip()
         try:  # same renderer + variables as runtime/commands.py `_render`
-            rendered = render(cmd.template or "{{args}}", {"args": args, "input": text}).strip()
+            values = {"args": args, "input": text, "worktree": str(self.svc.cwd)}  # G6: worktree var
+            rendered = render(cmd.template or "{{args}}", values).strip()
         except TemplateError as exc:
             raise MCPError(INVALID_PARAMS, str(exc)) from None
         message = mt.PromptMessage(role="user", content=mt.TextContent(text=rendered or text))

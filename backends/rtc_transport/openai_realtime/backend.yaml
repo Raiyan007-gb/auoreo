@@ -1,0 +1,14 @@
+kind: rtc_transport
+name: openai_realtime
+description: >-
+  OpenAI Realtime over WebRTC (P1 alt to aiortc): join mints a short-lived ephemeral client
+  secret server-side (POST /v1/realtime/client_secrets, OpenAI-Safety-Identifier = hashed
+  session) and, given an SDP offer, exchanges it at /v1/realtime/calls for the answer; without
+  an offer the browser gets the ephemeral secret to do the exchange itself. Secrets are never
+  persisted or logged; SDP is never logged. Key OPENAI_API_KEY from the secret store.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [OPENAI_API_KEY]
+license: proprietary API
+posture: ok

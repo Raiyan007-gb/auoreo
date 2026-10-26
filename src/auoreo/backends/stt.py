@@ -7,7 +7,7 @@ Cloud backends enforce `MAX_UPLOAD_BYTES` before sending anything.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -36,6 +36,17 @@ class Transcript:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class TranscriptDelta:
+    """One streaming update (G6): `text` is the new piece; `final` marks a finished segment.
+    The last item of a stream has `done=True` and carries the whole transcript in `text`."""
+
+    text: str
+    final: bool = False
+    done: bool = False
+    language: str | None = None
+
+
 class SttBackend(ABC):
     def __init__(self, settings: Any) -> None:
         self.settings = settings
@@ -49,6 +60,16 @@ class SttBackend(ABC):
         self, wav: bytes, *, language: str | None = None, keyterms: Sequence[str] = ()
     ) -> Transcript:
         """Transcribe a 16 kHz mono int16 WAV. Raises `ToolError` with a remedy on failure."""
+
+    streaming: bool = False
+    """True when `stream` yields partial deltas from the provider (not just one final item)."""
+
+    async def stream(
+        self, wav: bytes, *, language: str | None = None, keyterms: Sequence[str] = ()
+    ) -> AsyncIterator[TranscriptDelta]:
+        """Streaming deltas; the default runs `transcribe` and yields one `done` item."""
+        t = await self.transcribe(wav, language=language, keyterms=keyterms)
+        yield TranscriptDelta(t.text, final=True, done=True, language=t.language)
 
 
 def check_upload(wav: bytes, limit: int = MAX_UPLOAD_BYTES) -> None:

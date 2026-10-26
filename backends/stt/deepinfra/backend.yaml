@@ -1,0 +1,12 @@
+kind: stt
+name: deepinfra
+description: >-
+  DeepInfra OpenAI-compatible /v1/openai/audio/transcriptions (default
+  openai/whisper-large-v3-turbo, settings.g6.voice.deepinfra_model; verbose_json segments).
+  Key DEEPINFRA_API_KEY from the secret store; 25 MB cap checked first.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [DEEPINFRA_API_KEY]
+license: proprietary API (weights vary per model)
+posture: ok

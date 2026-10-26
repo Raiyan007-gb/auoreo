@@ -1,0 +1,12 @@
+kind: stt
+name: xai
+description: >-
+  xAI speech-to-text (EXPERIMENTAL): the endpoint is not documented as stable, so it is off
+  unless settings.g6.voice.xai_experimental is true; the URL is settings.g6.voice.xai_stt_url.
+  Key XAI_API_KEY from the secret store; 25 MB cap checked first.
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: [XAI_API_KEY]
+license: proprietary API
+posture: ok
