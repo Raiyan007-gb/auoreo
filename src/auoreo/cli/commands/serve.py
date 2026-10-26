@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import socket
 import sys
@@ -10,6 +11,7 @@ from typing import Annotated
 import typer
 
 from auoreo.cli.common import err_console, settings
+from auoreo.cli.serve_extras import ServeExtras
 from auoreo.core.logsetup import configure_logging, uvicorn_log_config
 from auoreo.core.settings import Settings
 
@@ -30,22 +32,56 @@ def serve(
     queue_bound: Annotated[
         int | None, typer.Option(help="Queued messages per session before 429 (default 128).", min=1)
     ] = None,
+    # --- G5a: spec §18 flags (resolved in cli/serve_extras.py)
+    ws: Annotated[bool, typer.Option("--ws/--no-ws", help="Serve the /ws control plane.")] = True,
+    ws_ping_interval: Annotated[float | None, typer.Option(help="WebSocket ping interval, s (20).")] = None,
+    ws_ping_timeout: Annotated[float | None, typer.Option(help="WebSocket ping timeout, s (60).")] = None,
+    tunnel: Annotated[
+        str,
+        typer.Option(help="off | cloudflared | tailscale | fake (needs a password; UDP media not carried)"),
+    ] = "off",
+    cors: Annotated[
+        list[str] | None, typer.Option("--cors", help="Extra CORS/WS origin (repeatable).")
+    ] = None,
+    trusted_host: Annotated[
+        list[str] | None, typer.Option("--trusted-host", help="Extra allowed Host header (repeatable).")
+    ] = None,
+    ws_auth: Annotated[str | None, typer.Option(help="token (default) | off (loopback only)")] = None,
+    mdns: Annotated[
+        bool, typer.Option("--mdns", help="Advertise on the LAN (binds 0.0.0.0; password required).")
+    ] = False,
 ) -> None:
     """Run the API server (one app, one port; optionally a Unix socket too)."""
     import uvicorn
 
     from auoreo.api.app import create_app
+    from auoreo.cli import serve_extras
 
     st = settings(host=host, port=port, gateway=gateway, workers=workers)
     if queue_bound is not None:  # --- G1a
         st.http.queue_bound = queue_bound
+    try:  # --- G5a
+        extras = serve_extras.resolve(
+            st,
+            ws=ws,
+            ws_ping_interval=ws_ping_interval,
+            ws_ping_timeout=ws_ping_timeout,
+            tunnel=tunnel,
+            cors=cors,
+            trusted_hosts=trusted_host,
+            ws_auth=ws_auth,
+            mdns=mdns,
+        )
+    except serve_extras.ServeOptionError as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(2) from exc
     configure_logging(st)
     if not st.is_loopback and not st.server_password:
         err_console.print("[red]refusing to bind a non-loopback address without AUOREO_SERVER_PASSWORD[/red]")
         raise typer.Exit(2)
     _check_workers(st)
     if uds is not None:  # --- W2-B: the daemon's socket (TCP only when --port is given)
-        _serve_uds(st, uds, tcp=port is not None)
+        _serve_uds(st, uds, tcp=port is not None, extras=extras)
         return
     sock = socket.socket(socket.AF_INET6 if ":" in st.host else socket.AF_INET)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -57,25 +93,38 @@ def serve(
     bound = sock.getsockname()[1]
     url = f"http://{st.host}:{bound}"
     if st.workers > 1:
-        _run_workers(st, sock, bound, url, open_browser)
+        _run_workers(st, sock, bound, url, open_browser, extras)
         return
+
+    def emit(line: str) -> None:
+        print(line, flush=True)
 
     class _Server(uvicorn.Server):
         async def startup(self, sockets: list[socket.socket] | None = None) -> None:
             await super().startup(sockets=sockets)
             if self.started:  # announce only once the app (lifespan) is ready
                 print(f"server listening on {url}", flush=True)  # discovery contract
+                if line := extras.ws_line(st.host, bound):  # --- G5a
+                    emit(line)
+                await extras.started(st, bound, emit)
                 if open_browser:
                     webbrowser.open(url)
 
         async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
+            await extras.stopping(st)  # --- G5a: tunnel + mDNS
             svc = getattr(app.state, "services", None)
             if svc is not None:  # close WS clients with 1001 before uvicorn's own 1012
                 await svc.connections.close_all(1001)
             await super().shutdown(sockets=sockets)
 
     app = create_app(st)
-    config = uvicorn.Config(app, log_level="info", lifespan="on", log_config=uvicorn_log_config(st))
+    config = uvicorn.Config(
+        app,
+        log_level="info",
+        lifespan="on",
+        log_config=uvicorn_log_config(st),
+        **extras.uvicorn_kwargs(st),
+    )
     server = _Server(config)
     try:
         server.run(sockets=[sock])
@@ -99,7 +148,9 @@ def _check_workers(st: Settings) -> None:
         raise typer.Exit(2) from exc
 
 
-def _run_workers(st: Settings, sock: socket.socket, bound: int, url: str, open_browser: bool) -> None:
+def _run_workers(
+    st: Settings, sock: socket.socket, bound: int, url: str, open_browser: bool, extras: ServeExtras
+) -> None:
     """N uvicorn workers on our pre-bound socket; each builds its app through the factory
     (`create_app()` → `get_settings()`), so CLI overrides travel as AUOREO_* env vars."""
     import uvicorn
@@ -111,6 +162,11 @@ def _run_workers(st: Settings, sock: socket.socket, bound: int, url: str, open_b
             "AUOREO_PORT": str(bound),
             "AUOREO_GATEWAY": st.gateway,
             "AUOREO_WORKERS": str(st.workers),
+            # --- G5a: serve flags reach every worker's factory-built Settings
+            "AUOREO_CLI": st.cli.model_dump_json(),
+            "AUOREO_HTTP": st.http.model_dump_json(),
+            "AUOREO_CORS_ORIGINS": json.dumps(st.cors_origins),
+            "AUOREO_WS_PING_INTERVAL_S": str(st.ws_ping_interval_s),
         }
     )
     config = uvicorn.Config(
@@ -120,8 +176,11 @@ def _run_workers(st: Settings, sock: socket.socket, bound: int, url: str, open_b
         log_level="info",
         lifespan="on",
         log_config=uvicorn_log_config(st),
+        **extras.uvicorn_kwargs(st),
     )
     print(f"server listening on {url} ({st.workers} workers; sticky sessions required)", flush=True)
+    if line := extras.ws_line(st.host, bound):
+        print(line, flush=True)
     if open_browser:
         webbrowser.open(url)
     try:
@@ -130,7 +189,7 @@ def _run_workers(st: Settings, sock: socket.socket, bound: int, url: str, open_b
         sys.exit(0)
 
 
-def _serve_uds(st: Settings, path: Path, *, tcp: bool) -> None:
+def _serve_uds(st: Settings, path: Path, *, tcp: bool, extras: ServeExtras) -> None:
     """Serve `create_app` on a Unix socket (+ TCP with --port). Requests over the socket are
     trusted by file permissions (`remote.uds.TrustUnixSocket`); TCP keeps bearer auth."""
     import uvicorn
@@ -171,7 +230,10 @@ def _serve_uds(st: Settings, path: Path, *, tcp: bool) -> None:
             await super().shutdown(sockets=sockets)
 
     app = uds_mod.TrustUnixSocket(inner, st.server_password)
-    server = _Server(uvicorn.Config(app, log_level="info", lifespan="on", log_config=uvicorn_log_config(st)))
+    config = uvicorn.Config(
+        app, log_level="info", lifespan="on", log_config=uvicorn_log_config(st), **extras.uvicorn_kwargs(st)
+    )
+    server = _Server(config)
     try:
         server.run(sockets=sockets)
     except KeyboardInterrupt:

@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from auoreo import __version__
 from auoreo.api.deps import ServicesDep
+from auoreo.core.buildinfo import code_sha
 from auoreo.schema.chat import Health
 
 router = APIRouter(prefix="/api", tags=["health"])
@@ -14,4 +15,5 @@ async def health(svc: ServicesDep) -> Health:
         version=__version__,
         generation=svc.harness.generation,
         gateway=svc.gateway.name,
+        code_sha=code_sha(),
     )

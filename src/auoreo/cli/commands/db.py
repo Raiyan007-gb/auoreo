@@ -56,6 +56,26 @@ def history() -> None:
     command.history(alembic_config(_url()), verbose=False)
 
 
+@app.command("inspect")  # --- G5a
+def inspect(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
+    """Read-only: schema version, Alembic head/current, row counts per table, file sizes."""
+    from auoreo.core.debuginfo import db_inspect
+
+    info = db_inspect(settings())
+    if as_json:
+        print(json.dumps(info, indent=2))
+        return
+    console.print(f"path            {info['path']}{'' if info['exists'] else ' (missing)'}")
+    console.print(f"schema_version  {info['schema_version']} (code {info['code_schema_version']})")
+    console.print(f"alembic         current {info['alembic_current']} · head {info['alembic_head']}")
+    for name, size in info["files"].items():
+        console.print(f"file            {name:14} {size:>12,} bytes")
+    for name, count in info["tables"].items():
+        console.print(f"table           {name:28} {count:>10,} rows")
+    if info.get("note"):
+        console.print(f"[yellow]{info['note']}[/yellow]")
+
+
 # ------------------------------------------------------------------ W1-E: backups + keys
 def _write_private(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)

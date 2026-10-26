@@ -33,6 +33,9 @@ class RunOptions:
     tools_allow: tuple[str, ...] | None = None  # fnmatch globs; None = agent default
     tools_deny: tuple[str, ...] = ()
     skip_memory: bool = False
+    bare: bool = False  # --- G5a: system prompt = agent body only (`auoreo run --bare`)
+    variant: str | None = None  # shape requests by the variants.yaml entry matching this id
+    effort: str | None = None  # reasoning effort override (`--thinking low|medium|high|max`)
 
 
 @dataclass

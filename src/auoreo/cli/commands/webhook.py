@@ -149,3 +149,7 @@ async def _in_process(
     finally:
         lock.release(svc.settings.home, svc)
     return r.status_code, answer, ({"id": row.id, "status": row.status, "error": row.error} if row else None)
+
+
+# --- G5a: add/deliveries/replay
+from auoreo.cli.commands import webhook_more  # noqa: E402,F401

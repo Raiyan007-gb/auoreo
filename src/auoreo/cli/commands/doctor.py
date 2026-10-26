@@ -25,9 +25,16 @@ def _credential_checks(st: Settings) -> list[dict[str, str]]:
     return [c.as_dict() for c in diagnostics.credential_checks(st)]
 
 
+async def _all_checks(st: Settings) -> list[diagnostics.Check]:
+    from auoreo.core.diagnostics_cli import cli_checks  # --- G5a: live server, ws, tunnels, …
+
+    return [*await diagnostics.run_checks(st), *await cli_checks(st)]
+
+
 def doctor(as_json: Annotated[bool, typer.Option("--json")] = False) -> None:
     """Check the environment, definitions, database and credentials."""
-    out = [c.as_dict() for c in asyncio.run(diagnostics.run_checks(settings()))]
+    st = settings()
+    out = [c.as_dict() for c in asyncio.run(_all_checks(st))]
     if as_json:
         dump_json(out)
     else:

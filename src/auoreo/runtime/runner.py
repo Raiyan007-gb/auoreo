@@ -38,6 +38,7 @@ from auoreo.runtime.liveness import LivenessWatchdog
 from auoreo.runtime.multimodal import prepare_messages
 from auoreo.runtime.nudges import MemoryNudge, recall_query
 from auoreo.runtime.recovery import model_step
+from auoreo.runtime.run_overrides import apply_run_options  # --- G5a
 from auoreo.runtime.sequence import repair
 from auoreo.runtime.stopgates import StopGates, prompt_hook
 from auoreo.runtime.tool_round import ABORTED_BEFORE_DISPATCH, tool_round
@@ -175,7 +176,7 @@ class AgentRunner:
         options = options or RunOptions()
         try:
             choice = await self.policy.begin(sid, agent, model or rt.model, run_id, text)
-            spec = self._spec(rt, agent, model, choice)
+            spec = apply_run_options(self.s.harness, self._spec(rt, agent, model, choice), options)
         except (KeyError, ValueError) as exc:
             await self.s.emit(sid, "run.failed", {"run_id": run_id, "code": "CONFIG", "message": str(exc)})
             return TurnResult(run_id, "failed", "", {"code": "CONFIG", "message": str(exc)})

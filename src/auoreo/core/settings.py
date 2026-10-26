@@ -20,6 +20,7 @@ from pydantic_settings import (
 )
 
 from auoreo.core.paths import home_dir
+from auoreo.core.settings_cli import CliSettings  # --- G5a
 from auoreo.core.settings_compaction import CompactionSettings  # --- G2b
 from auoreo.core.settings_engine import ToolEngineSettings  # --- G4a
 from auoreo.core.settings_gateway import AuxSettings, GatewayTuning
@@ -400,6 +401,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)  # --- G5c
     tools: ToolSettings = Field(default_factory=ToolSettings)  # --- G4b
     tool_engine: ToolEngineSettings = Field(default_factory=ToolEngineSettings)  # --- G4a
+    cli: CliSettings = Field(default_factory=CliSettings)  # --- G5a
 
 
 class _JsonFileSource(PydanticBaseSettingsSource):
