@@ -245,7 +245,13 @@ async def test_idle_trigger_compacts_once_and_new_input_cancels(
     sess = await services.create_session()
     mark = await services.events.last_seq()
     await turns(services, sess.id, 12)
-    await asyncio.sleep(0.6)
+    done: list = []
+    for _ in range(100):  # poll: under a loaded full suite the idle compaction can take > 0.6 s
+        done = [e for e in await since(services, sess.id, mark) if e.type == "compaction.completed"]
+        if done:
+            break
+        await asyncio.sleep(0.05)
+    await asyncio.sleep(0.2)  # a (wrong) second idle compaction would show up here
     done = [e for e in await since(services, sess.id, mark) if e.type == "compaction.completed"]
     assert len(done) == 1 and done[0].data["trigger"] == "idle"
     # input before the timer fires cancels it
