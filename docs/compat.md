@@ -71,7 +71,7 @@ which handles `Mcp-Session-Id` (issued on `initialize`, 400/404 on a missing/unk
 `DELETE` to end), 202 for notifications and the optional GET SSE stream. It is added to
 the FastAPI app through the `MOUNTS` hook in `api/app.py` (before the SPA mount); the app's
 lifespan runs the session manager. `MCP-Protocol-Version` is echoed. Disable with
-`"mcp_server_enabled": false` in `settings.json`.
+`auoreo config set mcp_server_enabled false` (stored in state.db).
 
 - **Tools**: the `direct` tools of `settings.agent` (default `default`), minus
   `interactive_only` ones, rebuilt from the live harness on each request (hot reload shows

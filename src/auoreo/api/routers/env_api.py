@@ -3,10 +3,12 @@
 
 - `GET /api/env` — sections with effective values (non-secrets, redacted), `is_set` for secrets,
   source / tier / type / choices / default / live / writable.
-- `PUT /api/env/settings/{name}` — validated settings.json write, applied live (`settings.changed`).
+- `PUT /api/env/settings/{name}` — validated write to the state.db settings store, applied live
+  (`settings.changed`).
 - `PUT|DELETE /api/env/secrets/{name}`, `POST …/rotate` — write-only secrets.db (`secret.changed`).
-- `POST /api/env/undo` — restore the previous settings.json; `POST /api/env/import-dotenv` — move
-  `~/.auoreo/.env` keys into secrets.db / settings.json (protected names are never imported).
+- `POST /api/env/undo` — restore the previous stored settings; `POST /api/env/import-dotenv` — the
+  one-time import of `~/.auoreo/.env` + the project `.env` into secrets.db / state.db / provider
+  connections (protected names are never imported). Nothing else ever reads a `.env`.
 
 Auth: normal auth + cookie CSRF, capability (per-session) tokens refused, bodies ≤ 64 KiB.
 An env-sourced value answers 409, an `[env-only]` knob 403. No response carries a secret value.
@@ -111,9 +113,9 @@ def _check_lock(e: Any, source: str) -> None:
 
 
 async def write_settings(svc: Services, data: dict[str, Any], source: str = "api") -> AppliedChange:
-    """Validate + write settings.json (history kept), then apply live."""
+    """Validate + write the settings store (history kept), then apply live."""
     try:
-        await asyncio.to_thread(env_store.write, svc.settings.home, data)
+        await asyncio.to_thread(lambda: env_store.write(svc.settings.home, data, source=source))
     except ValidationError as exc:
         errs = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, errs[:2000]) from exc
@@ -124,7 +126,7 @@ async def write_settings(svc: Services, data: dict[str, Any], source: str = "api
 
 @router.put("/settings/{name}", response_model=EnvApplied)
 async def put_setting(name: str, body: EnvSettingWrite, svc: ServicesDep) -> EnvApplied:
-    """Set (or with `value: null` reset) one setting in settings.json and apply it live."""
+    """Set (or with `value: null` reset) one stored setting and apply it live."""
     e = _entry(name, ("setting",))
     live = live_of(svc)
     try:
@@ -174,7 +176,7 @@ async def delete_secret(name: str, svc: ServicesDep) -> EnvApplied:
 
 @router.post("/undo", response_model=EnvApplied)
 async def undo(svc: ServicesDep) -> EnvApplied:
-    """Restore the previous settings.json version (10 are kept) and apply it live."""
+    """Restore the previous stored settings (10 change sets are kept) and apply them live."""
     try:
         await asyncio.to_thread(env_store.undo, svc.settings.home)
     except (env_store.EnvStoreError, ValidationError) as exc:
@@ -186,7 +188,7 @@ async def undo(svc: ServicesDep) -> EnvApplied:
 
 @router.post("/import-dotenv", response_model=DotenvImport)
 async def post_import(body: DotenvImportRequest, svc: ServicesDep) -> DotenvImport:
-    """Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews)."""
+    """One-time import of `~/.auoreo/.env` + `<cwd>/.env` (`dry_run` previews)."""
     try:
         out = await import_dotenv(svc, dry_run=body.dry_run, write_settings=write_settings)
     except SecretStoreError as exc:

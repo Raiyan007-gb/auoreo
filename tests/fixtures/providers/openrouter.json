@@ -1,0 +1,62 @@
+{
+ "data": [
+  {
+   "id": "anthropic/claude-sonnet-4.5",
+   "name": "Anthropic: Claude Sonnet 4.5",
+   "created": 1758000000,
+   "context_length": 1000000,
+   "architecture": {
+    "input_modalities": [
+     "text",
+     "image"
+    ],
+    "output_modalities": [
+     "text"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.000003",
+    "completion": "0.000015"
+   },
+   "supported_parameters": [
+    "tools",
+    "reasoning",
+    "temperature"
+   ]
+  },
+  {
+   "id": "openai/text-embedding-3-large",
+   "name": "OpenAI: Text Embedding 3 Large",
+   "context_length": 8192,
+   "architecture": {
+    "input_modalities": [
+     "text"
+    ],
+    "output_modalities": [
+     "embeddings"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.00000013",
+    "completion": "0"
+   }
+  },
+  {
+   "id": "openai/gpt-image-1",
+   "name": "OpenAI: GPT Image 1",
+   "context_length": 0,
+   "architecture": {
+    "input_modalities": [
+     "text"
+    ],
+    "output_modalities": [
+     "image"
+    ]
+   },
+   "pricing": {
+    "prompt": "0.00001",
+    "completion": "0.00004"
+   }
+  }
+ ]
+}

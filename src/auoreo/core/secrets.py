@@ -1,4 +1,4 @@
-"""Secret resolution: process env → OS keyring → encrypted `secrets.db` → `.env` (spec §7).
+"""Secret resolution: process env → OS keyring → encrypted `secrets.db` (spec §7; no `.env`).
 
 `secrets.db` is a JSON map encrypted with Fernet. The Fernet key lives in the OS keyring;
 if no usable keyring exists and `AUOREO_KEYRING=allow-file`, the key falls back to a
@@ -22,7 +22,6 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet, InvalidToken
 
-from auoreo.core.dotenv import from_dotenv
 from auoreo.core.keyring_policy import backend_allowed
 from auoreo.core.owner_files import read_owner_only, write_owner_only
 
@@ -274,9 +273,9 @@ class SecretStore:
             log.exception("secret audit hook failed")
 
     def _resolve(self, name: str) -> str | None:
-        """Real env → keyring → secrets.db → values a `.env` file supplied (spec §7)."""
+        """Real env → keyring → secrets.db (spec §7)."""
         env = os.environ.get(name)
-        if env is not None and not from_dotenv(name):
+        if env is not None:
             return env
         if backend_allowed(self.policy) and (v := _keyring_get(name)) is not None:
             return v
@@ -288,7 +287,7 @@ class SecretStore:
                 return v
         except SecretStoreError as exc:
             log.warning("secret store unavailable: %s", exc)
-        return env
+        return None
 
 
 def _expired(stamp: str | None) -> bool:

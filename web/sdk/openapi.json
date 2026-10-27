@@ -2051,6 +2051,13 @@
             "title": "Dry Run",
             "type": "boolean"
           },
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          },
           "moved": {
             "items": {
               "$ref": "#/components/schemas/DotenvMove"
@@ -2061,6 +2068,13 @@
           "note": {
             "title": "Note",
             "type": "string"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/DotenvProvider"
+            },
+            "title": "Providers",
+            "type": "array"
           }
         },
         "required": [
@@ -2085,9 +2099,27 @@
       },
       "DotenvMove": {
         "properties": {
+          "file": {
+            "default": "",
+            "description": "The `.env` file the name came from",
+            "title": "File",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider connection this key creates",
+            "title": "Provider"
           },
           "reason": {
             "anyOf": [
@@ -2116,6 +2148,47 @@
           "to"
         ],
         "title": "DotenvMove",
+        "type": "object"
+      },
+      "DotenvProvider": {
+        "description": "A provider connection created (or attempted) from an imported key.",
+        "properties": {
+          "connection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Id"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "ok"
+        ],
+        "title": "DotenvProvider",
         "type": "object"
       },
       "EnvApplied": {
@@ -2194,7 +2267,7 @@
                 "type": "null"
               }
             ],
-            "description": "settings.json key for `kind=setting`",
+            "description": "Settings key (state.db) for `kind=setting`",
             "title": "Field"
           },
           "is_set": {
@@ -2240,7 +2313,7 @@
           },
           "pending_restart": {
             "default": false,
-            "description": "settings.json differs from the running value",
+            "description": "The stored value differs from the running one",
             "title": "Pending Restart",
             "type": "boolean"
           },
@@ -2258,8 +2331,7 @@
           "source": {
             "enum": [
               "env",
-              "dotenv",
-              "settings",
+              "db",
               "secrets",
               "override",
               "default"
@@ -2270,7 +2342,6 @@
           "tier": {
             "enum": [
               "anywhere",
-              "home",
               "env-only"
             ],
             "title": "Tier",
@@ -2338,11 +2409,20 @@
             "type": "boolean"
           },
           "dotenv_path": {
+            "description": "First `.env` found (home, then project) \u2014 import only",
             "title": "Dotenv Path",
             "type": "string"
           },
+          "dotenv_paths": {
+            "description": "Every `.env` the import would read",
+            "items": {
+              "type": "string"
+            },
+            "title": "Dotenv Paths",
+            "type": "array"
+          },
           "history": {
-            "description": "settings.json versions available to undo",
+            "description": "Stored change sets available to undo",
             "title": "History",
             "type": "integer"
           },
@@ -4627,6 +4707,122 @@
         "title": "MessageOut",
         "type": "object"
       },
+      "ModelRef": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "integer"
+          },
+          "model_id": {
+            "maxLength": 255,
+            "title": "Model Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id",
+          "model_id"
+        ],
+        "title": "ModelRef",
+        "type": "object"
+      },
+      "ModelSelection": {
+        "properties": {
+          "embedding": {
+            "$ref": "#/components/schemas/SelectedModel"
+          },
+          "main": {
+            "$ref": "#/components/schemas/SelectedModel"
+          },
+          "small": {
+            "$ref": "#/components/schemas/SelectedModel"
+          }
+        },
+        "required": [
+          "main",
+          "small",
+          "embedding"
+        ],
+        "title": "ModelSelection",
+        "type": "object"
+      },
+      "ModelSelectionApplied": {
+        "properties": {
+          "changed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "live": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Live",
+            "type": "array"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          },
+          "restart_required": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Restart Required",
+            "type": "array"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/ModelSelection"
+          }
+        },
+        "required": [
+          "selection",
+          "changed",
+          "live",
+          "restart_required",
+          "note"
+        ],
+        "title": "ModelSelectionApplied",
+        "type": "object"
+      },
+      "ModelSelectionWrite": {
+        "properties": {
+          "embedding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "main": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "small": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ModelSelectionWrite",
+        "type": "object"
+      },
       "OAuthSettle": {
         "additionalProperties": false,
         "properties": {
@@ -5565,6 +5761,590 @@
         "title": "PrefsProposalIn",
         "type": "object"
       },
+      "ProviderConnectionOut": {
+        "properties": {
+          "api_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Version"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The provider's last error, redacted",
+            "title": "Last Error"
+          },
+          "model_count": {
+            "title": "Model Count",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "provider_name": {
+            "title": "Provider Name",
+            "type": "string"
+          },
+          "secret_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the key lives (name only)",
+            "title": "Secret Name"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "invalid",
+              "error",
+              "unchecked"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "provider_name",
+          "label",
+          "status",
+          "model_count",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "ProviderConnectionOut",
+        "type": "object"
+      },
+      "ProviderCreate": {
+        "properties": {
+          "api_version": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Version"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "deployments": {
+            "description": "Azure only",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "title": "Deployments",
+            "type": "array"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Write-only; never returned",
+            "title": "Key"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "provider": {
+            "maxLength": 64,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "title": "ProviderCreate",
+        "type": "object"
+      },
+      "ProviderDetectRequest": {
+        "properties": {
+          "key": {
+            "default": "",
+            "maxLength": 4096,
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "title": "ProviderDetectRequest",
+        "type": "object"
+      },
+      "ProviderDetectResult": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "confident": {
+            "title": "Confident",
+            "type": "boolean"
+          },
+          "providers": {
+            "description": "Specs of the candidates, in order",
+            "items": {
+              "$ref": "#/components/schemas/ProviderSpecOut"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "candidates",
+          "confident",
+          "providers"
+        ],
+        "title": "ProviderDetectResult",
+        "type": "object"
+      },
+      "ProviderList": {
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderConnectionOut"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
+          "providers": {
+            "description": "Every provider that can be connected",
+            "items": {
+              "$ref": "#/components/schemas/ProviderSpecOut"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "connections",
+          "providers"
+        ],
+        "title": "ProviderList",
+        "type": "object"
+      },
+      "ProviderModelOut": {
+        "properties": {
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "context_window": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Window"
+          },
+          "input_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "USD per 1M input tokens",
+            "title": "Input Price"
+          },
+          "kind": {
+            "enum": [
+              "chat",
+              "embedding",
+              "other"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "litellm_id": {
+            "description": "What the gateway is called with: `<prefix><model_id>`",
+            "title": "Litellm Id",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "output_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "USD per 1M output tokens",
+            "title": "Output Price"
+          }
+        },
+        "required": [
+          "model_id",
+          "litellm_id",
+          "name",
+          "kind"
+        ],
+        "title": "ProviderModelOut",
+        "type": "object"
+      },
+      "ProviderModels": {
+        "properties": {
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "integer"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderModelOut"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "stale": {
+            "default": false,
+            "description": "Older than the cache TTL (1 h)",
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "invalid",
+              "error",
+              "unchecked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id",
+          "status",
+          "models"
+        ],
+        "title": "ProviderModels",
+        "type": "object"
+      },
+      "ProviderResult": {
+        "description": "Answer of add / update / refresh: the connection, or the provider's error.",
+        "properties": {
+          "connection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProviderConnectionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "model_count": {
+            "default": 0,
+            "title": "Model Count",
+            "type": "integer"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "invalid",
+              "error",
+              "unchecked"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "status"
+        ],
+        "title": "ProviderResult",
+        "type": "object"
+      },
+      "ProviderSpecOut": {
+        "properties": {
+          "default_api_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Api Version"
+          },
+          "default_base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Base Url"
+          },
+          "docs_url": {
+            "default": "",
+            "title": "Docs Url",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "manual_models": {
+            "description": "Azure: deployment names are entered by hand",
+            "title": "Manual Models",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "needs_api_version": {
+            "title": "Needs Api Version",
+            "type": "boolean"
+          },
+          "needs_base_url": {
+            "title": "Needs Base Url",
+            "type": "boolean"
+          },
+          "needs_key": {
+            "title": "Needs Key",
+            "type": "boolean"
+          },
+          "prefix": {
+            "description": "LiteLLM model prefix, e.g. `openai/`",
+            "title": "Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "needs_key",
+          "needs_base_url",
+          "needs_api_version",
+          "manual_models"
+        ],
+        "title": "ProviderSpecOut",
+        "type": "object"
+      },
+      "ProviderUpdate": {
+        "properties": {
+          "api_version": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Version"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "deployments": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 200,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Azure only",
+            "title": "Deployments"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replace the key (validated)",
+            "title": "Key"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "title": "ProviderUpdate",
+        "type": "object"
+      },
       "ReembedStatus": {
         "properties": {
           "done": {
@@ -6278,6 +7058,76 @@
           "reloaded"
         ],
         "title": "SecretWriteResult",
+        "type": "object"
+      },
+      "SelectedModel": {
+        "properties": {
+          "connection_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Id"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "role": {
+            "enum": [
+              "main",
+              "small",
+              "embedding"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "source": {
+            "description": "env | db | override | default",
+            "title": "Source",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The effective setting, e.g. `openai/gpt-5`",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "role",
+          "value",
+          "source"
+        ],
+        "title": "SelectedModel",
         "type": "object"
       },
       "ServerEvent": {
@@ -10082,7 +10932,7 @@
     },
     "/api/env/import-dotenv": {
       "post": {
-        "description": "Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews).",
+        "description": "One-time import of `~/.auoreo/.env` + `<cwd>/.env` (`dry_run` previews).",
         "operationId": "post_import_api_env_import_dotenv_post",
         "parameters": [
           {
@@ -10400,7 +11250,7 @@
     },
     "/api/env/settings/{name}": {
       "put": {
-        "description": "Set (or with `value: null` reset) one setting in settings.json and apply it live.",
+        "description": "Set (or with `value: null` reset) one stored setting and apply it live.",
         "operationId": "put_setting_api_env_settings__name__put",
         "parameters": [
           {
@@ -10485,7 +11335,7 @@
     },
     "/api/env/undo": {
       "post": {
-        "description": "Restore the previous settings.json version (10 are kept) and apply it live.",
+        "description": "Restore the previous stored settings (10 change sets are kept) and apply them live.",
         "operationId": "undo_api_env_undo_post",
         "parameters": [
           {
@@ -13463,6 +14313,145 @@
         ]
       }
     },
+    "/api/models/selection": {
+      "get": {
+        "operationId": "get_selection_api_models_selection_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSelection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Selection",
+        "tags": [
+          "providers"
+        ]
+      },
+      "put": {
+        "description": "Choose models from connected providers; applied live through the settings store.",
+        "operationId": "put_selection_api_models_selection_put",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelSelectionWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSelectionApplied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Selection",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
     "/api/oauth/{connector}/settled": {
       "post": {
         "description": "Drop the cached access token for `connector` and emit `authorization/settled`.",
@@ -14334,6 +15323,582 @@
         "summary": "Bandit Reset",
         "tags": [
           "policy"
+        ]
+      }
+    },
+    "/api/providers": {
+      "get": {
+        "operationId": "list_providers_api_providers_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Providers",
+        "tags": [
+          "providers"
+        ]
+      },
+      "post": {
+        "operationId": "add_provider_api_providers_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Provider",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/providers/detect": {
+      "post": {
+        "description": "Guess the provider from the key's shape (never stored, never sent anywhere).",
+        "operationId": "detect_api_providers_detect_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderDetectRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderDetectResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Detect",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/providers/{conn_id}": {
+      "delete": {
+        "description": "Remove the connection and its key; refused (409) while it serves the selected model.",
+        "operationId": "delete_provider_api_providers__conn_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conn_id",
+            "required": true,
+            "schema": {
+              "title": "Conn Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Force",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Provider",
+        "tags": [
+          "providers"
+        ]
+      },
+      "put": {
+        "description": "Replace the key / label / endpoint (a new key or endpoint is validated first).",
+        "operationId": "update_provider_api_providers__conn_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conn_id",
+            "required": true,
+            "schema": {
+              "title": "Conn Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Provider",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/providers/{conn_id}/models": {
+      "get": {
+        "description": "The cached list (refetched when `refresh=1` or older than 1 h; a failed fetch keeps it).",
+        "operationId": "provider_models_api_providers__conn_id__models_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conn_id",
+            "required": true,
+            "schema": {
+              "title": "Conn Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "chat",
+                    "embedding",
+                    "other"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "maximum": 1,
+              "minimum": 0,
+              "title": "Refresh",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderModels"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Models",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/providers/{conn_id}/refresh": {
+      "post": {
+        "operationId": "refresh_provider_api_providers__conn_id__refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conn_id",
+            "required": true,
+            "schema": {
+              "title": "Conn Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Provider",
+        "tags": [
+          "providers"
         ]
       }
     },

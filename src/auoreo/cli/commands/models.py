@@ -2,7 +2,7 @@
 
 `list` shows the routing groups (`settings.models`) with the active default and whether each
 deployment has credentials (env var NAMES only, never values). `set` writes `model` /
-`small_model` to settings.json. `test` sends one tiny request through the real gateway
+`small_model` to the settings store (state.db). `test` sends one tiny request through the real gateway
 (LiteLLM Router, or the fake one) and reports latency, tokens and the first words."""
 
 from __future__ import annotations
@@ -77,7 +77,7 @@ def set_(
     model: Annotated[str, typer.Argument(help="Routing group (default, small, …) or <provider>/<model id>.")],
     small: Annotated[bool, typer.Option("--small", help="Set small_model (aux calls) instead.")] = False,
 ) -> None:
-    """Persist the default (or small) model in settings.json."""
+    """Persist the default (or small) model in the settings store."""
     key = "small_model" if small else "model"
     if "/" not in model and model not in settings().models:
         raise typer.BadParameter(f"'{model}' is neither a routing group nor <provider>/<model id>")
@@ -86,7 +86,7 @@ def set_(
     env = f"AUOREO_{key.upper()}"
     if os.environ.get(env):
         err_console.print(
-            f"[yellow]{env} is set in the environment and still wins over settings.json[/yellow]"
+            f"[yellow]{env} is set in the environment and still wins over the stored value[/yellow]"
         )
 
 

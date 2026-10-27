@@ -31,10 +31,10 @@ class EnvEntry:
         writable (bool):
         choices (list[str] | Unset):
         default (Any | Unset):
-        field (None | str | Unset): settings.json key for `kind=setting`
+        field (None | str | Unset): Settings key (state.db) for `kind=setting`
         locked_reason (None | str | Unset): Why the web cannot change it
         nullable (bool | Unset):  Default: False.
-        pending_restart (bool | Unset): settings.json differs from the running value Default: False.
+        pending_restart (bool | Unset): The stored value differs from the running one Default: False.
         restart_reason (None | str | Unset):
         updated_at (datetime.datetime | None | Unset): Secrets: last write
         value (Any | Unset): Effective value (redacted); always null for secrets

@@ -1,15 +1,15 @@
-"""I1: a project `.env` is allowlisted — it can set provider keys and model names, never
-CORS origins, model api_base overrides, the bind host or the server password (§7, §19.3)."""
+"""I1: a project `.env` is repository-controlled. AUOREO never loads it; the one-time web import
+holds it to an allowlist — provider keys and model names move into the stores, never CORS origins,
+model api_base overrides, the bind host or the server password (§7, §19.3)."""
 
 from __future__ import annotations
 
-import logging
-import os
 from pathlib import Path
 
 import pytest
 
-from auoreo.core import dotenv
+from auoreo.core import env_rules
+from auoreo.core.env_import import plan
 
 BLOCKED = (
     "AUOREO_CORS_ORIGINS",
@@ -26,17 +26,7 @@ BLOCKED = (
 ALLOWED = ("I1_PROVIDER_API_KEY", "I1_GH_TOKEN", "AUOREO_MODEL", "AUOREO_GATEWAY")
 
 
-@pytest.fixture(autouse=True)
-def _clean(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(dotenv, "_ORIGIN", {})
-    monkeypatch.setenv("AUOREO_HOME", str(tmp_path / "home"))
-    for name in (*BLOCKED, *ALLOWED):
-        monkeypatch.delenv(name, raising=False)
-
-
-def test_project_dotenv_ignores_everything_outside_the_allowlist(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_project_dotenv_import_skips_everything_outside_the_allowlist(tmp_path: Path) -> None:
     values = {
         "AUOREO_CORS_ORIGINS": '["https://evil.example"]',
         "AUOREO_MODELS": '{"default": {"models": ["openai/x"], "api_base": "https://evil.example"}}',
@@ -53,40 +43,32 @@ def test_project_dotenv_ignores_everything_outside_the_allowlist(
         "AUOREO_MODEL": "openai/gpt-5",
         "AUOREO_GATEWAY": "fake",
     }
-    (tmp_path / ".env").write_text("".join(f"{k}={v!r}\n" for k, v in values.items()))
-    for name in values:
-        monkeypatch.delenv(name, raising=False)
-    caplog.set_level(logging.WARNING, logger="auoreo.core.dotenv")
-    loaded = dotenv.load_env_files(tmp_path)
-    try:
-        assert sorted(loaded) == sorted(ALLOWED)
-        for name in BLOCKED:
-            assert name not in os.environ, name
-        assert "AUOREO_CORS_ORIGINS" in caplog.text and "AUOREO_SERVER_PASSWORD" in caplog.text
-    finally:
-        for name in loaded:
-            os.environ.pop(name, None)
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / ".env").write_text("".join(f"{k}={v!r}\n" for k, v in values.items()))
+    moves, settings, secrets = plan([proj / ".env"], tmp_path / "home")
+    to = {m.name: m.to for m in moves}
+    assert {n for n, t in to.items() if t in {"settings", "secrets"}} == set(ALLOWED)
+    assert all(to[n] in {"skipped", "kept"} for n in BLOCKED)
+    assert settings == {"model": "openai/gpt-5", "gateway": "fake"}
+    assert secrets == {"I1_PROVIDER_API_KEY": "k", "I1_GH_TOKEN": "t"}
 
 
-def test_home_dotenv_may_still_set_server_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_home_dotenv_import_keeps_the_blocklist_only(tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
-    (home / ".env").write_text("AUOREO_HOST=0.0.0.0\nAUOREO_SERVER_PASSWORD=mine\nAUOREO_YOLO=1\n")
-    for name in ("AUOREO_HOST", "AUOREO_SERVER_PASSWORD", "AUOREO_YOLO"):
-        monkeypatch.delenv(name, raising=False)
-    loaded = dotenv.load_env_files(tmp_path / "proj")
-    try:
-        assert sorted(loaded) == ["AUOREO_HOST", "AUOREO_SERVER_PASSWORD"]  # security knobs still never
-    finally:
-        for name in loaded:
-            os.environ.pop(name, None)
+    (home / ".env").write_text("AUOREO_SEARXNG_URL=http://s:8888\nAUOREO_HOST=0.0.0.0\nAUOREO_YOLO=1\n")
+    moves, settings, _ = plan([home / ".env"], home)
+    to = {m.name: m.to for m in moves}
+    assert settings == {"searxng_url": "http://s:8888"}
+    assert to["AUOREO_YOLO"] == "skipped" and to["AUOREO_HOST"] == "skipped"  # env-only / bootstrap
 
 
 @pytest.mark.parametrize("name", BLOCKED)
 def test_project_allowed_predicate(name: str) -> None:
-    assert not dotenv.project_allowed(name)
+    assert not env_rules.project_allowed(name)
 
 
 @pytest.mark.parametrize("name", [*ALLOWED, "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "AWS_SECRET_ACCESS_KEY"])
 def test_project_allowed_predicate_accepts_credentials(name: str) -> None:
-    assert dotenv.project_allowed(name)
+    assert env_rules.project_allowed(name)

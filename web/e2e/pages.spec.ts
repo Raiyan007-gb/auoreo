@@ -33,14 +33,14 @@ test("usage, settings, audit and doctor render", async ({ page }) => {
   await expect(page.getByText("Total tokens")).toBeVisible();
   await shot(page, "usage-page");
 
-  await page.goto("/settings");
+  await page.goto("/settings#general");
   await expect(page.getByTestId("health-json")).toContainText('"status": "ok"');
   await shot(page, "settings");
   await page.getByRole("radio", { name: "Dark" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.goto("/sessions");
   await shot(page, "sessions-dark");
-  await page.goto("/settings");
+  await page.goto("/settings#general");
   await page.getByRole("radio", { name: "Light" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 

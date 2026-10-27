@@ -14,6 +14,7 @@ from typer.testing import CliRunner
 
 from auoreo.cli.app import app
 from auoreo.cli.profiles import apply_profile
+from auoreo.core import settings_store
 
 runner = CliRunner()
 
@@ -42,16 +43,16 @@ def _json(out: str) -> object:
 # ------------------------------------------------------------------ --profile
 def test_profile_selects_isolated_home(home: Path) -> None:
     out = _ok(["-p", "work", "config", "path"])
-    assert out.strip() == str(home / "profiles" / "work" / "settings.json")
+    assert out.strip() == str(home / "profiles" / "work" / "state.db")
     assert (home / "profiles" / "work").is_dir()
-    _ok(["--profile", "work", "config", "set", "port", "5000"])
-    assert json.loads((home / "profiles" / "work" / "settings.json").read_text())["port"] == 5000
-    assert not (home / "settings.json").exists()  # never the shared root
+    _ok(["--profile", "work", "config", "set", "locale", "de-DE"])
+    assert settings_store.read(home / "profiles" / "work")["locale"] == "de-DE"
+    assert settings_store.read(home) == {}  # never the shared root
 
 
 def test_profile_from_env_and_invalid_name(home: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AUOREO_PROFILE", "ops")
-    assert _ok(["config", "path"]).strip() == str(home / "profiles" / "ops" / "settings.json")
+    assert _ok(["config", "path"]).strip() == str(home / "profiles" / "ops" / "state.db")
     monkeypatch.setenv("AUOREO_PROFILE", "")
     monkeypatch.setenv("AUOREO_HOME", str(home))
     assert "invalid profile name" in _ok(["-p", "Bad/Name", "config", "path"], 2)
@@ -122,7 +123,7 @@ def test_messaging_pair_and_errors(home: Path) -> None:
 
     code = PairingStore(home, "telegram").request("777", "alice")
     assert "paired chat 777" in _ok(["messaging", "telegram", "pair", code])
-    assert json.loads((home / "settings.json").read_text())["plugins"]["telegram"]["allowlist"] == ["777"]
+    assert settings_store.read(home)["plugins"]["telegram"]["allowlist"] == ["777"]
     assert "unknown or expired" in _ok(["messaging", "telegram", "pair", "000000"], 1)
     dcode = PairingStore(home, "discord").request("4242", "bob")  # I7: discord pairs like telegram
     assert "paired chat 4242" in _ok(["messaging", "discord", "pair", dcode])
@@ -206,7 +207,7 @@ def test_model_list_set_test(home: Path) -> None:
     assert listing["gateway"] == "fake" and {r["group"] for r in listing["models"]} >= {"default", "small"}  # type: ignore[index]
     _ok(["model", "set", "anthropic/claude-sonnet-5"])
     _ok(["model", "set", "small", "--small"])
-    data = json.loads((home / "settings.json").read_text())
+    data = settings_store.read(home)
     assert data["model"] == "anthropic/claude-sonnet-5" and data["small_model"] == "small"
     _ok(["model", "set", "nogroup"], 2)
     tested = _json(_ok(["model", "test", "default", "--json"]))

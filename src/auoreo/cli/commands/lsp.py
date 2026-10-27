@@ -54,7 +54,7 @@ def status(
                 "available": bool(found),
                 "command": " ".join(found[0]) if found else None,
                 "source": "settings" if lang in st.lsp_servers else ("PATH" if found else None),
-                "remedy": None if found else REMEDY.get(lang, "set lsp_servers.<language> in settings.json"),
+                "remedy": None if found else REMEDY.get(lang, "`auoreo config set lsp_servers.<language> …`"),
             }
         )
     if as_json:

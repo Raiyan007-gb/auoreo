@@ -1,12 +1,12 @@
-"""Every variable AUOREO reads, as metadata: the single source for `.env.example`
-(`scripts/gen_env_example.py`) and for the web's Settings → Environment page (`/api/env`).
+"""Every variable AUOREO reads, as metadata for the web's Settings → Environment page (`/api/env`).
 
 Each `EnvVar` has a section, a description, a `kind` (`setting` = a `Settings` field stored in
-settings.json, `secret` = a key stored write-only in secrets.db, `passthrough` = read from the
-process environment only), a value type (bool|int|float|str|enum|json, enum choices from the
-`Settings` annotation), the default, the loader `tier` (anywhere | home | env-only, from the real
-`core.dotenv` rules) and whether a change applies live or needs a restart (`RESTART_REQUIRED`,
-each with the reason the web shows).
+the `app_settings` table of state.db, `secret` = a key stored write-only in secrets.db,
+`passthrough` = read from the process environment only), a value type (bool|int|float|str|enum|
+json, enum choices from the `Settings` annotation), the default, the `tier` (`env-only` for
+security knobs that only the real environment may set, `core.env_rules`; else `anywhere`) and
+whether a change applies live or needs a restart (`RESTART_REQUIRED`, each with the reason the
+web shows). No `.env` / `.env.example` file is generated or read from it.
 """
 
 from __future__ import annotations
@@ -22,13 +22,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from auoreo.core.dotenv import is_protected, project_allowed
 from auoreo.core.env_catalog_data import ITEMS, K, S, Sec
+from auoreo.core.env_rules import is_protected
 from auoreo.core.settings import Settings
 
 Kind = Literal["setting", "secret", "passthrough"]
 ValueType = Literal["bool", "int", "float", "str", "enum", "json"]
-Tier = Literal["anywhere", "home", "env-only"]
+Tier = Literal["anywhere", "env-only"]
 FIELDS = Settings.model_fields
 
 RESTART_REQUIRED: dict[str, str] = {
@@ -99,37 +99,9 @@ class Section:
     title: str
 
 
-# ---------------------------------------------------------------- shared with the generator
-def default_of(name: str) -> str:
-    """The default as `.env.example` prints it."""
-    f = FIELDS[name]
-    if name == "home":
-        return "~/.auoreo (Windows %LOCALAPPDATA%\\auoreo)"
-    if f.default_factory is not None:
-        try:
-            v = f.default_factory()  # type: ignore[call-arg]
-        except TypeError:
-            return "see settings.json"
-        if v in ({}, []):
-            return "{}" if isinstance(v, dict) else "[]"
-        return (
-            "built-in (see settings.json)"
-            if isinstance(v, dict) and any(isinstance(x, BaseModel) for x in v.values())
-            else json.dumps(v, default=str)
-        )
-    v = f.default
-    if v is None:
-        return "unset"
-    if isinstance(v, bool):
-        return str(v).lower()
-    return str(v)
-
-
 def tier_tag(env: str) -> str:
-    """Where the loader accepts `env`: anywhere (''), `~/.auoreo/.env` only, or the real env only."""
-    if is_protected(env):
-        return "env-only"
-    return "" if project_allowed(env) else "home"
+    """`env-only` for security knobs (real environment only), else ''."""
+    return "env-only" if is_protected(env) else ""
 
 
 def _flat(name: str) -> tuple[list[Any], bool]:
@@ -169,7 +141,7 @@ def _kind_of(env: str) -> Kind:
 
 
 def _tier(env: str) -> Tier:
-    return {"": "anywhere", "home": "home", "env-only": "env-only"}[tier_tag(env)]  # type: ignore[return-value]
+    return "env-only" if is_protected(env) else "anywhere"
 
 
 def _setting(item: S, section: str) -> EnvVar:
@@ -223,7 +195,7 @@ def _key(item: K, section: str, field: str | None = None) -> EnvVar:
 
 @lru_cache(maxsize=1)
 def catalog() -> tuple[tuple[Section, ...], tuple[EnvVar, ...]]:
-    """`(sections, entries)` in `.env.example` order."""
+    """`(sections, entries)` in catalog (display) order."""
     sections: list[Section] = []
     entries: list[EnvVar] = []
     current = ""
@@ -267,7 +239,6 @@ __all__ = [
     "by_field",
     "by_name",
     "catalog",
-    "default_of",
     "entries",
     "is_secretish",
     "json_kind",

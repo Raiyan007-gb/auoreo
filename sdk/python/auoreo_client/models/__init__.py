@@ -74,6 +74,7 @@ from .dotenv_import_counts import DotenvImportCounts
 from .dotenv_import_request import DotenvImportRequest
 from .dotenv_move import DotenvMove
 from .dotenv_move_to import DotenvMoveTo
+from .dotenv_provider import DotenvProvider
 from .env_applied import EnvApplied
 from .env_entry import EnvEntry
 from .env_entry_kind import EnvEntryKind
@@ -158,6 +159,10 @@ from .memory_files import MemoryFiles
 from .memory_usage import MemoryUsage
 from .message_out import MessageOut
 from .message_out_tool_calls_type_0_item import MessageOutToolCallsType0Item
+from .model_ref import ModelRef
+from .model_selection import ModelSelection
+from .model_selection_applied import ModelSelectionApplied
+from .model_selection_write import ModelSelectionWrite
 from .o_auth_settle import OAuthSettle
 from .o_auth_settled import OAuthSettled
 from .open_ai_chat_completion import OpenAIChatCompletion
@@ -194,6 +199,23 @@ from .prefs_proposal_action import PrefsProposalAction
 from .prefs_proposal_in import PrefsProposalIn
 from .prefs_proposal_in_action import PrefsProposalInAction
 from .prefs_proposal_status import PrefsProposalStatus
+from .provider_connection_out import ProviderConnectionOut
+from .provider_connection_out_status import ProviderConnectionOutStatus
+from .provider_create import ProviderCreate
+from .provider_detect_request import ProviderDetectRequest
+from .provider_detect_result import ProviderDetectResult
+from .provider_list import ProviderList
+from .provider_model_out import ProviderModelOut
+from .provider_model_out_kind import ProviderModelOutKind
+from .provider_models import ProviderModels
+from .provider_models_api_providers_conn_id_models_get_kind_type_0 import (
+    ProviderModelsApiProvidersConnIdModelsGetKindType0,
+)
+from .provider_models_status import ProviderModelsStatus
+from .provider_result import ProviderResult
+from .provider_result_status import ProviderResultStatus
+from .provider_spec_out import ProviderSpecOut
+from .provider_update import ProviderUpdate
 from .reembed_status import ReembedStatus
 from .reload_api_harness_reload_post_kind_type_0 import ReloadApiHarnessReloadPostKindType0
 from .reload_result import ReloadResult
@@ -222,6 +244,8 @@ from .secret_rotate import SecretRotate
 from .secret_write import SecretWrite
 from .secret_write_result import SecretWriteResult
 from .secret_write_result_action import SecretWriteResultAction
+from .selected_model import SelectedModel
+from .selected_model_role import SelectedModelRole
 from .server_event import ServerEvent
 from .server_event_data import ServerEventData
 from .session_context import SessionContext
@@ -346,6 +370,7 @@ __all__ = (
     "DotenvImportRequest",
     "DotenvMove",
     "DotenvMoveTo",
+    "DotenvProvider",
     "EnvApplied",
     "EnvEntry",
     "EnvEntryKind",
@@ -426,6 +451,10 @@ __all__ = (
     "MemoryUsage",
     "MessageOut",
     "MessageOutToolCallsType0Item",
+    "ModelRef",
+    "ModelSelection",
+    "ModelSelectionApplied",
+    "ModelSelectionWrite",
     "OAuthSettle",
     "OAuthSettled",
     "OpenAIChatCompletion",
@@ -462,6 +491,21 @@ __all__ = (
     "PrefsProposalIn",
     "PrefsProposalInAction",
     "PrefsProposalStatus",
+    "ProviderConnectionOut",
+    "ProviderConnectionOutStatus",
+    "ProviderCreate",
+    "ProviderDetectRequest",
+    "ProviderDetectResult",
+    "ProviderList",
+    "ProviderModelOut",
+    "ProviderModelOutKind",
+    "ProviderModels",
+    "ProviderModelsApiProvidersConnIdModelsGetKindType0",
+    "ProviderModelsStatus",
+    "ProviderResult",
+    "ProviderResultStatus",
+    "ProviderSpecOut",
+    "ProviderUpdate",
     "ReembedStatus",
     "ReloadApiHarnessReloadPostKindType0",
     "ReloadResult",
@@ -488,6 +532,8 @@ __all__ = (
     "SecretWrite",
     "SecretWriteResult",
     "SecretWriteResultAction",
+    "SelectedModel",
+    "SelectedModelRole",
     "ServerEvent",
     "ServerEventData",
     "SessionContext",

@@ -109,7 +109,7 @@ Use `/ws` (or the REST endpoints) for control and keep the data channel as a rea
   `subscribe` with your last `seq` to catch up.
 - ICE: `rtc_ice_servers` (default `["stun:stun.l.google.com:19302"]`). On a host without
   UDP egress STUN gathering times out (~5 s per offer); set `"rtc_ice_servers": []` in
-  `settings.json` (or `AUOREO_RTC_ICE_SERVERS='[]'`) for loopback/LAN. TURN is not wired yet.
+  the stored settings (Settings → Environment, or `AUOREO_RTC_ICE_SERVERS='[]'`) for loopback/LAN. TURN is not wired yet.
 - SDP is never logged or audited: log lines show `[REDACTED sdp N bytes]`; audit rows
   `rtc.offer` / `rtc.close` carry only `{rtc_id, sdp_bytes, audio}` / `{rtc_id, reason}`.
 - Media is DTLS-SRTP end to end. There is no outbound (TTS) track yet; a future STT

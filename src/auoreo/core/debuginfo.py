@@ -278,14 +278,14 @@ def mask_secret_keys(o: Any) -> Any:
 def settings_view(st: Settings) -> dict[str, Any]:
     data = mask_secret_keys(st.model_dump(mode="json"))
     data["server_password"] = "set" if st.server_password else None
-    path = st.home / "settings.json"
-    raw: Any = None
-    if path.is_file():
-        try:
-            raw = mask_secret_keys(json.loads(path.read_text(encoding="utf-8")))
-        except (OSError, ValueError) as exc:
-            raw = f"unreadable: {exc}"
-    return {"effective": data, "settings_json": raw}
+    from auoreo.core import settings_store
+
+    raw: Any
+    try:
+        raw = mask_secret_keys(settings_store.read(st.home))
+    except settings_store.SettingsStoreError as exc:
+        raw = f"unreadable: {exc}"
+    return {"effective": data, "stored": raw}
 
 
 # ------------------------------------------------------------------ bundle

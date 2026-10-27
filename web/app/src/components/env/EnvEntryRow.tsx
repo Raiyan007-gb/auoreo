@@ -203,9 +203,11 @@ function SecretInput({ entry, onApplied, onError }: RowProps) {
   );
 }
 
+const MODEL_FIELDS = new Set(["model", "small_model", "embed_model", "embed_dims"]);
+
 export function EnvEntryRow(props: RowProps) {
   const { entry, onApplied, onError } = props;
-  const resettable = entry.writable && entry.kind === "setting" && entry.source === "settings";
+  const resettable = entry.writable && entry.kind === "setting" && entry.source === "db";
   const body = !entry.writable ? (
     <ReadOnly entry={entry} />
   ) : entry.kind === "secret" ? (
@@ -224,6 +226,11 @@ export function EnvEntryRow(props: RowProps) {
           <Badges entry={entry} />
         </div>
         <p className="text-xs text-muted-foreground">{entry.description}</p>
+        {entry.field && MODEL_FIELDS.has(entry.field) && (
+          <a href="#models" className="text-xs underline" data-testid={`env-models-link-${entry.name}`}>
+            Choose from your providers in the Models tab →
+          </a>
+        )}
       </div>
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">{body}</div>

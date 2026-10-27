@@ -18,11 +18,15 @@ class DotenvMove:
     Attributes:
         name (str):
         to (DotenvMoveTo):
+        file (str | Unset): The `.env` file the name came from Default: ''.
+        provider (None | str | Unset): Provider connection this key creates
         reason (None | str | Unset):
     """
 
     name: str
     to: DotenvMoveTo
+    file: str | Unset = ""
+    provider: None | str | Unset = UNSET
     reason: None | str | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -30,6 +34,14 @@ class DotenvMove:
         name = self.name
 
         to = self.to.value
+
+        file = self.file
+
+        provider: None | str | Unset
+        if isinstance(self.provider, Unset):
+            provider = UNSET
+        else:
+            provider = self.provider
 
         reason: None | str | Unset
         if isinstance(self.reason, Unset):
@@ -45,6 +57,10 @@ class DotenvMove:
                 "to": to,
             }
         )
+        if file is not UNSET:
+            field_dict["file"] = file
+        if provider is not UNSET:
+            field_dict["provider"] = provider
         if reason is not UNSET:
             field_dict["reason"] = reason
 
@@ -56,6 +72,17 @@ class DotenvMove:
         name = d.pop("name")
 
         to = DotenvMoveTo(d.pop("to"))
+
+        file = d.pop("file", UNSET)
+
+        def _parse_provider(data: object) -> None | str | Unset:
+            if data is None:
+                return data
+            if isinstance(data, Unset):
+                return data
+            return cast(None | str | Unset, data)
+
+        provider = _parse_provider(d.pop("provider", UNSET))
 
         def _parse_reason(data: object) -> None | str | Unset:
             if data is None:
@@ -69,6 +96,8 @@ class DotenvMove:
         dotenv_move = cls(
             name=name,
             to=to,
+            file=file,
+            provider=provider,
             reason=reason,
         )
 

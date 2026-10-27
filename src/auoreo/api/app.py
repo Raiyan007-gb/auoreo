@@ -56,6 +56,7 @@ from auoreo.api.routers import ops as ops_router  # --- W0-B
 from auoreo.api.routers import plugins as plugins_router
 from auoreo.api.routers import policy as policy_router  # --- W1-C
 from auoreo.api.routers import prefs as prefs_router  # --- G6
+from auoreo.api.routers import providers as providers_router  # --- Settings → Models
 from auoreo.api.routers import rtc as rtc_router
 from auoreo.api.routers import secrets_api as secrets_router  # --- I2
 from auoreo.api.routers import session_extras as session_extras_router  # --- G7: plan + sources
@@ -128,6 +129,7 @@ ROUTERS = (
     livekit_router,  # --- I8: POST /api/livekit/token + POST /livekit/webhook
     env_router,  # --- ENV: Settings → Environment (catalog, live writes, undo, .env import)
     env_custom_router,  # --- ENV: custom variables
+    providers_router,  # --- providers + model selection
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

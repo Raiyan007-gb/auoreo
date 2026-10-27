@@ -52,11 +52,35 @@ function startTap() {
   });
 }
 
+// --- Settings → Models: a local OpenAI-compatible provider (`GET /v1/models`). The backend points
+// provider model-list calls here via AUOREO_TEST_PROVIDER_BASE (honoured only with the fake gateway).
+const E2E_GOOD_KEY = "sk-proj-e2e-good-key-0123456789abcdef";
+
+function startProvider() {
+  return new Promise((ok) => {
+    const srv = createServer((req, res) => {
+      if ((req.url ?? "").split("?")[0] !== "/v1/models") return void res.writeHead(404).end();
+      if (req.headers.authorization !== `Bearer ${E2E_GOOD_KEY}`) {
+        const error = { message: "Incorrect API key provided (e2e fake provider)", type: "invalid_request_error" };
+        return void res.writeHead(401, { "content-type": "application/json" }).end(JSON.stringify({ error }));
+      }
+      const data = ["e2e-model-alpha", "e2e-model-beta", "text-embedding-3-small"].map((id) => ({
+        id,
+        object: "model",
+        owned_by: "e2e",
+      }));
+      res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ object: "list", data }));
+    });
+    srv.listen(0, "127.0.0.1", () => ok(srv));
+  });
+}
+
 async function main() {
   if (process.env.BASE_URL) process.exit(await runPlaywright(process.env.BASE_URL));
 
   const tap = await startTap();
   const tapUrl = `http://127.0.0.1:${tap.address().port}/index.json`;
+  const provider = await startProvider();
   const home = mkdtempSync(join(tmpdir(), "auoreo-e2e-"));
   const server = spawn("uv", ["run", "auoreo", "serve", "--port", "0"], {
     cwd: repoRoot,
@@ -68,11 +92,13 @@ async function main() {
       // vad:fake = energy VAD, so the RTC call e2e endpoints the fake-mic tone into utterances
       AUOREO_BACKENDS: '{"stt":"fake","tts":"fake","vad":"fake"}',
       AUOREO_G6: JSON.stringify({ skills: { taps: [tapUrl] } }), // --- I5
+      AUOREO_TEST_PROVIDER_BASE: `http://127.0.0.1:${provider.address().port}`, // --- Settings → Models
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const stop = () => {
     tap.close();
+    provider.close();
     server.kill("SIGTERM");
     rmSync(home, { recursive: true, force: true });
   };

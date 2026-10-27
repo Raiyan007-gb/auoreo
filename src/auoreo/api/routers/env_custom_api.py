@@ -1,7 +1,7 @@
 """`/api/env/custom` — user-defined variables (Settings → Environment → Custom variables).
 
-A secret variable's value goes write-only to secrets.db; settings.json `env.custom.<NAME>` keeps
-only its flags and `updated_at`. A plain variable lives entirely in settings.json. Names are
+A secret variable's value goes write-only to secrets.db; the stored setting `env.custom.<NAME>` keeps
+only its flags and `updated_at`. A plain variable lives entirely in the settings store. Names are
 `^[A-Z][A-Z0-9_]{1,63}$` and may not shadow AUOREO_*, catalog, protected or loader/redirect
 names. Every change applies live (next shell call / next turn) — `settings.changed`, plus
 `secret.changed` for secret values.
@@ -43,7 +43,9 @@ def _custom(data: dict[str, Any]) -> dict[str, Any]:
 
 def _read(svc: Services) -> dict[str, Any]:
     if env_store.env_source("AUOREO_ENV") is not None or "env" in live_of(svc).overrides:
-        raise HTTPException(status.HTTP_409_CONFLICT, "AUOREO_ENV is set outside settings.json")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "AUOREO_ENV is set in the real environment or a startup flag"
+        )
     try:
         return env_store.read(svc.settings.home)
     except env_store.EnvStoreError as exc:

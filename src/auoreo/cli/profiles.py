@@ -1,6 +1,6 @@
 """H4: `auoreo --profile/-p <name>` (spec §18, §16.3, §25.14 multiprofile isolation).
 
-A profile is a separate runtime home, `<base home>/profiles/<name>/`: its own settings.json,
+A profile is a separate runtime home, `<base home>/profiles/<name>/`: its own state.db (settings),
 state.db, memory.db, secrets.db, cron state, plugins and `mcp/` definitions. Nothing is
 shared with the base home (spec: "never shared root"). Selecting a profile sets
 `AUOREO_HOME` for this process before any command builds its settings, so every command,

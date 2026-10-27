@@ -236,7 +236,7 @@ def credential_checks(st: Settings, secret: Callable[[str], str | None] | None =
             rows.append(Check("credentials", "ok", detail))
             continue
         key = detail.split("missing ", 1)[-1].split(" or ")[0].split(",")[0]
-        hint = f"set {key} in .env, the environment, or `auoreo secrets set {key}`"
+        hint = f"connect the provider in Settings → Models (or `auoreo secrets set {key}`)"
         rows.append(Check("credentials", "warn", detail, hint))
     return rows
 
@@ -486,3 +486,6 @@ async def _i9_checks(st: Settings) -> list[Check]:  # --- I9: egress proxy, ws s
 
 
 EXTRA_CHECKS.append(_i9_checks)
+from auoreo.core.diagnostics_env import env_checks  # noqa: E402  --- leftover .env, provider connections
+
+EXTRA_CHECKS.append(env_checks)

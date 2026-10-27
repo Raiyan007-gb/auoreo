@@ -1,6 +1,6 @@
-"""Prefix parity (spec §19.10, §25.11): every provider key format named in `.env.example`, the
+"""Prefix parity (spec §19.10, §25.11): every provider key format named in the variable catalog, the
 spec prefix list, and every secret name declared by tools/backends/plugins is redacted.
-CI fails on drift: a new provider key in `.env.example` needs a sample format here."""
+CI fails on drift: a new provider key in the catalog needs a sample format here."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ SPEC_PREFIXES = (
     "oai-",
 )
 
-# One realistic sample per provider key in `.env.example` (shape only, never a real key).
+# One realistic sample per provider key in the catalog (shape only, never a real key).
 PROVIDER_SAMPLES = {
     "OPENROUTER_API_KEY": "sk-or-v1-0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d",
     "ANTHROPIC_API_KEY": "sk-ant-api03-AbCdEfGhIjKlMnOpQrStUv",
@@ -78,8 +78,10 @@ PROVIDER_SAMPLES = {
 KEYISH = re.compile(r"\b([A-Z][A-Z0-9_]*(?:API_KEY|TOKEN|SECRET|PASSWORD|_KEY))\b")
 
 
-def _env_example_names() -> set[str]:
-    return set(KEYISH.findall((ROOT / ".env.example").read_text(encoding="utf-8")))
+def _catalog_names() -> set[str]:
+    from auoreo.core.env_catalog import entries
+
+    return {e.name for e in entries() if KEYISH.fullmatch(e.name)}
 
 
 def _declared_secret_names() -> set[str]:
@@ -108,8 +110,8 @@ def test_each_prefix_is_redacted(prefix: str) -> None:
         assert token not in out, (prefix, mode, out)
 
 
-def test_every_env_example_provider_has_a_sample() -> None:
-    names = {n for n in _env_example_names() if n.endswith("_API_KEY")}
+def test_every_catalog_provider_has_a_sample() -> None:
+    names = {n for n in _catalog_names() if n.endswith("_API_KEY")}
     missing = names - PROVIDER_SAMPLES.keys()
     assert not missing, f"add a sample key format for {sorted(missing)} (and a redaction prefix if needed)"
 
@@ -123,7 +125,7 @@ def test_provider_samples_redacted_bare_and_assigned(name: str, sample: str) -> 
 
 
 def test_declared_secret_names_redacted_as_assignments() -> None:
-    names = _declared_secret_names() | _env_example_names()
+    names = _declared_secret_names() | _catalog_names()
     assert {"GITHUB_TOKEN", "OPENAI_API_KEY", "GH_TOKEN", "MODAL_TOKEN_SECRET"} <= names
     for name in sorted(names):
         value = "Q7w8E9r0T1y2U3i4O5p6"

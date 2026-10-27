@@ -9,7 +9,7 @@ snapshot); the kind decides what else happens and which part of the diff is repo
 | `command` | —                                                                 | `commands`         |
 | `mcp`     | MCP bridge re-syncs servers (connect new, drop removed)          | `mcp`              |
 | `lsp`     | in-process language servers stop (they restart on next use)      | `lsp.stopped`      |
-| `config`  | settings.json re-read, validated and applied live (`live_settings`) | `config.changed` |
+| `config`  | stored settings re-read, validated and applied live (`live_settings`) | `config.changed` |
 | `model`   | same as `config`, reporting only model routing keys              | `config.changed`   |
 
 `config`/`model` go through `core.live_settings`: live keys are copied into the running
@@ -27,7 +27,7 @@ _DIFF_KEY: dict[str, str] = {"agent": "agents", "command": "commands", "mcp": "m
 
 
 async def _apply_settings(svc: Any, keys: tuple[str, ...] | None) -> tuple[list[str], list[str]]:
-    """`(changed, restart_required)` after applying settings.json live (ValidationError when broken)."""
+    """`(changed, restart_required)` after applying the stored settings live (ValidationError when broken)."""
     from auoreo.core.live_settings import live_of
 
     res = await live_of(svc).reload("reload")
@@ -53,9 +53,9 @@ async def scoped_reload(
         stopped = await stop_lsp(manager_for(svc))
         return {"lsp": {"stopped": stopped}}, "language servers restart on their next use"
     changed, restart = await _apply_settings(svc, MODEL_KEYS if kind == "model" else None)
-    note = "settings.json is valid; nothing changed"
+    note = "stored settings are valid; nothing changed"
     if changed:
-        note = "settings.json is valid; changes applied live"
+        note = "stored settings are valid; changes applied live"
     if restart:
         note += "; restart required for: " + ", ".join(restart)
     return {"config": {"changed": changed}}, note

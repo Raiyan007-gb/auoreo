@@ -1,12 +1,12 @@
 """Non-secret configuration.
 
-Precedence (first wins): process env `AUOREO_*` > `<home>/settings.json` > defaults.
-Secrets never live here — see `core.secrets`.
+Precedence (first wins): process env `AUOREO_*` > init values (CLI flags) > the `app_settings`
+table of `<home>/state.db` (`core.settings_store`) > defaults. Bootstrap fields (`home`, `host`,
+`port`, `workers`, `db_encryption`) are env/CLI-only. Secrets never live here — see `core.secrets`.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from functools import lru_cache
 from pathlib import Path
@@ -166,7 +166,8 @@ class Settings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        return (init_settings, env_settings, _JsonFileSource(settings_cls))
+        init_kwargs = getattr(init_settings, "init_kwargs", {}) or {}
+        return (init_settings, env_settings, _DbSource(settings_cls, init_kwargs))
 
     # --- M5 (shared contracts)
     hooks_enabled: bool = True
@@ -433,40 +434,39 @@ class Settings(BaseSettings):
     env: EnvSettings = Field(default_factory=EnvSettings)  # --- ENV: web-managed custom variables
 
 
-class _JsonFileSource(PydanticBaseSettingsSource):
-    """Reads `<home>/settings.json`; malformed file warns and is ignored."""
+class _DbSource(PydanticBaseSettingsSource):
+    """Reads the `app_settings` table of `<home>/state.db` (read-only, sync). Bootstrap fields
+    are never taken from it. A pre-v8 `settings.json` is migrated into it first (one time)."""
+
+    def __init__(self, settings_cls: type[BaseSettings], init_kwargs: dict[str, Any]) -> None:
+        super().__init__(settings_cls)
+        self.init_kwargs = init_kwargs
 
     def get_field_value(self, field: Any, field_name: str) -> tuple[Any, str, bool]:
         return None, field_name, False
 
     def __call__(self) -> dict[str, Any]:
-        path = home_dir() / "settings.json"
-        if not path.is_file():
-            return {}
+        from auoreo.core import settings_store as store
+
+        home = Path(self.init_kwargs.get("home") or home_dir()).expanduser()
+        kw = {"encryption": self.init_kwargs.get("db_encryption"), "policy": self.init_kwargs.get("keyring")}
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            log.warning("ignoring unreadable %s: %s", path, exc)
+            if not store.migrating():
+                store.migrate_legacy(home, **kw)
+            data = store.read(home, **kw)
+        except Exception as exc:  # an unreadable store never blocks startup: defaults apply
+            log.warning("ignoring the settings in %s: %s", store.db_file(home), exc)
             return {}
-        return data if isinstance(data, dict) else {}
+        return {k: v for k, v in data.items() if k not in store.BOOTSTRAP and k not in store.NEVER_STORED}
 
 
-def write_settings_value(home: Path, dotted: str, value: Any) -> Path:
-    """Set `a.b.c` in `<home>/settings.json` (atomic write)."""
-    path = home / "settings.json"
-    data: dict[str, Any] = {}
-    if path.is_file():
-        data = json.loads(path.read_text(encoding="utf-8"))
-    node = data
-    *parents, leaf = dotted.split(".")
-    for key in parents:
-        node = node.setdefault(key, {})
-    node[leaf] = value
-    home.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    tmp.replace(path)
-    return path
+def write_settings_value(home: Path, dotted: str, value: Any, *, source: str = "cli") -> Path:
+    """Set `a.b.c` in the settings store (validated as a whole; `value=None` removes it)."""
+    from auoreo.core import env_store
+
+    data = env_store.read(home)
+    env_store.write(home, env_store.set_path(data, dotted, value), source=source)
+    return env_store.store_path(home)
 
 
 @lru_cache(maxsize=1)

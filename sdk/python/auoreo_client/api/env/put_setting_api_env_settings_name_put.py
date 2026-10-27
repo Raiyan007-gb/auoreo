@@ -83,7 +83,7 @@ def sync_detailed(
 ) -> Response[EnvApplied | HTTPValidationError]:
     """Put Setting
 
-     Set (or with `value: null` reset) one setting in settings.json and apply it live.
+     Set (or with `value: null` reset) one stored setting and apply it live.
 
     Args:
         name (str):
@@ -123,7 +123,7 @@ def sync(
 ) -> EnvApplied | HTTPValidationError | None:
     """Put Setting
 
-     Set (or with `value: null` reset) one setting in settings.json and apply it live.
+     Set (or with `value: null` reset) one stored setting and apply it live.
 
     Args:
         name (str):
@@ -158,7 +158,7 @@ async def asyncio_detailed(
 ) -> Response[EnvApplied | HTTPValidationError]:
     """Put Setting
 
-     Set (or with `value: null` reset) one setting in settings.json and apply it live.
+     Set (or with `value: null` reset) one stored setting and apply it live.
 
     Args:
         name (str):
@@ -196,7 +196,7 @@ async def asyncio(
 ) -> EnvApplied | HTTPValidationError | None:
     """Put Setting
 
-     Set (or with `value: null` reset) one setting in settings.json and apply it live.
+     Set (or with `value: null` reset) one stored setting and apply it live.
 
     Args:
         name (str):

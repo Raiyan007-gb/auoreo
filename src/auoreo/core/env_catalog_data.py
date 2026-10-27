@@ -1,9 +1,10 @@
-"""The `.env.example` catalog as data, in file order: `scripts/gen_env_example.py` renders it and
-`core.env_catalog` derives the web's Settings → Environment entries from it.
+"""The variable catalog as data, in display order: `core.env_catalog` derives the web's
+Settings → Environment entries from it (no `.env` / `.env.example` file is generated or read).
 
-`S` = a `Settings` field (`AUOREO_<NAME>`), `K` = any other variable (provider/tool keys,
-pass-through names), `T` = a raw comment block, `Sec` = a section, `Done` = a field covered by
-an earlier `K` (e.g. `home` ← `AUOREO_HOME`).
+`S` = a `Settings` field (`AUOREO_<NAME>`, stored in state.db), `K` = any other variable
+(provider/tool keys stored in secrets.db, pass-through names read from the real environment),
+`T` = a free-text note, `Sec` = a section, `Done` = a field covered by an earlier `K`
+(e.g. `home` ← `AUOREO_HOME`).
 """
 
 from __future__ import annotations
@@ -43,26 +44,10 @@ class Done:
 
 Item = Sec | T | S | K | Done
 
-HEADER = """# AUOREO — every environment variable AUOREO reads. Copy to `~/.auoreo/.env` (recommended) or a
-# project `.env`, then fill in only what you use: a blank value is ignored (the built-in default
-# applies), and a variable already set in the real environment always wins.
-#
-# Where a variable may live:
-#   (no tag)    anywhere: a project `.env`, `~/.auoreo/.env`, or the real environment
-#   [home]      `~/.auoreo/.env` or the real environment. A PROJECT `.env` is repository-controlled,
-#               so it may only set provider keys and AUOREO_MODEL / SMALL_MODEL / EMBED_MODEL /
-#               EMBED_DIMS / AGENT / WORKFLOW / GATEWAY / PORT; anything else (and any *_API_BASE,
-#               *_URL, *_HOST, *_ENDPOINT, proxy, PATH-like name) is ignored there with a warning.
-#   [env-only]  security knobs: read ONLY from the real process environment (`export ...`); both
-#               `.env` files ignore them with a warning, so a checked-out repo can never set them.
-#
-# Every AUOREO_* below is also a `settings.json` key (`~/.auoreo/settings.json`, same name in
-# lower case without the prefix); the environment wins over settings.json. "(JSON)" values take a
-# JSON literal, e.g. AUOREO_CORS_ORIGINS='["https://app.example.com"]'. Nested groups such as
-# AUOREO_LIVEKIT take a JSON object; settings.json is the friendlier place for those.
-#
-# Keys can live in the encrypted store instead of a file:  auoreo secrets set ANTHROPIC_API_KEY
-# Lookup order for a key: real environment → keyring/secrets.db → `.env` values."""
+HEADER = """# Every variable AUOREO reads. Settings live in state.db and keys in secrets.db, managed from
+# the web (Settings → Models / Environment) or `auoreo config` / `auoreo secrets`. A variable set
+# in the real process environment (Docker, CI) always wins; [env-only] security knobs and the
+# bootstrap fields (home, db_encryption, host, port, workers) are read only from there."""
 
 ITEMS: list[Item] = [
     T(HEADER),
@@ -336,6 +321,7 @@ ITEMS: list[Item] = [
     K("AUOREO_OFFLINE", "set to 1 to skip network probes in doctor and backends"),
     K("AUOREO_CODE_SHA", "override the code hash reported by /api/health"),
     K("AUOREO_ALLOW_NO_WEB_DIST", "set to 1 to build a wheel without web/dist"),
+    K("AUOREO_TEST_PROVIDER_BASE", "tests only (fake gateway): base URL for provider model-list calls"),
     K("UPDATE_SIGNING_KEY", "release CI: ed25519 private key (PEM) that signs update manifests"),
     K("PLUGIN_SIGNING_KEY", "release CI: ed25519 private key (PEM) that signs bundled plugins"),
 ]

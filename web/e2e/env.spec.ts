@@ -31,7 +31,7 @@ test("a live setting applies without a restart (teleop flag → /api/rtc/capabil
   await toggle.click();
   await expect(page.getByTestId("env-toast")).toContainText("Applied");
   await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId("env-source-AUOREO_TELEOP_INPUT_ENABLED")).toHaveText("settings.json");
+  await expect(page.getByTestId("env-source-AUOREO_TELEOP_INPUT_ENABLED")).toHaveText("database");
   expect(await caps()).toBe(true);
   await shot(page, "env-live-setting");
   await page.getByTestId("env-reset-AUOREO_TELEOP_INPUT_ENABLED").click();
@@ -105,7 +105,7 @@ test("env-only security knobs are read-only", async ({ page, request }) => {
   expect(res.status()).toBe(403);
 });
 
-test("import from ~/.auoreo/.env moves keys and settings, skips security knobs", async ({ page, request }) => {
+test("import existing .env moves keys and settings, skips security knobs", async ({ page, request }) => {
   const { dotenv_path } = await envJson(request);
   writeFileSync(dotenv_path, `TAVILY_API_KEY=${SECRET}\nAUOREO_LOCALE=pt-BR\nAUOREO_YOLO=1\n`);
   await openEnv(page);
@@ -118,7 +118,7 @@ test("import from ~/.auoreo/.env moves keys and settings, skips security knobs",
   await expect(page.getByTestId("env-toast")).toContainText("Moved 2");
   const entries = (await envJson(request)).sections.flatMap((s) => s.entries);
   expect(entries.find((e) => e.name === "TAVILY_API_KEY")?.source).toBe("secrets");
-  expect(entries.find((e) => e.name === "AUOREO_LOCALE")?.source).toBe("settings");
+  expect(entries.find((e) => e.name === "AUOREO_LOCALE")?.source).toBe("db");
   expect(await page.content()).not.toContain(SECRET);
   // clean up: undo the settings write, drop the key and the file
   await page.getByTestId("env-undo").click();

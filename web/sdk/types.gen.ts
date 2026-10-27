@@ -452,7 +452,7 @@ export interface paths {
         put?: never;
         /**
          * Post Import
-         * @description Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews).
+         * @description One-time import of `~/.auoreo/.env` + `<cwd>/.env` (`dry_run` previews).
          */
         post: operations["post_import_api_env_import_dotenv_post"];
         delete?: never;
@@ -512,7 +512,7 @@ export interface paths {
         get?: never;
         /**
          * Put Setting
-         * @description Set (or with `value: null` reset) one setting in settings.json and apply it live.
+         * @description Set (or with `value: null` reset) one stored setting and apply it live.
          */
         put: operations["put_setting_api_env_settings__name__put"];
         post?: never;
@@ -533,7 +533,7 @@ export interface paths {
         put?: never;
         /**
          * Undo
-         * @description Restore the previous settings.json version (10 are kept) and apply it live.
+         * @description Restore the previous stored settings (10 change sets are kept) and apply them live.
          */
         post: operations["undo_api_env_undo_post"];
         delete?: never;
@@ -1095,6 +1095,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/models/selection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Selection */
+        get: operations["get_selection_api_models_selection_get"];
+        /**
+         * Put Selection
+         * @description Choose models from connected providers; applied live through the settings store.
+         */
+        put: operations["put_selection_api_models_selection_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/oauth/{connector}/settled": {
         parameters: {
             query?: never;
@@ -1294,6 +1315,105 @@ export interface paths {
          * @description Forget learned stats and outcomes (one `context`, or all). Settings are unchanged.
          */
         post: operations["bandit_reset_api_policy_bandit_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Providers */
+        get: operations["list_providers_api_providers_get"];
+        put?: never;
+        /** Add Provider */
+        post: operations["add_provider_api_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Detect
+         * @description Guess the provider from the key's shape (never stored, never sent anywhere).
+         */
+        post: operations["detect_api_providers_detect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers/{conn_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Provider
+         * @description Replace the key / label / endpoint (a new key or endpoint is validated first).
+         */
+        put: operations["update_provider_api_providers__conn_id__put"];
+        post?: never;
+        /**
+         * Delete Provider
+         * @description Remove the connection and its key; refused (409) while it serves the selected model.
+         */
+        delete: operations["delete_provider_api_providers__conn_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers/{conn_id}/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Provider Models
+         * @description The cached list (refetched when `refresh=1` or older than 1 h; a failed fetch keeps it).
+         */
+        get: operations["provider_models_api_providers__conn_id__models_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers/{conn_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Provider */
+        post: operations["refresh_provider_api_providers__conn_id__refresh_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3437,10 +3557,14 @@ export interface components {
             };
             /** Dry Run */
             dry_run: boolean;
+            /** Files */
+            files?: string[];
             /** Moved */
             moved: components["schemas"]["DotenvMove"][];
             /** Note */
             note: string;
+            /** Providers */
+            providers?: components["schemas"]["DotenvProvider"][];
         };
         /** DotenvImportRequest */
         DotenvImportRequest: {
@@ -3452,8 +3576,19 @@ export interface components {
         };
         /** DotenvMove */
         DotenvMove: {
+            /**
+             * File
+             * @description The `.env` file the name came from
+             * @default
+             */
+            file: string;
             /** Name */
             name: string;
+            /**
+             * Provider
+             * @description Provider connection this key creates
+             */
+            provider?: string | null;
             /** Reason */
             reason?: string | null;
             /**
@@ -3461,6 +3596,20 @@ export interface components {
              * @enum {string}
              */
             to: "secrets" | "settings" | "skipped" | "kept";
+        };
+        /**
+         * DotenvProvider
+         * @description A provider connection created (or attempted) from an imported key.
+         */
+        DotenvProvider: {
+            /** Connection Id */
+            connection_id?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Provider */
+            provider: string;
         };
         /**
          * EnvApplied
@@ -3490,7 +3639,7 @@ export interface components {
             description: string;
             /**
              * Field
-             * @description settings.json key for `kind=setting`
+             * @description Settings key (state.db) for `kind=setting`
              */
             field?: string | null;
             /**
@@ -3525,7 +3674,7 @@ export interface components {
             nullable: boolean;
             /**
              * Pending Restart
-             * @description settings.json differs from the running value
+             * @description The stored value differs from the running one
              * @default false
              */
             pending_restart: boolean;
@@ -3535,12 +3684,12 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "env" | "dotenv" | "settings" | "secrets" | "override" | "default";
+            source: "env" | "db" | "secrets" | "override" | "default";
             /**
              * Tier
              * @enum {string}
              */
-            tier: "anywhere" | "home" | "env-only";
+            tier: "anywhere" | "env-only";
             /**
              * Type
              * @enum {string}
@@ -3565,11 +3714,19 @@ export interface components {
             custom: components["schemas"]["CustomVarOut"][];
             /** Dotenv Exists */
             dotenv_exists: boolean;
-            /** Dotenv Path */
+            /**
+             * Dotenv Path
+             * @description First `.env` found (home, then project) — import only
+             */
             dotenv_path: string;
             /**
+             * Dotenv Paths
+             * @description Every `.env` the import would read
+             */
+            dotenv_paths?: string[];
+            /**
              * History
-             * @description settings.json versions available to undo
+             * @description Stored change sets available to undo
              */
             history: number;
             /** Pending Restart */
@@ -4503,6 +4660,37 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
         };
+        /** ModelRef */
+        ModelRef: {
+            /** Connection Id */
+            connection_id: number;
+            /** Model Id */
+            model_id: string;
+        };
+        /** ModelSelection */
+        ModelSelection: {
+            embedding: components["schemas"]["SelectedModel"];
+            main: components["schemas"]["SelectedModel"];
+            small: components["schemas"]["SelectedModel"];
+        };
+        /** ModelSelectionApplied */
+        ModelSelectionApplied: {
+            /** Changed */
+            changed: string[];
+            /** Live */
+            live: string[];
+            /** Note */
+            note: string;
+            /** Restart Required */
+            restart_required: string[];
+            selection: components["schemas"]["ModelSelection"];
+        };
+        /** ModelSelectionWrite */
+        ModelSelectionWrite: {
+            embedding?: components["schemas"]["ModelRef"] | null;
+            main?: components["schemas"]["ModelRef"] | null;
+            small?: components["schemas"]["ModelRef"] | null;
+        };
         /** OAuthSettle */
         OAuthSettle: {
             /**
@@ -4906,6 +5094,226 @@ export interface components {
              */
             reason: string;
         };
+        /** ProviderConnectionOut */
+        ProviderConnectionOut: {
+            /** Api Version */
+            api_version?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /** Checked At */
+            checked_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+            /**
+             * Last Error
+             * @description The provider's last error, redacted
+             */
+            last_error?: string | null;
+            /** Model Count */
+            model_count: number;
+            /** Provider */
+            provider: string;
+            /** Provider Name */
+            provider_name: string;
+            /**
+             * Secret Name
+             * @description Where the key lives (name only)
+             */
+            secret_name?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "invalid" | "error" | "unchecked";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ProviderCreate */
+        ProviderCreate: {
+            /** Api Version */
+            api_version?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /**
+             * Deployments
+             * @description Azure only
+             */
+            deployments?: string[];
+            /**
+             * Key
+             * @description Write-only; never returned
+             */
+            key?: string | null;
+            /** Label */
+            label?: string | null;
+            /** Provider */
+            provider: string;
+        };
+        /** ProviderDetectRequest */
+        ProviderDetectRequest: {
+            /**
+             * Key
+             * @default
+             */
+            key: string;
+        };
+        /** ProviderDetectResult */
+        ProviderDetectResult: {
+            /** Candidates */
+            candidates: string[];
+            /** Confident */
+            confident: boolean;
+            /**
+             * Providers
+             * @description Specs of the candidates, in order
+             */
+            providers: components["schemas"]["ProviderSpecOut"][];
+        };
+        /** ProviderList */
+        ProviderList: {
+            /** Connections */
+            connections: components["schemas"]["ProviderConnectionOut"][];
+            /**
+             * Providers
+             * @description Every provider that can be connected
+             */
+            providers: components["schemas"]["ProviderSpecOut"][];
+        };
+        /** ProviderModelOut */
+        ProviderModelOut: {
+            /** Capabilities */
+            capabilities?: string[];
+            /** Context Window */
+            context_window?: number | null;
+            /**
+             * Input Price
+             * @description USD per 1M input tokens
+             */
+            input_price?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "chat" | "embedding" | "other";
+            /**
+             * Litellm Id
+             * @description What the gateway is called with: `<prefix><model_id>`
+             */
+            litellm_id: string;
+            /** Model Id */
+            model_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Output Price
+             * @description USD per 1M output tokens
+             */
+            output_price?: number | null;
+        };
+        /** ProviderModels */
+        ProviderModels: {
+            /** Connection Id */
+            connection_id: number;
+            /** Error */
+            error?: string | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /** Models */
+            models: components["schemas"]["ProviderModelOut"][];
+            /**
+             * Stale
+             * @description Older than the cache TTL (1 h)
+             * @default false
+             */
+            stale: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "invalid" | "error" | "unchecked";
+        };
+        /**
+         * ProviderResult
+         * @description Answer of add / update / refresh: the connection, or the provider's error.
+         */
+        ProviderResult: {
+            connection?: components["schemas"]["ProviderConnectionOut"] | null;
+            /** Error */
+            error?: string | null;
+            /**
+             * Model Count
+             * @default 0
+             */
+            model_count: number;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "invalid" | "error" | "unchecked";
+        };
+        /** ProviderSpecOut */
+        ProviderSpecOut: {
+            /** Default Api Version */
+            default_api_version?: string | null;
+            /** Default Base Url */
+            default_base_url?: string | null;
+            /**
+             * Docs Url
+             * @default
+             */
+            docs_url: string;
+            /** Id */
+            id: string;
+            /**
+             * Manual Models
+             * @description Azure: deployment names are entered by hand
+             */
+            manual_models: boolean;
+            /** Name */
+            name: string;
+            /** Needs Api Version */
+            needs_api_version: boolean;
+            /** Needs Base Url */
+            needs_base_url: boolean;
+            /** Needs Key */
+            needs_key: boolean;
+            /**
+             * Prefix
+             * @description LiteLLM model prefix, e.g. `openai/`
+             */
+            prefix: string;
+        };
+        /** ProviderUpdate */
+        ProviderUpdate: {
+            /** Api Version */
+            api_version?: string | null;
+            /** Base Url */
+            base_url?: string | null;
+            /**
+             * Deployments
+             * @description Azure only
+             */
+            deployments?: string[] | null;
+            /**
+             * Key
+             * @description Replace the key (validated)
+             */
+            key?: string | null;
+            /** Label */
+            label?: string | null;
+        };
         /** ReembedStatus */
         ReembedStatus: {
             /**
@@ -5232,6 +5640,30 @@ export interface components {
             prev_expires_at?: string | null;
             /** Reloaded */
             reloaded: boolean;
+        };
+        /** SelectedModel */
+        SelectedModel: {
+            /** Connection Id */
+            connection_id?: number | null;
+            /** Model Id */
+            model_id?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "main" | "small" | "embedding";
+            /**
+             * Source
+             * @description env | db | override | default
+             */
+            source: string;
+            /**
+             * Value
+             * @description The effective setting, e.g. `openai/gpt-5`
+             */
+            value: string | null;
         };
         /** ServerEvent */
         ServerEvent: {
@@ -8521,6 +8953,76 @@ export interface operations {
             };
         };
     };
+    get_selection_api_models_selection_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSelection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_selection_api_models_selection_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelSelectionWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSelectionApplied"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     settled_api_oauth__connector__settled_post: {
         parameters: {
             query?: never;
@@ -8905,6 +9407,261 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BanditResetResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_providers_api_providers_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_provider_api_providers_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detect_api_providers_detect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderDetectRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderDetectResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_provider_api_providers__conn_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                conn_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_provider_api_providers__conn_id__delete: {
+        parameters: {
+            query?: {
+                force?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                conn_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    provider_models_api_providers__conn_id__models_get: {
+        parameters: {
+            query?: {
+                kind?: ("chat" | "embedding" | "other") | null;
+                q?: string | null;
+                refresh?: number;
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                conn_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderModels"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_provider_api_providers__conn_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                conn_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderResult"];
                 };
             };
             /** @description Validation Error */

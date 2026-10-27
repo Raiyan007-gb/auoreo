@@ -161,8 +161,11 @@ def test_guardian_timeout_setting(home: Path, monkeypatch: pytest.MonkeyPatch) -
     st.smart_timeout = None
     st.i9.guardian.timeout_s = 9
     assert timeout_s(SimpleNamespace(settings=st)) == 9.0  # type: ignore[arg-type]
-    assert "AUOREO_SMART_TIMEOUT" in (ROOT / ".env.example").read_text()
-    assert "smart_policy" in (ROOT / ".env.example").read_text()
+    from auoreo.core import env_catalog_data
+    from auoreo.core.env_catalog import by_name
+
+    assert "AUOREO_SMART_TIMEOUT" in by_name()  # the catalog feeds Settings → Environment
+    assert "smart_policy" in Path(env_catalog_data.__file__).read_text(encoding="utf-8")
 
 
 # ------------------------------------------------------------------ deploy + CI hygiene

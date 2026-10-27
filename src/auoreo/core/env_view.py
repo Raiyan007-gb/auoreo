@@ -2,10 +2,10 @@
 whether each entry is writable from the browser (`/api/env`).
 
 Writability is one policy (`EnvPolicy`): pass-through names and `[env-only]` security knobs are
-read-only (env-only editing is a future step-up flag, off by default), a value that comes from
-the real environment (or a startup flag) cannot be overridden from here, and a settings value
-that a `.env` file supplies must be imported first. Secret values never leave the store: entries
-report `is_set` and `updated_at` only.
+read-only (env-only editing is a future step-up flag, off by default), bootstrap fields (home,
+db_encryption, host, port, workers) are env/CLI-only because they are needed before state.db
+opens, and a value that comes from the real environment (or a startup flag) cannot be overridden
+from here. Secret values never leave the store: entries report `is_set` and `updated_at` only.
 """
 
 from __future__ import annotations
@@ -18,14 +18,15 @@ from typing import Any
 from auoreo.core import env_store
 from auoreo.core.env_catalog import WEB_MANAGED, EnvVar, catalog
 from auoreo.core.redaction import redact_obj
+from auoreo.core.settings_store import BOOTSTRAP
 
 LOCK_REASONS: dict[str, str] = {
-    "passthrough": "read from the process environment: export it or put it in ~/.auoreo/.env",
+    "passthrough": "read from the process environment only (export it before starting the server)",
     "env-only": "security knob: set in the real environment (export …) and restart",
     "env": "set in the real environment, which always wins: unset it there to manage it here",
-    "dotenv": "comes from a .env file: use “Import from ~/.auoreo/.env” to move it here",
     "override": "set by a command-line flag when the server started",
-    "server_password": "the server password is changed in the real environment or settings.json",
+    "server_password": "the server password is set in the real environment (AUOREO_SERVER_PASSWORD)",
+    "bootstrap": "bootstrap setting: {why}; set it in the real environment or a command-line flag",
 }
 
 
@@ -55,7 +56,9 @@ def lock_of(e: EnvVar, source: str, policy: EnvPolicy = POLICY) -> Lock | None:
         return Lock(WEB_MANAGED[e.field], 403)
     if e.field == "server_password":
         return Lock(LOCK_REASONS["server_password"], 403)
-    if source in ("env", "override") or (source == "dotenv" and e.kind == "setting"):
+    if e.field in BOOTSTRAP:
+        return Lock(LOCK_REASONS["bootstrap"].format(why=BOOTSTRAP[e.field]), 403)
+    if source in ("env", "override"):
         return Lock(LOCK_REASONS[source], 409)
     return None
 
@@ -125,7 +128,7 @@ def listing(svc: Any, live: Any, stored: set[str], updated: dict[str, int]) -> d
         file_data = {}
     try:
         built = live.build().model_dump(mode="json")
-    except Exception:  # a broken settings.json: show running values, nothing pending
+    except Exception:  # a broken store: show running values, nothing pending
         built = None
     sections, entries = catalog()
     rows: dict[str, list[dict[str, Any]]] = {s.id: [] for s in sections}
@@ -145,14 +148,17 @@ def listing(svc: Any, live: Any, stored: set[str], updated: dict[str, int]) -> d
         }
         for name, var in sorted(custom(svc.settings).items())
     ]
-    dotenv = svc.settings.home / ".env"
+    from auoreo.core.env_import import dotenv_files
+
+    files = dotenv_files(svc)
     return {
         "sections": [{"id": s.id, "label": s.label, "entries": rows[s.id]} for s in sections],
         "custom": out_custom,
         "pending_restart": list(getattr(live, "pending", [])),
-        "history": len(env_store.history(svc.settings.home)),
-        "dotenv_path": str(dotenv),
-        "dotenv_exists": dotenv.is_file(),
+        "history": env_store.history(svc.settings.home),
+        "dotenv_path": str(files[0]) if files else str(svc.settings.home / ".env"),
+        "dotenv_paths": [str(p) for p in files],
+        "dotenv_exists": bool(files),
     }
 
 

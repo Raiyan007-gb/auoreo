@@ -9,18 +9,18 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-EnvSource = Literal["env", "dotenv", "settings", "secrets", "override", "default"]
+EnvSource = Literal["env", "db", "secrets", "override", "default"]
 
 
 class EnvEntry(BaseModel):
     name: str = Field(description="The environment variable, e.g. `AUOREO_MODEL`")
-    field: str | None = Field(default=None, description="settings.json key for `kind=setting`")
+    field: str | None = Field(default=None, description="Settings key (state.db) for `kind=setting`")
     description: str
     kind: Literal["setting", "secret", "passthrough"]
     type: Literal["bool", "int", "float", "str", "enum", "json"]
     choices: list[str] = Field(default_factory=list)
     nullable: bool = False
-    tier: Literal["anywhere", "home", "env-only"]
+    tier: Literal["anywhere", "env-only"]
     source: EnvSource
     value: Any = Field(default=None, description="Effective value (redacted); always null for secrets")
     default: Any = None
@@ -28,7 +28,7 @@ class EnvEntry(BaseModel):
     updated_at: datetime | None = Field(default=None, description="Secrets: last write")
     live: bool = Field(description="A change applies without a restart")
     restart_reason: str | None = None
-    pending_restart: bool = Field(default=False, description="settings.json differs from the running value")
+    pending_restart: bool = Field(default=False, description="The stored value differs from the running one")
     writable: bool
     locked_reason: str | None = Field(default=None, description="Why the web cannot change it")
 
@@ -53,8 +53,9 @@ class EnvListing(BaseModel):
     sections: list[EnvSectionOut]
     custom: list[CustomVarOut]
     pending_restart: list[str] = Field(default_factory=list)
-    history: int = Field(description="settings.json versions available to undo")
-    dotenv_path: str
+    history: int = Field(description="Stored change sets available to undo")
+    dotenv_path: str = Field(description="First `.env` found (home, then project) — import only")
+    dotenv_paths: list[str] = Field(default_factory=list, description="Every `.env` the import would read")
     dotenv_exists: bool
 
 
@@ -93,6 +94,17 @@ class DotenvMove(BaseModel):
     name: str
     to: Literal["secrets", "settings", "skipped", "kept"]
     reason: str | None = None
+    file: str = Field(default="", description="The `.env` file the name came from")
+    provider: str | None = Field(default=None, description="Provider connection this key creates")
+
+
+class DotenvProvider(BaseModel):
+    """A provider connection created (or attempted) from an imported key."""
+
+    provider: str
+    ok: bool
+    connection_id: int | None = None
+    error: str | None = None
 
 
 class DotenvImport(BaseModel):
@@ -100,6 +112,8 @@ class DotenvImport(BaseModel):
     moved: list[DotenvMove]
     counts: dict[str, int]
     note: str
+    files: list[str] = Field(default_factory=list)
+    providers: list[DotenvProvider] = Field(default_factory=list)
 
 
 class DotenvImportRequest(BaseModel):
@@ -129,6 +143,7 @@ __all__ = [
     "DotenvImport",
     "DotenvImportRequest",
     "DotenvMove",
+    "DotenvProvider",
     "EnvApplied",
     "EnvEntry",
     "EnvListing",

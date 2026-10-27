@@ -1,0 +1,26 @@
+{
+ "object": "list",
+ "data": [
+  {
+   "id": "mistral-large-latest",
+   "object": "model",
+   "name": "mistral-large-2411",
+   "max_context_length": 131072,
+   "capabilities": {
+    "completion_chat": true,
+    "function_calling": true,
+    "vision": false
+   }
+  },
+  {
+   "id": "mistral-embed",
+   "object": "model",
+   "name": "mistral-embed",
+   "max_context_length": 8192,
+   "capabilities": {
+    "completion_chat": false,
+    "function_calling": false
+   }
+  }
+ ]
+}

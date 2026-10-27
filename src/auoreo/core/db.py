@@ -42,10 +42,8 @@ from auoreo.core.db_migrate import (  # re-exported: older imports use auoreo.co
 if TYPE_CHECKING:
     from auoreo.core.crypto_columns import ColumnCipher
 
-SCHEMA_VERSION = 7  # 2: sessions.archived, usage, messages_archive (M3); 3: automation + teams (M5)
-# 4: goals, suggestions (M3–M5 gaps); 5: blackboard, bandit, usage latency, audit triggers (M6)
-# 6: usage cache_write/reasoning tokens, generation id, deployment, tags (I2)
-# 7 (I3, revision 0007_teams_i3): team_members agent_type/model/color/cwd, usage attribution
+SCHEMA_VERSION = 8  # 2 archive/usage, 3 automation+teams, 4 goals, 5 bandit, 6 I2 usage, 7 I3 teams
+# 8 (0008_settings_providers): app_settings(+history/meta), provider_connections/models (db_settings.py)
 
 
 def utcnow() -> datetime:
@@ -474,6 +472,8 @@ class Database:
         async with self.session() as s:
             return int((await s.execute(select(func.count()).select_from(model))).scalar_one())
 
+
+from auoreo.core import db_settings as _db_settings  # noqa: E402,F401  (v8 tables on Base.metadata)
 
 __all__ = [
     "ALEMBIC_DIR",

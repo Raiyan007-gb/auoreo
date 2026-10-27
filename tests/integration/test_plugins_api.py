@@ -15,6 +15,7 @@ from typer.testing import CliRunner
 
 from auoreo.api.app import create_app
 from auoreo.cli.app import app as cli_app
+from auoreo.core import settings_store
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings
 from auoreo.gateway.fake import FakeGateway
@@ -83,7 +84,7 @@ async def test_pair_endpoint(client: httpx.AsyncClient, svc: Services) -> None:
     code = PairingStore(svc.settings.home, "echo").request("chat-9", "bob")
     r = await client.post("/api/plugins/echo/pair", json={"code": code})
     assert r.json() == {"paired": True, "chat_id": "chat-9"}
-    settings_json = json.loads((svc.settings.home / "settings.json").read_text())
+    settings_json = settings_store.read(svc.settings.home)
     assert settings_json["plugins"]["echo"]["allowlist"] == ["chat-9"]
     assert (await client.post("/api/plugins/echo/pair", json={"code": code})).status_code == 404
     assert (await client.post("/api/plugins/echo/pair", json={"code": "12"})).status_code == 422

@@ -71,7 +71,7 @@ uv pip install https://github.com/KittenML/KittenTTS/releases/download/<ver>/kit
 
 `ffmpeg` must be on `PATH` for anything that is not already a 16 kHz mono WAV.
 
-## Picking backends (`~/.auoreo/settings.json`)
+## Picking backends (Settings → Environment or `auoreo config set backends …`)
 
 ```json
 {

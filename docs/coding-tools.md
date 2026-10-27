@@ -51,7 +51,7 @@ Prompts, the pager and update checks are turned off.
 
 The target is the `repo` argument (`owner/name` or `host/owner/name`). Without it, the tools
 use the cwd checkout's `origin` remote, or its first remote when there is no `origin`. The
-cwd repo is always allowed. Any other repo has to match a glob in `settings.json`:
+cwd repo is always allowed. Any other repo has to match a glob in the stored settings (`auoreo config set github_allowed_repos …`):
 
 ```json
 { "github_allowed_repos": ["acme/*", "octo-org/docs"] }

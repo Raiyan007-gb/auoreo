@@ -30,20 +30,20 @@ uv run auoreo harness list
 # keyless demo with the deterministic fake gateway
 AUOREO_GATEWAY=fake uv run auoreo run '/tool read {"path": "README.md"}'
 
-# real models: any LiteLLM provider. Put the provider's key in .env (or the encrypted
-# store) and name the model as <provider>/<model id>; the prefix picks the key.
-cp .env.example .env
-#   ANTHROPIC_API_KEY=...   AUOREO_MODEL=anthropic/claude-sonnet-5
-#   OPENROUTER_API_KEY=...  AUOREO_MODEL=openrouter/anthropic/claude-sonnet-4.5
-#   OPENAI_API_KEY=...      AUOREO_MODEL=openai/gpt-5
-uv run auoreo doctor            # one credentials row per configured model
-uv run auoreo run "summarize this repo"
-uv run auoreo run --model groq/llama-3.3-70b-versatile "hi"   # per-run override
-
 # the API server + web UI on one port (SSE at /api/events, WebSocket at /ws)
 (cd web && npm ci && npm run build)
 uv run auoreo web
+# → Settings → Models: paste an API key (the provider is detected from it), Connect, then pick
+#   the main / small / embedding model from the list your key can use. Applied live.
+
+uv run auoreo doctor            # one credentials row per configured model
+uv run auoreo run "summarize this repo"
+uv run auoreo run --model groq/llama-3.3-70b-versatile "hi"   # per-run override
 ```
+
+There is no `.env` file: settings live in `~/.auoreo/state.db`, keys in the encrypted
+`~/.auoreo/secrets.db`, both managed from the web (or `auoreo config` / `auoreo secrets`). A real
+process environment variable (Docker, CI) still wins — see [docs/environment.md](docs/environment.md).
 
 Long sessions are compacted automatically (pressure or context overflow) and on `/compact`;
 replaced messages stay searchable in the archive. `auoreo stats` shows token/cost usage;

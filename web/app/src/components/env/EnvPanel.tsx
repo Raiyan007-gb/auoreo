@@ -53,10 +53,11 @@ function ImportDialog({
   return (
     <Dialog open={plan !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent data-testid="import-dialog">
-        <DialogTitle>Import from ~/.auoreo/.env</DialogTitle>
+        <DialogTitle>Import existing .env</DialogTitle>
         <DialogDescription>
-          Keys move into the encrypted secrets store, AUOREO_* settings into settings.json. Security knobs are never
-          imported. The file itself is not changed — clear it afterwards.
+          One-time move of {plan?.files?.join(" and ") || "your .env"}: keys go to the encrypted secrets store (provider
+          keys also become connections in the Models tab), AUOREO_* settings to the database. Security knobs are never
+          imported. AUOREO never reads .env files — delete them afterwards.
         </DialogDescription>
         {plan && plan.moved.length === 0 && <p className="text-sm">{plan.note}</p>}
         <ul className="grid max-h-64 gap-1 overflow-auto text-sm" data-testid="import-plan">
@@ -64,8 +65,9 @@ function ImportDialog({
             <li key={m.name} className="flex items-center gap-2">
               <code className="font-mono">{m.name}</code> →{" "}
               <Badge variant={m.to === "secrets" ? "success" : "info"}>
-                {m.to === "secrets" ? "secrets.db" : "settings.json"}
+                {m.to === "secrets" ? "secrets.db" : "database"}
               </Badge>
+              {m.provider && <Badge variant="outline">→ {m.provider} connection</Badge>}
             </li>
           ))}
           {staying.map((m) => (
@@ -107,7 +109,7 @@ export function EnvPanel() {
   );
   const onError = useCallback((message: string) => show(message, true), [show]);
 
-  // Live: writes from elsewhere (CLI, another tab, a manual settings.json edit) refresh the page.
+  // Live: writes from elsewhere (CLI `auoreo config set`, another tab) refresh the page.
   useEvents({ channel: "server", afterSeq: "live", types: LIVE_TYPES }, (e) => {
     if (!LIVE_TYPES.includes(e.type)) return;
     reload();
@@ -165,10 +167,10 @@ export function EnvPanel() {
               variant="outline"
               data-testid="env-import"
               disabled={!env.data?.dotenv_exists}
-              title={env.data?.dotenv_path}
+              title={env.data?.dotenv_paths?.join(", ") || "no .env file found"}
               onClick={() => api.envImportDotenv(true).then(setPlan, (err: unknown) => onError(errorText(err)))}
             >
-              <FileInputIcon aria-hidden /> Import from ~/.auoreo/.env
+              <FileInputIcon aria-hidden /> Import existing .env
             </Button>
             <Button
               size="sm"
@@ -220,7 +222,8 @@ export function EnvPanel() {
           api.envImportDotenv(false).then(
             (r) => {
               setPlan(null);
-              show(r.note);
+              const conns = (r.providers ?? []).map((p) => `${p.provider} ${p.ok ? "connected" : `failed (${p.error ?? ""})`}`);
+              show(conns.length ? `${r.note} Providers: ${conns.join("; ")}.` : r.note);
               reload();
             },
             (err: unknown) => onError(errorText(err)),

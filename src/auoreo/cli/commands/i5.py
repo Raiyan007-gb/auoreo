@@ -31,7 +31,7 @@ RELOAD_LABELS = {
     "command": "slash commands",
     "agent": "agents",
     "model": "model routing settings",
-    "config": "settings.json",
+    "config": "stored settings",
     "lsp": "language servers",
     "mcp": "MCP servers",
 }
@@ -82,7 +82,7 @@ def plugin_get(
     key: Annotated[str | None, typer.Argument(help="One key (default: every value).")] = None,
     as_json: JsonOpt = False,
 ) -> None:
-    """Show a plugin's config values from settings.json (secret-looking keys are masked)."""
+    """Show a plugin's config values from the settings store (secret-looking keys are masked)."""
     st = settings()
     m = _manifest(name)
     vals = cv.values(st.home, st.plugins.get(name, {}), m)
@@ -105,7 +105,7 @@ def plugin_set(
     key: str,
     value: Annotated[str, typer.Argument(help='JSON (true, 3, ["a"]) or a plain string.')],
 ) -> None:
-    """Set one plugin config value in settings.json (validated; secrets are refused)."""
+    """Set one plugin config value in the settings store (validated; secrets are refused)."""
     st = settings()
     try:
         parsed = cv.set_value(ensure_home(st.home), _manifest(name), key, value)

@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sqlite3
 import struct
 import zlib
 from pathlib import Path
@@ -17,6 +18,7 @@ from typer.testing import CliRunner
 from auoreo.cli.app import app
 from auoreo.cli.stdout_guard import StdoutGuard, active, write_line
 from auoreo.core import diagnostics_i5 as d5
+from auoreo.core import settings_store
 from auoreo.core.settings import Settings
 from auoreo.harness.discovery import default_roots
 from auoreo.harness.manifests import VariantsFile
@@ -76,17 +78,19 @@ def test_disk_row_thresholds(home: Path) -> None:
 
 def test_settings_schema_row(home: Path) -> None:
     st = Settings(home=home)
-    path = home / "settings.json"
-    assert d5.settings_schema_row(st).detail.startswith("no settings.json")
-    path.write_text("{oops")
-    assert d5.settings_schema_row(st).level == "error"
-    path.write_text(json.dumps({"port": "nope"}))
+    assert d5.settings_schema_row(st).detail.startswith("no stored settings")
+    settings_store.write(home, {"teams_max_depth": "nope"})  # raw store write: no validation
     row = d5.settings_schema_row(st)
-    assert row.level == "error" and "port" in row.detail
-    path.write_text(json.dumps({"prot": 1}))
+    assert row.level == "error" and "teams_max_depth" in row.detail
+    settings_store.write(home, {"prot": 1})
     assert d5.settings_schema_row(st).level == "warn"
-    path.write_text(json.dumps({"port": 5000}))
+    settings_store.write(home, {"locale": "de-DE"})
     assert d5.settings_schema_row(st).level == "ok"
+    con = sqlite3.connect(settings_store.db_file(home))
+    con.execute("UPDATE app_settings SET value = '{oops' WHERE key = 'locale'")
+    con.commit()
+    con.close()
+    assert d5.settings_schema_row(st).level == "error"
 
 
 async def test_worktrees_tcc_and_sse_rows(home: Path, tmp_path: Path, httpx_mock: HTTPXMock) -> None:
