@@ -245,7 +245,7 @@ async def test_idle_trigger_compacts_once_and_new_input_cancels(
     sess = await services.create_session()
     mark = await services.events.last_seq()
     await turns(services, sess.id, 12)
-    done: list = []
+    done: list[Any] = []
     for _ in range(100):  # poll: under a loaded full suite the idle compaction can take > 0.6 s
         done = [e for e in await since(services, sess.id, mark) if e.type == "compaction.completed"]
         if done:
