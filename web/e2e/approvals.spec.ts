@@ -19,7 +19,7 @@ test("approval footer appears for a bash call and approving completes the run", 
   const card = page.locator('[data-testid="tool-card"][data-tool="bash"]');
   await expect(card).toHaveAttribute("data-status", "completed");
   await expect(page.getByTestId("msg-assistant").last()).toContainText("hi");
-  await expect(page.getByTestId("session-status")).toHaveText("idle");
+  await expect(page.getByTestId("session-status")).toHaveText("Idle");
   await shot(page, "approval-completed");
 });
 

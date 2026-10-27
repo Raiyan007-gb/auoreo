@@ -2,47 +2,75 @@ import {
   ActivityIcon,
   BarChart3Icon,
   BrainIcon,
-  // --- W0-A
   CalendarClockIcon,
-  PlugIcon,
-  SparklesIcon,
-  UsersIcon,
-  // --- end W0-A
   type LucideIcon,
   MessagesSquareIcon,
   MicIcon,
+  PlugIcon,
   PuzzleIcon,
+  RadioTowerIcon,
   ScrollTextIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  SparklesIcon,
   TargetIcon,
-  WebhookIcon, // --- G5b
-  RadioTowerIcon, // --- G5b
+  UsersIcon,
+  WebhookIcon,
 } from "lucide-react";
 
 export interface NavItem {
   readonly to: string;
   readonly label: string;
   readonly icon: LucideIcon;
+  /** Shows the pending-approvals count as a badge. */
+  readonly badge?: "approvals";
 }
 
-export const NAV: readonly NavItem[] = [
-  { to: "/sessions", label: "Sessions", icon: MessagesSquareIcon },
-  { to: "/approvals", label: "Approvals", icon: ShieldCheckIcon },
-  { to: "/memory", label: "Memory", icon: BrainIcon },
-  { to: "/harness", label: "Harness", icon: PuzzleIcon },
-  // --- W0-A
-  { to: "/skills", label: "Skills", icon: SparklesIcon },
-  { to: "/plugins", label: "Plugins & MCP", icon: PlugIcon },
-  { to: "/jobs", label: "Jobs", icon: CalendarClockIcon },
-  { to: "/teams", label: "Teams", icon: UsersIcon },
-  // --- end W0-A
-  { to: "/usage", label: "Usage", icon: BarChart3Icon },
-  { to: "/audit", label: "Audit", icon: ScrollTextIcon },
-  { to: "/doctor", label: "Doctor", icon: ActivityIcon },
-  { to: "/settings", label: "Settings", icon: SettingsIcon },
-  { to: "/goals", label: "Goals", icon: TargetIcon }, // --- W0-C
-  { to: "/meetings", label: "Meetings", icon: MicIcon }, // --- F4
-  { to: "/webhooks", label: "Webhooks", icon: WebhookIcon }, // --- G5b
-  { to: "/platforms", label: "Messaging", icon: RadioTowerIcon }, // --- G5b
+export interface NavGroup {
+  readonly label: string;
+  readonly items: readonly NavItem[];
+}
+
+/** Sidebar groups (design canvas "Shared: grouped sidebar"); Settings sits in the footer. */
+export const NAV_GROUPS: readonly NavGroup[] = [
+  {
+    label: "Work",
+    items: [
+      { to: "/sessions", label: "Sessions", icon: MessagesSquareIcon },
+      { to: "/approvals", label: "Approvals", icon: ShieldCheckIcon, badge: "approvals" },
+      { to: "/memory", label: "Memory", icon: BrainIcon },
+      { to: "/goals", label: "Goals", icon: TargetIcon },
+      { to: "/meetings", label: "Meetings", icon: MicIcon },
+    ],
+  },
+  {
+    label: "Build",
+    items: [
+      { to: "/harness", label: "Harness", icon: PuzzleIcon },
+      { to: "/skills", label: "Skills", icon: SparklesIcon },
+      { to: "/plugins", label: "Plugins & MCP", icon: PlugIcon },
+      { to: "/teams", label: "Teams", icon: UsersIcon },
+    ],
+  },
+  {
+    label: "Automate",
+    items: [
+      { to: "/jobs", label: "Jobs", icon: CalendarClockIcon },
+      { to: "/webhooks", label: "Webhooks", icon: WebhookIcon },
+      { to: "/platforms", label: "Messaging", icon: RadioTowerIcon },
+    ],
+  },
+  {
+    label: "Observe",
+    items: [
+      { to: "/usage", label: "Usage", icon: BarChart3Icon },
+      { to: "/audit", label: "Audit log", icon: ScrollTextIcon },
+      { to: "/doctor", label: "Doctor", icon: ActivityIcon },
+    ],
+  },
 ];
+
+export const SETTINGS_NAV: NavItem = { to: "/settings", label: "Settings", icon: SettingsIcon };
+
+/** Flat list for the command palette. */
+export const NAV: readonly NavItem[] = [...NAV_GROUPS.flatMap((g) => g.items), SETTINGS_NAV];

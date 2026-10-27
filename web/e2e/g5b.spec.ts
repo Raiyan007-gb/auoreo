@@ -83,7 +83,7 @@ test("one shared EventSource per tab across pages; the thread still streams", as
   await page.goto(`/session/${s.id}`);
   await send(page, "hello shared stream");
   await expect(page.getByTestId("thread")).toContainText("hello shared stream");
-  await expect(page.locator('[data-testid="session-status"]')).toHaveText("idle", { timeout: 20_000 });
+  await expect(page.locator('[data-testid="session-status"]')).toHaveText("Idle", { timeout: 20_000 });
   // Client-side navigation to pages that follow the server channel reuses the same stream.
   await page.getByRole("link", { name: "Plugins & MCP" }).click();
   await page.getByRole("link", { name: "Jobs" }).click();

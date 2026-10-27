@@ -53,10 +53,10 @@ export function MemoryPage() {
   return (
     <div className="flex flex-col">
       <PageHeader title="Memory" description="Hybrid keyword + semantic recall over facts, documents and past messages." />
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-4 sm:px-8">
         <MemoryUsageGauge />
       </div>
-      <Tabs defaultValue="search" className="p-4">
+      <Tabs defaultValue="search" className="px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         <TabsList aria-label="Memory views">
           <TabsTrigger value="search">Search</TabsTrigger>
           <TabsTrigger value="facts">Facts</TabsTrigger>

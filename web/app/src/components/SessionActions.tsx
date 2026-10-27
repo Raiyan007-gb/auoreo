@@ -1,5 +1,5 @@
 import type { ExportFormat } from "@sdk/client";
-import { ArchiveIcon, ArchiveRestoreIcon, DownloadIcon, GitForkIcon, MinimizeIcon, Trash2Icon } from "lucide-react";
+import { ArchiveIcon, ArchiveRestoreIcon, FileDownIcon, FileJsonIcon, GitForkIcon, MinimizeIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ShareButton } from "@/components/ShareButton"; // --- I5
@@ -70,28 +70,35 @@ export function SessionActions({
 
   return (
     <div className="flex flex-wrap items-center gap-1" aria-label="Session actions">
+      <ShareButton sessionId={id} />
       <Tip label="Fork into a new session with the same messages">
-        <Button variant="outline" size="sm" onClick={() => void fork()} disabled={busy || running}>
-          <GitForkIcon aria-hidden /> Fork
+        <Button variant="outline" size="icon-sm" aria-label="Fork" onClick={() => void fork()} disabled={busy || running}>
+          <GitForkIcon aria-hidden />
         </Button>
       </Tip>
-      <Button variant="outline" size="sm" onClick={() => void compact()} disabled={busy || running}>
-        <MinimizeIcon aria-hidden /> Compact
-      </Button>
-      <ShareButton sessionId={id} />
-      <Button variant="outline" size="sm" onClick={() => void exportAs("md")} aria-label="Export as Markdown">
-        <DownloadIcon aria-hidden /> MD
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => void exportAs("json")} aria-label="Export as JSON">
-        <DownloadIcon aria-hidden /> JSON
-      </Button>
-      <Button variant="outline" size="sm" onClick={() => void toggleArchive()} disabled={busy}>
-        {archived ? <ArchiveRestoreIcon aria-hidden /> : <ArchiveIcon aria-hidden />}
-        {archived ? "Unarchive" : "Archive"}
-      </Button>
+      <Tip label="Compact: summarise older turns to free context">
+        <Button variant="outline" size="icon-sm" aria-label="Compact" onClick={() => void compact()} disabled={busy || running}>
+          <MinimizeIcon aria-hidden />
+        </Button>
+      </Tip>
+      <Tip label="Download as Markdown">
+        <Button variant="outline" size="icon-sm" onClick={() => void exportAs("md")} aria-label="Export as Markdown">
+          <FileDownIcon aria-hidden />
+        </Button>
+      </Tip>
+      <Tip label="Download as JSON">
+        <Button variant="outline" size="icon-sm" onClick={() => void exportAs("json")} aria-label="Export as JSON">
+          <FileJsonIcon aria-hidden />
+        </Button>
+      </Tip>
+      <Tip label={archived ? "Unarchive" : "Archive"}>
+        <Button variant="outline" size="icon-sm" aria-label={archived ? "Unarchive" : "Archive"} onClick={() => void toggleArchive()} disabled={busy}>
+          {archived ? <ArchiveRestoreIcon aria-hidden /> : <ArchiveIcon aria-hidden />}
+        </Button>
+      </Tip>
       <Tip label="Delete session">
         <Button
-          variant="ghost"
+          variant="destructive-outline"
           size="icon-sm"
           aria-label="Delete session"
           className="text-destructive hover:text-destructive"

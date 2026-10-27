@@ -155,7 +155,7 @@ export function PlatformsPage() {
         }
         actions={<RefreshButton onClick={plugins.reload} busy={plugins.loading} label="Refresh platforms" />}
       />
-      <div className="space-y-3 p-4">
+      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         <AsyncBody state={connectors} empty="No messaging plugins" emptyHint="Add plugins/<name>/plugin.yaml with provides: [connector] or [delivery].">
           {(rows) =>
             rows.map((p) => (

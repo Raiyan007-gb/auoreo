@@ -54,12 +54,16 @@ export function ApprovalCard({
       aria-label={`Permission request for ${request.tool}`}
       data-testid="approval-card"
       data-one-shot={request.one_shot === true}
-      className={cn("rounded-lg border border-warning/50 bg-warning/5", compact ? "p-2" : "p-3")}
+      className={cn(
+        "rounded-lg border",
+        request.one_shot || request.risk === "high" ? "border-warning-border bg-warning-surface" : "border-warning-border/70 bg-warning-surface",
+        compact ? "p-3" : "p-4",
+      )}
     >
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-2.5">
         <ShieldAlertIcon className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden />
         <div className="min-w-0 flex-1">
-          <p className="text-sm">
+          <p className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
             <span className="font-semibold">{request.tool}</span> wants{" "}
             <span className="font-mono text-xs">{request.permission}</span>
             {request.pattern && (
@@ -68,14 +72,15 @@ export function ApprovalCard({
                 on <code className="rounded bg-muted px-1 font-mono text-xs">{request.pattern}</code>
               </>
             )}
+            <RiskPill risk={request.risk} />
           </p>
           {request.justification && (
             <p className="mt-1 text-xs" data-testid="approval-justification">
-              <span className="font-medium">Why:</span> {request.justification}
+              <span className="text-muted-foreground">Agent’s reason:</span> {request.justification}
             </p>
           )}
           {request.detail && !editing && (
-            <pre className="mt-1 max-h-32 overflow-auto rounded-md bg-muted p-2 font-mono text-xs whitespace-pre-wrap">
+            <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-code px-3 py-2.5 font-mono text-[12.5px] whitespace-pre-wrap text-code-foreground">
               {request.detail}
             </pre>
           )}
@@ -111,30 +116,30 @@ export function ApprovalCard({
           </Button>
         </form>
       ) : (
-        <div className="mt-2 flex flex-wrap gap-2">
-          <Button size="sm" disabled={busy} onClick={() => void send("once")} autoFocus={!compact}>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Button disabled={busy} onClick={() => void send("once")} autoFocus={!compact}>
             <CheckIcon aria-hidden /> Approve once
           </Button>
           {matching > 1 && (
-            <Button size="sm" variant="secondary" disabled={busy} onClick={() => void send("once", true)} data-testid="approve-all">
+            <Button variant="secondary" disabled={busy} onClick={() => void send("once", true)} data-testid="approve-all">
               <CheckCheckIcon aria-hidden /> Approve all {matching}
             </Button>
           )}
           {request.one_shot ? (
             <span className="self-center text-xs text-muted-foreground" data-testid="one-shot-note">
-              One-time request — no “Always”
+              Sandbox escalations can only be approved one at a time
             </span>
           ) : (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => setConfirmAlways(true)}>
+            <Button variant="outline" disabled={busy} onClick={() => setConfirmAlways(true)}>
               <ShieldCheckIcon aria-hidden /> Always
             </Button>
           )}
           {request.editable && request.input && (
-            <Button size="sm" variant="outline" disabled={busy} onClick={() => setEditing(true)} data-testid="approval-edit">
+            <Button variant="outline" disabled={busy} onClick={() => setEditing(true)} data-testid="approval-edit">
               <PencilIcon aria-hidden /> Edit & approve
             </Button>
           )}
-          <Button size="sm" variant="outline" disabled={busy} onClick={() => setRejecting(true)}>
+          <Button variant="destructive-outline" className="sm:ml-auto" disabled={busy} onClick={() => setRejecting(true)}>
             <XIcon aria-hidden /> Reject
           </Button>
         </div>
@@ -168,4 +173,16 @@ export function ApprovalCard({
       </Dialog>
     </div>
   );
+}
+
+const RISK: Record<string, { label: string; cls: string }> = {
+  low: { label: "Low risk", cls: "bg-success-soft text-success-ink" },
+  medium: { label: "Medium risk", cls: "bg-warning-soft text-warning-ink" },
+  high: { label: "High risk", cls: "bg-destructive-soft text-destructive-ink" },
+};
+
+function RiskPill({ risk }: { risk?: string }) {
+  const r = risk ? RISK[risk] : undefined;
+  if (!r) return null;
+  return <span className={cn("ml-auto rounded-full px-2 py-px text-xs font-medium", r.cls)}>{r.label}</span>;
 }

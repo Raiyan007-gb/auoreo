@@ -1,18 +1,19 @@
 import type { SessionInfo } from "@sdk/client";
-import { ArchiveIcon, ArchiveRestoreIcon, GitForkIcon, ListPlusIcon, PlayIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import { ArchiveIcon, ArchiveRestoreIcon, GitForkIcon, ListPlusIcon, PlayIcon, PlusIcon, RefreshCwIcon, SearchIcon, Trash2Icon } from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input, Label, NativeSelect, Textarea } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tip } from "@/components/ui/tooltip";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
-import { STATUS_VARIANT } from "@/lib/status";
+import { StatusPill } from "@/components/StatusPill";
 import { errorText, relTime } from "@/lib/utils";
 
 function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -207,6 +208,10 @@ export function SessionsPage() {
   const [actionErr, setActionErr] = useState<string | null>(null);
   const [queueFor, setQueueFor] = useState<SessionInfo | null>(null); // --- I5
   const [queued, setQueued] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const counts = useMemo(() => countByStatus(rows ?? []), [rows]);
+  const shown = useMemo(() => filterRows(rows ?? [], query, status), [rows, query, status]);
 
   const act = async (fn: () => Promise<unknown>) => {
     setActionErr(null);
@@ -222,29 +227,54 @@ export function SessionsPage() {
     <div className="flex flex-col">
       <PageHeader
         title="Sessions"
-        description="Every conversation with an agent or workflow."
+        description="Every conversation with an agent, newest first. Sessions keep running when you close the tab."
         actions={
           <>
-            <Button
-              variant={showArchived ? "secondary" : "outline"}
-              size="sm"
-              aria-pressed={showArchived}
-              data-testid="archived-filter"
-              onClick={() => setParams(showArchived ? {} : { archived: "true" })}
-            >
-              <ArchiveIcon aria-hidden /> {showArchived ? "Showing archived" : "Show archived"}
-            </Button>
             <Button variant="outline" size="icon" aria-label="Refresh sessions" onClick={sessions.reload}>
               <RefreshCwIcon />
             </Button>
-            <Button onClick={() => setCreating(true)}>
+            <Button variant="brand" size="lg" onClick={() => setCreating(true)}>
               <PlusIcon aria-hidden /> New session
             </Button>
           </>
         }
       />
       <WelcomeBanner />
-      <div className="space-y-3 p-4">
+      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative min-w-60 max-w-105 flex-1">
+            <SearchIcon aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              aria-label="Search sessions"
+              placeholder="Search titles, projects and ids"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div role="group" aria-label="Filter by status" className="flex flex-wrap gap-1 rounded-[9px] bg-accent p-[3px]">
+            <FilterChip active={!showArchived && status === "all"} onClick={() => { setStatus("all"); if (showArchived) setParams({}); }}>
+              All <span className="text-muted-foreground">{showArchived ? "" : counts.all}</span>
+            </FilterChip>
+            <FilterChip active={!showArchived && status === "running"} onClick={() => { setStatus("running"); if (showArchived) setParams({}); }}>
+              Running <span className="text-muted-foreground">{counts.running}</span>
+            </FilterChip>
+            <FilterChip active={!showArchived && status === "blocked"} onClick={() => { setStatus("blocked"); if (showArchived) setParams({}); }}>
+              Needs you <span className={counts.blocked ? "font-semibold text-warning" : "text-muted-foreground"}>{counts.blocked}</span>
+            </FilterChip>
+            <FilterChip
+              active={showArchived}
+              data-testid="archived-filter"
+              onClick={() => {
+                setStatus("all");
+                setParams(showArchived ? {} : { archived: "true" });
+              }}
+            >
+              <ArchiveIcon aria-hidden className="size-3.5" /> Archived
+            </FilterChip>
+          </div>
+        </div>
         <ErrorNote error={sessions.error ?? actionErr} />
         {queued && (
           <p role="status" className="text-xs text-muted-foreground" data-testid="queue-notice">
@@ -253,35 +283,37 @@ export function SessionsPage() {
         )}
         {rows && rows.length === 0 ? (
           <EmptyState title="No sessions yet">Start one with “New session”.</EmptyState>
+        ) : rows && shown.length === 0 ? (
+          <EmptyState title="Nothing matches">Try another search or status.</EmptyState>
         ) : (
           <Table aria-label="Sessions">
             <TableHeader>
               <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Project</TableHead>
-                <TableHead>Agent</TableHead>
+                <TableHead>Session</TableHead>
+                <TableHead className="max-md:hidden">Project</TableHead>
+                <TableHead className="max-md:hidden">Agent</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Updated</TableHead>
+                <TableHead className="max-sm:hidden">Updated</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(rows ?? []).map((s) => (
+              {shown.map((s) => (
                 <TableRow key={s.id} data-testid="session-row" data-session-id={s.id} data-archived={isArchived(s.id)}>
                   <TableCell className="max-w-md">
                     <button
                       type="button"
-                      className="truncate text-left font-medium hover:underline"
+                      className="truncate text-left font-medium text-foreground hover:underline"
                       onClick={() => void navigate(`/session/${s.id}`)}
                     >
                       {s.title || "Untitled"}
                     </button>
                     <div className="font-mono text-[11px] text-muted-foreground">{s.id}</div>
                   </TableCell>
-                  <TableCell className="max-w-40 truncate">
+                  <TableCell className="max-w-40 truncate max-md:hidden">
                     <ProjectCell path={s.project} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="max-md:hidden">
                     <span className="font-mono text-xs">{s.agent}</span>
                     {s.workflow && s.workflow !== "chat" && (
                       <Badge variant="outline" className="ml-1">
@@ -290,14 +322,14 @@ export function SessionsPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_VARIANT[s.status] ?? "secondary"}>{s.status}</Badge>
+                    <StatusPill status={s.status} />
                     {isArchived(s.id) && (
                       <Badge variant="outline" className="ml-1">
                         archived
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground" title={s.updated_at}>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground max-sm:hidden" title={s.updated_at}>
                     {relTime(s.updated_at)}
                   </TableCell>
                   <TableCell>
@@ -362,5 +394,39 @@ export function SessionsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+type StatusFilter = "all" | "running" | "blocked";
+
+function countByStatus(rows: readonly SessionInfo[]) {
+  return {
+    all: rows.length,
+    running: rows.filter((r) => r.status === "running").length,
+    blocked: rows.filter((r) => r.status === "blocked").length,
+  };
+}
+
+function filterRows(rows: readonly SessionInfo[], query: string, status: StatusFilter): SessionInfo[] {
+  const q = query.trim().toLowerCase();
+  return rows.filter(
+    (r) =>
+      (status === "all" || r.status === status) &&
+      (!q || [r.title, r.id, r.project ?? "", r.agent].some((v) => v.toLowerCase().includes(q))),
+  );
+}
+
+function FilterChip({ active, className, ...props }: React.ComponentProps<"button"> & { active: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-[7px] px-3 text-[13px] text-secondary-foreground",
+        active && "bg-card font-medium text-foreground shadow-xs",
+        className,
+      )}
+      {...props}
+    />
   );
 }

@@ -24,12 +24,12 @@ const FLAG_LABELS: [keyof Flags, string][] = [
 
 function FlagToggles({ flags, onChange, prefix }: { flags: Flags; onChange: (f: Flags) => void; prefix: string }) {
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="flex flex-col gap-2">
       {FLAG_LABELS.map(([key, label]) => (
-        <label key={key} className="flex items-center gap-1.5 text-xs">
+        <label key={key} className="flex items-center gap-2 text-[13px]">
           <input
             type="checkbox"
-            className="size-4 accent-primary"
+            className="size-4 accent-brand"
             data-testid={`${prefix}-${key}`}
             checked={Boolean(flags[key])}
             onChange={(e) => onChange({ ...flags, [key]: e.target.checked })}
@@ -123,15 +123,13 @@ export function CustomVarsCard({ vars, onApplied, onError }: Props) {
     }
   };
   return (
-    <Card data-testid="custom-vars">
+    <Card data-testid="custom-vars" className="gap-3 px-4.5">
       <CardHeader>
-        <CardTitle>Custom variables</CardTitle>
+        <CardTitle className="text-sm">Add your own variable</CardTitle>
         <CardDescription>
-          Your own variables. Secret values are stored encrypted and never shown again. “Available to shell commands”
-          exports the variable to bash / exec / terminal tools (secret values are masked in their output); “Show to the
-          agent” lists the name in each turn’s context so the model knows <code className="font-mono">$NAME</code>{" "}
-          exists. Plain values also resolve as <code className="font-mono">{"{{var.NAME}}"}</code> in commands, jobs and
-          workflows.
+          Reaches tools and shell commands from the next tool call. Secrets are encrypted and never shown again (and
+          masked in tool output). Plain values also resolve as <code className="font-mono">{"{{var.NAME}}"}</code> in
+          commands, jobs and workflows.
         </CardDescription>
       </CardHeader>
       <form
@@ -141,7 +139,7 @@ export function CustomVarsCard({ vars, onApplied, onError }: Props) {
           void add();
         }}
       >
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2">
           <div className="grid gap-1">
             <Label htmlFor="custom-name">Name</Label>
             <Input
@@ -166,13 +164,13 @@ export function CustomVarsCard({ vars, onApplied, onError }: Props) {
         </div>
         <FlagToggles flags={flags} onChange={setFlags} prefix="custom-new" />
         <div>
-          <Button type="submit" size="sm" disabled={busy || !name || !value} data-testid="custom-add">
+          <Button type="submit" variant="brand" className="w-full" disabled={busy || !name || !value} data-testid="custom-add">
             Add variable
           </Button>
         </div>
       </form>
       {vars.length > 0 && (
-        <ul className="grid" data-testid="custom-list">
+        <ul className="grid border-t pt-1" data-testid="custom-list">
           {vars.map((v) => (
             <VarRow key={v.name} v={v} onApplied={onApplied} onError={onError} />
           ))}

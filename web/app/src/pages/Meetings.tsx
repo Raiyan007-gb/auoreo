@@ -209,7 +209,7 @@ export function MeetingsPage() {
         title="Meetings"
         description="Record or upload a meeting, get a speaker-labelled transcript, then summarise it."
       />
-      <div className="grid gap-4 p-4 md:grid-cols-[18rem_1fr]">
+      <div className="grid gap-4 px-4 pt-4 pb-10 sm:px-8 sm:pt-5 md:grid-cols-[18rem_1fr]">
         <aside className="space-y-3">
           <form
             className="flex gap-2"

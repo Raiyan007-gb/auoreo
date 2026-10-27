@@ -42,7 +42,7 @@ export function ToolCard({ tool, awaitingApproval }: { tool: ToolItem; awaitingA
     >
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/40"
+        className="flex w-full items-center gap-2 px-3.5 py-2 text-left hover:bg-muted/40"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((o) => !o)}

@@ -322,7 +322,7 @@ export function GoalsPage() {
         title="Goals"
         description="Long-running goals and consent-first suggestions from your agents."
       />
-      <div className="space-y-3 p-4">
+      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         {Boolean(err || goalsQ.error || suggestionsQ.error) && (
           <ErrorNote error={err ?? goalsQ.error ?? suggestionsQ.error} />
         )}

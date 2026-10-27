@@ -38,16 +38,16 @@ export function SettingsPage() {
 
   return (
     <div className="flex flex-col">
-      <PageHeader title="Settings" description="Models and providers, the environment, browser preferences and server status." />
+      <PageHeader title="Settings" description="Keys go to the encrypted secrets store and are never shown again. Changes reach running agents without a restart." />
       <Tabs
         value={tab}
         onValueChange={(v) => {
           setTab(v as Tab);
           history.replaceState(null, "", `#${v}`);
         }}
-        className="p-4"
+        className="gap-5 px-4 pt-4 pb-10 sm:px-8 sm:pt-5"
       >
-        <TabsList>
+        <TabsList variant="line" aria-label="Settings sections">
           <TabsTrigger value="models" data-testid="tab-models">
             Models
           </TabsTrigger>

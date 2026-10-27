@@ -8,18 +8,17 @@ import { BudgetCard, UsageCharts } from "@/components/UsageCharts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { NativeSelect } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
-import { fmtTokens, fmtUsd } from "@/lib/utils";
+import { cn, fmtTokens, fmtUsd } from "@/lib/utils";
 
 function Stat({ label, value, hint, testId }: { label: string; value: string; hint?: string; testId?: string }) {
   return (
-    <Card className="gap-1">
-      <CardHeader>
+    <Card className="min-w-0 flex-[1_1_180px] gap-0.5 px-4 py-3.5">
+      <CardHeader className="gap-0.5">
         <CardDescription>{label}</CardDescription>
-        <CardTitle className="text-2xl tabular-nums" data-testid={testId}>
+        <CardTitle className="text-2xl font-semibold tracking-tight tabular-nums" data-testid={testId}>
           {value}
         </CardTitle>
       </CardHeader>
@@ -147,6 +146,13 @@ function PolicyCard() {
 }
 
 /** `GET /api/usage/summary?days=` — totals, per model and per session. */
+const RANGES: readonly (readonly [number, string])[] = [
+  [1, "Today"],
+  [7, "7 days"],
+  [30, "30 days"],
+  [365, "Year"],
+];
+
 export function UsagePage() {
   const [days, setDays] = useState(7);
   const summary = useAsync(() => api.usageSummary(days), [days]);
@@ -164,15 +170,25 @@ export function UsagePage() {
     <div className="flex flex-col">
       <PageHeader
         title="Usage"
-        description="Tokens and cost from the usage ledger."
+        description="What your agents spent, by day, model and session. Costs use the provider’s list prices."
         actions={
           <>
-            <NativeSelect aria-label="Time range" value={days} onChange={(e) => setDays(Number(e.target.value))} className="w-36">
-              <option value={1}>Last 24 hours</option>
-              <option value={7}>Last 7 days</option>
-              <option value={30}>Last 30 days</option>
-              <option value={365}>Last year</option>
-            </NativeSelect>
+            <div role="group" aria-label="Time range" className="flex gap-1 rounded-[9px] bg-accent p-[3px]">
+              {RANGES.map(([d, label]) => (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={days === d}
+                  onClick={() => setDays(d)}
+                  className={cn(
+                    "h-7.5 rounded-[7px] px-3 text-[13px] text-secondary-foreground",
+                    days === d && "bg-card font-medium text-foreground shadow-xs",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <Button
               variant="outline"
               size="icon"
@@ -187,11 +203,11 @@ export function UsagePage() {
           </>
         }
       />
-      <div className="space-y-4 p-4">
+      <div className="space-y-4 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         <ErrorNote error={summary.error} />
         {s && (
           <>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="flex flex-wrap gap-3.5">
               <Stat
                 label="Total tokens"
                 testId="usage-total-tokens"
@@ -199,7 +215,8 @@ export function UsagePage() {
                 hint={`${s.total.prompt_tokens.toLocaleString()} prompt + ${s.total.completion_tokens.toLocaleString()} completion`}
               />
               <Stat label="Cost" testId="usage-total-cost" value={fmtUsd(s.total.cost_usd)} />
-              <Stat label="Calls" testId="usage-total-calls" value={s.total.calls.toLocaleString()} />
+              <Stat label="Model calls" testId="usage-total-calls" value={s.total.calls.toLocaleString()} hint={`across ${s.by_session.length} session${s.by_session.length === 1 ? "" : "s"}`} />
+              <Stat label="Average call" value={s.total.calls ? fmtUsd(s.total.cost_usd / s.total.calls) : "—"} hint="cost per model call" />
             </div>
             {series.data && (
               <div className="grid gap-3 xl:grid-cols-[2fr_1fr]">
@@ -208,7 +225,7 @@ export function UsagePage() {
               </div>
             )}
             <section className="space-y-2">
-              <h2 className="text-sm font-medium">By model</h2>
+              <h2 className="text-[15px] font-semibold">By model</h2>
               {s.by_model.length === 0 ? (
                 <EmptyState title="No usage in this range">Run a turn and it shows up here.</EmptyState>
               ) : (
@@ -217,7 +234,7 @@ export function UsagePage() {
             </section>
             {s.by_session.length > 0 && (
               <section className="space-y-2">
-                <h2 className="text-sm font-medium">By session</h2>
+                <h2 className="text-[15px] font-semibold">By session</h2>
                 <TotalsTable
                   label="Session"
                   rows={s.by_session}

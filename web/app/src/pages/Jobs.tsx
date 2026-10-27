@@ -229,7 +229,7 @@ export function JobsPage() {
   return (
     <div className="flex flex-col">
       <PageHeader title="Jobs" description="Scheduled jobs, webhook routes and the deliveries outbox." />
-      <div className="p-4">
+      <div className="px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         <Tabs value={tab} onValueChange={(v) => setParams(v === "cron" ? {} : { tab: v }, { replace: true })}>
           <TabsList aria-label="Jobs sections">
             <TabsTrigger value="cron">Cron</TabsTrigger>

@@ -125,7 +125,7 @@ export function ApprovalsPage() {
         title="Approvals"
         description={
           <>
-            Tool calls waiting for a human decision, across all sessions.{" "}
+            Agents pause here before risky actions. Nothing runs until you decide.{" "}
             <span data-testid="approvals-live">{wsUp ? "Live over WebSocket." : "Polling every 3s (WebSocket down)."}</span>
           </>
         }
@@ -135,51 +135,78 @@ export function ApprovalsPage() {
           </Button>
         }
       />
-      <div className="space-y-4 p-4">
-        <ErrorNote error={error} />
-        {groups.bySession.length === 0 && <EmptyState title="Nothing to approve">New requests show up here as they arrive.</EmptyState>}
-        {groups.bySession.map(([sid, items]) => (
-          <section key={sid} aria-labelledby={`grp-${sid}`} className="space-y-2" data-testid="approval-group">
-            <h2 id={`grp-${sid}`} className="flex items-center gap-2 text-sm font-medium">
-              <Link to={`/session/${sid}`} className="hover:underline">
-                {sessions[sid]?.title || "Untitled session"}
-              </Link>
-              <span className="font-mono text-xs text-muted-foreground">{sid}</span>
-              <Badge variant="warning">{items.length}</Badge>
-            </h2>
-            {items.map((p) => (
-              <ApprovalCard
-                key={p.request_id}
-                compact
-                request={p}
-                matching={groups.matching.get(groupKey(p)) ?? 1}
-                onDone={() => markAnswered(p.request_id)}
-              />
-            ))}
-          </section>
-        ))}
-        {decisions.length > 0 && (
-          <section aria-labelledby="recent-decisions" className="space-y-1" data-testid="recent-decisions">
-            <h2 id="recent-decisions" className="text-sm font-medium">
-              Recent decisions
-            </h2>
-            <ul className="space-y-1 text-xs">
+      <div className="flex flex-wrap items-start gap-6 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+        <section aria-labelledby="waiting" className="flex min-w-0 flex-[999_1_520px] flex-col gap-3.5">
+          <h2 id="waiting" className="flex items-center gap-2.5 text-[15px] font-semibold">
+            Waiting for you
+            {groups.all.length > 0 && (
+              <span className="rounded-full bg-warning px-2 text-xs leading-5 font-semibold text-card">{groups.all.length}</span>
+            )}
+          </h2>
+          <ErrorNote error={error} />
+          {groups.bySession.length === 0 && <EmptyState title="Nothing to approve">New requests show up here as they arrive.</EmptyState>}
+          {groups.bySession.map(([sid, items]) => (
+            <section
+              key={sid}
+              aria-labelledby={`grp-${sid}`}
+              className="overflow-hidden rounded-lg border bg-card"
+              data-testid="approval-group"
+            >
+              <h3 id={`grp-${sid}`} className="flex flex-wrap items-center gap-2 border-b border-border-subtle bg-muted/40 px-4 py-2.5 text-sm font-medium">
+                <Link to={`/session/${sid}`} className="text-brand-ink hover:underline">
+                  {sessions[sid]?.title || "Untitled session"}
+                </Link>
+                <span className="font-mono text-xs text-muted-foreground">{sid}</span>
+                <Badge variant="warning" className="ml-auto">{items.length} waiting</Badge>
+              </h3>
+              <div className="flex flex-col gap-3 p-3">
+                {items.map((p) => (
+                  <ApprovalCard
+                    key={p.request_id}
+                    compact
+                    request={p}
+                    matching={groups.matching.get(groupKey(p)) ?? 1}
+                    onDone={() => markAnswered(p.request_id)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </section>
+        <aside aria-labelledby="recent-decisions" className="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5" data-testid="recent-decisions">
+          <h2 id="recent-decisions" className="text-[15px] font-semibold">
+            Recent decisions
+          </h2>
+          {decisions.length === 0 ? (
+            <p className="rounded-lg border bg-card px-4 py-3 text-sm text-muted-foreground">Decisions you make while this page is open appear here.</p>
+          ) : (
+            <ul className="rounded-lg border bg-card">
               {decisions.map((d) => (
-                <li key={d.request_id} className="flex flex-wrap items-center gap-2" data-testid="decision-row">
-                  <Badge variant={d.reply === "reject" ? "destructive" : "success"}>{d.reply}</Badge>
-                  {d.cascade && <Badge variant="outline">bulk</Badge>}
-                  <span className="font-mono">{d.tool || d.request_id.slice(0, 8)}</span>
-                  <Link to={`/session/${d.session_id}`} className="text-muted-foreground hover:underline">
-                    {sessions[d.session_id]?.title || d.session_id}
-                  </Link>
-                  <Link to={auditHref(d.session_id)} className="inline-flex items-center gap-1 text-info hover:underline" data-testid="audit-link">
-                    <ScrollTextIcon aria-hidden className="size-3" /> audit
+                <li key={d.request_id} className="flex items-start gap-3 border-b border-border-subtle px-3.5 py-3 last:border-0" data-testid="decision-row">
+                  <Badge variant={d.reply === "reject" ? "destructive" : d.reply === "always" ? "brand" : "success"} className="min-w-18 justify-center">
+                    {d.reply}
+                  </Badge>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="truncate font-mono text-xs">
+                      {d.tool || d.request_id.slice(0, 8)}
+                      {d.cascade && <span className="ml-1.5 font-sans text-muted-foreground">(bulk)</span>}
+                    </span>
+                    <Link to={`/session/${d.session_id}`} className="truncate text-xs text-muted-foreground hover:underline">
+                      {sessions[d.session_id]?.title || d.session_id}
+                    </Link>
+                  </div>
+                  <Link to={auditHref(d.session_id)} className="inline-flex items-center gap-1 text-xs whitespace-nowrap text-brand-ink hover:underline" data-testid="audit-link">
+                    <ScrollTextIcon aria-hidden className="size-3" /> Audit
                   </Link>
                 </li>
               ))}
             </ul>
-          </section>
-        )}
+          )}
+          <p className="text-xs text-muted-foreground">
+            “Always” rules live in your permissions files; every decision is kept in the{" "}
+            <Link to="/audit?action=permission.reply" className="text-brand-ink hover:underline">audit log</Link>.
+          </p>
+        </aside>
       </div>
     </div>
   );

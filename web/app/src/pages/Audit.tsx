@@ -115,7 +115,7 @@ export function AuditPage() {
           </>
         }
       />
-      <div className="space-y-3 p-4">
+      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         <form
           className="flex flex-wrap items-end gap-2"
           aria-label="Filter audit log"

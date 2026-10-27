@@ -126,14 +126,14 @@ export function ModelPicker({
       {models.data?.error && models.data.status !== "ok" && (
         <p className="text-xs text-destructive">Last refresh failed: {models.data.error}</p>
       )}
-      <ul className="grid max-h-96 overflow-auto rounded-md border" data-testid="model-list">
+      <ul className="grid max-h-120 overflow-auto rounded-lg border" data-testid="model-list">
         {shown.map((m) => (
-          <li key={m.model_id} className="flex flex-wrap items-center gap-2 border-b px-2 py-1.5 text-sm last:border-0" data-testid={`model-row-${m.model_id}`}>
-            <code className="font-mono text-xs">{m.model_id}</code>
+          <li key={m.model_id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border-subtle px-4 py-2.5 text-sm last:border-0 hover:bg-muted/40" data-testid={`model-row-${m.model_id}`}>
+            <code className="font-mono text-[13px] font-medium">{m.model_id}</code>
             {m.name !== m.model_id && <span className="text-muted-foreground">{m.name}</span>}
             <Badge variant={m.kind === "chat" ? "info" : m.kind === "embedding" ? "success" : "outline"}>{m.kind}</Badge>
-            {ctx(m.context_window) && <span className="text-xs text-muted-foreground">{ctx(m.context_window)}</span>}
-            {price(m) && <span className="text-xs text-muted-foreground">{price(m)}</span>}
+            {ctx(m.context_window) && <span className="text-xs tabular-nums text-muted-foreground">{ctx(m.context_window)} context</span>}
+            {price(m) && <span className="text-xs tabular-nums text-muted-foreground">{price(m)}</span>}
             <span className="ml-auto flex gap-1">
               {ROLES.filter((r) => roles.includes(r.role) && r.kinds.includes(m.kind)).map((r) => (
                 <Button
@@ -150,7 +150,7 @@ export function ModelPicker({
             </span>
           </li>
         ))}
-        {shown.length === 0 && <li className="px-2 py-3 text-sm text-muted-foreground">No models match.</li>}
+        {shown.length === 0 && <li className="px-4 py-4 text-sm text-muted-foreground">No models match.</li>}
       </ul>
     </div>
   );

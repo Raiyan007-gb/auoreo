@@ -2,19 +2,19 @@ import type { EnvApplied, EnvEntry } from "@sdk/env";
 import type { BadgeVariant } from "@/components/ui/badge";
 
 export const SOURCE_LABEL: Record<EnvEntry["source"], string> = {
-  env: "environment",
-  db: "database",
-  secrets: "secrets.db",
-  override: "startup flag",
-  default: "default",
+  env: "Server environment",
+  db: "Saved here",
+  secrets: "Secrets store",
+  override: "Startup flag",
+  default: "Default",
 };
 
 export const SOURCE_VARIANT: Record<EnvEntry["source"], BadgeVariant> = {
-  env: "warning",
-  db: "info",
-  secrets: "success",
+  env: "info",
+  db: "brand",
+  secrets: "brand",
   override: "warning",
-  default: "outline",
+  default: "secondary",
 };
 
 /** Text shown in an input for a current value (JSON for objects/arrays). */

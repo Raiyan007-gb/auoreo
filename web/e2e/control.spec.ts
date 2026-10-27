@@ -69,7 +69,7 @@ test("interrupt over the WebSocket cancels a pending bash call", async ({ page, 
   await expect(page.getByTestId("thread-notice").filter({ hasText: "Run interrupted" })).toBeVisible();
   await expect(page.getByTestId("approval-card")).toHaveCount(0); // the cancelled call's prompt is gone
   await expect(page.locator('[data-testid="tool-card"][data-tool="bash"]')).toHaveAttribute("data-status", "error");
-  await expect(page.getByTestId("session-status")).toHaveText("idle");
+  await expect(page.getByTestId("session-status")).toHaveText("Idle");
   await expect(page.getByText("Interrupt sent (ws)")).toBeVisible();
   const req = frames.sent.find((f) => f.type === "control_request");
   expect(req).toMatchObject({ request: { kind: "interrupt", session_id: s.id } });

@@ -23,10 +23,10 @@ export function ThinkingBlock({ text, streaming }: { text: string; streaming: bo
   const [open, setOpen] = useState<boolean | null>(null);
   const expanded = open ?? streaming;
   return (
-    <div className="max-w-[90%] rounded-md border border-dashed bg-muted/40 text-xs" data-testid="thinking-block" data-streaming={streaming}>
+    <div className="max-w-[90%] rounded-lg border border-dashed bg-muted/40 text-xs" data-testid="thinking-block" data-streaming={streaming}>
       <button
         type="button"
-        className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-muted-foreground"
+        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-muted-foreground"
         aria-expanded={expanded}
         onClick={() => setOpen(!expanded)}
       >

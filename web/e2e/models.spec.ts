@@ -54,7 +54,7 @@ test("ambiguous keys ask for the provider", async ({ page }) => {
 test("connect → list models → use as main → the next turn uses it → remove", async ({ page, request }) => {
   await openModels(page);
   await page.getByTestId("provider-key").fill(GOOD);
-  await expect(page.getByTestId("provider-detected")).toContainText("Looks like OpenAI");
+  await expect(page.getByTestId("provider-detected")).toContainText("Detected: OpenAI");
   await page.getByTestId("provider-connect").click();
   await expect(page.getByTestId("models-toast")).toContainText("OpenAI connected — 3 models");
   await expect(page.getByTestId("provider-status-openai")).toHaveAttribute("data-status", "ok");
@@ -83,7 +83,7 @@ test("connect → list models → use as main → the next turn uses it → remo
   // the Environment tab shows the DB as the source and links back here
   await page.goto("/settings#environment");
   await page.getByTestId("env-search").fill("AUOREO_MODEL");
-  await expect(page.getByTestId("env-source-AUOREO_MODEL")).toHaveText("database");
+  await expect(page.getByTestId("env-source-AUOREO_MODEL")).toHaveText("Saved here");
   await page.getByTestId("env-models-link-AUOREO_MODEL").click();
   await expect(page.getByTestId("models-panel")).toBeVisible();
 

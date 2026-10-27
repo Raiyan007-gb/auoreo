@@ -31,7 +31,7 @@ test("a live setting applies without a restart (teleop flag → /api/rtc/capabil
   await toggle.click();
   await expect(page.getByTestId("env-toast")).toContainText("Applied");
   await expect(toggle).toHaveAttribute("aria-checked", "true");
-  await expect(page.getByTestId("env-source-AUOREO_TELEOP_INPUT_ENABLED")).toHaveText("database");
+  await expect(page.getByTestId("env-source-AUOREO_TELEOP_INPUT_ENABLED")).toHaveText("Saved here");
   expect(await caps()).toBe(true);
   await shot(page, "env-live-setting");
   await page.getByTestId("env-reset-AUOREO_TELEOP_INPUT_ENABLED").click();

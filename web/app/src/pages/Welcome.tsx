@@ -226,56 +226,108 @@ export function WelcomePage() {
   return (
     <div className="flex flex-col">
       <PageHeader
-        title="Welcome to auoreo"
-        description="A short, skippable setup. Progress is saved in this browser so you can come back later."
+        title="Let’s get your first agent running"
+        description="A few minutes, every step skippable. Progress is saved in this browser so you can come back later."
         actions={
           <Button variant="ghost" size="sm" onClick={skipAll}>
             <SkipForwardIcon aria-hidden /> Skip setup
           </Button>
         }
       />
-      <div className="grid max-w-3xl gap-4 p-4">
+      <div className="flex max-w-6xl flex-col gap-6 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         <ErrorNote error={doctor.error} />
-        <ol className="flex flex-wrap gap-1" aria-label="Setup steps">
-          {STEPS.map((s, i) => (
-            <li key={s}>
-              <button
-                type="button"
-                onClick={() => update({ ...p, step: i })}
-                aria-current={i === p.step ? "step" : undefined}
-                className={cn(
-                  "flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs",
-                  i === p.step ? "border-foreground font-medium" : "text-muted-foreground",
-                )}
-              >
-                {p.done.includes(s) ? <CheckIcon className="size-3 text-success" aria-label="done" /> : <span className="tabular-nums">{i + 1}.</span>}
-                {TITLES[s]}
-                {p.skipped.includes(s) && !p.done.includes(s) && <span className="sr-only">(skipped)</span>}
-              </button>
-            </li>
-          ))}
+        <ol className="flex flex-wrap gap-2" aria-label="Setup steps">
+          {STEPS.map((s, i) => {
+            const done = p.done.includes(s);
+            const current = i === p.step;
+            return (
+              <li key={s} className="min-w-36 flex-[1_1_140px]">
+                <button
+                  type="button"
+                  onClick={() => update({ ...p, step: i })}
+                  aria-current={current ? "step" : undefined}
+                  className={cn(
+                    "flex h-full w-full items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-left text-[13px] leading-tight",
+                    current && "border-brand bg-card font-semibold ring-1 ring-brand",
+                    !current && done && "border-transparent bg-success-soft font-medium text-success-ink",
+                    !current && !done && "bg-card text-muted-foreground",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "inline-flex size-5.5 shrink-0 items-center justify-center rounded-full text-xs",
+                      current ? "bg-brand text-brand-foreground" : done ? "bg-success text-card" : "bg-muted",
+                    )}
+                  >
+                    {done && !current ? <CheckIcon className="size-3" /> : i + 1}
+                  </span>
+                  {TITLES[s]}
+                  {done && <span className="sr-only">(done)</span>}
+                  {p.skipped.includes(s) && !done && <span className="sr-only">(skipped)</span>}
+                </button>
+              </li>
+            );
+          })}
         </ol>
-        <Card data-testid="welcome-step" data-step={id}>
-          <CardHeader>
-            <CardTitle>
-              Step {p.step + 1} of {STEPS.length}: {TITLES[id]}
-            </CardTitle>
-            {id === "credentials" && <CardDescription>Paste an API key: the provider is detected from it.</CardDescription>}
-          </CardHeader>
-          {body[id]}
-          <div className="flex flex-wrap gap-2 border-t pt-3">
-            <Button variant="outline" size="sm" disabled={p.step === 0} onClick={() => update({ ...p, step: p.step - 1 })}>
-              <ChevronLeftIcon aria-hidden /> Back
-            </Button>
-            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => advance("skipped")}>
-              Skip step
-            </Button>
-            <Button size="sm" onClick={() => advance("done")}>
-              {p.step === STEPS.length - 1 ? "Finish" : "Next"} <ChevronRightIcon aria-hidden />
-            </Button>
-          </div>
-        </Card>
+        <div className="flex flex-wrap items-start gap-5">
+          <Card data-testid="welcome-step" data-step={id} className="min-w-0 flex-[999_1_460px] gap-4 rounded-xl px-6 py-5.5">
+            <CardHeader>
+              <CardTitle className="text-[17px]">
+                <span className="sr-only">
+                  Step {p.step + 1} of {STEPS.length}:{" "}
+                </span>
+                {TITLES[id]}
+              </CardTitle>
+              {id === "credentials" && <CardDescription className="text-[13px]">Paste an API key: the provider is detected from it.</CardDescription>}
+            </CardHeader>
+            {body[id]}
+            <div className="flex flex-wrap gap-2 border-t border-border-subtle pt-4">
+              <Button variant="outline" disabled={p.step === 0} onClick={() => update({ ...p, step: p.step - 1 })}>
+                <ChevronLeftIcon aria-hidden /> Back
+              </Button>
+              <Button variant="ghost" className="ml-auto" onClick={() => advance("skipped")}>
+                Skip step
+              </Button>
+              <Button variant="brand" onClick={() => advance("done")}>
+                {p.step === STEPS.length - 1 ? "Finish" : "Next"} <ChevronRightIcon aria-hidden />
+              </Button>
+            </div>
+          </Card>
+          {id !== "doctor" && <SystemCheck report={doctor.data} />}
+        </div>
       </div>
     </div>
+  );
+}
+
+const DOT: Record<string, string> = { ok: "bg-success", warn: "bg-warning", error: "bg-destructive" };
+
+/** Side panel: the doctor's problems at a glance while the other steps run. */
+function SystemCheck({ report }: { report: DoctorReport | undefined }) {
+  const rows = report ? [...report.checks].sort((a, b) => (a.level === "ok" ? 1 : 0) - (b.level === "ok" ? 1 : 0)).slice(0, 6) : [];
+  return (
+    <aside aria-labelledby="sys-check" className="flex min-w-0 flex-[1_1_280px] flex-col gap-2.5 rounded-xl border bg-card px-5 py-4.5">
+      <h2 id="sys-check" className="text-sm font-semibold">
+        System check
+      </h2>
+      {!report && <p className="text-sm text-muted-foreground">Running checks…</p>}
+      <ul className="flex flex-col gap-2">
+        {rows.map((c, i) => (
+          <li key={`${c.check}-${i}`} className="flex items-start gap-2.5 text-[13px]">
+            <span aria-hidden className={cn("mt-1.5 size-2 shrink-0 rounded-full", DOT[c.level] ?? "bg-muted-foreground")} />
+            <span className="min-w-0 flex-1">
+              <span className="font-medium">{c.check}</span>
+              <span className="sr-only"> ({c.level})</span>
+              <br />
+              <span className="text-xs text-muted-foreground">{c.level === "ok" ? c.detail : c.remedy || c.detail}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <Link to="/doctor" className="text-xs text-brand-ink hover:underline">
+        Open the full report
+      </Link>
+    </aside>
   );
 }

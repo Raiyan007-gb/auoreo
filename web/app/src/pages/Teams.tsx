@@ -190,7 +190,7 @@ export function TeamsPage() {
         title="Teams"
         description="Agent teams (members, liveness, mailbox), the kanban board, and each team's blackboard."
       />
-      <div className="p-4">
+      <div className="px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         <Tabs value={tab} onValueChange={(v) => setParams(v === "teams" ? {} : { tab: v }, { replace: true })}>
           <TabsList aria-label="Teams sections">
             <TabsTrigger value="teams">Teams</TabsTrigger>

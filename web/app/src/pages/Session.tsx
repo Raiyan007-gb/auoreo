@@ -9,6 +9,9 @@ import { ErrorNote } from "@/components/AppShell";
 import { PlanPanel } from "@/components/PlanPanel";
 import { PolicyChip } from "@/components/PolicyChip";
 import { SessionActions } from "@/components/SessionActions";
+import { SessionRail } from "@/components/SessionRail";
+import { StatusPill } from "@/components/StatusPill";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { SkillMention } from "@/components/SkillMention";
 import { ThinkingToggle } from "@/components/ThinkingBlock";
 import { ElicitationCard } from "@/components/ElicitationCard"; // --- I5
@@ -24,7 +27,6 @@ import { useThread } from "@/hooks/useThread";
 import { api } from "@/lib/api";
 import { useControl } from "@/lib/controlContext";
 import { compactSession, type OpNotice, RUN_COMPACT_EVENT } from "@/lib/sessionOps";
-import { STATUS_VARIANT } from "@/lib/status";
 import { useShowThinking } from "@/lib/thinking";
 import { cn, errorText } from "@/lib/utils";
 
@@ -51,6 +53,7 @@ function SessionPage({ id }: { id: string }) {
   const [atEnd, setAtEnd] = useState(true);
   const [callOpen, setCallOpen] = useState(false); // --- G5b
   const [showThinking, setShowThinking] = useShowThinking(); // --- G7: per-user thinking toggle
+  const wide = useMediaQuery("(min-width: 80rem)"); // xl: the plan moves to the right rail
 
   const items = showThinking ? t.items : t.items.filter((it) => it.kind !== "reasoning");
   const pendingPerms = Object.values(t.state.permissions);
@@ -135,18 +138,13 @@ function SessionPage({ id }: { id: string }) {
       setNotice(`Interrupt sent (${via})`);
     });
 
+  const planPanel = <PlanPanel sessionId={id} plan={t.state.plan} planMode={t.state.planMode} />;
+
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-base font-semibold" data-testid="session-title">
-            {title || "Untitled session"}
-            {archived && (
-              <Badge variant="outline" className="ml-2 align-middle" data-testid="archived-badge">
-                archived
-              </Badge>
-            )}
-          </h1>
+    <div className="flex h-full">
+    <div className="flex min-w-0 flex-1 flex-col">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-4 py-3 sm:px-5">
+        <div className="min-w-0 flex-[1_1_240px]">
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             <Link to="/sessions" className="text-muted-foreground hover:underline">
               Sessions
@@ -154,20 +152,30 @@ function SessionPage({ id }: { id: string }) {
             <span className="text-muted-foreground">/</span>
             <span className="font-mono text-muted-foreground">{id}</span>
           </div>
+          <h1 className="truncate text-lg font-semibold tracking-tight" data-testid="session-title">
+            {title || "Untitled session"}
+            {archived && (
+              <Badge variant="outline" className="ml-2 align-middle" data-testid="archived-badge">
+                archived
+              </Badge>
+            )}
+          </h1>
         </div>
         <div className="flex flex-wrap items-center gap-1.5" aria-label="Session details">
-          <Badge variant="outline" title="Agent">
+          <StatusPill
+            data-testid="session-status"
+            status={running ? "running" : (t.session?.status ?? "idle")}
+            label={running ? "Running" : t.session ? undefined : "…"}
+          />
+          <Badge variant="outline" title="Agent" className="bg-card">
             {t.state.agent ?? t.session?.agent ?? "…"}
           </Badge>
           {(t.state.model ?? t.session?.model) && (
-            <Badge variant="outline" title="Model" className="font-mono">
+            <Badge variant="outline" title="Model" className="max-w-72 truncate bg-card font-mono font-normal">
               {t.state.model ?? t.session?.model}
             </Badge>
           )}
           <PolicyChip choice={t.state.policy} />
-          <Badge variant={running ? "info" : (STATUS_VARIANT[t.session?.status ?? ""] ?? "secondary")} data-testid="session-status">
-            {running ? "running" : (t.session?.status ?? "…")}
-          </Badge>
           <TokenBadge sessionId={id} usage={t.state.usage} running={running} />
           <ContextGauge sessionId={id} refreshKey={`${running}:${t.state.usage.prompt}:${items.length}`} />
           {!t.streamOk && <Badge variant="warning">stream reconnecting</Badge>}
@@ -200,7 +208,7 @@ function SessionPage({ id }: { id: string }) {
       <div className="relative min-h-0 flex-1">
         <div
           ref={scrollRef}
-          className="h-full overflow-y-auto px-4"
+          className="h-full overflow-y-auto px-4 sm:px-6"
           role="log"
           aria-label="Conversation"
           aria-live="polite"
@@ -221,7 +229,7 @@ function SessionPage({ id }: { id: string }) {
                   key={v.key}
                   data-index={v.index}
                   ref={virtualizer.measureElement}
-                  className="absolute left-0 w-full py-1.5"
+                  className="absolute left-0 w-full py-2"
                   style={{ transform: `translateY(${v.start}px)` }}
                 >
                   <ThreadItem item={item} awaiting={item.kind === "tool" && item.status === "running" && waitingTools.has(item.name)} />
@@ -242,10 +250,10 @@ function SessionPage({ id }: { id: string }) {
         )}
       </div>
 
-      <footer className="space-y-2 border-t px-4 py-3">
-        <div className="mx-auto w-full max-w-4xl space-y-2">
+      <footer className="px-4 pt-2 pb-4 sm:px-6">
+        <div className="mx-auto w-full max-w-4xl space-y-2.5">
           <ErrorNote error={t.error ?? err} />
-          <PlanPanel sessionId={id} plan={t.state.plan} planMode={t.state.planMode} />
+          {!wide && planPanel}
           {pendingPerms.map((p) => (
             <ApprovalCard key={p.request_id} request={p} onDone={() => t.dismissPermission(p.request_id)} />
           ))}
@@ -258,7 +266,7 @@ function SessionPage({ id }: { id: string }) {
               inputRef.current?.focus();
             }} />
           <form
-            className="flex items-end gap-2"
+            className="flex items-end gap-2 rounded-xl border bg-card p-2 shadow-xs focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/15"
             onSubmit={(e) => {
               e.preventDefault();
               void send();
@@ -269,7 +277,8 @@ function SessionPage({ id }: { id: string }) {
               aria-label="Message"
               data-testid="composer"
               rows={2}
-              placeholder={running ? "Queue a follow-up, or steer the running turn…" : "Message the agent — Enter to send, Shift+Enter for a newline"}
+              className="border-0 bg-transparent shadow-none focus-visible:ring-0 dark:bg-transparent"
+              placeholder={running ? "Queue a follow-up, or steer the running turn…" : "Message the agent (Enter sends, Shift+Enter adds a line)"}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
@@ -279,11 +288,11 @@ function SessionPage({ id }: { id: string }) {
                 }
               }}
             />
-            <div className="flex flex-col gap-1">
-              <Button type="submit" disabled={busy || !text.trim()} aria-label="Send message">
+            <div className="flex shrink-0 items-center gap-1">
+              <VoiceButton sessionId={id} items={items} />
+              <Button type="submit" variant="brand" disabled={busy || !text.trim()} aria-label="Send message">
                 <SendIcon aria-hidden /> Send
               </Button>
-              <VoiceButton sessionId={id} items={items} />
               {running && (
                 <div className="flex gap-1">
                   <Tip label="Steer the running turn with this text">
@@ -308,7 +317,7 @@ function SessionPage({ id }: { id: string }) {
               className={cn(
                 "text-xs",
                 notice.level === "info" && "text-muted-foreground",
-                notice.level === "warn" && "text-warning",
+                notice.level === "warn" && "text-warning-ink",
                 notice.level === "error" && "text-destructive",
               )}
             >
@@ -317,6 +326,8 @@ function SessionPage({ id }: { id: string }) {
           )}
         </div>
       </footer>
+    </div>
+    <SessionRail session={t.session} plan={wide ? planPanel : null} />
     </div>
   );
 }

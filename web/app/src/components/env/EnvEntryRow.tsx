@@ -22,11 +22,11 @@ function Badges({ entry }: { entry: EnvEntry }) {
         {SOURCE_LABEL[entry.source]}
       </Badge>
       {!entry.live && (
-        <Badge variant="outline" title={entry.restart_reason ?? undefined}>
-          restart required
+        <Badge variant="warning" title={entry.restart_reason ?? undefined}>
+          Needs restart
         </Badge>
       )}
-      {entry.pending_restart && <Badge variant="warning">pending restart</Badge>}
+      {entry.pending_restart && <Badge variant="destructive">Waiting for restart</Badge>}
     </span>
   );
 }
@@ -35,7 +35,7 @@ function ReadOnly({ entry }: { entry: EnvEntry }) {
   const shown = entry.kind === "secret" ? (entry.is_set ? "•••••• (set)" : "not set") : draftOf(entry) || "(unset)";
   return (
     <div className="grid gap-1" data-testid={`env-locked-${entry.name}`}>
-      <code className="max-h-24 overflow-auto rounded bg-muted px-2 py-1 font-mono text-xs whitespace-pre-wrap">
+      <code className="block max-h-24 overflow-auto rounded-lg border bg-muted/60 px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap text-muted-foreground">
         {shown}
       </code>
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -78,10 +78,10 @@ function SettingInput({ entry, onApplied, onError }: RowProps) {
         data-testid={id}
         disabled={busy}
         onClick={() => void save(!on)}
-        className={`relative h-5 w-9 rounded-full transition-colors ${on ? "bg-primary" : "bg-muted-foreground/30"}`}
+        className={`relative h-5 w-9 rounded-full transition-colors ${on ? "bg-brand" : "bg-muted-foreground/30"}`}
       >
         <span
-          className={`absolute top-0.5 size-4 rounded-full bg-background transition-all ${on ? "left-4.5" : "left-0.5"}`}
+          className={`absolute top-0.5 size-4 rounded-full bg-card transition-all ${on ? "left-4.5" : "left-0.5"}`}
         />
       </button>
     );
@@ -217,17 +217,17 @@ export function EnvEntryRow(props: RowProps) {
   );
   return (
     <div
-      className="grid gap-2 border-t py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]"
+      className="grid gap-x-4 gap-y-2 border-t border-border-subtle px-5 py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]"
       data-testid={`env-row-${entry.name}`}
     >
       <div className="grid content-start gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <code className="font-mono text-sm font-medium break-all">{entry.name}</code>
+          <code className="font-mono text-[12.5px] font-medium break-all">{entry.name}</code>
           <Badges entry={entry} />
         </div>
         <p className="text-xs text-muted-foreground">{entry.description}</p>
         {entry.field && MODEL_FIELDS.has(entry.field) && (
-          <a href="#models" className="text-xs underline" data-testid={`env-models-link-${entry.name}`}>
+          <a href="#models" className="text-xs text-brand-ink underline" data-testid={`env-models-link-${entry.name}`}>
             Choose from your providers in the Models tab →
           </a>
         )}

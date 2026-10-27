@@ -1,5 +1,5 @@
 import type { ProviderDetect, ProviderResult, ProviderSpec } from "@sdk/models";
-import { PlugIcon } from "lucide-react";
+import { CheckIcon, PlugIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, NativeSelect } from "@/components/ui/input";
@@ -109,9 +109,17 @@ export function AddProvider({
             }}
           />
           {detected && (
-            <p className="text-xs text-muted-foreground" data-testid="provider-detected">
+            <p
+              className={
+                detect.confident
+                  ? "inline-flex w-fit items-center gap-1.5 rounded-full bg-brand-soft px-2.5 py-0.5 text-xs font-medium text-brand-ink"
+                  : "text-xs text-muted-foreground"
+              }
+              data-testid="provider-detected"
+            >
+              {detect.confident && <CheckIcon aria-hidden className="size-3.5" />}
               {detect.confident
-                ? `Looks like ${detect.providers[0]?.name ?? detect.candidates[0]}`
+                ? `Detected: ${detect.providers[0]?.name ?? detect.candidates[0]}`
                 : `Could be ${detect.providers.map((p) => p.name).join(", ")} — choose one`}
             </p>
           )}
@@ -172,13 +180,14 @@ export function AddProvider({
       <div className="flex flex-wrap items-center gap-2">
         <Button
           type="submit"
-          size="sm"
+          variant="brand"
+          className={compact ? "w-full" : undefined}
           data-testid="provider-connect"
           disabled={busy || !spec || (spec.needs_key && !key.trim())}
         >
-          <PlugIcon aria-hidden /> {busy ? "Checking…" : "Connect"}
+          <PlugIcon aria-hidden /> {busy ? "Checking the key…" : "Check key and connect"}
         </Button>
-        <span className="text-xs text-muted-foreground">
+        <span className={compact ? "hidden" : "text-xs text-muted-foreground"}>
           The key is checked by listing the provider’s models, then stored encrypted. It is never shown again.
         </span>
       </div>

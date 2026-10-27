@@ -76,7 +76,7 @@ function BarChart({
                 width={bar}
                 height={h}
                 rx={Math.min(4, bar / 2)}
-                className={cn("fill-info", hover !== null && hover !== i && "opacity-50")}
+                className={cn("fill-brand", hover !== null && hover !== i && "opacity-50")}
                 data-testid="chart-bar"
               >
                 <title>{`${label(p, bucket)}: ${fmt(v)}`}</title>
@@ -163,7 +163,7 @@ export function BudgetCard({ series, sessions }: { series: UsageSeries; sessions
               </div>
               {pct !== null && (
                 <div className="h-1.5 rounded bg-muted" role="meter" aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100} aria-label="Share of the session spend cap">
-                  <div className={cn("h-full rounded", pct >= 100 ? "bg-destructive" : pct >= 80 ? "bg-warning" : "bg-info")} style={{ width: `${pct}%` }} />
+                  <div className={cn("h-full rounded", pct >= 100 ? "bg-destructive" : pct >= 80 ? "bg-warning" : "bg-brand")} style={{ width: `${pct}%` }} />
                 </div>
               )}
             </div>

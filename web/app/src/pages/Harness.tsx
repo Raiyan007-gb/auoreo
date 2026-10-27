@@ -123,7 +123,7 @@ export function HarnessPage() {
           </Button>
         }
       />
-      <div className="space-y-3 p-4">
+      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
         <ErrorNote error={listing.error ?? reloadErr} />
         {reload && <ReloadDiff result={reload} />}
         {listing.data && listing.data.errors.length > 0 && (

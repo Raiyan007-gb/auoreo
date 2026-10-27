@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ErrorNote } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useAsync } from "@/hooks/useAsync";
@@ -133,87 +132,86 @@ export function EnvPanel() {
   );
 
   return (
-    <div className="grid gap-4" data-testid="env-panel">
-      <Card>
-        <CardHeader>
-          <CardTitle>Environment</CardTitle>
-          <CardDescription>
-            Every variable AUOREO reads. Changes apply live unless marked “restart required”. Values from the real
-            environment always win and are read-only here; secrets are write-only.
-          </CardDescription>
-        </CardHeader>
-        <div className="flex flex-wrap items-center gap-2">
-          <Input
-            aria-label="Search variables"
-            data-testid="env-search"
-            className="max-w-xs"
-            placeholder="Search…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+    <div className="grid gap-5" data-testid="env-panel">
+      <div className="flex flex-wrap items-center gap-3.5">
+        <Input
+          type="search"
+          aria-label="Search variables"
+          data-testid="env-search"
+          className="max-w-105 flex-[1_1_260px]"
+          placeholder={`Search ${env.data ? env.data.sections.reduce((n, s) => n + s.entries.length, 0) : ""} variables`}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <label className="flex items-center gap-2 text-[13px] text-secondary-foreground">
+          <input
+            type="checkbox"
+            className="size-4 accent-brand"
+            data-testid="env-only-set"
+            checked={onlySet}
+            onChange={(e) => setOnlySet(e.target.checked)}
           />
-          <label className="flex items-center gap-1.5 text-sm">
-            <input
-              type="checkbox"
-              className="size-4 accent-primary"
-              data-testid="env-only-set"
-              checked={onlySet}
-              onChange={(e) => setOnlySet(e.target.checked)}
-            />
-            Only set
-          </label>
-          <span className="ml-auto flex gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              data-testid="env-import"
-              disabled={!env.data?.dotenv_exists}
-              title={env.data?.dotenv_paths?.join(", ") || "no .env file found"}
-              onClick={() => api.envImportDotenv(true).then(setPlan, (err: unknown) => onError(errorText(err)))}
-            >
-              <FileInputIcon aria-hidden /> Import existing .env
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              data-testid="env-undo"
-              disabled={!env.data?.history}
-              onClick={() => api.envUndo().then(onApplied, (err: unknown) => onError(errorText(err)))}
-            >
-              <Undo2Icon aria-hidden /> Undo last change
-            </Button>
-          </span>
-        </div>
-        {toast && (
-          <p
-            role="status"
-            data-testid="env-toast"
-            className={`text-sm ${toast.error ? "text-destructive" : "text-success"}`}
+          Only show what’s set
+        </label>
+        <span className="ml-auto flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            data-testid="env-undo"
+            disabled={!env.data?.history}
+            onClick={() => api.envUndo().then(onApplied, (err: unknown) => onError(errorText(err)))}
           >
-            {toast.text}
-          </p>
-        )}
-        {(env.data?.pending_restart?.length ?? 0) > 0 && (
-          <p className="text-xs text-warning" data-testid="env-pending">
-            Waiting for a restart: {env.data?.pending_restart?.join(", ")}
-          </p>
-        )}
-        <ErrorNote error={env.error} />
-      </Card>
+            <Undo2Icon aria-hidden /> Undo last change
+          </Button>
+          <Button
+            variant="outline"
+            data-testid="env-import"
+            disabled={!env.data?.dotenv_exists}
+            title={env.data?.dotenv_paths?.join(", ") || "no .env file found"}
+            onClick={() => api.envImportDotenv(true).then(setPlan, (err: unknown) => onError(errorText(err)))}
+          >
+            <FileInputIcon aria-hidden /> Import existing .env
+          </Button>
+        </span>
+      </div>
+      <p className="-mt-2 text-xs text-muted-foreground">
+        Every variable AUOREO reads. Values set in the server’s own environment always win and are read-only here;
+        secrets are write-only.
+      </p>
+      {toast && (
+        <p
+          role="status"
+          data-testid="env-toast"
+          className={`text-sm ${toast.error ? "text-destructive" : "text-success-ink"}`}
+        >
+          {toast.text}
+        </p>
+      )}
+      {(env.data?.pending_restart?.length ?? 0) > 0 && (
+        <p className="rounded-lg border border-warning-border bg-warning-surface px-3 py-2 text-xs text-warning-ink" data-testid="env-pending">
+          Waiting for a restart: {env.data?.pending_restart?.join(", ")}
+        </p>
+      )}
+      <ErrorNote error={env.error} />
 
-      {env.data && <CustomVarsCard vars={env.data.custom} onApplied={onApplied} onError={onError} />}
-
-      {sections.map((s) => (
-        <Card key={s.id} data-testid={`env-section-${s.id}`}>
-          <CardHeader>
-            <CardTitle>{s.label}</CardTitle>
-          </CardHeader>
-          <div>
-            {s.entries.map((e) => (
-              <EnvEntryRow key={e.name} entry={e} onApplied={onApplied} onError={onError} />
-            ))}
-          </div>
-        </Card>
-      ))}
+      <div className="flex flex-wrap items-start gap-5">
+        <div className="flex min-w-0 flex-[999_1_520px] flex-col gap-4.5">
+          {sections.map((s) => (
+            <section key={s.id} aria-labelledby={`env-h-${s.id}`} className="overflow-hidden rounded-lg border bg-card" data-testid={`env-section-${s.id}`}>
+              <h3 id={`env-h-${s.id}`} className="border-b border-border-subtle bg-muted/40 px-5 py-3 text-sm font-semibold">
+                {s.label}
+              </h3>
+              <div>
+                {s.entries.map((e) => (
+                  <EnvEntryRow key={e.name} entry={e} onApplied={onApplied} onError={onError} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+        <aside className="min-w-0 flex-[1_1_320px] lg:sticky lg:top-4">
+          {env.data && <CustomVarsCard vars={env.data.custom} onApplied={onApplied} onError={onError} />}
+        </aside>
+      </div>
 
       <ImportDialog
         plan={plan}
