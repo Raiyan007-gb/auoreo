@@ -23,7 +23,8 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `policies/<name>.star` | Starlark exec policies: `# key: value` header + `decide(req)`; run after floors, before rules |
 | `commands/<name>.md` | Slash commands (`/compact`, `/model`, `/plan`, `/review`); `handler: prompt` renders the body |
 | `memory/*.md` | Templates copied into `~/.auoreo/memory/` |
-| `src/auoreo/core/env_catalog*.py`, `live_settings.py`, `env_*.py` | The variable catalog (`.env.example` + Settings → Environment), live apply of settings.json/secrets.db (in-place `svc.settings`, per-area refresh, watcher), custom variables; API `api/routers/env_api.py` |
+| `src/auoreo/core/env_catalog*.py`, `settings_store.py`, `env_store.py`, `live_settings.py`, `env_*.py` | The variable catalog (feeds Settings → Environment only), the settings store in `state.db` (`app_settings` + history + version counter; pydantic source in `settings.py`; one-time `settings.json` migration), live apply (in-place `svc.settings`, per-area refresh, DB-version + secrets.db watcher), custom variables, the one-time `.env` import; API `api/routers/env_api.py` |
+| `src/auoreo/gateway/providers.py`, `provider_fetch.py`, `core/provider*.py`, `core/model_selection.py` | Settings → Models: provider registry + key detection, list-models clients/parsers (httpx, no litellm), `provider_connections`/`provider_models` (keys only in secrets.db), model selection → settings; API `api/routers/providers.py`, wire `schema/providers.py` |
 | `src/auoreo/harness/` | discovery → loader → registry → orchestrator |
 | `src/auoreo/runtime/` | inbox, agent loop, session coordinator, compaction, slash-command dispatch, titles |
 | `src/auoreo/gateway/` | LLM gateway (LiteLLM Router) + fake gateway |
@@ -39,7 +40,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `docs/` | `roadmap-m3-plus.md`, `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md`, `environments.md`, `environment.md` (web-managed env), `remote.md`, `perception.md`, `teleop.md`, `release.md` |
 
 Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` → repo root
-(bundled) → `extra_roots` from `settings.json`.
+(bundled) → `extra_roots` from the stored settings.
 
 ## Invariants
 
@@ -55,14 +56,20 @@ Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` �
   it never edits `services.py`. Device/library integrations are `backends/` with a fake.
 - Schema changes need an Alembic revision in `src/auoreo/core/alembic/versions/` and a
   `SCHEMA_VERSION` bump; `Database.init()` upgrades file databases in place.
-- Hardline floors (`core/floors.py`, `floors_secrets.py`) run before policies, rules and yolo; a project `.env` can never set `AUOREO_*` security knobs.
+- Hardline floors (`core/floors.py`, `floors_secrets.py`) run before policies, rules and yolo; `[env-only]` security knobs (`core/env_rules.py`) come only from the real process environment.
+- No `.env`: nothing loads one at startup and there is no `.env.example`. Settings live in `state.db`
+  (`app_settings`), keys in `secrets.db`, provider connections in `state.db` (key names only), all
+  managed from the web (Settings → Models / Environment) or `auoreo config` / `auoreo secrets`. The
+  real process environment still wins (Docker/CI); bootstrap fields (`home`, `db_encryption`, `host`,
+  `port`, `workers`, plus `AUOREO_PROFILE`) are env/CLI-only. The only `.env` reader is the
+  user-confirmed web import (`core/env_import.py`); `auoreo doctor` warns about a leftover file.
 - A project `<cwd>/.auoreo/` is inert (no hooks, MCP, tool code, plugins, policies or allow rules) until trusted (`auoreo trust`); tools reach the network only through the egress proxy unless a one-shot `net_direct` grant with a justification says otherwise.
 - Secrets come only from env / keyring / `secrets.db`. Tools never read `.env` or
   `secrets.db` (executor-enforced floor) and child processes get a scrubbed env.
 - Web-managed environment (`/api/env`, `docs/environment.md`): secrets are write-only (no response,
   event or audit row carries a value), the real environment always wins (409), `[env-only]` knobs
   are read-only (403), the web never writes a `.env`. New variables go in
-  `core/env_catalog_data.py` (then `gen_env_example.py --write`); a startup-only field goes in
+  `core/env_catalog_data.py` (the catalog only feeds the web); a startup-only field goes in
   `env_catalog.RESTART_REQUIRED`, a cached one gets a refresh path in `core/live_handlers.py`.
 - No `elif` chains of 4+ (use dict dispatch); files ≤ 500 lines (`api/app.py` ≤ 300).
 - Every path must check out on Windows: no reserved names (`con`, `prn`, `aux`, `nul`, `com1`…,
@@ -77,7 +84,6 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy src && uv run
 uv run auoreo harness validate
 uv run python scripts/check_openapi.py --check
 uv run python scripts/verify_tool_catalog.py --check   # --write after adding/changing a tool
-uv run python scripts/gen_env_example.py --check      # --write after adding a setting or key
 ./scripts/run_tests.sh [--per-file]                     # hermetic: env -i, fresh HOME
 cd web && npm ci && npm run typecheck && npm run lint && npm run build && npm run e2e
 AUOREO_GATEWAY=fake uv run auoreo web --port 0       # keyless live run with the UI

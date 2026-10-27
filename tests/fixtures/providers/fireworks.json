@@ -1,0 +1,11 @@
+{
+ "object": "list",
+ "data": [
+  {
+   "id": "accounts/fireworks/models/llama-v3p3-70b-instruct",
+   "object": "model",
+   "owned_by": "fireworks",
+   "context_length": 131072
+  }
+ ]
+}

@@ -1,4 +1,4 @@
-"""I5: `auoreo plugin get|set` — plugin config values in `settings.json` (`plugins.<name>`).
+"""I5: `auoreo plugin get|set` — plugin config values in the settings store (`plugins.<name>`).
 
 Secrets never travel through here: a key the plugin's `config_schema` marks secret
 (`format: password|secret`, `writeOnly: true`, `x-secret: true`) or whose name looks like a
@@ -62,7 +62,7 @@ def set_value(home: Path, manifest: PluginManifest, key: str, raw: str) -> Any:
     if is_secret(manifest, key):
         raise PluginConfigError(
             f"'{key}' is a secret: store it with `auoreo secrets set <NAME>` and let the plugin "
-            "consume it (secrets never go into settings.json)"
+            "consume it (secrets never go into the settings store)"
         )
     props = manifest.config_schema.get("properties", {})
     closed = manifest.config_schema.get("additionalProperties") is False

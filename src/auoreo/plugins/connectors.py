@@ -2,7 +2,7 @@
 `(plugin, chat_id) → session` map. Inbound text runs non-interactively in that session and the
 final answer goes back through the plugin's delivery.
 
-State lives in files under `<home>/plugins/<name>/` (and the allowlist in `settings.json`) so
+State lives in files under `<home>/plugins/<name>/` (and the allowlist in the settings store) so
 `auoreo plugin pair` works from another process while the server is running.
 
 `/approve`, `/deny [reason]`, `/approve all` and `/pending` from a paired owner chat answer
@@ -46,8 +46,13 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
 
 
 def file_config(home: Path, plugin: str) -> dict[str, Any]:
-    """`plugins.<name>` from `<home>/settings.json`, read fresh (pairing edits it at runtime)."""
-    node = _read_json(home / "settings.json").get("plugins", {})
+    """`plugins.<name>` from the settings store (state.db), read fresh (pairing edits it at runtime)."""
+    from auoreo.core import settings_store
+
+    try:
+        node = settings_store.read(home).get("plugins", {})
+    except settings_store.SettingsStoreError:
+        node = {}
     cfg = node.get(plugin, {}) if isinstance(node, dict) else {}
     return cfg if isinstance(cfg, dict) else {}
 

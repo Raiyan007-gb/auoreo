@@ -46,7 +46,7 @@ async def reload(svc: ServicesDep, kind: ReloadKind | None = None) -> ReloadResu
         try:
             changes, note = await scoped_reload(svc, kind, diff)
         except (ValidationError, EnvStoreError) as exc:
-            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"settings.json: {exc}") from exc
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, f"settings: {exc}") from exc
     scope = {"kind": kind} if kind else {}
     await svc.emit("server", "harness.reloaded", {"generation": gen, "errors": errors, **scope, **changes})
     return ReloadResult(generation=gen, errors=errors, changes=changes, kind=kind, note=note)

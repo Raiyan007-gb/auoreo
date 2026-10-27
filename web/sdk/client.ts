@@ -4,15 +4,14 @@
  * Framework-agnostic: no React here.
  */
 import { type ControlOptions, connectControl } from "./control";
-// --- W0-A
-import { opsMethods } from "./ops";
-// --- end W0-A
+import { opsMethods } from "./ops"; // --- W0-A
 import { statusMethods } from "./ops2"; // --- W0-B
 import { g5bMethods } from "./ops3"; // --- G5b
 import { g6Methods } from "./ops4"; // --- G6
 import { g7Methods } from "./ops5"; // --- G7
 import { i5Methods } from "./ops6"; // --- I5
 import { envMethods } from "./env"; // --- ENV
+import { modelsMethods } from "./models"; // --- Settings → Models
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -105,6 +104,8 @@ export const EVENT_TYPES = [
   "harness.reloaded",
   "settings.changed",
   "secret.changed",
+  "providers.changed",
+  "models.changed",
   "message",
 ] as const;
 
@@ -285,14 +286,13 @@ export function createClient(opts: ClientOptions = {}) {
     connectControl: (o: Omit<ControlOptions, "baseUrl" | "token">) =>
       connectControl({ ...o, baseUrl: base, token: token() }),
 
-    // --- W0-A: skills, plugins, cron, webhooks, deliveries, teams, kanban (./ops.ts)
-    ...opsMethods(request),
-    // --- end W0-A
+    ...opsMethods(request), // --- W0-A: skills, plugins, cron, webhooks, deliveries, teams, kanban (./ops.ts)
     ...g5bMethods(request), // --- G5b: rtc call client + context gauge (./ops3.ts)
     ...g6Methods(request), // --- G6: PREFS.md proposals + skills hub (./ops4.ts)
     ...g7Methods(request), // --- G7: session plan/sources + usage timeseries (./ops5.ts)
     ...i5Methods(request), // --- I5: share links, skills hub, memory usage, lsp stop (./ops6.ts)
     ...envMethods(request), // --- ENV: Settings → Environment (./env.ts)
+    ...modelsMethods(request), // --- Settings → Models: providers + model selection (./models.ts)
   };
 }
 

@@ -3,8 +3,7 @@ import type { BadgeVariant } from "@/components/ui/badge";
 
 export const SOURCE_LABEL: Record<EnvEntry["source"], string> = {
   env: "environment",
-  dotenv: ".env file",
-  settings: "settings.json",
+  db: "database",
   secrets: "secrets.db",
   override: "startup flag",
   default: "default",
@@ -12,8 +11,7 @@ export const SOURCE_LABEL: Record<EnvEntry["source"], string> = {
 
 export const SOURCE_VARIANT: Record<EnvEntry["source"], BadgeVariant> = {
   env: "warning",
-  dotenv: "warning",
-  settings: "info",
+  db: "info",
   secrets: "success",
   override: "warning",
   default: "outline",

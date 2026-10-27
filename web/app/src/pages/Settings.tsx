@@ -1,7 +1,8 @@
 import { ExternalLinkIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorNote, PageHeader } from "@/components/AppShell";
 import { EnvPanel } from "@/components/env/EnvPanel";
+import { ModelsPanel } from "@/components/models/ModelsPanel";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
@@ -17,7 +18,17 @@ const THEMES: { value: ThemePref; label: string; icon: typeof SunIcon }[] = [
   { value: "system", label: "System", icon: MonitorIcon },
 ];
 
+const TABS = ["models", "environment", "general"] as const;
+type Tab = (typeof TABS)[number];
+const tabFromHash = (): Tab => (TABS as readonly string[]).find((t) => `#${t}` === location.hash) as Tab ?? "models";
+
 export function SettingsPage() {
+  const [tab, setTab] = useState<Tab>(tabFromHash);
+  useEffect(() => {
+    const onHash = () => setTab(tabFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
   const [token, setToken] = useState(getStoredToken);
   const [saved, setSaved] = useState(false);
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
@@ -27,14 +38,27 @@ export function SettingsPage() {
 
   return (
     <div className="flex flex-col">
-      <PageHeader title="Settings" description="Browser-local preferences, server status and the environment." />
-      <Tabs defaultValue={location.hash === "#environment" ? "environment" : "general"} className="p-4">
+      <PageHeader title="Settings" description="Models and providers, the environment, browser preferences and server status." />
+      <Tabs
+        value={tab}
+        onValueChange={(v) => {
+          setTab(v as Tab);
+          history.replaceState(null, "", `#${v}`);
+        }}
+        className="p-4"
+      >
         <TabsList>
-          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="models" data-testid="tab-models">
+            Models
+          </TabsTrigger>
           <TabsTrigger value="environment" data-testid="tab-environment">
             Environment
           </TabsTrigger>
+          <TabsTrigger value="general">General</TabsTrigger>
         </TabsList>
+        <TabsContent value="models" className="max-w-5xl">
+          <ModelsPanel />
+        </TabsContent>
         <TabsContent value="environment" className="max-w-5xl">
           <EnvPanel />
         </TabsContent>

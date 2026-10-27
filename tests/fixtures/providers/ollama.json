@@ -1,0 +1,27 @@
+{
+ "models": [
+  {
+   "name": "llama3.2:latest",
+   "model": "llama3.2:latest",
+   "size": 2019393189,
+   "details": {
+    "format": "gguf",
+    "family": "llama",
+    "families": [
+     "llama"
+    ],
+    "parameter_size": "3.2B"
+   }
+  },
+  {
+   "name": "nomic-embed-text:latest",
+   "model": "nomic-embed-text:latest",
+   "details": {
+    "family": "nomic-bert",
+    "families": [
+     "nomic-bert"
+    ]
+   }
+  }
+ ]
+}

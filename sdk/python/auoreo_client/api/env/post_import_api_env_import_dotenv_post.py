@@ -78,7 +78,7 @@ def sync_detailed(
 ) -> Response[DotenvImport | HTTPValidationError]:
     """Post Import
 
-     Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews).
+     One-time import of `~/.auoreo/.env` + `<cwd>/.env` (`dry_run` previews).
 
     Args:
         authorization (None | str | Unset):
@@ -115,7 +115,7 @@ def sync(
 ) -> DotenvImport | HTTPValidationError | None:
     """Post Import
 
-     Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews).
+     One-time import of `~/.auoreo/.env` + `<cwd>/.env` (`dry_run` previews).
 
     Args:
         authorization (None | str | Unset):
@@ -147,7 +147,7 @@ async def asyncio_detailed(
 ) -> Response[DotenvImport | HTTPValidationError]:
     """Post Import
 
-     Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews).
+     One-time import of `~/.auoreo/.env` + `<cwd>/.env` (`dry_run` previews).
 
     Args:
         authorization (None | str | Unset):
@@ -182,7 +182,7 @@ async def asyncio(
 ) -> DotenvImport | HTTPValidationError | None:
     """Post Import
 
-     Move `~/.auoreo/.env` into secrets.db / settings.json (`dry_run` previews).
+     One-time import of `~/.auoreo/.env` + `<cwd>/.env` (`dry_run` previews).
 
     Args:
         authorization (None | str | Unset):

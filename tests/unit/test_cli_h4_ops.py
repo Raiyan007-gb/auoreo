@@ -20,6 +20,7 @@ from auoreo import __version__
 from auoreo.cli.app import app
 from auoreo.cli.loop_support import is_quiet, parse_interval
 from auoreo.core import oauth_login as oauth
+from auoreo.core import settings_store
 
 runner = CliRunner()
 
@@ -86,9 +87,9 @@ def _editor(tmp_path: Path, content: str, monkeypatch: pytest.MonkeyPatch, code:
 
 
 def test_config_edit_saves_valid(home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    _editor(tmp_path, '{"port": 5050}', monkeypatch)
+    _editor(tmp_path, '{"locale": "de-DE"}', monkeypatch)
     assert "saved" in _run(["config", "edit"])
-    assert json.loads((home / "settings.json").read_text()) == {"port": 5050}
+    assert settings_store.read(home) == {"locale": "de-DE"}
     assert not list(home.glob("settings.edit-*"))
 
 
@@ -97,18 +98,19 @@ def test_config_edit_saves_valid(home: Path, tmp_path: Path, monkeypatch: pytest
     [
         ("{not json", "not valid JSON"),
         ('["a"]', "must be a JSON object"),
-        ('{"port": "abc"}', "invalid settings"),
-        ('{"server_password": "hunter2"}', "secrets do not belong"),
+        ('{"teams_max_depth": "abc"}', "invalid settings"),
+        ('{"server_password": "hunter2"}', "not stored in the database"),
+        ('{"port": 4100}', "not stored in the database"),
     ],
 )
 def test_config_edit_refuses_invalid(
     home: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str, reason: str
 ) -> None:
-    (home / "settings.json").write_text('{"port": 4100}\n')
+    settings_store.write(home, {"locale": "fr-FR"})
     _editor(tmp_path, content, monkeypatch)
     out = _run(["config", "edit"], 1)
-    assert reason in out and "settings.json unchanged" in out
-    assert (home / "settings.json").read_text() == '{"port": 4100}\n'
+    assert reason in out and "settings unchanged" in out
+    assert settings_store.read(home) == {"locale": "fr-FR"}
     kept = list(home.glob("settings.edit-*.json"))
     assert len(kept) == 1 and kept[0].read_text() == content
 
@@ -118,7 +120,7 @@ def test_config_edit_editor_failure_and_no_change(
 ) -> None:
     _editor(tmp_path, '{"port": 1}', monkeypatch, code=3)
     assert "editor exited with 3" in _run(["config", "edit"], 1)
-    assert not (home / "settings.json").exists()
+    assert settings_store.read(home) == {}
     _editor(tmp_path, "{}\n", monkeypatch)
     assert "no changes" in _run(["config", "edit"])
     monkeypatch.setenv("EDITOR", "/nonexistent/editor")

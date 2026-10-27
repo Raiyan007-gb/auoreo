@@ -1,4 +1,4 @@
-"""Live settings: apply settings.json / secrets.db changes to the running server.
+"""Live settings: apply state.db settings / secrets.db changes to the running server.
 
 `apply(svc, new)` diffs the top-level fields, copies the live ones INTO the existing
 `svc.settings` object (every holder of the reference — runner, executor, gateway, backends,
@@ -11,8 +11,9 @@ environment) are NOT applied: they are reported as `restart_required`.
 A step already in flight keeps its frozen request; the agent sees new values from its next step
 (the runner builds the spec + context per turn and reads `svc.settings` per step).
 
-`LiveSettings` (the `live_settings` extension) also polls settings.json and secrets.db mtimes
-(every `POLL_S`) so `auoreo config set`, `auoreo secrets set` and manual edits apply live too;
+`LiveSettings` (the `live_settings` extension) also polls the settings version counter
+(`app_settings_meta.version`, bumped by every write from any process) and the secrets.db mtime
+(every `POLL_S`) so `auoreo config set` and `auoreo secrets set` apply live too;
 API writes call `reload()` / `secrets_changed()` directly. Events carry names only:
 `settings.changed {keys, live, restart_required, source}`, `secret.changed {name, action}`.
 """
@@ -26,7 +27,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from auoreo.core import env_store, live_handlers
+from auoreo.core import env_store, live_handlers, settings_store
 from auoreo.core.env_catalog import ENV_ONLY_RESTART, RESTART_REQUIRED, by_field
 
 log = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ async def apply(svc: Any, new: Any) -> AppliedChange:
     out = AppliedChange(changed, live, [k for k in changed if k not in live])
     for key in live:
         setattr(svc.settings, key, getattr(new, key))
-    get_settings.cache_clear()  # module-level readers (`get_settings()`) re-read the file
+    get_settings.cache_clear()  # module-level readers (`get_settings()`) re-read the store
     if live:
         out.failed = await live_handlers.run(svc, live)
     return out
@@ -89,7 +90,7 @@ class LiveSettings:
         winning over settings.json on every rebuild, exactly as at startup."""
         try:
             baseline = self._fresh({})
-        except Exception:  # an already-broken settings.json: no overrides can be inferred
+        except Exception:  # an already-broken store: no overrides can be inferred
             return {}
         a, b = _dump(self.svc.settings), _dump(baseline)
         return {k: getattr(self.svc.settings, k) for k in a if k != "home" and a[k] != b.get(k)}
@@ -100,14 +101,14 @@ class LiveSettings:
         return Settings(home=self.home, **overrides)
 
     def build(self) -> Any:
-        """Settings as a restart would build them now (env > overrides > settings.json)."""
+        """Settings as a restart would build them now (env > overrides > state.db)."""
         return self._fresh(self.overrides)
 
     # ------------------------------------------------------------ apply
     async def reload(self, source: str = "watch") -> AppliedChange:
         async with self._lock:
             self._mtimes = self._stat()
-            env_store.read(self.home)  # unreadable JSON raises (Settings would silently ignore it)
+            env_store.read(self.home)  # an unreadable store raises (Settings would ignore it)
             new = self.build()  # raises ValidationError for an invalid value (watcher logs it)
             res = await apply(self.svc, new)
             self.pending = res.restart_required
@@ -150,7 +151,11 @@ class LiveSettings:
             except OSError:
                 return None
 
-        return mtime(self.home / "settings.json"), mtime(self.home / "secrets.db")
+        try:
+            version: float | None = float(settings_store.version(self.home))
+        except Exception:  # mid-migration / locked: try again on the next poll
+            version = None
+        return version, mtime(self.home / "secrets.db")
 
     async def poll_once(self) -> None:
         now = self._stat()
@@ -158,8 +163,8 @@ class LiveSettings:
         if now[0] != before[0]:
             try:
                 await self.reload("watch")
-            except Exception as exc:  # a half-written / invalid file: keep running settings
-                log.warning("settings.json changed but cannot be applied: %s", exc)
+            except Exception as exc:  # an invalid value written behind our back: keep running
+                log.warning("stored settings changed but cannot be applied: %s", exc)
         if now[1] != before[1]:
             await self.secrets_changed(None, "external")
 
@@ -196,10 +201,30 @@ async def start(services: Any) -> LiveSettings:
     """Extension starter → `services.ext["live_settings"]` (watcher on)."""
     from auoreo.core.env_custom import refresh_redaction
 
+    await record_migration(services)
     live = LiveSettings(services)
     refresh_redaction(services)
     live.start()
     return live
+
+
+async def record_migration(services: Any) -> None:
+    """Import a pre-v8 settings.json (if any is left) and audit the one-time migration once."""
+    import json
+
+    home = Path(services.settings.home)
+    try:
+        await asyncio.to_thread(settings_store.migrate_legacy, home)
+        note = await asyncio.to_thread(settings_store.get_meta, home, "pending_audit")
+    except Exception:
+        log.exception("settings.json migration failed; the file was left in place")
+        return
+    if not note:
+        return
+    await services.audit.record(
+        actor="system", action="settings.migrate", decision="allow", detail=json.loads(note)
+    )
+    await asyncio.to_thread(settings_store.set_meta, home, "pending_audit", None)
 
 
 __all__ = ["AppliedChange", "LiveSettings", "apply", "diff", "live_of", "restart_reason", "start"]

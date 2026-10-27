@@ -4,7 +4,6 @@ env/env-only locks, undo, `.env` import and the capability-token refusal."""
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -15,6 +14,7 @@ from asgi_lifespan import LifespanManager
 from sqlalchemy import select
 
 from auoreo.api.app import create_app
+from auoreo.core import settings_store
 from auoreo.core.db import AuditRow
 from auoreo.core.env_catalog import by_field, by_name, catalog, entries, secret_names
 from auoreo.core.services import Services
@@ -50,6 +50,10 @@ def _entry(body: dict[str, Any], name: str) -> dict[str, Any]:
             if e["name"] == name:
                 return e
     raise AssertionError(name)
+
+
+def _stored(svc: Services) -> dict[str, Any]:
+    return settings_store.read(svc.settings.home)
 
 
 async def _events(svc: Services, type_: str) -> list[dict[str, Any]]:
@@ -104,9 +108,7 @@ async def test_listing_reports_sources_and_never_secret_values(
 
 
 # ------------------------------------------------------------------ settings writes
-async def test_put_setting_writes_file_and_applies_live(
-    services: Services, client: httpx.AsyncClient
-) -> None:
+async def test_put_setting_writes_db_and_applies_live(services: Services, client: httpx.AsyncClient) -> None:
     gw = _Reloading()
     services.gateway = gw
     same = services.settings
@@ -114,31 +116,33 @@ async def test_put_setting_writes_file_and_applies_live(
     assert r.status_code == 200, r.text
     assert r.json()["live"] == ["locale"] and "next step" in r.json()["note"]
     assert services.settings is same and same.locale == "de-DE"  # in place
-    assert json.loads((services.settings.home / "settings.json").read_text())["locale"] == "de-DE"
-    if os.name == "posix":
-        assert (services.settings.home / "settings.json").stat().st_mode & 0o777 == 0o600
+    assert _stored(services)["locale"] == "de-DE"
+    assert not (services.settings.home / "settings.json").exists()  # never a file again
     r = await client.put("/api/env/settings/AUOREO_MODEL", json={"value": "openai/gpt-5"})
     assert r.status_code == 200 and "model" in r.json()["live"]
     assert services.settings.models["default"].models == ["openai/gpt-5"] and gw.reloads == 1
     changed = await _events(services, "settings.changed")
     assert changed[-1]["keys"] == ["model", "models"] and changed[-1]["source"] == "api"
     assert await _audit(services, "settings.write") == [{"keys": ["locale"]}, {"keys": ["model"]}]
-    r = await client.put("/api/env/settings/AUOREO_PORT", json={"value": 5000})
-    assert r.json()["restart_required"] == ["port"] and services.settings.port == 4096
-    assert _entry((await client.get("/api/env")).json(), "AUOREO_PORT")["pending_restart"]
+    r = await client.put("/api/env/settings/AUOREO_PORT", json={"value": 5000})  # bootstrap: env/CLI
+    assert r.status_code == 403 and "bootstrap" in r.text and services.settings.port == 4096
+    r = await client.put("/api/env/settings/AUOREO_REDIS_URL", json={"value": "redis://x:6379"})
+    assert r.json()["restart_required"] == ["redis_url"]
+    assert _entry((await client.get("/api/env")).json(), "AUOREO_REDIS_URL")["pending_restart"]
     r = await client.put("/api/env/settings/AUOREO_LOCALE", json={"value": None})  # reset
     assert r.status_code == 200 and services.settings.locale is None
 
 
-async def test_invalid_value_is_422_and_file_untouched(services: Services, client: httpx.AsyncClient) -> None:
+async def test_invalid_value_is_422_and_db_untouched(services: Services, client: httpx.AsyncClient) -> None:
     await client.put("/api/env/settings/AUOREO_LOCALE", json={"value": "fr-FR"})
-    path = services.settings.home / "settings.json"
-    before = path.read_bytes()
+    before = _stored(services)
+    version = settings_store.version(services.settings.home)
     r = await client.put("/api/env/settings/AUOREO_TEAMS_MAX_DEPTH", json={"value": 99})
     assert r.status_code == 422 and "teams_max_depth" in r.text
     r = await client.put("/api/env/settings/AUOREO_UPDATE_CHANNEL", json={"value": "nightly"})
     assert r.status_code == 422
-    assert path.read_bytes() == before and services.settings.teams_max_depth == 2
+    assert _stored(services) == before and services.settings.teams_max_depth == 2
+    assert settings_store.version(services.settings.home) == version
 
 
 async def test_env_sourced_409_env_only_403_unknown_404(
@@ -159,7 +163,7 @@ async def test_env_sourced_409_env_only_403_unknown_404(
     assert (
         await client.put("/api/env/secrets/ANTHROPIC_API_KEY", json={"value": "x" * 10})
     ).status_code == 409
-    assert not (services.settings.home / "settings.json").exists()
+    assert _stored(services) == {}
 
 
 # ------------------------------------------------------------------ secrets
@@ -192,23 +196,24 @@ async def test_undo_restores_previous_settings(services: Services, client: httpx
     r = await client.post("/api/env/undo")
     assert r.status_code == 200 and r.json()["live"] == ["locale"]
     assert services.settings.locale == "de-DE"
-    assert json.loads((services.settings.home / "settings.json").read_text())["locale"] == "de-DE"
-    assert (await client.post("/api/env/undo")).status_code == 200  # back to "no file" ({})
+    assert _stored(services)["locale"] == "de-DE"
+    assert (await client.post("/api/env/undo")).status_code == 200  # back to an empty store
     assert services.settings.locale is None
     assert (await client.post("/api/env/undo")).status_code == 409
     assert await _audit(services, "settings.undo")
 
 
 async def test_import_dotenv_moves_keys_and_skips_protected(
-    services: Services, client: httpx.AsyncClient
+    services: Services, client: httpx.AsyncClient, httpx_mock: Any
 ) -> None:
+    httpx_mock.add_response(url="https://api.openai.com/v1/models", json={"data": [{"id": "gpt-5"}]})
     home: Path = services.settings.home
     (home / ".env").write_text(
         f"OPENAI_API_KEY={SECRET}\nAUOREO_LOCALE=pt-BR\nAUOREO_YOLO=1\n"
         'AUOREO_PERMISSION_MODE=yolo\nSOME_OTHER=thing\nAUOREO_CORS_ORIGINS=["https://x.example"]\n'
     )
     preview = (await client.post("/api/env/import-dotenv", json={"dry_run": True})).json()
-    assert preview["dry_run"] and not (home / "settings.json").exists()
+    assert preview["dry_run"] and _stored(services) == {}
     r = await client.post("/api/env/import-dotenv", json={})
     assert r.status_code == 200 and SECRET not in r.text
     moved = {m["name"]: m["to"] for m in r.json()["moved"]}
@@ -220,8 +225,9 @@ async def test_import_dotenv_moves_keys_and_skips_protected(
         "SOME_OTHER": "kept",
         "AUOREO_CORS_ORIGINS": "settings",
     }
-    data = json.loads((home / "settings.json").read_text())
+    data = _stored(services)
     assert data == {"locale": "pt-BR", "cors_origins": ["https://x.example"]}
+    assert r.json()["providers"] == [{"provider": "openai", "ok": True, "connection_id": 1, "error": None}]
     assert "permission_mode" not in data and services.settings.permission_mode == "manual"
     assert services.secrets.get("OPENAI_API_KEY") == SECRET and services.settings.locale == "pt-BR"
     assert (await _audit(services, "env.import"))[0]["counts"]["secrets"] == 1

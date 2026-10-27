@@ -13,7 +13,6 @@ Each probe that does not apply says `skipped: <why>` instead of pretending to ha
 
 from __future__ import annotations
 
-import json
 import shutil
 import sys
 from pathlib import Path
@@ -44,15 +43,14 @@ def disk_row(st: Settings) -> Check:
 
 
 def settings_schema_row(st: Settings) -> Check:
-    path = st.home / "settings.json"
-    if not path.is_file():
-        return Check("settings_schema", "ok", "no settings.json (defaults)")
+    from auoreo.core import settings_store
+
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        return Check("settings_schema", "error", f"{path} is not valid JSON: {exc}", "fix or delete the file")
-    if not isinstance(data, dict):
-        return Check("settings_schema", "error", f"{path} must hold a JSON object", "fix the file")
+        data = settings_store.read(st.home)
+    except settings_store.SettingsStoreError as exc:
+        return Check("settings_schema", "error", str(exc), "check state.db (`auoreo db`)")
+    if not data:
+        return Check("settings_schema", "ok", "no stored settings (defaults)")
     from pydantic import ValidationError
 
     try:
@@ -74,7 +72,7 @@ def settings_schema_row(st: Settings) -> Check:
             f"unknown top-level key(s) ignored: {', '.join(unknown[:8])}",
             "remove or rename them (typo?)",
         )
-    return Check("settings_schema", "ok", f"{path.name} valid ({len(data)} top-level keys)")
+    return Check("settings_schema", "ok", f"stored settings valid ({len(data)} top-level keys)")
 
 
 async def worktrees_row(st: Settings, cwd: Path | None = None) -> Check:

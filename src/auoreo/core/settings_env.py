@@ -28,7 +28,7 @@ class CustomVar(BaseModel):
     @model_validator(mode="after")
     def _no_secret_value(self) -> CustomVar:
         if self.secret and self.value is not None:
-            raise ValueError("a secret custom variable never stores its value in settings.json")
+            raise ValueError("a secret custom variable never stores its value in the settings store")
         return self
 
 

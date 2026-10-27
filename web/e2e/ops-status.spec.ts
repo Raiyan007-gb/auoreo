@@ -74,7 +74,8 @@ test("welcome flow is resumable and skippable; banner shows on missing credentia
   await expect(page.getByTestId("welcome-doctor")).toContainText("ok");
   await page.getByRole("button", { name: "Next" }).click();
   await expect(step).toHaveAttribute("data-step", "credentials");
-  await expect(page.getByTestId("welcome-credentials")).toContainText("auoreo secrets set");
+  await expect(page.getByTestId("welcome-credentials")).toContainText("Paste a key");
+  await expect(page.getByTestId("provider-key")).toHaveAttribute("type", "password");
   await page.getByRole("button", { name: "Skip step" }).click();
   await expect(step).toHaveAttribute("data-step", "model");
   await shot(page, "welcome-model");

@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 import pytest
 
+from auoreo.core import settings_store
 from auoreo.plugins.connectors import PairingStore
 
 PLUGIN = Path(__file__).resolve().parents[2] / "plugins" / "telegram" / "plugin.py"
@@ -114,7 +115,7 @@ async def test_unknown_chat_gets_a_pairing_code_then_pairs(plugin: Any, api: Bot
 
     # the operator pairs (`auoreo plugin pair telegram <code>` / POST …/pair)
     assert plugin.host.store.pair(code) == "42"
-    settings_json = json.loads((home / "settings.json").read_text())
+    settings_json = settings_store.read(home)
     assert settings_json["plugins"]["telegram"]["allowlist"] == ["42"]
     assert plugin.host.store.pair(code) is None  # single use
 

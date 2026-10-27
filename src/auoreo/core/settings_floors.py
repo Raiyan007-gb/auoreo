@@ -2,7 +2,7 @@
 
 Attached to `Settings` as `floors: FloorSettings`; set in `settings.json`
 (`{"floors": {"max_inline_command_bytes": 32768}}`). Not settable from a project `.env`
-(`core.dotenv` refuses `AUOREO_FLOORS`).
+(`core.env_rules` refuses `AUOREO_FLOORS`).
 """
 
 from __future__ import annotations

@@ -2,12 +2,11 @@ from enum import StrEnum
 
 
 class EnvEntrySource(StrEnum):
+    DB = "db"
     DEFAULT = "default"
-    DOTENV = "dotenv"
     ENV = "env"
     OVERRIDE = "override"
     SECRETS = "secrets"
-    SETTINGS = "settings"
 
     def __str__(self) -> str:
         return str(self.value)

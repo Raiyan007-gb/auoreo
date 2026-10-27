@@ -4,10 +4,13 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { ErrorNote, PageHeader } from "@/components/AppShell";
 import { LevelBadge } from "@/components/LevelBadge";
+import { AddProvider } from "@/components/models/AddProvider";
+import { ModelPicker } from "@/components/models/ModelPicker";
+import { SelectionSummary } from "@/components/models/ModelsPanel";
+import { appliedNote } from "@/components/models/modelsUtils";
 import { audit, loadProgress, saveProgress, STEPS, type StepId, type WelcomeProgress } from "@/components/welcomeState";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { NativeSelect } from "@/components/ui/input";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
@@ -15,8 +18,8 @@ import { cn, errorText } from "@/lib/utils";
 
 const TITLES: Record<StepId, string> = {
   doctor: "Health check",
-  credentials: "Provider key",
-  model: "Default model",
+  credentials: "Connect a provider",
+  model: "Choose a model",
   tunnel: "Remote access",
   theme: "Theme",
   demo: "Demo session",
@@ -55,42 +58,67 @@ function DoctorStep({ report }: { report: DoctorReport | undefined }) {
 }
 
 function CredentialsStep({ report }: { report: DoctorReport | undefined }) {
-  const rows = (report?.checks ?? []).filter((c) => c.check === "credentials");
+  const providers = useAsync(() => api.providers(), []);
+  const [note, setNote] = useState<string | null>(null);
+  const rows = (report?.checks ?? []).filter((c) => c.check === "credentials" && c.level !== "ok");
+  const connected = providers.data?.connections ?? [];
   return (
-    <div className="space-y-2 text-sm" data-testid="welcome-credentials">
-      <ul className="space-y-1">
-        {rows.map((c, i) => (
-          <li key={i} className="flex flex-wrap items-center gap-2">
-            <LevelBadge level={c.level} /> <span>{c.detail}</span>
-            {c.level !== "ok" && c.remedy && <span className="text-xs text-muted-foreground">→ {c.remedy}</span>}
-          </li>
-        ))}
-      </ul>
-      <p>
-        Keys are read from the environment, a <Mono>.env</Mono> file next to the server, the OS keyring or{" "}
-        <Mono>auoreo secrets set OPENROUTER_API_KEY</Mono>. Never paste a key into a chat or into code. A key added or rotated with <Mono>auoreo secrets</Mono> is picked up on the next model call, no restart needed (a key in the environment or <Mono>.env</Mono> still needs one).
+    <div className="space-y-3 text-sm" data-testid="welcome-credentials">
+      {connected.length > 0 && (
+        <ul className="space-y-1" data-testid="welcome-connected">
+          {connected.map((c) => (
+            <li key={c.id} className="flex items-center gap-2">
+              <LevelBadge level={c.status === "ok" ? "ok" : "warn"} /> {c.provider_name} — {c.model_count} models
+            </li>
+          ))}
+        </ul>
+      )}
+      <ErrorNote error={providers.error} />
+      <AddProvider
+        compact
+        specs={providers.data?.providers ?? []}
+        onConnected={(r) => {
+          setNote(`${r.connection?.provider_name ?? "Provider"} connected — ${r.model_count} models`);
+          providers.reload();
+        }}
+      />
+      {note && (
+        <p role="status" className="text-success">
+          {note}
+        </p>
+      )}
+      {rows.length > 0 && connected.length === 0 && (
+        <p className="text-xs text-muted-foreground">Doctor: {rows.map((c) => c.detail).join("; ")}</p>
+      )}
+      <p className="text-xs text-muted-foreground">
+        Paste a key from OpenRouter, Anthropic, OpenAI, Gemini, Groq, xAI, Mistral, DeepSeek, Together, Fireworks or
+        Cohere (or choose Ollama / Azure). It is validated, stored encrypted and never shown again. Manage providers
+        later in <Link to="/settings#models" className="underline">Settings → Models</Link>.
       </p>
     </div>
   );
 }
 
-function ModelStep({ model, onModel }: { model: string | undefined; onModel: (m: string) => void }) {
-  const models = useAsync(() => api.models(), []);
-  const ids = models.data?.data.map((m) => m.id) ?? [];
+function ModelStep() {
+  const providers = useAsync(() => api.providers(), []);
+  const selection = useAsync(() => api.modelSelection(), []);
+  const [note, setNote] = useState<string | null>(null);
+  const connections = providers.data?.connections ?? [];
   return (
-    <div className="space-y-2 text-sm">
-      <ErrorNote error={models.error} />
-      <label className="grid max-w-sm gap-1">
-        <span>Model for the demo session</span>
-        <NativeSelect aria-label="Model" value={model ?? ""} onChange={(e) => onModel(e.target.value)}>
-          <option value="">Server default</option>
-          {ids.map((id) => (
-            <option key={id}>{id}</option>
-          ))}
-        </NativeSelect>
-      </label>
+    <div className="space-y-3 text-sm" data-testid="welcome-model">
+      <SelectionSummary selection={selection.data} />
+      <ModelPicker
+        connections={connections}
+        roles={["main", "small"]}
+        onApplied={(r) => {
+          setNote(appliedNote(r));
+          selection.setData(() => r.selection);
+        }}
+        onError={(m) => setNote(m)}
+      />
+      {note && <p role="status">{note}</p>}
       <p className="text-xs text-muted-foreground">
-        To change the server-wide default, set <Mono>model</Mono> in <Mono>~/.auoreo/settings.json</Mono> or <Mono>AUOREO_MODEL</Mono>. Sessions can switch with <Mono>/model</Mono>.
+        The choice is server-wide and applies from the agent’s next step. Sessions can still switch with <Mono>/model</Mono>.
       </p>
     </div>
   );
@@ -189,7 +217,7 @@ export function WelcomePage() {
   const body: Record<StepId, React.ReactNode> = {
     doctor: <DoctorStep report={doctor.data} />,
     credentials: <CredentialsStep report={doctor.data} />,
-    model: <ModelStep model={p.model} onModel={(m) => update({ ...p, model: m || undefined })} />,
+    model: <ModelStep />,
     tunnel: <TunnelStep />,
     theme: <ThemeStep />,
     demo: <DemoStep model={p.model} onStarted={(sid) => finish({ ...p, done: [...new Set([...p.done, id])] }, `/session/${sid}`)} />,
@@ -232,7 +260,7 @@ export function WelcomePage() {
             <CardTitle>
               Step {p.step + 1} of {STEPS.length}: {TITLES[id]}
             </CardTitle>
-            {id === "credentials" && <CardDescription>Which provider keys the configured models need.</CardDescription>}
+            {id === "credentials" && <CardDescription>Paste an API key: the provider is detected from it.</CardDescription>}
           </CardHeader>
           {body[id]}
           <div className="flex flex-wrap gap-2 border-t pt-3">

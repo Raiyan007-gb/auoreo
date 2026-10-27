@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { shot } from "./helpers";
 
 async function enablePwa(page: Page): Promise<void> {
-  await page.goto("/settings");
+  await page.goto("/settings#general");
   const toggle = page.getByTestId("pwa-toggle");
   await expect(toggle).toBeEnabled();
   await toggle.check();

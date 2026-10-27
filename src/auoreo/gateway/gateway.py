@@ -123,6 +123,8 @@ litellm.drop_params = True
 # `gemini/…` → GEMINI_API_KEY | GOOGLE_API_KEY, `azure/…` → AZURE_API_KEY + _BASE + _VERSION.
 _SUFFIX_PARAM = {"_API_KEY": "api_key", "_API_BASE": "api_base", "_API_VERSION": "api_version"}
 _EXACT_PARAM = {"VERTEXAI_PROJECT": "vertex_project", "VERTEXAI_LOCATION": "vertex_location"}
+# Endpoint secrets a Settings → Models connection stores, passed even when LiteLLM does not list them.
+_ENDPOINT_SECRETS = {"OLLAMA": ("OLLAMA_API_BASE",), "AZURE": ("AZURE_API_BASE", "AZURE_API_VERSION")}
 
 
 def env_names(model: str) -> list[str]:
@@ -154,6 +156,10 @@ def credential_params(model: str, secret: Callable[[str], str | None]) -> dict[s
     prefix = provider_of(model).upper().replace("-", "_")
     if prefix and "api_key" not in params and (value := secret(f"{prefix}_API_KEY")):
         params["api_key"] = value
+    for name in _ENDPOINT_SECRETS.get(prefix, ()):  # Ollama / Azure endpoints from Settings → Models
+        param = _param_for(name)
+        if param and param not in params and (value := secret(name)):
+            params[param] = value
     return params
 
 

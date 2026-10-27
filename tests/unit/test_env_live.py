@@ -4,7 +4,7 @@ masking, the agent's per-turn view, `{{var.NAME}}` placeholders, name rules)."""
 from __future__ import annotations
 
 import json
-import os
+import sqlite3
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -15,6 +15,7 @@ from asgi_lifespan import LifespanManager
 from sqlalchemy import select
 
 from auoreo.api.app import create_app
+from auoreo.core import settings_store
 from auoreo.core.db import AuditRow
 from auoreo.core.env_custom import name_problem, resolve_vars, shell_env
 from auoreo.core.live_settings import apply, live_of
@@ -54,18 +55,21 @@ async def test_apply_updates_in_place_and_skips_restart_keys(services: Services,
     assert held is services.settings and held.locale == "ja-JP" and held.port == 4096
 
 
-async def test_watcher_picks_up_external_settings_edit(services: Services) -> None:
+async def test_watcher_picks_up_a_db_change_from_another_connection(services: Services) -> None:
     live = live_of(services)
-    path = services.settings.home / "settings.json"
-    path.write_text(json.dumps({"suggestions_max_pending": 9, "strict_overlays": True}))
-    os.utime(path, ns=(1, 2_000_000_000_000_000_000))
+    home = services.settings.home
+    # another process (`auoreo config set`): its own sqlite3 connection, no server API involved
+    settings_store.write(home, {"suggestions_max_pending": 9, "strict_overlays": True}, source="cli")
     gen = services.harness.generation
     await live.poll_once()
     assert services.settings.suggestions_max_pending == 9 and services.settings.strict_overlays
     assert services.harness.strict_overlays and services.harness.generation == gen + 1
-    path.write_text("{ broken")
-    os.utime(path, ns=(1, 3_000_000_000_000_000_000))
-    await live.poll_once()  # a broken file is logged and ignored: running settings stay
+    con = sqlite3.connect(settings_store.db_file(home))  # an invalid value behind our back
+    con.execute("UPDATE app_settings SET value = '999' WHERE key = 'suggestions_max_pending'")
+    con.execute("UPDATE app_settings_meta SET value = value + 1 WHERE key = 'version'")
+    con.commit()
+    con.close()
+    await live.poll_once()  # an invalid value is logged and ignored: running settings stay
     assert services.settings.suggestions_max_pending == 9
     services.secrets.set("BRAVE_API_KEY", "brave-key-0123456789")
     await live.poll_once()
@@ -74,7 +78,7 @@ async def test_watcher_picks_up_external_settings_edit(services: Services) -> No
 
 
 async def test_init_overrides_survive_a_rebuild(services: Services) -> None:
-    (services.settings.home / "settings.json").write_text(json.dumps({"gateway": "litellm"}))
+    settings_store.write(services.settings.home, {"gateway": "litellm"})
     res = await live_of(services).reload()
     assert services.settings.gateway == "fake" and "gateway" not in res.changed
 
@@ -99,7 +103,7 @@ def test_name_rules() -> None:
 async def test_custom_vars_crud_names_only(services: Services, client: httpx.AsyncClient) -> None:
     await _custom(client, "MY_PLAIN", "hello", expose_to_agent=True)
     await _custom(client, "MY_TOKEN_X", SECRET, secret=True, expose_to_shell=True)
-    data = json.loads((services.settings.home / "settings.json").read_text())
+    data = settings_store.read(services.settings.home)
     assert data["env"]["custom"]["MY_PLAIN"]["value"] == "hello"
     assert "value" not in data["env"]["custom"]["MY_TOKEN_X"] and SECRET not in json.dumps(data)
     assert services.secrets.get("MY_TOKEN_X") == SECRET
@@ -170,7 +174,7 @@ async def test_model_change_rebuilds_the_litellm_router(services: Services) -> N
     gw = LiteLLMGateway(services.settings, lambda n: "sk-env" if n.endswith("_API_KEY") else None)
     services.gateway = gw
     before = gw._router
-    (services.settings.home / "settings.json").write_text(json.dumps({"model": "openai/gpt-5"}))
+    settings_store.write(services.settings.home, {"model": "openai/gpt-5"})
     res = await live_of(services).reload("api")
     assert "models" in res.live and gw._router is not before
     names = [e["litellm_params"]["model"] for e in gw._model_list if e["model_name"] == "default"]

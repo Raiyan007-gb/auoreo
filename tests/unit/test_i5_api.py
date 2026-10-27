@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,7 @@ from asgi_lifespan import LifespanManager
 from pytest_httpx import HTTPXMock
 
 from auoreo.api.app import create_app
+from auoreo.core import settings_store
 from auoreo.core.services import Services
 from auoreo.core.settings import Settings
 
@@ -107,11 +107,11 @@ async def test_scoped_reload(client: httpx.AsyncClient, services: Services) -> N
     lsp = (await client.post("/api/harness/reload", params={"kind": "lsp"})).json()
     assert lsp["changes"] == {"lsp": {"stopped": []}} and "next use" in lsp["note"]
 
-    (services.settings.home / "settings.json").write_text(json.dumps({"model": "small"}))
+    settings_store.write(services.settings.home, {"model": "small"})
     cfg = (await client.post("/api/harness/reload", params={"kind": "model"})).json()
     assert cfg["changes"] == {"config": {"changed": ["model"]}} and "applied live" in cfg["note"]
     assert services.settings.model == "small"  # ENV: applied in place, no restart
-    (services.settings.home / "settings.json").write_text(json.dumps({"port": "not-a-port"}))
+    settings_store.write(services.settings.home, {"teams_max_depth": "not-a-number"})  # raw: no validation
     assert (await client.post("/api/harness/reload", params={"kind": "config"})).status_code == 422
     assert (await client.post("/api/harness/reload", params={"kind": "bogus"})).status_code == 422
     full = (await client.post("/api/harness/reload")).json()

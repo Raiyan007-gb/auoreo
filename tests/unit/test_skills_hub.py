@@ -20,6 +20,7 @@ from pytest_httpx import HTTPXMock
 from typer.testing import CliRunner
 
 from auoreo.api.app import create_app
+from auoreo.core import settings_store
 from auoreo.core.services import Services
 from auoreo.core.settings_g6 import SkillsHubSettings
 from auoreo.harness.discovery import Root
@@ -242,7 +243,7 @@ def test_cli_taps_and_install(home: Path, httpx_mock: HTTPXMock) -> None:
     runner = CliRunner()
     r = runner.invoke(app, ["skills", "taps", "add", INDEX])
     assert r.exit_code == 0, r.output
-    assert json.loads((home / "settings.json").read_text())["g6"]["skills"]["taps"] == [INDEX]
+    assert settings_store.read(home)["g6"]["skills"]["taps"] == [INDEX]
     assert INDEX in runner.invoke(app, ["skills", "taps"]).output
     add_index(
         httpx_mock, [{"name": "cli-skill", "description": "from the cli", "url": "https://hub.test/c.md"}]

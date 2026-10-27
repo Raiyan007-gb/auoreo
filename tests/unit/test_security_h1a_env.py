@@ -1,11 +1,11 @@
-"""H1a: `.env` can never set security knobs and yolo is frozen from the real env (§19.3);
-`secrets.db` beats `.env` values with a cross-process lock on writes (§7); the closed child
-env allowlist (§24.9); forced redaction for debug bundles (§24.9)."""
+"""H1a: no `.env` is ever loaded and the one-time import never moves security knobs; yolo is
+frozen from the real env (§19.3); secrets come from env → keyring → secrets.db with a
+cross-process lock on writes (§7); the closed child env allowlist (§24.9); forced redaction for
+debug bundles (§24.9)."""
 
 from __future__ import annotations
 
 import json
-import logging
 import os
 import subprocess
 import sys
@@ -14,8 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from auoreo.core import dotenv, redaction
+from auoreo.core import redaction
 from auoreo.core.debuginfo import build_bundle
+from auoreo.core.env_import import plan
 from auoreo.core.secrets import ENV_ALLOWLIST, SecretStore, child_env
 from auoreo.core.settings import Settings
 
@@ -23,32 +24,19 @@ REPO = Path(__file__).resolve().parents[2]
 FAKE_KEY = "sk-proj-" + "A1b2C3d4E5f6G7h8I9j0" * 2
 
 
-@pytest.fixture
-def clean_origin(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(dotenv, "_ORIGIN", {})
-
-
 # ------------------------------------------------------------------ §19.3
-def test_dotenv_refuses_security_knobs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, clean_origin: None
-) -> None:
+def test_dotenv_import_refuses_security_knobs(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text(
         "AUOREO_YOLO=1\nAUOREO_PERMISSION_MODE=yolo\nAUOREO_SANDBOX_POLICY=warn\n"
         'AUOREO_REDACT_SECRETS=0\nAUOREO_BACKENDS={"sandbox":"none"}\nAUOREO_SECURITY={}\n'
         "H1A_PROVIDER_KEY=abc123\n"
     )
-    for name in ("AUOREO_YOLO", "AUOREO_PERMISSION_MODE", "AUOREO_SANDBOX_POLICY", "AUOREO_REDACT_SECRETS"):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.delenv("AUOREO_BACKENDS", raising=False)
-    monkeypatch.delenv("AUOREO_SECURITY", raising=False)
-    monkeypatch.delenv("H1A_PROVIDER_KEY", raising=False)
-    caplog.set_level(logging.WARNING, logger="auoreo.core.dotenv")
-    loaded = dotenv.load_env_files(tmp_path)
-    assert loaded == ["H1A_PROVIDER_KEY"]
-    for name in ("AUOREO_YOLO", "AUOREO_PERMISSION_MODE", "AUOREO_SANDBOX_POLICY", "AUOREO_REDACT_SECRETS"):
-        assert name not in os.environ
-    assert "ignored security setting(s)" in caplog.text and "AUOREO_YOLO" in caplog.text
-    monkeypatch.delenv("H1A_PROVIDER_KEY")
+    moves, settings, secrets = plan([tmp_path / ".env"], tmp_path)
+    assert secrets == {"H1A_PROVIDER_KEY": "abc123"} and settings == {}
+    assert {m.name for m in moves if m.to == "skipped"} == {
+        "AUOREO_YOLO", "AUOREO_PERMISSION_MODE", "AUOREO_SANDBOX_POLICY", "AUOREO_REDACT_SECRETS",
+        "AUOREO_BACKENDS", "AUOREO_SECURITY",
+    }  # fmt: skip
 
 
 def _probe(cwd: Path, env: dict[str, str]) -> dict[str, object]:
@@ -56,8 +44,6 @@ def _probe(cwd: Path, env: dict[str, str]) -> dict[str, object]:
         "import json, os\n"
         "from auoreo.cli import main as m\n"
         "import auoreo.core.permissions, auoreo.core.redaction\n"
-        "from auoreo.core.dotenv import load_env_files\n"
-        "load_env_files()\n"
         "from auoreo.core import permissions as p, redaction as r\n"
         "print(json.dumps({'yolo': p.YOLO_FROZEN, 'redact': r.ENABLED,"
         " 'env': os.environ.get('AUOREO_YOLO'), 'other': os.environ.get('H1A_OTHER')}))\n"
@@ -74,38 +60,29 @@ def test_project_env_cannot_turn_on_yolo_or_disable_redaction(tmp_path: Path) ->
     env = {k: v for k, v in os.environ.items() if not k.startswith(("AUOREO_YOLO", "AUOREO_REDACT"))}
     env["AUOREO_HOME"] = str(tmp_path / "home")
     got = _probe(tmp_path, env)
-    assert got == {"yolo": False, "redact": True, "env": None, "other": "ok"}
+    assert got == {"yolo": False, "redact": True, "env": None, "other": None}  # never loaded
     # the real process environment still works
     got = _probe(tmp_path, {**env, "AUOREO_YOLO": "1"})
     assert got["yolo"] is True
 
 
-def test_cli_main_freezes_before_loading_dotenv() -> None:
+def test_cli_main_freezes_and_never_loads_dotenv() -> None:
     src = (REPO / "src/auoreo/cli/main.py").read_text()
-    assert src.index("import auoreo.core.permissions") < src.index("load_env_files()")
+    assert "import auoreo.core.permissions" in src and "load_env_files" not in src
 
 
 # ------------------------------------------------------------------ §7 precedence
-def test_secrets_db_beats_dotenv_but_not_the_real_env(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, clean_origin: None
-) -> None:
+def test_a_dotenv_file_is_never_a_secret_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     store = SecretStore(tmp_path / "home")
     store.set("H1A_TOKEN", "from-store")
     (tmp_path / ".env").write_text("H1A_TOKEN=from-dotenv\nH1A_ONLY_DOTENV=gap-filler\n")
+    monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("H1A_TOKEN", raising=False)
     monkeypatch.delenv("H1A_ONLY_DOTENV", raising=False)
-    dotenv.load_env_files(tmp_path)
-    try:
-        assert os.environ["H1A_TOKEN"] == "from-dotenv" and dotenv.from_dotenv("H1A_TOKEN")
-        assert store.get("H1A_TOKEN") == "from-store"  # secrets.db > <cwd>/.env
-        assert store.get("H1A_ONLY_DOTENV") == "gap-filler"  # .env fills gaps
-        assert child_env(["H1A_TOKEN"], store)["H1A_TOKEN"] == "from-store"
-        monkeypatch.setenv("H1A_TOKEN", "from-real-env")  # process env always wins
-        assert not dotenv.from_dotenv("H1A_TOKEN")
-        assert store.get("H1A_TOKEN") == "from-real-env"
-    finally:
-        monkeypatch.delenv("H1A_TOKEN", raising=False)
-        monkeypatch.delenv("H1A_ONLY_DOTENV", raising=False)
+    assert store.get("H1A_TOKEN") == "from-store" and store.get("H1A_ONLY_DOTENV") is None
+    assert child_env(["H1A_TOKEN"], store)["H1A_TOKEN"] == "from-store"
+    monkeypatch.setenv("H1A_TOKEN", "from-real-env")  # the process env always wins
+    assert store.get("H1A_TOKEN") == "from-real-env"
 
 
 def test_secret_writes_are_serialised_across_processes(tmp_path: Path) -> None:
@@ -163,16 +140,12 @@ async def test_debug_bundle_redacts_even_when_redaction_is_off(
     assert manifest["redaction"]["pattern_count"] > 0 and manifest["redaction"]["version"]
 
 
-def test_project_dotenv_cannot_repoint_home(tmp_path, monkeypatch):
-    """A repo `.env` must not swap in its own settings.json via AUOREO_HOME / AUOREO_PROFILE."""
-    from auoreo.core import dotenv
-
-    monkeypatch.delenv("AUOREO_HOME", raising=False)
-    monkeypatch.delenv("AUOREO_PROFILE", raising=False)
-    (tmp_path / ".env").write_text("AUOREO_HOME=./evil\nAUOREO_PROFILE=evil\nSOME_OK=1\n")
-    monkeypatch.setenv("HOME", str(tmp_path / "realhome"))
-    monkeypatch.delenv("SOME_OK", raising=False)
-    loaded = dotenv.load_env_files(tmp_path)
-    assert "AUOREO_HOME" not in loaded and "AUOREO_PROFILE" not in loaded
-    assert "AUOREO_HOME" not in __import__("os").environ
-    assert "SOME_OK" in loaded
+def test_project_dotenv_cannot_repoint_home(tmp_path: Path) -> None:
+    """A repo `.env` must not swap in its own state.db via AUOREO_HOME / AUOREO_PROFILE."""
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / ".env").write_text("AUOREO_HOME=./evil\nAUOREO_PROFILE=evil\nSOME_OK_TOKEN=1\n")
+    moves, settings, secrets = plan([proj / ".env"], tmp_path / "home")
+    to = {m.name: m.to for m in moves}
+    assert to["AUOREO_HOME"] == "skipped" and to["AUOREO_PROFILE"] == "skipped"
+    assert settings == {} and secrets == {"SOME_OK_TOKEN": "1"}

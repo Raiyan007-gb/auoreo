@@ -11,13 +11,11 @@ def main() -> None:
 
         print(__version__)
         return
-    # Freeze yolo + the redaction switch from the REAL process env before any `.env` is read
-    # (§19.3); `load_env_files` also refuses security knobs outright.
+    # Freeze yolo + the redaction switch from the REAL process env (§19.3). No `.env` file is
+    # ever loaded: settings live in state.db, keys in secrets.db (Settings → Environment/Models).
     import auoreo.core.permissions
     import auoreo.core.redaction  # noqa: F401
-    from auoreo.core.dotenv import load_env_files
 
-    load_env_files()  # provider keys + AUOREO_* from .env (never overrides the real env)
     _configure_logging()
     from auoreo.cli.app import app
 

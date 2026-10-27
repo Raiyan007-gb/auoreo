@@ -22,9 +22,10 @@ class EnvListing:
     Attributes:
         custom (list[CustomVarOut]):
         dotenv_exists (bool):
-        dotenv_path (str):
-        history (int): settings.json versions available to undo
+        dotenv_path (str): First `.env` found (home, then project) — import only
+        history (int): Stored change sets available to undo
         sections (list[EnvSectionOut]):
+        dotenv_paths (list[str] | Unset): Every `.env` the import would read
         pending_restart (list[str] | Unset):
     """
 
@@ -33,6 +34,7 @@ class EnvListing:
     dotenv_path: str
     history: int
     sections: list[EnvSectionOut]
+    dotenv_paths: list[str] | Unset = UNSET
     pending_restart: list[str] | Unset = UNSET
     additional_properties: dict[str, Any] = _attrs_field(init=False, factory=dict)
 
@@ -53,6 +55,10 @@ class EnvListing:
             sections_item = sections_item_data.to_dict()
             sections.append(sections_item)
 
+        dotenv_paths: list[str] | Unset = UNSET
+        if not isinstance(self.dotenv_paths, Unset):
+            dotenv_paths = self.dotenv_paths
+
         pending_restart: list[str] | Unset = UNSET
         if not isinstance(self.pending_restart, Unset):
             pending_restart = self.pending_restart
@@ -68,6 +74,8 @@ class EnvListing:
                 "sections": sections,
             }
         )
+        if dotenv_paths is not UNSET:
+            field_dict["dotenv_paths"] = dotenv_paths
         if pending_restart is not UNSET:
             field_dict["pending_restart"] = pending_restart
 
@@ -99,6 +107,8 @@ class EnvListing:
 
             sections.append(sections_item)
 
+        dotenv_paths = cast(list[str], d.pop("dotenv_paths", UNSET))
+
         pending_restart = cast(list[str], d.pop("pending_restart", UNSET))
 
         env_listing = cls(
@@ -107,6 +117,7 @@ class EnvListing:
             dotenv_path=dotenv_path,
             history=history,
             sections=sections,
+            dotenv_paths=dotenv_paths,
             pending_restart=pending_restart,
         )
 

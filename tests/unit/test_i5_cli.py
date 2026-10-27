@@ -14,6 +14,7 @@ from typer.testing import CliRunner
 from auoreo.cli import output, target
 from auoreo.cli.app import app
 from auoreo.cli.serve_extras import lan_lines
+from auoreo.core import settings_store
 from auoreo.core.event_levels import at_least, level_of
 from auoreo.harness.manifests import PluginManifest
 from auoreo.plugins import config_values as cv
@@ -109,11 +110,11 @@ def test_plugin_get_set_refuses_secrets(cli_env: Path, home: Path) -> None:
     r = runner.invoke(app, ["plugin", "set", "telegram", "poll_timeout_s", "10"])
     assert r.exit_code == 0, r.output
     assert runner.invoke(app, ["plugin", "set", "telegram", "allowlist", '["42"]']).exit_code == 0
-    cfg = json.loads((home / "settings.json").read_text())["plugins"]["telegram"]
+    cfg = settings_store.read(home)["plugins"]["telegram"]
     assert cfg == {"poll_timeout_s": 10, "allowlist": ["42"]}
     r = runner.invoke(app, ["plugin", "set", "telegram", "bot_token", "123:abc"])
     assert r.exit_code == 2 and "secret" in r.output
-    assert "123:abc" not in (home / "settings.json").read_text()
+    assert "123:abc" not in json.dumps(settings_store.read(home))
     r = runner.invoke(app, ["plugin", "set", "telegram", "poll_timeout_s", "99"])
     assert r.exit_code == 2 and "maximum" in r.output.lower()
     r = runner.invoke(app, ["plugin", "set", "telegram", "nope", "1"])
@@ -138,7 +139,7 @@ def test_secret_detection_from_schema(home: Path) -> None:
         }
     )
     assert cv.is_secret(m, "pin") and cv.is_secret(m, "api_key") and not cv.is_secret(m, "region")
-    (home / "settings.json").write_text(json.dumps({"plugins": {"demo": {"pin": "1234", "region": "eu"}}}))
+    settings_store.write(home, {"plugins": {"demo": {"pin": "1234", "region": "eu"}}})
     assert cv.values(home, {}, m) == {"pin": cv.MASK, "region": "eu"}
     with pytest.raises(cv.PluginConfigError, match="secret"):
         cv.set_value(home, m, "pin", "9999")

@@ -18,7 +18,7 @@ import logging
 import re
 from typing import Any
 
-from auoreo.core.dotenv import _REDIRECT, PROTECTED_PREFIXES
+from auoreo.core.env_rules import PROTECTED_PREFIXES, REDIRECT
 from auoreo.core.settings_env import CUSTOM_NAME
 
 log = logging.getLogger(__name__)
@@ -36,7 +36,7 @@ def name_problem(name: str) -> str | None:
         return "use A-Z, 0-9 and _ (2-64 characters, starting with a letter)"
     if any(name.startswith(p) for p in PROTECTED_PREFIXES) or _RESERVED_EXTRA.search(name):
         return "AUOREO_* and loader/redirect names are reserved"
-    if _REDIRECT.search(name):
+    if REDIRECT.search(name):
         return "names that redirect traffic or code loading (PATH, HOME, *_URL, *_HOST, …) are reserved"
     if name in by_name():
         return "this is a built-in variable: edit it in its section above"

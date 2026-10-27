@@ -71,7 +71,7 @@ def sync_detailed(
 ) -> Response[EnvApplied | HTTPValidationError]:
     """Undo
 
-     Restore the previous settings.json version (10 are kept) and apply it live.
+     Restore the previous stored settings (10 change sets are kept) and apply them live.
 
     Args:
         authorization (None | str | Unset):
@@ -105,7 +105,7 @@ def sync(
 ) -> EnvApplied | HTTPValidationError | None:
     """Undo
 
-     Restore the previous settings.json version (10 are kept) and apply it live.
+     Restore the previous stored settings (10 change sets are kept) and apply them live.
 
     Args:
         authorization (None | str | Unset):
@@ -134,7 +134,7 @@ async def asyncio_detailed(
 ) -> Response[EnvApplied | HTTPValidationError]:
     """Undo
 
-     Restore the previous settings.json version (10 are kept) and apply it live.
+     Restore the previous stored settings (10 change sets are kept) and apply them live.
 
     Args:
         authorization (None | str | Unset):
@@ -166,7 +166,7 @@ async def asyncio(
 ) -> EnvApplied | HTTPValidationError | None:
     """Undo
 
-     Restore the previous settings.json version (10 are kept) and apply it live.
+     Restore the previous stored settings (10 change sets are kept) and apply them live.
 
     Args:
         authorization (None | str | Unset):

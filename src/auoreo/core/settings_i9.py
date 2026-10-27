@@ -5,7 +5,7 @@ the guardian timeout and the WebSocket server pinning (spec §25.10 L1017/L1021,
 Attached to `Settings` as `i9: I9Settings`; set in `settings.json`
 (`{"i9": {"egress": {"deny_hosts": ["*.internal"]}}}`) or as a JSON env var
 (`AUOREO_I9='{"search": {"order": ["brave", "exa"]}}'`). `AUOREO_SMART_TIMEOUT` (a plain env
-var, see `.env.example`) overrides `guardian.timeout_s`.
+var, see the variable catalog) overrides `guardian.timeout_s`.
 """
 
 from __future__ import annotations
