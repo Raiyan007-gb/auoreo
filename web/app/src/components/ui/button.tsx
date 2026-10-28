@@ -4,17 +4,18 @@ import type * as React from "react";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0",
+  "inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg text-sm font-medium transition-[color,background-color,box-shadow,transform] duration-150 outline-none active:scale-[0.98] motion-reduce:active:scale-100 focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90",
-        brand: "bg-brand text-brand-foreground shadow-xs hover:bg-brand/90",
+        // Neutral raised button; the one main action on a screen uses `brand` (teal).
+        default: "border bg-secondary text-foreground shadow-xs hover:bg-accent hover:border-foreground/15",
+        brand: "bg-brand text-brand-foreground shadow-xs shadow-brand/25 hover:bg-brand/90 hover:shadow-md hover:shadow-brand/20",
         destructive: "bg-destructive text-white shadow-xs hover:bg-destructive/90",
         "destructive-outline": "border border-destructive/35 bg-card text-destructive shadow-xs hover:bg-destructive-soft",
-        outline: "border bg-card shadow-xs hover:bg-accent hover:text-accent-foreground",
+        outline: "border bg-card shadow-xs hover:bg-surface-hover hover:border-foreground/15",
         secondary: "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
+        ghost: "hover:bg-surface-selected hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

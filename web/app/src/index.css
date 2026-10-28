@@ -9,9 +9,20 @@
 /* Design tokens from the AUOREO canvas (Claude Design): neutral grey page, white surfaces,
    teal brand, soft tone pairs (`--<tone>-soft` background + `--<tone>-ink` text on it). */
 :root {
-  --background: #f6f6f7;
+  --background: #f7f7f8;
   --foreground: #18181b;
   --card: #ffffff;
+  --surface-selected: rgb(24 24 27 / 6%);
+  --surface-hover: rgb(24 24 27 / 4%);
+  --elev-card: 0 1px 2px rgb(16 16 20 / 4%), 0 1px 1px rgb(16 16 20 / 2%);
+  --elev-raised: 0 1px 2px rgb(16 16 20 / 6%), 0 8px 24px -12px rgb(16 16 20 / 14%);
+  /* Logo (components/AppShell BrandMark): dark tile, white ring, grey orbit; inverted in dark mode. */
+  --logo-tile-top: #2a2a2e;
+  --logo-tile-bottom: #0c0c0e;
+  --logo-ring: #fafafa;
+  --logo-orbit: #a1a1aa;
+  --logo-edge: rgb(255 255 255 / 9%);
+  --glow: rgb(20 184 166 / 9%);
   --card-foreground: #18181b;
   --popover: #ffffff;
   --popover-foreground: #18181b;
@@ -51,11 +62,21 @@
 }
 
 [data-theme="dark"] {
-  --background: #0f0f11;
+  --background: #0b0b0d;
   --foreground: #f4f4f5;
-  --card: #18181b;
+  --card: #141417;
+  --surface-selected: rgb(255 255 255 / 7%);
+  --surface-hover: rgb(255 255 255 / 4%);
+  --elev-card: 0 1px 2px rgb(0 0 0 / 40%);
+  --elev-raised: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px -12px rgb(0 0 0 / 60%);
+  --logo-tile-top: #fafafa;
+  --logo-tile-bottom: #d4d4d8;
+  --logo-ring: #18181b;
+  --logo-orbit: #71717a;
+  --logo-edge: rgb(0 0 0 / 8%);
+  --glow: rgb(43 179 165 / 10%);
   --card-foreground: #f4f4f5;
-  --popover: #1c1c20;
+  --popover: #18181c;
   --popover-foreground: #f4f4f5;
   --primary: #f4f4f5;
   --primary-foreground: #18181b;
@@ -87,7 +108,7 @@
   --border-subtle: rgb(255 255 255 / 7%);
   --input: rgb(255 255 255 / 16%);
   --ring: #2bb3a5;
-  --sidebar: #141417;
+  --sidebar: #0e0e11;
   --code: #0a0a0c;
   --code-foreground: #f4f4f5;
 }
@@ -132,10 +153,22 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
+  --color-surface-selected: var(--surface-selected);
+  --color-surface-hover: var(--surface-hover);
+  --shadow-card: var(--elev-card);
+  --shadow-raised: var(--elev-raised);
+  /* Type scale: 2xs 11 · xs 12 · ui 13 · sm 14 · title 15 · base 16 · lg 18 · 2xl 24 (px). */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-ui: 0.8125rem;
+  --text-ui--line-height: 1.25rem;
+  --text-title: 0.9375rem;
+  --text-title--line-height: 1.375rem;
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
-  --radius-xl: 0.875rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
   --font-sans: "Inter Variable", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
@@ -156,6 +189,74 @@
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-ring;
   }
+  /* Native controls (select popups, scrollbars, date pickers) follow the app theme, not the OS. */
+  :root {
+    color-scheme: light;
+  }
+  [data-theme="dark"] {
+    color-scheme: dark;
+  }
+  option,
+  optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--brand) 22%, transparent);
+  }
+}
+
+/* Soft brand glow behind page content (AppShell <main>). */
+.surface-glow {
+  background-image: radial-gradient(60rem 22rem at 70% -8rem, var(--glow), transparent 70%);
+  background-repeat: no-repeat;
+}
+
+/* Thin scrollbars that only show on hover (sidebar nav, thread). Ported from 21st.dev "Sidebar" (wensity). */
+.scroll-quiet { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.scroll-quiet:hover { scrollbar-color: color-mix(in srgb, var(--foreground) 14%, transparent) transparent; }
+
+/* Page spacing: one gutter for headers and bodies (16px, 32px from sm). `page-body` is the
+   content block under a PageHeader. */
+@utility page-gutter {
+  padding-inline: 1rem;
+  @media (width >= 40rem) {
+    padding-inline: 2rem;
+  }
+}
+@utility page-body {
+  padding: 1rem 1rem 2.5rem;
+  @media (width >= 40rem) {
+    padding: 1.25rem 2rem 2.5rem;
+  }
+}
+
+/* Table density (lib/density): compact tightens every table's rows. */
+[data-density="compact"] [data-slot="table-head"] { height: 2.25rem; }
+[data-density="compact"] [data-slot="table-cell"] { padding-block: 0.375rem; }
+
+/* Skeleton shimmer (components/ui/skeleton). */
+.skeleton {
+  background: linear-gradient(90deg, var(--muted) 25%, color-mix(in srgb, var(--muted) 55%, var(--card)) 37%, var(--muted) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+@keyframes shimmer {
+  from { background-position: 100% 50%; }
+  to { background-position: 0 50%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* Page entrance: content fades up on route change. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-rise-in { animation: rise-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .animate-rise-in { animation: none; }
 }
 
 /* Assistant markdown (components/Markdown.tsx). */

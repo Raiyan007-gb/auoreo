@@ -1,5 +1,9 @@
 import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { extendTailwindMerge } from "tailwind-merge";
+
+/** Knows the app's font-size tokens (index.css `--text-2xs|ui|title`); without this, `text-ui`
+ *  reads as a colour and is dropped next to `text-muted-foreground`. */
+const twMerge = extendTailwindMerge({ extend: { theme: { text: ["2xs", "ui", "title"] } } });
 
 export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));

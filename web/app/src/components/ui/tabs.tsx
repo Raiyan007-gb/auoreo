@@ -21,7 +21,7 @@ export function TabsList({ className, variant, ...props }: React.ComponentProps<
     <TabsPrimitive.List
       data-slot="tabs-list"
       className={cn(
-        "inline-flex min-h-9 w-fit flex-wrap items-center justify-center gap-1 rounded-[9px] bg-accent p-[3px] text-muted-foreground",
+        "inline-flex min-h-9 w-fit flex-wrap items-center justify-center gap-1 rounded-[10px] border border-border-subtle bg-muted/70 p-[3px] text-muted-foreground",
         className,
       )}
       {...props}
@@ -34,8 +34,8 @@ export function TabsTrigger({ className, ...props }: React.ComponentProps<typeof
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "inline-flex h-7.5 items-center justify-center gap-1.5 rounded-[7px] px-3 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-xs",
-        "group-data-[variant=line]/tabs:-mb-px group-data-[variant=line]/tabs:h-9.5 group-data-[variant=line]/tabs:rounded-none group-data-[variant=line]/tabs:border-b-2 group-data-[variant=line]/tabs:border-transparent group-data-[variant=line]/tabs:font-normal group-data-[variant=line]/tabs:text-muted-foreground group-data-[variant=line]/tabs:data-[state=active]:border-foreground group-data-[variant=line]/tabs:data-[state=active]:bg-transparent group-data-[variant=line]/tabs:data-[state=active]:font-semibold group-data-[variant=line]/tabs:data-[state=active]:text-foreground group-data-[variant=line]/tabs:data-[state=active]:shadow-none",
+        "inline-flex h-7.5 items-center justify-center gap-1.5 rounded-[7px] px-3 text-sm font-medium whitespace-nowrap transition-[color,background-color,box-shadow] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-card",
+        "group-data-[variant=line]/tabs:-mb-px group-data-[variant=line]/tabs:h-9.5 group-data-[variant=line]/tabs:rounded-none group-data-[variant=line]/tabs:border-b-2 group-data-[variant=line]/tabs:border-transparent group-data-[variant=line]/tabs:font-normal group-data-[variant=line]/tabs:text-muted-foreground group-data-[variant=line]/tabs:data-[state=active]:border-brand group-data-[variant=line]/tabs:data-[state=active]:bg-transparent group-data-[variant=line]/tabs:data-[state=active]:font-semibold group-data-[variant=line]/tabs:data-[state=active]:text-foreground group-data-[variant=line]/tabs:data-[state=active]:shadow-none",
         className,
       )}
       {...props}
@@ -44,5 +44,5 @@ export function TabsTrigger({ className, ...props }: React.ComponentProps<typeof
 }
 
 export function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
-  return <TabsPrimitive.Content data-slot="tabs-content" className={cn("outline-none", className)} {...props} />;
+  return <TabsPrimitive.Content data-slot="tabs-content" className={cn("rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background", className)} {...props} />;
 }
