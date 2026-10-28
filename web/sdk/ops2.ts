@@ -7,6 +7,9 @@ import type { components } from "./types.gen";
 type S = components["schemas"];
 export type DoctorCheck = S["DoctorCheck"];
 export type DoctorReport = S["DoctorReport"];
+export type DoctorFix = S["DoctorFix"];
+export type DoctorFixPlan = S["DoctorFixPlan"];
+export type DoctorFixResult = S["DoctorFixResult"];
 export type AuditEntry = S["AuditEntry"];
 export type AuditPage = S["AuditPage"];
 export type AuditVerify = S["AuditVerify"];
@@ -51,6 +54,8 @@ const enc = encodeURIComponent;
 export function statusMethods(request: Request, base: string, token: () => string | null) {
   return {
     doctor: () => request<DoctorReport>("GET", "/api/doctor"),
+    doctorFixes: () => request<DoctorFixPlan>("GET", "/api/doctor/fixes"),
+    applyDoctorFixes: () => request<DoctorFixResult>("POST", "/api/doctor/fixes"),
     audit: (q: AuditQuery = {}) => request<AuditPage>("GET", "/api/audit", { query: { ...q } }),
     auditVerify: () => request<AuditVerify>("GET", "/api/audit/verify"),
 

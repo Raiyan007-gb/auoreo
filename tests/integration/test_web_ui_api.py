@@ -55,3 +55,18 @@ async def test_session_context_breakdown(client: httpx.AsyncClient) -> None:
 
 async def test_session_context_unknown_404(client: httpx.AsyncClient) -> None:
     assert (await client.get("/api/sessions/nope/context")).status_code == 404
+
+
+async def test_sessions_context_batch(client: httpx.AsyncClient) -> None:
+    a = (await client.post("/api/sessions", json={"title": "ctx a"})).json()["id"]
+    b = (await client.post("/api/sessions", json={"title": "ctx b"})).json()["id"]
+    r = await client.get(
+        "/api/context",
+        params=[("session_id", a), ("session_id", b), ("session_id", "nope"), ("session_id", a)],
+    )
+    assert r.status_code == 200
+    rows = r.json()
+    assert [x["session_id"] for x in rows] == [a, b]  # unknown left out, duplicates once
+    single = (await client.get(f"/api/sessions/{a}/context")).json()
+    assert rows[0] == single
+    assert (await client.get("/api/context", params=[("session_id", "x")] * 101)).status_code == 422

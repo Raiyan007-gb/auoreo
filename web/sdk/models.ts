@@ -36,6 +36,8 @@ export function modelsMethods(request: Req) {
     providers: () => request<ProviderList>("GET", "/api/providers"),
     /** Validates first; `ok: false` carries the provider's error and nothing was stored. */
     providerAdd: (body: ProviderCreate) => request<ProviderResult>("POST", "/api/providers", { body }),
+    /** Connect a provider whose key is already stored (Environment tab / real env): no key is sent. */
+    providerAdopt: (provider: string) => request<ProviderResult>("POST", "/api/providers/adopt", { body: { provider } }),
     providerUpdate: (id: number, body: ProviderUpdate) =>
       request<ProviderResult>("PUT", `/api/providers/${id}`, { body }),
     providerRefresh: (id: number) => request<ProviderResult>("POST", `/api/providers/${id}/refresh`),

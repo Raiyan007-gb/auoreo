@@ -290,3 +290,29 @@ async def test_import_of_a_project_env_creates_provider_connections(
     assert [c["provider"] for c in conns] == ["openai"]
     assert settings_store.read(services.settings.home) == {"model": "openai/gpt-5"}
     assert services.secrets.get("OPENAI_API_BASE") is None
+
+
+async def test_adopt_connects_a_key_that_is_already_stored(
+    services: Services, client: httpx.AsyncClient, httpx_mock: HTTPXMock
+) -> None:
+    # nothing stored yet: refused, nothing created
+    r = await client.post("/api/providers/adopt", json={"provider": "openai"})
+    assert r.status_code == 404 and "OPENAI_API_KEY" in r.json()["detail"]
+    assert (await client.get("/api/providers")).json()["connections"] == []
+
+    services.secrets.set("OPENAI_API_KEY", KEY)  # e.g. pasted under Settings → Environment
+    httpx_mock.add_response(url=OPENAI, json=fx("openai"))
+    r = await client.post("/api/providers/adopt", json={"provider": "openai"})
+    body = r.json()
+    assert r.status_code == 200 and body["ok"] and body["model_count"] == 5 and KEY not in r.text
+    assert body["connection"]["secret_name"] == "OPENAI_API_KEY"
+    assert services.secrets.get("OPENAI_API_KEY") == KEY  # the same secret, not a copy
+
+    again = await client.post("/api/providers/adopt", json={"provider": "openai"})
+    assert again.status_code == 409
+    dump = _db_dump(services) + json.dumps(await _audit(services, "provider"))
+    dump += json.dumps(await _events(services, "providers.changed", "secret.changed"))
+    assert KEY not in dump
+    assert [a["action"] for a in await _audit(services, "provider")] == ["provider.adopt"]
+    # providers that need an endpoint are not adoptable
+    assert (await client.post("/api/providers/adopt", json={"provider": "azure"})).status_code == 422

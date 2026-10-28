@@ -413,6 +413,7 @@ function goalsApi(request: RequestFn) {
       request<GoalInfo>("POST", "/api/goals", { body: { description: "", ...body } }),
     updateGoal: (id: number, body: Partial<GoalPatch>) =>
       request<GoalInfo>("PATCH", `/api/goals/${id}`, { body }),
+    deleteGoal: (id: number) => request<void>("DELETE", `/api/goals/${id}`),
     absorbGoal: (id: number, into: number) =>
       request<GoalInfo>("POST", `/api/goals/${id}/absorb`, { body: { into } }),
     listSuggestions: (status?: SuggestionStatus | "all", limit = 100) =>
@@ -493,6 +494,7 @@ function meetingsApi(request: RequestFn, base: string, token: () => string | nul
     attachMeetingPeer: (id: string, rtcId: string) =>
       request<MeetingInfo>("POST", `/api/voice/meetings/${enc(id)}/attach`, { body: { rtc_id: rtcId } }),
     stopMeeting: (id: string) => request<MeetingDetail>("POST", `/api/voice/meetings/${enc(id)}/stop`),
+    deleteMeeting: (id: string) => request<void>("DELETE", `/api/voice/meetings/${enc(id)}`),
     summarizeMeeting: (id: string) =>
       request<MeetingSummarizeStarted>("POST", `/api/voice/meetings/${enc(id)}/summarize`),
   };

@@ -38,6 +38,12 @@ class ProviderDetectResult(BaseModel):
     providers: list[ProviderSpecOut] = Field(description="Specs of the candidates, in order")
 
 
+class ProviderAdopt(BaseModel):
+    """Connect a provider whose key is already stored (no key in the body, nothing is copied)."""
+
+    provider: str = Field(max_length=64)
+
+
 class ProviderCreate(BaseModel):
     provider: str = Field(max_length=64)
     key: str | None = Field(default=None, max_length=4096, description="Write-only; never returned")

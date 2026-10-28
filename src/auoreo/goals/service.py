@@ -120,6 +120,8 @@ class GoalsService:
                 row.status = status
             if progress is not None:
                 row.progress = float(progress)
+            elif status == "done":
+                row.progress = 1.0  # done means finished: no "done at 50%"
             if title is not None and title.strip():
                 row.title = title.strip()[:300]
             if description is not None:
@@ -168,6 +170,24 @@ class GoalsService:
             await self._emit("goal.updated", row)
         await self._emit("goal.updated", dst)
         return dst
+
+    async def delete(self, goal_id: int) -> None:
+        """Remove a goal. Goals absorbed into it lose their target and become `dropped`."""
+        async with self.s.db.session() as s:
+            row = await s.get(GoalRow, goal_id)
+            if row is None:
+                raise GoalError(f"goal {goal_id} not found")
+            orphans = list(
+                (await s.execute(select(GoalRow).where(GoalRow.absorbed_into == goal_id))).scalars()
+            )
+            now = utcnow()
+            for o in orphans:
+                o.status, o.absorbed_into, o.updated_at = "dropped", None, now
+            await s.delete(row)
+            await s.commit()
+        await self.s.emit("server", "goal.deleted", {"id": goal_id})
+        for o in orphans:
+            await self._emit("goal.updated", o)
 
     async def _emit(self, type_: str, row: GoalRow) -> None:
         data = goal_data(row)

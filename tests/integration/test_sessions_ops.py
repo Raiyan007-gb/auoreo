@@ -51,6 +51,7 @@ async def test_fork_copies_messages_and_links_both_sides(
     assert r.status_code == 201
     child = r.json()
     assert child["parent_id"] == parent.id and child["model"] == "small" and child["agent"] == "default"
+    assert child["title"] == "p (fork)"
     pm = (await client.get(f"/api/sessions/{parent.id}/messages")).json()
     cm = (await client.get(f"/api/sessions/{child['id']}/messages")).json()
     assert cm == pm and len(cm) == 4

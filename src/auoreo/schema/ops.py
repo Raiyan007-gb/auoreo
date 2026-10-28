@@ -28,6 +28,27 @@ class DoctorReport(BaseModel):
     summary: DoctorSummary
 
 
+class DoctorFix(BaseModel):
+    """One safe, local repair (`auoreo doctor --fix`): never settings, secrets or user data."""
+
+    kind: Literal["mkdir", "chmod", "worktree"]
+    target: str = Field(description="The directory, file or worktree it touches")
+    detail: str
+
+
+class DoctorFixPlan(BaseModel):
+    fixes: list[DoctorFix]
+
+
+class DoctorFixFailure(DoctorFix):
+    error: str
+
+
+class DoctorFixResult(BaseModel):
+    applied: list[DoctorFix]
+    failed: list[DoctorFixFailure]
+
+
 class AuditEntry(BaseModel):
     seq: int
     ts: datetime

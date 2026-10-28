@@ -47,12 +47,19 @@ async def _require(svc: Services, session_id: str, *, idle: bool = False) -> Ses
     return row
 
 
+def fork_title(title: str | None) -> str | None:
+    """`<title> (fork)` so a fork is told apart from its source in lists; never stacks the suffix."""
+    if not title:
+        return title
+    return title if title.endswith(" (fork)") else f"{title} (fork)"
+
+
 async def fork_session(svc: Services, session_id: str) -> SessionRow:
     """New session with the same agent/workflow/model and a copy of every committed message."""
     parent = await _require(svc, session_id, idle=True)
     messages = await svc.coordinator.runner.load_history(session_id)
     child = await svc.create_session(
-        title=parent.title,
+        title=fork_title(parent.title),
         agent=parent.agent,
         workflow=parent.workflow,
         model=parent.model,

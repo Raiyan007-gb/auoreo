@@ -177,3 +177,13 @@ async def test_live_rtc_utterances_append_instead_of_turns(services: Services) -
     stopped = await meetings.stop(meta["id"])
     assert stopped["status"] == "finalised" and stopped["live"] is False
     assert "rtc_1" not in meetings.live
+
+
+async def test_delete_meeting_removes_its_folder(client: httpx.AsyncClient, services: Services) -> None:
+    mid = (await client.post("/api/voice/meetings", json={"title": "Scratch"})).json()["meeting_id"]
+    folder = Path(services.settings.home) / "meetings" / mid
+    assert folder.is_dir()
+    assert (await client.delete(f"/api/voice/meetings/{mid}")).status_code == 204
+    assert not folder.exists()
+    assert all(m["id"] != mid for m in (await client.get("/api/voice/meetings")).json())
+    assert (await client.delete(f"/api/voice/meetings/{mid}")).status_code == 404

@@ -425,9 +425,16 @@ class Harness:
         out["workflows"] = [
             row("workflow", n, w.source, w.path, w.manifest.description) for n, w in self.workflows.items()
         ]
-        out["mcp"] = [
-            row("mcp", n, m.source, m.path, m.manifest.transport) for n, m in self._snap.mcp.items()
-        ]
+
+        def mcp_row(n: str, m: Any) -> dict[str, Any]:
+            on = m.manifest.enabled
+            how = (
+                f"auoreo mcp add --bundle {n}" if m.source == "bundled" else f"set enabled: true in {m.path}"
+            )
+            extra = {"available": on, "unavailable_reason": None if on else f"off — enable with `{how}`"}
+            return {**row("mcp", n, m.source, m.path, m.manifest.transport), **extra}
+
+        out["mcp"] = [mcp_row(n, m) for n, m in self._snap.mcp.items()]
         out["prompts"] = [
             row("prompt", n, p.source, p.path, f"order {p.section.order}")
             for n, p in self._snap.prompts.items()

@@ -125,6 +125,15 @@ async def stop_meeting(meeting_id: str, svc: ServicesDep) -> MeetingDetail:
         raise _http(exc) from None
 
 
+@router.delete("/{meeting_id}", status_code=204, responses=_RESPONSES)
+async def delete_meeting(meeting_id: str, svc: ServicesDep) -> None:
+    """Remove the meeting with its audio, transcript and summary (409 while finalising)."""
+    try:
+        await _meetings(svc).delete(meeting_id)
+    except (MeetingNotFound, ToolError) as exc:
+        raise _http(exc) from None
+
+
 @router.post("/{meeting_id}/summarize", response_model=MeetingSummarizeStarted, responses=_RESPONSES)
 async def summarize_meeting(meeting_id: str, svc: ServicesDep) -> MeetingSummarizeStarted:
     """Run the `meeting-summary` workflow in a new session (watch `run_id` on `/api/events`)."""

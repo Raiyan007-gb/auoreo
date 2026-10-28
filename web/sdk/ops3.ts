@@ -34,5 +34,8 @@ export function g5bMethods(request: Ops3Request) {
     livekitToken: (body: Partial<LiveKitTokenRequest>) =>
       request<LiveKitToken>("POST", "/api/livekit/token", { body }),
     sessionContext: (sessionId: string) => request<SessionContext>("GET", `/api/sessions/${enc(sessionId)}/context`),
+    /** Many sessions in one call (max 100; unknown ids are left out). */
+    sessionsContext: (sessionIds: readonly string[]) =>
+      request<SessionContext[]>("GET", `/api/context?${sessionIds.map((id) => `session_id=${enc(id)}`).join("&")}`),
   };
 }

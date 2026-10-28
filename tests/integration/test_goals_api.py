@@ -109,3 +109,22 @@ async def test_suggestion_delivery_visible_in_deliveries(
     assert sug["delivery_id"] == rows[0]["id"]
     r = await client.post(f"/api/deliveries/{rows[0]['id']}/replay", params={"dry_run": False})
     assert r.status_code == 409 and "not replayable" in r.json()["detail"]
+
+
+async def test_done_means_full_progress_and_delete(client: httpx.AsyncClient) -> None:
+    a = (await client.post("/api/goals", json={"title": "write docs"})).json()
+    await client.patch(f"/api/goals/{a['id']}", json={"progress": 0.5})
+    done = (await client.patch(f"/api/goals/{a['id']}", json={"status": "done"})).json()
+    assert done["status"] == "done" and done["progress"] == 1.0
+    # an explicit progress still wins
+    again = (await client.patch(f"/api/goals/{a['id']}", json={"status": "done", "progress": 0.8})).json()
+    assert again["progress"] == 0.8
+
+    b = (await client.post("/api/goals", json={"title": "old idea"})).json()
+    target = (await client.post("/api/goals", json={"title": "umbrella"})).json()
+    await client.post(f"/api/goals/{b['id']}/absorb", json={"into": target["id"]})
+    assert (await client.delete(f"/api/goals/{target['id']}")).status_code == 204
+    assert (await client.get(f"/api/goals/{target['id']}")).status_code == 404
+    orphan = (await client.get(f"/api/goals/{b['id']}")).json()
+    assert orphan["status"] == "dropped" and orphan["absorbed_into"] is None
+    assert (await client.delete(f"/api/goals/{target['id']}")).status_code == 404

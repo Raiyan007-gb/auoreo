@@ -1996,6 +1996,110 @@
         "title": "DoctorCheck",
         "type": "object"
       },
+      "DoctorFix": {
+        "description": "One safe, local repair (`auoreo doctor --fix`): never settings, secrets or user data.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mkdir",
+              "chmod",
+              "worktree"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "description": "The directory, file or worktree it touches",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "detail"
+        ],
+        "title": "DoctorFix",
+        "type": "object"
+      },
+      "DoctorFixFailure": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mkdir",
+              "chmod",
+              "worktree"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "description": "The directory, file or worktree it touches",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "target",
+          "detail",
+          "error"
+        ],
+        "title": "DoctorFixFailure",
+        "type": "object"
+      },
+      "DoctorFixPlan": {
+        "properties": {
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/DoctorFix"
+            },
+            "title": "Fixes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fixes"
+        ],
+        "title": "DoctorFixPlan",
+        "type": "object"
+      },
+      "DoctorFixResult": {
+        "properties": {
+          "applied": {
+            "items": {
+              "$ref": "#/components/schemas/DoctorFix"
+            },
+            "title": "Applied",
+            "type": "array"
+          },
+          "failed": {
+            "items": {
+              "$ref": "#/components/schemas/DoctorFixFailure"
+            },
+            "title": "Failed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "applied",
+          "failed"
+        ],
+        "title": "DoctorFixResult",
+        "type": "object"
+      },
       "DoctorReport": {
         "description": "Read-only environment report: never repairs, never includes secret values.",
         "properties": {
@@ -5759,6 +5863,21 @@
           }
         },
         "title": "PrefsProposalIn",
+        "type": "object"
+      },
+      "ProviderAdopt": {
+        "description": "Connect a provider whose key is already stored (no key in the body, nothing is copied).",
+        "properties": {
+          "provider": {
+            "maxLength": 64,
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "title": "ProviderAdopt",
         "type": "object"
       },
       "ProviderConnectionOut": {
@@ -9722,6 +9841,89 @@
         ]
       }
     },
+    "/api/context": {
+      "get": {
+        "description": "The same breakdown for up to 100 sessions at once; unknown ids are left out.",
+        "operationId": "sessions_context_api_context_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 100,
+              "title": "Session Id",
+              "type": "array"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SessionContext"
+                  },
+                  "title": "Response Sessions Context Api Context Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sessions Context",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
     "/api/cron": {
       "get": {
         "operationId": "list_jobs_api_cron_get",
@@ -10628,6 +10830,136 @@
           }
         },
         "summary": "Doctor",
+        "tags": [
+          "ops"
+        ]
+      }
+    },
+    "/api/doctor/fixes": {
+      "get": {
+        "description": "The safe fixes `POST` would apply now: missing runtime dirs, loose file modes, stale worktrees.",
+        "operationId": "doctor_fixes_api_doctor_fixes_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorFixPlan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Doctor Fixes",
+        "tags": [
+          "ops"
+        ]
+      },
+      "post": {
+        "description": "Apply every safe fix (re-planned here, never taken from the client); each one is audited.",
+        "operationId": "apply_doctor_fixes_api_doctor_fixes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoctorFixResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Apply Doctor Fixes",
         "tags": [
           "ops"
         ]
@@ -11996,6 +12328,72 @@
       }
     },
     "/api/goals/{goal_id}": {
+      "delete": {
+        "description": "Remove a goal for good (`dropped` keeps it listed). Goals absorbed into it become `dropped`.",
+        "operationId": "delete_goal_api_goals__goal_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "title": "Goal Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Goal",
+        "tags": [
+          "goals"
+        ]
+      },
       "get": {
         "operationId": "get_goal_api_goals__goal_id__get",
         "parameters": [
@@ -15459,6 +15857,82 @@
           }
         },
         "summary": "Add Provider",
+        "tags": [
+          "providers"
+        ]
+      }
+    },
+    "/api/providers/adopt": {
+      "post": {
+        "description": "Manage a provider here when its key already lives in Settings \u2192 Environment or the real\nenvironment: list its models and switch between them, without pasting the key again.",
+        "operationId": "adopt_provider_api_providers_adopt_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderAdopt"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Adopt Provider",
         "tags": [
           "providers"
         ]
@@ -20473,6 +20947,81 @@
       }
     },
     "/api/voice/meetings/{meeting_id}": {
+      "delete": {
+        "description": "Remove the meeting with its audio, transcript and summary (409 while finalising).",
+        "operationId": "delete_meeting_api_voice_meetings__meeting_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "meeting_id",
+            "required": true,
+            "schema": {
+              "title": "Meeting Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown meeting"
+          },
+          "409": {
+            "description": "The meeting is not in a state that allows this"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Voice disabled or a backend is not ready"
+          }
+        },
+        "summary": "Delete Meeting",
+        "tags": [
+          "voice"
+        ]
+      },
       "get": {
         "operationId": "get_meeting_api_voice_meetings__meeting_id__get",
         "parameters": [

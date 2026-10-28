@@ -67,6 +67,12 @@ from .delivery_info_result import DeliveryInfoResult
 from .delivery_replay import DeliveryReplay
 from .doctor_check import DoctorCheck
 from .doctor_check_level import DoctorCheckLevel
+from .doctor_fix import DoctorFix
+from .doctor_fix_failure import DoctorFixFailure
+from .doctor_fix_failure_kind import DoctorFixFailureKind
+from .doctor_fix_kind import DoctorFixKind
+from .doctor_fix_plan import DoctorFixPlan
+from .doctor_fix_result import DoctorFixResult
 from .doctor_report import DoctorReport
 from .doctor_summary import DoctorSummary
 from .dotenv_import import DotenvImport
@@ -199,6 +205,7 @@ from .prefs_proposal_action import PrefsProposalAction
 from .prefs_proposal_in import PrefsProposalIn
 from .prefs_proposal_in_action import PrefsProposalInAction
 from .prefs_proposal_status import PrefsProposalStatus
+from .provider_adopt import ProviderAdopt
 from .provider_connection_out import ProviderConnectionOut
 from .provider_connection_out_status import ProviderConnectionOutStatus
 from .provider_create import ProviderCreate
@@ -363,6 +370,12 @@ __all__ = (
     "DeliveryReplay",
     "DoctorCheck",
     "DoctorCheckLevel",
+    "DoctorFix",
+    "DoctorFixFailure",
+    "DoctorFixFailureKind",
+    "DoctorFixKind",
+    "DoctorFixPlan",
+    "DoctorFixResult",
     "DoctorReport",
     "DoctorSummary",
     "DotenvImport",
@@ -491,6 +504,7 @@ __all__ = (
     "PrefsProposalIn",
     "PrefsProposalInAction",
     "PrefsProposalStatus",
+    "ProviderAdopt",
     "ProviderConnectionOut",
     "ProviderConnectionOutStatus",
     "ProviderCreate",

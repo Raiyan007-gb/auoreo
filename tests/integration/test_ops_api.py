@@ -167,3 +167,21 @@ async def test_ops_endpoints_require_auth(services: Services, settings: Settings
             assert (await c.get(path)).status_code == 401, path
         ok = await c.get("/api/audit/verify", headers={"Authorization": "Bearer s3cret-pass"})
         assert ok.status_code == 200
+
+
+async def test_doctor_fixes_plan_then_apply(client: httpx.AsyncClient, settings: Settings) -> None:
+    missing = settings.home / "skills"
+    if missing.exists():
+        missing.rmdir()
+    plan = (await client.get("/api/doctor/fixes")).json()["fixes"]
+    assert {
+        "kind": "mkdir",
+        "target": str(missing),
+        "detail": "create missing runtime directory (0700)",
+    } in plan
+    done = (await client.post("/api/doctor/fixes")).json()
+    assert done["failed"] == [] and any(f["target"] == str(missing) for f in done["applied"])
+    assert missing.is_dir()
+    assert all(f["target"] != str(missing) for f in (await client.get("/api/doctor/fixes")).json()["fixes"])
+    rows = (await client.get("/api/audit", params={"action": "doctor.fix.mkdir"})).json()["rows"]
+    assert any(r["detail"].get("target") == str(missing) for r in rows)

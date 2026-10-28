@@ -198,6 +198,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Sessions Context
+         * @description The same breakdown for up to 100 sessions at once; unknown ids are left out.
+         */
+        get: operations["sessions_context_api_context_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/cron": {
         parameters: {
             query?: never;
@@ -380,6 +400,30 @@ export interface paths {
         get: operations["doctor_api_doctor_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/doctor/fixes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Doctor Fixes
+         * @description The safe fixes `POST` would apply now: missing runtime dirs, loose file modes, stale worktrees.
+         */
+        get: operations["doctor_fixes_api_doctor_fixes_get"];
+        put?: never;
+        /**
+         * Apply Doctor Fixes
+         * @description Apply every safe fix (re-planned here, never taken from the client); each one is audited.
+         */
+        post: operations["apply_doctor_fixes_api_doctor_fixes_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -659,7 +703,11 @@ export interface paths {
         get: operations["get_goal_api_goals__goal_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Goal
+         * @description Remove a goal for good (`dropped` keeps it listed). Goals absorbed into it become `dropped`.
+         */
+        delete: operations["delete_goal_api_goals__goal_id__delete"];
         options?: never;
         head?: never;
         /** Update Goal */
@@ -1333,6 +1381,27 @@ export interface paths {
         put?: never;
         /** Add Provider */
         post: operations["add_provider_api_providers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/providers/adopt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adopt Provider
+         * @description Manage a provider here when its key already lives in Settings → Environment or the real
+         *     environment: list its models and switch between them, without pasting the key again.
+         */
+        post: operations["adopt_provider_api_providers_adopt_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2343,7 +2412,11 @@ export interface paths {
         get: operations["get_meeting_api_voice_meetings__meeting_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Delete Meeting
+         * @description Remove the meeting with its audio, transcript and summary (409 while finalising).
+         */
+        delete: operations["delete_meeting_api_voice_meetings__meeting_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3521,6 +3594,53 @@ export interface components {
              * @default
              */
             remedy: string;
+        };
+        /**
+         * DoctorFix
+         * @description One safe, local repair (`auoreo doctor --fix`): never settings, secrets or user data.
+         */
+        DoctorFix: {
+            /** Detail */
+            detail: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "mkdir" | "chmod" | "worktree";
+            /**
+             * Target
+             * @description The directory, file or worktree it touches
+             */
+            target: string;
+        };
+        /** DoctorFixFailure */
+        DoctorFixFailure: {
+            /** Detail */
+            detail: string;
+            /** Error */
+            error: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "mkdir" | "chmod" | "worktree";
+            /**
+             * Target
+             * @description The directory, file or worktree it touches
+             */
+            target: string;
+        };
+        /** DoctorFixPlan */
+        DoctorFixPlan: {
+            /** Fixes */
+            fixes: components["schemas"]["DoctorFix"][];
+        };
+        /** DoctorFixResult */
+        DoctorFixResult: {
+            /** Applied */
+            applied: components["schemas"]["DoctorFix"][];
+            /** Failed */
+            failed: components["schemas"]["DoctorFixFailure"][];
         };
         /**
          * DoctorReport
@@ -5093,6 +5213,14 @@ export interface components {
              * @default
              */
             reason: string;
+        };
+        /**
+         * ProviderAdopt
+         * @description Connect a provider whose key is already stored (no key in the body, nothing is copied).
+         */
+        ProviderAdopt: {
+            /** Provider */
+            provider: string;
         };
         /** ProviderConnectionOut */
         ProviderConnectionOut: {
@@ -6927,6 +7055,41 @@ export interface operations {
             };
         };
     };
+    sessions_context_api_context_get: {
+        parameters: {
+            query: {
+                session_id: string[];
+            };
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionContext"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_jobs_api_cron_get: {
         parameters: {
             query?: never;
@@ -7309,6 +7472,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DoctorReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    doctor_fixes_api_doctor_fixes_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoctorFixPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_doctor_fixes_api_doctor_fixes_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoctorFixResult"];
                 };
             };
             /** @description Validation Error */
@@ -7938,6 +8167,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["GoalInfo"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_goal_api_goals__goal_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                goal_id: number;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -9467,6 +9729,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ProviderCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    adopt_provider_api_providers_adopt_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderAdopt"];
             };
         };
         responses: {
@@ -11820,6 +12119,60 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MeetingDetail"];
                 };
+            };
+            /** @description Unknown meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The meeting is not in a state that allows this */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Voice disabled or a backend is not ready */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_meeting_api_voice_meetings__meeting_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                meeting_id: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unknown meeting */
             404: {

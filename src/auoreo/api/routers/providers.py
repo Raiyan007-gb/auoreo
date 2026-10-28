@@ -33,6 +33,7 @@ from auoreo.schema.providers import (
     ModelSelection,
     ModelSelectionApplied,
     ModelSelectionWrite,
+    ProviderAdopt,
     ProviderCreate,
     ProviderDetectRequest,
     ProviderDetectResult,
@@ -74,6 +75,16 @@ async def add_provider(body: ProviderCreate, svc: ServicesDep) -> ProviderResult
         return await svc_mod.add(
             svc, body.provider, body.key, body.base_url, body.api_version, body.label, body.deployments
         )
+    except ProviderError as exc:
+        raise _http(exc) from exc
+
+
+@router.post("/api/providers/adopt", response_model=ProviderResult)
+async def adopt_provider(body: ProviderAdopt, svc: ServicesDep) -> ProviderResult:
+    """Manage a provider here when its key already lives in Settings → Environment or the real
+    environment: list its models and switch between them, without pasting the key again."""
+    try:
+        return await svc_mod.adopt(svc, body.provider)
     except ProviderError as exc:
         raise _http(exc) from exc
 

@@ -196,6 +196,43 @@ async def add(
     return ProviderResult(ok=True, connection=conn_out(row), status="ok", model_count=len(models))
 
 
+async def adopt(svc: Any, provider: str) -> ProviderResult:
+    """Connect a provider whose key is already stored (Settings → Environment, `auoreo secrets set`,
+    or the real process environment) without pasting it again. The connection points at that same
+    secret, so nothing is copied or rewritten."""
+    spec = _spec(provider)
+    if spec.secret is None or spec.needs_base_url or spec.needs_api_version or spec.manual_models:
+        raise ProviderError(422, f"{spec.name} needs an endpoint: connect it with “Add a provider”")
+    taken = {c.secret_name for c in await store.connections(svc.db) if c.secret_name}
+    if spec.secret in taken:
+        raise ProviderError(409, f"{spec.name} is already connected")
+    key = await asyncio.to_thread(svc.secrets._resolve, spec.secret)
+    if not key:
+        raise ProviderError(404, f"no {spec.secret} found in the environment or the secret store")
+    try:
+        models = await _fetch(svc, spec, key, None, None)
+    except ProviderFetchError as exc:
+        return ProviderResult(ok=False, status=exc.status, error=exc.message)
+    row = await store.create(
+        svc.db,
+        {
+            "provider": provider,
+            "label": spec.name[:128],
+            "secret_name": spec.secret,
+            "base_url": None,
+            "api_version": None,
+        },
+        models,
+    )
+    await _audit(
+        svc,
+        "provider.adopt",
+        {"connection_id": row.id, "provider": provider, "secret": spec.secret, "model_count": len(models)},
+    )
+    await _changed(svc, "add", row)
+    return ProviderResult(ok=True, connection=conn_out(row), status="ok", model_count=len(models))
+
+
 def _store_secrets(
     svc: Any, spec: reg.ProviderSpec, secret: str | None, key: str | None, base: str | None, ver: str | None
 ) -> None:

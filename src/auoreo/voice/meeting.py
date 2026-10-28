@@ -244,6 +244,18 @@ class MeetingService:
                 return self.detail(mid)
         return self.detail(mid)
 
+    async def delete(self, mid: str) -> None:
+        """Remove a meeting and its folder (audio, transcript, summary); refused while finalising."""
+        async with self._lock(mid):
+            meta = self.load(mid)
+            if meta["status"] == "finalising":
+                raise MeetingStateError("meeting is finalising; delete it once that finishes")
+            for rtc in [r for r, m in self.live.items() if m == mid]:
+                self.live.pop(rtc, None)
+            shutil.rmtree(self._dir(mid), ignore_errors=True)
+        self._locks.pop(mid, None)
+        await self._emit(meta, "meeting.deleted", {})
+
     # ----------------------------------------------------------- finalise
     def _chunks(self, mid: str) -> list[tuple[float, float, bytes, str]]:
         """`(start_s, end_s, pcm, comment)` per stored chunk, in upload order."""

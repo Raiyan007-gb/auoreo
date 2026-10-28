@@ -1,4 +1,4 @@
-"""Long-running goals (spec §2.3): list, create, update, absorb."""
+"""Long-running goals (spec §2.3): list, create, update, absorb, delete."""
 
 from __future__ import annotations
 
@@ -64,6 +64,15 @@ async def update_goal(goal_id: int, svc: ServicesDep, body: GoalPatch) -> GoalIn
     except GoalError as exc:
         raise _refused(exc) from exc
     return _info(row)
+
+
+@router.delete("/{goal_id}", status_code=204)
+async def delete_goal(goal_id: int, svc: ServicesDep) -> None:
+    """Remove a goal for good (`dropped` keeps it listed). Goals absorbed into it become `dropped`."""
+    try:
+        await goals_of(svc).delete(goal_id)
+    except GoalError as exc:
+        raise _refused(exc) from exc
 
 
 @router.post("/{goal_id}/absorb", response_model=GoalInfo)
