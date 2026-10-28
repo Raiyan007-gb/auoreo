@@ -86,6 +86,7 @@ uv run python scripts/check_openapi.py --check
 uv run python scripts/verify_tool_catalog.py --check   # --write after adding/changing a tool
 ./scripts/run_tests.sh [--per-file]                     # hermetic: env -i, fresh HOME
 cd web && npm ci && npm run typecheck && npm run lint && npm run build && npm run e2e
+cd web && npm run e2e:visual                            # screenshot comparison (web/README.md "Quality gates")
 AUOREO_GATEWAY=fake uv run auoreo web --port 0       # keyless live run with the UI
 ```
 

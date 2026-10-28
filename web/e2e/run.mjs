@@ -2,7 +2,7 @@
 // `npm run e2e`: with BASE_URL set, run Playwright against it. Without it, boot a keyless
 // backend (`AUOREO_GATEWAY=fake uv run auoreo serve --port 0`, fresh AUOREO_HOME) from the
 // repo root, wait for "server listening on …", run the suite, then stop the server.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -12,11 +12,20 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(here, "..");
 const repoRoot = resolve(webDir, "..");
-const extra = process.argv.slice(2);
+// `--visual`: run only the screenshot-comparison spec (it needs a fresh, empty server and is kept
+// out of the normal run). `npm run e2e:visual -- --update-snapshots` rewrites this platform's baselines.
+const args = process.argv.slice(2);
+const visual = args.includes("--visual");
+if (visual) process.env.VISUAL = "1";
+// The file goes first: `--update-snapshots` takes an optional value and would swallow a path after it.
+const extra = visual ? ["visual.spec.ts", ...args.filter((a) => a !== "--visual")] : args;
 
 function runPlaywright(baseUrl) {
   return new Promise((done) => {
-    const p = spawn("npx", ["playwright", "test", "-c", join(here, "playwright.config.ts"), ...extra], {
+    // Node + the CLI file directly (not `npx`): no shell needed, so Windows (npx.cmd) and paths
+    // with spaces or quotes work the same everywhere.
+    const cli = join(webDir, "node_modules", "@playwright", "test", "cli.js");
+    const p = spawn(process.execPath, [cli, "test", "-c", join(here, "playwright.config.ts"), ...extra], {
       cwd: webDir,
       stdio: "inherit",
       env: { ...process.env, BASE_URL: baseUrl },
@@ -99,8 +108,14 @@ async function main() {
   const stop = () => {
     tap.close();
     provider.close();
-    server.kill("SIGTERM");
-    rmSync(home, { recursive: true, force: true });
+    // Windows: `uv run` → auoreo.exe → python; killing the wrapper leaves the server running.
+    if (process.platform === "win32") spawnSync("taskkill", ["/F", "/T", "/PID", String(server.pid)], { stdio: "ignore" });
+    else server.kill("SIGTERM");
+    try {
+      rmSync(home, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch {
+      /* Windows may still hold the DBs for a moment; the OS temp dir cleans it up later */
+    }
   };
   process.on("SIGINT", () => {
     stop();

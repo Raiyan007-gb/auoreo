@@ -1,10 +1,13 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defineConfig, devices } from "@playwright/test";
+import { chromium, defineConfig, devices } from "@playwright/test";
 
-/** Use the pre-installed Chromium (never `playwright install` here). */
+/** Use the pre-installed Chromium (never `playwright install` here): `PLAYWRIGHT_CHROMIUM_PATH`,
+ *  a Linux build under the browsers path, Playwright's own install, or else an installed Chrome. */
 function chromiumPath(): string | undefined {
+  const pinned = process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  if (pinned && existsSync(pinned)) return pinned;
   const roots = [process.env.PLAYWRIGHT_BROWSERS_PATH, "/opt/pw-browsers"].filter(Boolean) as string[];
   for (const root of roots) {
     if (!existsSync(root)) continue;
@@ -13,7 +16,15 @@ function chromiumPath(): string | undefined {
       if (existsSync(bin)) return bin;
     }
   }
-  return undefined;
+  // Playwright's own Chromium (`npx playwright install chromium`, as CI does) beats a system Chrome,
+  // so every platform runs the same browser build where it can.
+  if (existsSync(chromium.executablePath())) return undefined;
+  const installed = [
+    join(process.env.PROGRAMFILES ?? "C:\\Program Files", "Google", "Chrome", "Application", "chrome.exe"),
+    join(process.env.LOCALAPPDATA ?? "", "Google", "Chrome", "Application", "chrome.exe"),
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  ];
+  return installed.find((p) => existsSync(p));
 }
 
 const executablePath = chromiumPath();
@@ -58,7 +69,8 @@ const MEDIA_ARGS = [
 
 export default defineConfig({
   testDir: ".",
-  testMatch: "*.spec.ts",
+  // Screenshot comparison runs on its own (`npm run e2e:visual`), against a fresh server.
+  testMatch: process.env.VISUAL ? "visual.spec.ts" : "*.spec.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 45_000,
@@ -73,13 +85,14 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: "rtc.spec.ts",
+      // (a project's own testIgnore replaces the top-level one, so visual.spec.ts is listed here)
+      testIgnore: process.env.VISUAL ? "rtc.spec.ts" : ["rtc.spec.ts", "visual.spec.ts"],
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 }, launchOptions: { executablePath } },
     },
     {
       // --- G5b: WebRTC call client against the aiortc server (needs the `rtc` extra)
       name: "chromium-media",
-      testMatch: "rtc.spec.ts",
+      testMatch: process.env.VISUAL ? "none.spec.ts" : "rtc.spec.ts",
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1280, height: 800 },
