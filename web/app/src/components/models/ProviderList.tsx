@@ -76,7 +76,7 @@ function Row({
       <div className="flex flex-wrap items-center gap-3 text-sm">
         <span
           aria-hidden
-          className="inline-flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-muted text-[13px] font-bold text-secondary-foreground"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-muted text-ui font-bold text-secondary-foreground"
         >
           {initials(c.provider_name)}
         </span>
@@ -85,7 +85,7 @@ function Row({
             <span className="font-semibold">{c.provider_name}</span>
             {c.label && c.label !== c.provider_name && <span className="text-muted-foreground">{c.label}</span>}
             <span
-              className={cn("rounded-full px-2 py-px text-[11px] font-semibold", PILL[c.status])}
+              className={cn("rounded-full px-2 py-px text-2xs font-semibold", PILL[c.status])}
               data-testid={`provider-status-${c.provider}`}
               data-status={c.status}
             >
@@ -163,19 +163,63 @@ function Row({
   );
 }
 
+/** A provider running on a key that lives outside this page: adopt it to list and switch its models. */
+function ManageHere({
+  provider,
+  onDone,
+  onError,
+}: {
+  provider: { id: string; name: string };
+  onDone: (note: string) => void;
+  onError: (message: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const adopt = async () => {
+    setBusy(true);
+    try {
+      const r = await api.providerAdopt(provider.id);
+      if (r.ok) onDone(`${provider.name} connected — ${r.model_count} models`);
+      else onError(r.error ?? `${provider.name} refused the key`);
+    } catch (e) {
+      onError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="flex flex-col items-center gap-3">
+      <span>
+        <span className="font-medium text-foreground">{provider.name}</span> is in use with a key set in Settings → Environment (or
+        the server's environment). Manage it here to list its models and switch between them; the key stays where it is.
+      </span>
+      <Button variant="brand" size="sm" disabled={busy} onClick={() => void adopt()} data-testid="provider-manage-here">
+        {busy ? "Checking the key…" : "Manage here"}
+      </Button>
+      <span className="text-xs">Removing the connection later deletes that stored key.</span>
+    </span>
+  );
+}
+
 export function ProviderList({
   connections,
+  external,
   onDone,
   onError,
 }: {
   connections: readonly ProviderConnection[];
+  /** Provider of the model in use when its key comes from outside this page (Environment / real env). */
+  external?: { id: string; name: string } | null;
   onDone: (note: string) => void;
   onError: (message: string) => void;
 }) {
   if (connections.length === 0)
     return (
       <p className="rounded-lg border border-dashed bg-card px-4 py-6 text-center text-sm text-muted-foreground" data-testid="providers-empty">
-        No provider connected yet. Paste a key in “Add a provider”.
+        {external ? (
+          <ManageHere provider={external} onDone={onDone} onError={onError} />
+        ) : (
+          <>No provider connected yet. Paste a key in “Add a provider”.</>
+        )}
       </p>
     );
   return (

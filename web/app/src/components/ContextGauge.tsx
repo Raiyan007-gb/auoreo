@@ -52,9 +52,8 @@ export function ContextBreakdown({ ctx }: { ctx: SessionContext }) {
   );
 }
 
-/** Usage page: context gauge for one session row. */
-export function ContextCell({ sessionId }: { sessionId: string }) {
-  const ctx = useSessionContext(sessionId, 0);
+/** Usage page: context gauge for one session row (the page loads every row's context in one call). */
+export function ContextCell({ sessionId, ctx }: { sessionId: string; ctx: SessionContext | undefined }) {
   if (!ctx) return <span className="text-xs text-muted-foreground">—</span>;
   return (
     <Tip label={<ContextBreakdown ctx={ctx} />}>

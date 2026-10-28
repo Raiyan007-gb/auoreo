@@ -5,6 +5,7 @@ import { EmptyState, ErrorNote } from "@/components/AppShell";
 import { OPS_STATUS } from "@/components/ops/opsUtils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SkeletonRows } from "@/components/ui/skeleton";
 import type { AsyncState } from "@/hooks/useAsync";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +40,7 @@ export function AsyncBody<T>({
         </Button>
       </div>
     );
-  if (state.data === undefined) return <Loading />;
+  if (state.data === undefined) return <SkeletonRows rows={3} />;
   if (isEmpty(state.data)) return <EmptyState title={empty}>{emptyHint}</EmptyState>;
   return <>{children(state.data)}</>;
 }

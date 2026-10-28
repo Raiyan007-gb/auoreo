@@ -6,7 +6,7 @@ import { relTime } from "@/lib/utils";
 function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section aria-label={title} className="flex flex-col gap-2.5 rounded-lg border bg-card px-4 py-3.5">
-      <h2 className="text-[13px] font-semibold">{title}</h2>
+      <h2 className="text-ui font-semibold">{title}</h2>
       {children}
     </section>
   );
@@ -21,11 +21,11 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-/** Right rail on wide screens (design canvas "Session"): the plan, then facts about the session. */
-export function SessionRail({ session, plan }: { session: SessionDetail | undefined; plan: React.ReactNode }) {
+/** The session's facts card plus the sources hint; shared by the xl rail and the narrow-screen sheet.
+ *  `model` is the one the last turn actually ran on, which beats the session's pinned model. */
+export function SessionFacts({ session, model }: { session: SessionDetail | undefined; model?: string | null }) {
   return (
-    <aside aria-label="Session side panel" className="hidden w-80 shrink-0 flex-col gap-3.5 overflow-y-auto border-l bg-background p-4 xl:flex">
-      {plan}
+    <>
       <RailCard title="Session">
         <dl className="flex flex-col gap-1.5">
           <Row label="Agent">
@@ -37,8 +37,8 @@ export function SessionRail({ session, plan }: { session: SessionDetail | undefi
             </Row>
           )}
           <Row label="Model">
-            <span className="font-mono" title={session?.model ?? undefined}>
-              {session?.model ?? "server default"}
+            <span className="font-mono break-all" title={model ?? session?.model ?? undefined}>
+              {model ?? session?.model ?? "server default"}
             </span>
           </Row>
           {session?.project && (
@@ -63,11 +63,29 @@ export function SessionRail({ session, plan }: { session: SessionDetail | undefi
       </RailCard>
       <p className="px-1 text-xs text-muted-foreground">
         Turn MCP servers and plugins on or off per session under{" "}
-        <Link to="/plugins" className="text-brand-ink hover:underline">
+        <Link to="/plugins" className="text-brand-ink underline underline-offset-2 hover:decoration-2">
           session sources
         </Link>
         .
       </p>
+    </>
+  );
+}
+
+/** Right rail on wide screens (design canvas "Session"): the plan, then facts about the session. */
+export function SessionRail({
+  session,
+  model,
+  plan,
+}: {
+  session: SessionDetail | undefined;
+  model?: string | null;
+  plan: React.ReactNode;
+}) {
+  return (
+    <aside aria-label="Session side panel" className="hidden w-80 shrink-0 flex-col gap-3.5 overflow-y-auto border-l bg-background p-4 xl:flex">
+      {plan}
+      <SessionFacts session={session} model={model} />
     </aside>
   );
 }

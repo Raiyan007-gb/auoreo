@@ -164,7 +164,7 @@ function TeamsTab() {
     >
       {(rows) => (
         <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
-          <Card className="gap-2 p-3">
+          <Card className="gap-2 p-3 sm:p-3">
             <div className="flex items-center gap-2">
               <CardTitle className="flex-1 text-sm">Teams</CardTitle>
               <RefreshButton onClick={teams.reload} busy={teams.loading} label="Refresh teams" />
@@ -190,12 +190,12 @@ export function TeamsPage() {
         title="Teams"
         description="Agent teams (members, liveness, mailbox), the kanban board, and each team's blackboard."
       />
-      <div className="px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="page-body">
         <Tabs value={tab} onValueChange={(v) => setParams(v === "teams" ? {} : { tab: v }, { replace: true })}>
           <TabsList aria-label="Teams sections">
             <TabsTrigger value="teams">Teams</TabsTrigger>
             <TabsTrigger value="kanban">Kanban</TabsTrigger>
-            <TabsTrigger value="board">Board</TabsTrigger>
+            <TabsTrigger value="board">Blackboard</TabsTrigger>
           </TabsList>
           <TabsContent value="teams">
             <TeamsTab />

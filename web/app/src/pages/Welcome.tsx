@@ -179,7 +179,7 @@ function DemoStep({ model, onStarted }: { model: string | undefined; onStarted: 
   return (
     <div className="space-y-2 text-sm">
       <p>Start a short session that asks the agent to introduce itself.</p>
-      <Button onClick={() => void start()} disabled={busy}>
+      <Button variant="brand" onClick={() => void start()} disabled={busy}>
         <PlayIcon aria-hidden /> Start demo session
       </Button>
       {err && <ErrorNote error={err} />}
@@ -234,7 +234,7 @@ export function WelcomePage() {
           </Button>
         }
       />
-      <div className="flex max-w-6xl flex-col gap-6 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="flex max-w-6xl flex-col gap-6 page-body">
         <ErrorNote error={doctor.error} />
         <ol className="flex flex-wrap gap-2" aria-label="Setup steps">
           {STEPS.map((s, i) => {
@@ -247,7 +247,7 @@ export function WelcomePage() {
                   onClick={() => update({ ...p, step: i })}
                   aria-current={current ? "step" : undefined}
                   className={cn(
-                    "flex h-full w-full items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-left text-[13px] leading-tight",
+                    "flex h-full w-full items-center gap-2.5 rounded-[10px] border px-3 py-2.5 text-left text-ui leading-tight",
                     current && "border-brand bg-card font-semibold ring-1 ring-brand",
                     !current && done && "border-transparent bg-success-soft font-medium text-success-ink",
                     !current && !done && "bg-card text-muted-foreground",
@@ -271,15 +271,15 @@ export function WelcomePage() {
           })}
         </ol>
         <div className="flex flex-wrap items-start gap-5">
-          <Card data-testid="welcome-step" data-step={id} className="min-w-0 flex-[999_1_460px] gap-4 rounded-xl px-6 py-5.5">
+          <Card data-testid="welcome-step" data-step={id} className="min-w-0 flex-[999_1_460px] gap-4 rounded-xl px-6 py-5.5 sm:px-6 sm:py-5.5">
             <CardHeader>
-              <CardTitle className="text-[17px]">
+              <CardTitle className="text-lg">
                 <span className="sr-only">
                   Step {p.step + 1} of {STEPS.length}:{" "}
                 </span>
                 {TITLES[id]}
               </CardTitle>
-              {id === "credentials" && <CardDescription className="text-[13px]">Paste an API key: the provider is detected from it.</CardDescription>}
+              {id === "credentials" && <CardDescription className="text-ui">Paste an API key: the provider is detected from it.</CardDescription>}
             </CardHeader>
             {body[id]}
             <div className="flex flex-wrap gap-2 border-t border-border-subtle pt-4">
@@ -314,7 +314,7 @@ function SystemCheck({ report }: { report: DoctorReport | undefined }) {
       {!report && <p className="text-sm text-muted-foreground">Running checks…</p>}
       <ul className="flex flex-col gap-2">
         {rows.map((c, i) => (
-          <li key={`${c.check}-${i}`} className="flex items-start gap-2.5 text-[13px]">
+          <li key={`${c.check}-${i}`} className="flex items-start gap-2.5 text-ui">
             <span aria-hidden className={cn("mt-1.5 size-2 shrink-0 rounded-full", DOT[c.level] ?? "bg-muted-foreground")} />
             <span className="min-w-0 flex-1">
               <span className="font-medium">{c.check}</span>

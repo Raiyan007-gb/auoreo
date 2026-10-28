@@ -61,7 +61,7 @@ export function SkillsHubPanel({ onChanged }: { onChanged?: () => void }) {
         </Button>
       )}
       {status === "quarantined" && (
-        <Button size="sm" disabled={action.busy !== null} data-testid="hub-approve" onClick={() => void act(`a:${name}`, () => api.approveHubSkill(name))}>
+        <Button variant="brand" size="sm" disabled={action.busy !== null} data-testid="hub-approve" onClick={() => void act(`a:${name}`, () => api.approveHubSkill(name))}>
           <ShieldCheckIcon aria-hidden /> Approve
         </Button>
       )}
@@ -127,7 +127,7 @@ export function SkillsHubPanel({ onChanged }: { onChanged?: () => void }) {
                     <div className="font-mono text-xs font-semibold">{h.name}</div>
                     <div className="line-clamp-2 max-w-xl text-xs text-muted-foreground">{h.description}</div>
                   </TableCell>
-                  <TableCell className="max-w-48 truncate font-mono text-[11px] text-muted-foreground" title={h.tap}>
+                  <TableCell className="max-w-48 truncate font-mono text-2xs text-muted-foreground" title={h.tap}>
                     {h.tap}
                   </TableCell>
                   <TableCell>
@@ -158,7 +158,7 @@ export function SkillsHubPanel({ onChanged }: { onChanged?: () => void }) {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell className="font-mono text-[11px] text-muted-foreground">{s.sha256.slice(0, 12)}…</TableCell>
+                  <TableCell className="font-mono text-2xs text-muted-foreground">{s.sha256.slice(0, 12)}…</TableCell>
                   <TableCell>{actions(s.name, s.status)}</TableCell>
                 </TableRow>
               ))}

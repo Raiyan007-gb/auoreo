@@ -45,7 +45,7 @@ function WebhookRow({
         <div className="flex flex-wrap gap-1">
           {w.events.length ? w.events.map((e) => <Badge key={e}>{e}</Badge>) : <span className="text-xs text-muted-foreground">any</span>}
         </div>
-        {w.filters.length > 0 && <p className="text-[11px] text-muted-foreground">{w.filters.length} filters</p>}
+        {w.filters.length > 0 && <p className="text-2xs text-muted-foreground">{w.filters.length} filters</p>}
       </TableCell>
       <TableCell className="text-xs">
         {w.workflow ? (
@@ -71,7 +71,7 @@ function WebhookRow({
         {last ? (
           <div className="flex flex-col gap-0.5">
             <StatusBadge status={last.status} />
-            <span className="text-[11px] text-muted-foreground" title={last.updated_at}>
+            <span className="text-2xs text-muted-foreground" title={last.updated_at}>
               #{last.id} · {relTime(last.updated_at)}
             </span>
           </div>

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input, Label } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DensityToggle, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 import { relTime } from "@/lib/utils";
@@ -41,6 +41,7 @@ function SessionLink({ id }: { id: string | null | undefined }) {
 function decisionVariant(d: string) {
   if (/deny|reject|block/i.test(d)) return "destructive" as const;
   if (/allow|approve|once|always/i.test(d)) return "success" as const;
+  if (/escalate|warn|ask/i.test(d)) return "warning" as const;
   return "secondary" as const;
 }
 
@@ -66,7 +67,7 @@ function RowDetail({ row, onClose }: { row: AuditEntry | null; onClose: () => vo
             <pre className="max-h-80 overflow-auto rounded-md bg-muted p-2 font-mono text-xs">
               {JSON.stringify(row.detail, null, 2)}
             </pre>
-            <dl className="grid grid-cols-[6rem_1fr] gap-y-1 font-mono text-[11px] break-all text-muted-foreground">
+            <dl className="grid grid-cols-[6rem_1fr] gap-y-1 font-mono text-2xs break-all text-muted-foreground">
               <dt>prev_hash</dt>
               <dd>{row.prev_hash}</dd>
               <dt>row_hash</dt>
@@ -92,6 +93,7 @@ export function AuditPage() {
   });
   const [selected, setSelected] = useState<AuditEntry | null>(null);
   const page = useAsync(() => api.audit(query), [query]);
+  const [verifyRun, setVerifyRun] = useState(0); // the chain is re-verified on Refresh only
 
   const apply = () =>
     setQuery({
@@ -108,14 +110,23 @@ export function AuditPage() {
         description="Append-only, hash-chained log of tool calls, permission decisions and memory changes."
         actions={
           <>
-            <ChainBadge key={page.data ? page.data.rows.length : 0} />
-            <Button variant="outline" size="sm" onClick={page.reload} aria-label="Refresh audit log">
+            <DensityToggle />
+            <ChainBadge key={verifyRun} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                page.reload();
+                setVerifyRun((n) => n + 1);
+              }}
+              aria-label="Refresh audit log"
+            >
               <RefreshCwIcon aria-hidden /> Refresh
             </Button>
           </>
         }
       />
-      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="space-y-3 page-body">
         <form
           className="flex flex-wrap items-end gap-2"
           aria-label="Filter audit log"
@@ -164,7 +175,7 @@ export function AuditPage() {
                   <TableCell title={new Date(r.ts).toLocaleString()}>{relTime(r.ts)}</TableCell>
                   <TableCell>{r.actor}</TableCell>
                   <TableCell className="font-mono text-xs">{r.action}</TableCell>
-                  <TableCell>{r.decision ? <Badge variant={decisionVariant(r.decision)}>{r.decision}</Badge> : null}</TableCell>
+                  <TableCell>{r.decision ? <Badge variant={decisionVariant(r.decision)}>{r.decision.toLowerCase()}</Badge> : null}</TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <SessionLink id={r.session_id} />
                   </TableCell>

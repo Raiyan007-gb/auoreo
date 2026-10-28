@@ -1,4 +1,4 @@
-import type { SessionInfo, UsageTotals } from "@sdk/client";
+import type { SessionContext, SessionInfo, UsageTotals } from "@sdk/client";
 import { RefreshCwIcon } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
@@ -15,7 +15,7 @@ import { cn, fmtTokens, fmtUsd } from "@/lib/utils";
 
 function Stat({ label, value, hint, testId }: { label: string; value: string; hint?: string; testId?: string }) {
   return (
-    <Card className="min-w-0 flex-[1_1_180px] gap-0.5 px-4 py-3.5">
+    <Card className="min-w-0 flex-[1_1_180px] gap-0.5 px-4 py-3.5 sm:px-4 sm:py-3.5">
       <CardHeader className="gap-0.5">
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-2xl font-semibold tracking-tight tabular-nums" data-testid={testId}>
@@ -98,7 +98,7 @@ function PolicyCard() {
         </CardTitle>
         <CardDescription>
           Epsilon-greedy choice of model and effort per agent, applied at turn boundaries.{" "}
-          {p && !p.enabled && <>Turn it on with <code>bandit.enabled: true</code> in settings.json.</>}
+          {p && !p.enabled && <>Turn it on with <code>auoreo config set bandit.enabled true</code> (or Settings → Environment).</>}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-2 text-sm">
@@ -165,6 +165,15 @@ export function UsagePage() {
     [],
   );
   const s = summary.data;
+  // Every listed session's context gauge in one request (the API caps a batch at 100).
+  const ctxIds = (s?.by_session ?? []).slice(0, 100).map((r) => r.key).join(" ");
+  const contexts = useAsync(
+    () =>
+      ctxIds
+        ? api.sessionsContext(ctxIds.split(" ")).then((l) => new Map(l.map((c) => [c.session_id, c])))
+        : Promise.resolve(new Map<string, SessionContext>()),
+    [ctxIds],
+  );
 
   return (
     <div className="flex flex-col">
@@ -181,7 +190,7 @@ export function UsagePage() {
                   aria-pressed={days === d}
                   onClick={() => setDays(d)}
                   className={cn(
-                    "h-7.5 rounded-[7px] px-3 text-[13px] text-secondary-foreground",
+                    "h-7.5 rounded-[7px] px-3 text-ui text-secondary-foreground",
                     days === d && "bg-card font-medium text-foreground shadow-xs",
                   )}
                 >
@@ -203,7 +212,7 @@ export function UsagePage() {
           </>
         }
       />
-      <div className="space-y-4 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="space-y-4 page-body">
         <ErrorNote error={summary.error} />
         {s && (
           <>
@@ -225,7 +234,7 @@ export function UsagePage() {
               </div>
             )}
             <section className="space-y-2">
-              <h2 className="text-[15px] font-semibold">By model</h2>
+              <h2 className="text-title font-semibold">By model</h2>
               {s.by_model.length === 0 ? (
                 <EmptyState title="No usage in this range">Run a turn and it shows up here.</EmptyState>
               ) : (
@@ -234,7 +243,7 @@ export function UsagePage() {
             </section>
             {s.by_session.length > 0 && (
               <section className="space-y-2">
-                <h2 className="text-[15px] font-semibold">By session</h2>
+                <h2 className="text-title font-semibold">By session</h2>
                 <TotalsTable
                   label="Session"
                   rows={s.by_session}
@@ -243,7 +252,7 @@ export function UsagePage() {
                       {sessions.data?.[r.key]?.title || <span className="font-mono text-xs">{r.key}</span>}
                     </Link>
                   )}
-                  extra={{ head: "Context", cell: (r) => <ContextCell sessionId={r.key} /> }}
+                  extra={{ head: "Context", cell: (r) => <ContextCell sessionId={r.key} ctx={contexts.data?.get(r.key)} /> }}
                 />
               </section>
             )}

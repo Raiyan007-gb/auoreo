@@ -12,8 +12,9 @@ const fmtBytes = (n: number) =>
  * saved so far (1 − post/pre tokens over every `compaction.completed`) next to the size of
  * long-term memory (facts, chunks, transcript rows, memory.db).
  */
-export function MemoryUsageGauge() {
-  const usage = useAsync(() => api.memoryUsage(), []);
+/** `refreshKey`: bump it after a write (e.g. a new fact) so the counts reload. */
+export function MemoryUsageGauge({ refreshKey = 0 }: { refreshKey?: number }) {
+  const usage = useAsync(() => api.memoryUsage(), [refreshKey]);
   const u = usage.data;
   const pct = u ? Math.round(u.saved_ratio * 100) : 0;
   return (

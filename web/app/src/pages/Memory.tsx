@@ -38,6 +38,7 @@ export function MemoryPage() {
     }
   };
 
+  const [added, setAdded] = useState(0);
   const add = async () => {
     if (!fact.trim()) return;
     setFactErr(null);
@@ -45,6 +46,7 @@ export function MemoryPage() {
       const r = await api.addFact({ content: fact.trim(), category });
       setFactMsg(r.created ? `Saved as fact:${r.id}` : `Already known as fact:${r.id}`);
       setFact("");
+      setAdded((n) => n + 1);
     } catch (e) {
       setFactErr(errorText(e));
     }
@@ -53,10 +55,10 @@ export function MemoryPage() {
   return (
     <div className="flex flex-col">
       <PageHeader title="Memory" description="Hybrid keyword + semantic recall over facts, documents and past messages." />
-      <div className="px-4 pt-4 sm:px-8">
-        <MemoryUsageGauge />
+      <div className="page-gutter pt-4">
+        <MemoryUsageGauge refreshKey={added} />
       </div>
-      <Tabs defaultValue="search" className="px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <Tabs defaultValue="search" className="page-body">
         <TabsList aria-label="Memory views">
           <TabsTrigger value="search">Search</TabsTrigger>
           <TabsTrigger value="facts">Facts</TabsTrigger>
@@ -124,7 +126,7 @@ export function MemoryPage() {
                 <option key={c}>{c}</option>
               ))}
             </NativeSelect>
-            <Button type="submit" disabled={!fact.trim()}>
+            <Button variant="brand" type="submit" disabled={!fact.trim()}>
               <PlusIcon aria-hidden /> Add fact
             </Button>
             {factMsg && (

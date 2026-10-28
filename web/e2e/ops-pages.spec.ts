@@ -37,7 +37,7 @@ test("jobs: morning_brief runs now with the fake gateway; runs drawer and delive
   await page.goto("/jobs");
   const row = page.locator('[data-testid="cron-row"][data-name="morning_brief"]');
   await expect(row).toContainText("0 9 * * 1-5");
-  await row.getByRole("button", { name: "Run morning_brief now" }).click();
+  await row.getByRole("button", { name: "Run now: morning_brief" }).click();
   await expect(page.getByTestId("cron-notice")).toContainText("morning_brief");
   await expect(row.getByTestId("cron-last")).toContainText("ok", { timeout: 20_000 });
 

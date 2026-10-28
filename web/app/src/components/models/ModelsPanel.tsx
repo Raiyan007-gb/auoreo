@@ -27,7 +27,7 @@ export function SelectionSummary({ selection }: { selection: ModelSelection | un
           </dt>
           <dd className="flex flex-wrap items-center gap-2" data-testid={`selected-${s.role}`}>
             {s.value ? (
-              <code className="font-mono text-[13px] font-medium break-all">{s.value}</code>
+              <code className="font-mono text-ui font-medium break-all">{s.value}</code>
             ) : (
               <span className="text-muted-foreground">{s.role === "small" ? "same as main" : "not set"}</span>
             )}
@@ -68,10 +68,17 @@ export function ModelsPanel() {
   };
   const onError = (m: string) => show(m, true);
   const connections = providers.data?.connections ?? [];
+  // A model in use with no connection behind it runs on a key from the Environment tab or the real env.
+  const mainModel = selection.data?.main.value ?? "";
+  const external = (() => {
+    if (connections.length > 0 || !mainModel) return null;
+    const p = providers.data?.providers.find((x) => mainModel.startsWith(x.prefix));
+    return p && !p.needs_base_url && !p.manual_models ? { id: p.id, name: p.name } : null;
+  })();
 
   return (
     <div className="grid gap-5" data-testid="models-panel">
-      <Card className="gap-3.5 px-5 py-4.5">
+      <Card className="gap-3.5">
         <CardHeader>
           <CardTitle>Models in use</CardTitle>
           <CardDescription>What the agent uses from its next step. Change it below — no restart needed.</CardDescription>
@@ -86,11 +93,12 @@ export function ModelsPanel() {
       </Card>
       <div className="flex flex-wrap items-start gap-5">
         <section aria-labelledby="providers-h" className="flex min-w-0 flex-[1_1_420px] flex-col gap-3">
-          <h2 id="providers-h" className="text-[15px] font-semibold">
+          <h2 id="providers-h" className="text-title font-semibold">
             Connected providers
           </h2>
           <ProviderList
             connections={connections}
+            external={external}
             onDone={(note) => {
               show(note);
               reload();
@@ -98,10 +106,10 @@ export function ModelsPanel() {
             onError={onError}
           />
         </section>
-        <Card className="min-w-0 flex-[1_1_340px] gap-3 px-5 py-4.5">
+        <Card className="min-w-0 flex-[1_1_340px] gap-3">
           <CardHeader>
             <CardTitle>Add a provider</CardTitle>
-            <CardDescription className="text-[13px]">
+            <CardDescription className="text-ui">
               Paste an API key. We recognise the provider and check the key by listing your models before saving
               anything.
             </CardDescription>
@@ -109,7 +117,7 @@ export function ModelsPanel() {
           <AddProvider compact specs={providers.data?.providers ?? []} onConnected={onConnected} />
         </Card>
       </div>
-      <Card className="gap-3.5 px-5 py-4.5">
+      <Card className="gap-3.5">
         <CardHeader>
           <CardTitle>Choose a model</CardTitle>
           <CardDescription>

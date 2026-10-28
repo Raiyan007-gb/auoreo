@@ -28,7 +28,7 @@ test("board tab lists keys, shows a value with producer/version, and the decisio
   expect((await put("leak", "sk-proj-abcdefghijklmnopqrstu")).status()).toBe(422);
 
   await page.goto(`/teams?tab=board&team=${id}`);
-  await expect(page.getByRole("tab", { name: "Board" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Blackboard" })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("Team", { exact: true })).toHaveValue(id);
   const rows = page.getByTestId("board-row");
   await expect(rows).toHaveCount(2);

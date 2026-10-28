@@ -80,7 +80,7 @@ function ImportDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button disabled={moving.length === 0} onClick={onConfirm} data-testid="import-confirm">
+          <Button variant="brand" disabled={moving.length === 0} onClick={onConfirm} data-testid="import-confirm">
             Move {moving.length} value{moving.length === 1 ? "" : "s"}
           </Button>
         </DialogFooter>
@@ -143,7 +143,7 @@ export function EnvPanel() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <label className="flex items-center gap-2 text-[13px] text-secondary-foreground">
+        <label className="flex items-center gap-2 text-ui text-secondary-foreground">
           <input
             type="checkbox"
             className="size-4 accent-brand"

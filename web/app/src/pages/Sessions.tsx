@@ -8,13 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input, Label, NativeSelect, Textarea } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SkeletonRows } from "@/components/ui/skeleton";
+import { DensityToggle, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tip } from "@/components/ui/tooltip";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { useAsync } from "@/hooks/useAsync";
+import { toast } from "@/lib/toast";
 import { api } from "@/lib/api";
 import { StatusPill } from "@/components/StatusPill";
 import { errorText, relTime } from "@/lib/utils";
+
+/** Native option popups size to their longest label; keep descriptions short (full text in the tooltip). */
+function clip(text: string | null | undefined, max = 60): string {
+  const t = (text ?? "").trim();
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+}
 
 function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const navigate = useNavigate();
@@ -59,10 +67,10 @@ function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <div className="grid gap-1">
             <Label htmlFor="ns-agent">Agent</Label>
             <NativeSelect id="ns-agent" value={agent} onChange={(e) => setAgent(e.target.value)}>
-              <option value="">default</option>
+              <option value="">Server default</option>
               {agents.data?.map((a) => (
-                <option key={a.name} value={a.name}>
-                  {a.name} — {a.description}
+                <option key={a.name} value={a.name} title={a.description}>
+                  {a.name} — {clip(a.description)}
                 </option>
               ))}
             </NativeSelect>
@@ -72,8 +80,8 @@ function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             <NativeSelect id="ns-workflow" value={workflow} onChange={(e) => setWorkflow(e.target.value)}>
               <option value="">chat (single agent)</option>
               {workflows.data?.map((w) => (
-                <option key={w.name} value={w.name}>
-                  {w.name} — {w.description}
+                <option key={w.name} value={w.name} title={w.description}>
+                  {w.name} — {clip(w.description)}
                 </option>
               ))}
             </NativeSelect>
@@ -87,7 +95,7 @@ function NewSessionDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             <DialogClose asChild>
               <Button variant="ghost">Cancel</Button>
             </DialogClose>
-            <Button type="submit" disabled={busy}>
+            <Button variant="brand" type="submit" disabled={busy}>
               Create
             </Button>
           </DialogFooter>
@@ -161,7 +169,7 @@ function QueueDialog({ session, onClose, onQueued }: { session: SessionInfo | nu
             <DialogClose asChild>
               <Button variant="ghost">Cancel</Button>
             </DialogClose>
-            <Button type="submit" disabled={busy || !text.trim()} data-testid="queue-submit">
+            <Button variant="brand" type="submit" disabled={busy || !text.trim()} data-testid="queue-submit">
               Queue
             </Button>
           </DialogFooter>
@@ -211,12 +219,18 @@ export function SessionsPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
   const counts = useMemo(() => countByStatus(rows ?? []), [rows]);
-  const shown = useMemo(() => filterRows(rows ?? [], query, status), [rows, query, status]);
+  // The Archived chip lists archived sessions only (the API returns archived + active; `archived` marks which).
+  const shown = useMemo(() => {
+    const base = showArchived ? (rows ?? []).filter((r) => sessions.data?.archived.has(r.id)) : (rows ?? []);
+    return filterRows(base, query, status);
+  }, [rows, query, status, showArchived, sessions.data]);
 
-  const act = async (fn: () => Promise<unknown>) => {
+  /** Run a row action; `done` is the toast shown when it succeeds. */
+  const act = async (fn: () => Promise<unknown>, done?: string) => {
     setActionErr(null);
     try {
       await fn();
+      if (done) toast.success(done);
       sessions.reload();
     } catch (e) {
       setActionErr(errorText(e));
@@ -240,7 +254,7 @@ export function SessionsPage() {
         }
       />
       <WelcomeBanner />
-      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="space-y-3 page-body">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative min-w-60 max-w-105 flex-1">
             <SearchIcon aria-hidden className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -274,6 +288,7 @@ export function SessionsPage() {
               <ArchiveIcon aria-hidden className="size-3.5" /> Archived
             </FilterChip>
           </div>
+          <DensityToggle />
         </div>
         <ErrorNote error={sessions.error ?? actionErr} />
         {queued && (
@@ -281,8 +296,21 @@ export function SessionsPage() {
             {queued}
           </p>
         )}
-        {rows && rows.length === 0 ? (
-          <EmptyState title="No sessions yet">Start one with “New session”.</EmptyState>
+        {!rows && !sessions.error ? (
+          <SkeletonRows rows={5} label="Loading sessions…" />
+        ) : rows && showArchived && !query && shown.length === 0 ? (
+          <EmptyState title="No archived sessions">Archive a session from its row to tuck it away here.</EmptyState>
+        ) : rows && rows.length === 0 ? (
+          <EmptyState
+            title="No sessions yet"
+            action={
+              <Button variant="brand" onClick={() => setCreating(true)}>
+                <PlusIcon aria-hidden /> New session
+              </Button>
+            }
+          >
+            Every conversation with an agent lands here.
+          </EmptyState>
         ) : rows && shown.length === 0 ? (
           <EmptyState title="Nothing matches">Try another search or status.</EmptyState>
         ) : (
@@ -299,7 +327,7 @@ export function SessionsPage() {
             </TableHeader>
             <TableBody>
               {shown.map((s) => (
-                <TableRow key={s.id} data-testid="session-row" data-session-id={s.id} data-archived={isArchived(s.id)}>
+                <TableRow key={s.id} className="group/row" data-testid="session-row" data-session-id={s.id} data-archived={isArchived(s.id)}>
                   <TableCell className="max-w-md">
                     <button
                       type="button"
@@ -308,7 +336,7 @@ export function SessionsPage() {
                     >
                       {s.title || "Untitled"}
                     </button>
-                    <div className="font-mono text-[11px] text-muted-foreground">{s.id}</div>
+                    <div className="font-mono text-2xs text-muted-foreground">{s.id}</div>
                   </TableCell>
                   <TableCell className="max-w-40 truncate max-md:hidden">
                     <ProjectCell path={s.project} />
@@ -333,7 +361,8 @@ export function SessionsPage() {
                     {relTime(s.updated_at)}
                   </TableCell>
                   <TableCell>
-                    <div className="flex justify-end gap-0.5">
+                    {/* Revealed on row hover or keyboard focus; always shown where there is no hover (touch). */}
+                    <div className="flex justify-end gap-0.5 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100 [@media(hover:hover)]:opacity-0">
                       <Tip label="Continue">
                         <Button variant="ghost" size="icon-sm" aria-label="Continue" onClick={() => void navigate(`/session/${s.id}`)}>
                           <PlayIcon />
@@ -353,7 +382,12 @@ export function SessionsPage() {
                       <RowAction
                         label={isArchived(s.id) ? "Unarchive" : "Archive"}
                         icon={isArchived(s.id) ? <ArchiveRestoreIcon /> : <ArchiveIcon />}
-                        onClick={() => void act(() => (isArchived(s.id) ? api.unarchive(s.id) : api.archive(s.id)))}
+                        onClick={() =>
+                          void act(
+                            () => (isArchived(s.id) ? api.unarchive(s.id) : api.archive(s.id)),
+                            isArchived(s.id) ? `Restored “${s.title || "Untitled"}”` : `Archived “${s.title || "Untitled"}”`,
+                          )
+                        }
                       />
                       <RowAction label="Delete" destructive icon={<Trash2Icon />} onClick={() => setConfirmDelete(s)} />
                     </div>
@@ -385,7 +419,7 @@ export function SessionsPage() {
               onClick={() => {
                 const s = confirmDelete;
                 setConfirmDelete(null);
-                if (s) void act(() => api.deleteSession(s.id));
+                if (s) void act(() => api.deleteSession(s.id), `Deleted “${s.title || "Untitled"}”`);
               }}
             >
               Delete
@@ -422,7 +456,7 @@ function FilterChip({ active, className, ...props }: React.ComponentProps<"butto
       type="button"
       aria-pressed={active}
       className={cn(
-        "inline-flex h-8 items-center gap-1.5 rounded-[7px] px-3 text-[13px] text-secondary-foreground",
+        "inline-flex h-8 items-center gap-1.5 rounded-[7px] px-3 text-ui text-secondary-foreground",
         active && "bg-card font-medium text-foreground shadow-xs",
         className,
       )}

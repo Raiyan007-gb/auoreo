@@ -50,7 +50,8 @@ export function App() {
               <Route index element={<Navigate to="/sessions" replace />} />
               <Route path="sessions" element={<SessionsPage />} />
               <Route path="session/:id" element={<SessionRoute />} />
-              <Route path="approvals" element={<ApprovalsPage />} />
+              <Route path="inbox" element={<ApprovalsPage />} />
+              <Route path="approvals" element={<Navigate to="/inbox" replace />} />
               <Route path="memory" element={<MemoryPage />} />
               <Route path="harness" element={<HarnessPage />} />
               <Route path="usage" element={<UsagePage />} />

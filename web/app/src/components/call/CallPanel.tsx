@@ -136,7 +136,7 @@ export function CallPanel({ sessionId }: { sessionId: string }) {
             <PhoneOffIcon aria-hidden /> Hang up
           </Button>
         ) : (
-          <Button size="sm" onClick={() => void start()} disabled={caps?.available === false} data-testid="call-start">
+          <Button variant="brand" size="sm" onClick={() => void start()} disabled={caps?.available === false} data-testid="call-start">
             <PhoneIcon aria-hidden /> Start call
           </Button>
         )}

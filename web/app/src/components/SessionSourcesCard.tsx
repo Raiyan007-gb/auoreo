@@ -66,7 +66,14 @@ export function SessionSourcesCard({ initialSession }: { initialSession?: string
       {data && data.sources.length === 0 && <p className="text-xs text-muted-foreground">No MCP servers or plugins defined.</p>}
       <ul className="max-h-64 space-y-1 overflow-auto text-xs">
         {data?.sources.map((s) => (
-          <li key={s.id} className="flex items-center gap-2" data-testid="session-source" data-id={s.id} data-enabled={s.enabled}>
+          <li
+            key={s.id}
+            className="flex items-center gap-2"
+            data-testid="session-source"
+            data-id={s.id}
+            data-enabled={s.enabled}
+            title={s.status === "disabled" ? "Off for every session right now; this choice applies once it is switched on" : undefined}
+          >
             <input
               type="checkbox"
               id={`src-${s.id}`}
@@ -78,7 +85,7 @@ export function SessionSourcesCard({ initialSession }: { initialSession?: string
             <label htmlFor={`src-${s.id}`} className="min-w-0 flex-1 truncate font-mono">
               {s.id}
             </label>
-            <Badge variant="outline">{s.status}</Badge>
+            <Badge variant="outline">{s.status === "disabled" ? "off everywhere" : s.status}</Badge>
             <span className="text-muted-foreground tabular-nums" title={(s.skills ?? []).join(", ")}>
               {s.tools} tools{(s.skills ?? []).length ? ` · ${(s.skills ?? []).length} skills` : ""}
             </span>

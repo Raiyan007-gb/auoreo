@@ -108,16 +108,13 @@ function PlatformCard({ p, paired, commands, onPaired }: { p: PluginInfo; paired
                 No chats paired from this server yet.
               </p>
             )}
-            <p className="text-[11px] text-muted-foreground">
-              Stored in <code>settings.json</code> → <code>plugins.{p.name}.allowlist</code> (plus any ids set there by hand).
+            <p className="text-2xs text-muted-foreground">
+              Stored in the settings database → <code>plugins.{p.name}.allowlist</code> (plus any ids set there with <code>auoreo config set</code>).
             </p>
           </div>
           )}
         </div>
-        <div className="space-y-1">
-          <p className="text-xs font-medium">Menu preview</p>
-          <MenuPreview commands={commands} platform={p.name} />
-        </div>
+        <MenuPreview commands={commands} platform={p.name} />
       </CardContent>
     </Card>
   );
@@ -155,7 +152,7 @@ export function PlatformsPage() {
         }
         actions={<RefreshButton onClick={plugins.reload} busy={plugins.loading} label="Refresh platforms" />}
       />
-      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="space-y-3 page-body">
         <AsyncBody state={connectors} empty="No messaging plugins" emptyHint="Add plugins/<name>/plugin.yaml with provides: [connector] or [delivery].">
           {(rows) =>
             rows.map((p) => (

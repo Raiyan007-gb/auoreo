@@ -57,7 +57,7 @@ export function SharedScreen({
         </form>
       )}
       {last && (
-        <p className="text-[11px] text-muted-foreground" data-testid="input-last">
+        <p className="text-2xs text-muted-foreground" data-testid="input-last">
           {last}
         </p>
       )}

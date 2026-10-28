@@ -1,5 +1,5 @@
 import type { GoalInfo, GoalStatus, SuggestionInfo } from "@sdk/client";
-import { CheckIcon, MergeIcon, PlusIcon, XIcon } from "lucide-react";
+import { CheckIcon, MergeIcon, PlusIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useAsync } from "@/hooks/useAsync";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
@@ -16,6 +16,7 @@ import {
 import { Input, Label, NativeSelect } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
+import { toast } from "@/lib/toast";
 import { useControl } from "@/lib/controlContext";
 import { errorText } from "@/lib/utils";
 
@@ -113,7 +114,7 @@ function AbsorbDialog({
           <DialogClose asChild>
             <Button variant="ghost">Cancel</Button>
           </DialogClose>
-          <Button onClick={() => void submit()} disabled={!into}>
+          <Button variant="brand" onClick={() => void submit()} disabled={!into}>
             <MergeIcon aria-hidden /> Absorb
           </Button>
         </DialogFooter>
@@ -134,6 +135,7 @@ function GoalRow({
   onDone,
 }: { goal: GoalInfo; onAbsorb: () => void } & Handlers) {
   const [pct, setPct] = useState(String(Math.round(goal.progress * 100)));
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const absorbed = goal.status === "absorbed";
   const evidence = goal.evidence_session_ids ?? [];
   const save = (body: Parameters<typeof api.updateGoal>[1]) =>
@@ -155,7 +157,41 @@ function GoalRow({
           {goal.status}
           {goal.absorbed_into ? ` → #${goal.absorbed_into}` : ""}
         </Badge>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Delete goal ${goal.id}`}
+          className="text-muted-foreground hover:text-destructive"
+          onClick={() => setConfirmDelete(true)}
+        >
+          <Trash2Icon aria-hidden />
+        </Button>
       </div>
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogTitle>Delete goal?</DialogTitle>
+          <DialogDescription>
+            “{goal.title}” is removed for good. To keep it listed, set its status to dropped instead.
+          </DialogDescription>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setConfirmDelete(false);
+                void api.deleteGoal(goal.id).then(() => {
+                  toast.success(`Deleted goal “${goal.title}”`);
+                  onDone();
+                }, onError);
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       {goal.description && (
         <p className="text-sm whitespace-pre-wrap text-muted-foreground">
           {goal.description}
@@ -250,7 +286,7 @@ function SuggestionCard({
       )}
       {s.status === "pending" && (
         <div className="flex gap-2">
-          <Button
+          <Button variant="brand"
             size="sm"
             onClick={() =>
               void api.acceptSuggestion(s.id).then(onDone, onError)
@@ -322,7 +358,7 @@ export function GoalsPage() {
         title="Goals"
         description="Long-running goals and consent-first suggestions from your agents."
       />
-      <div className="space-y-3 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="space-y-3 page-body">
         {Boolean(err || goalsQ.error || suggestionsQ.error) && (
           <ErrorNote error={err ?? goalsQ.error ?? suggestionsQ.error} />
         )}
@@ -349,7 +385,7 @@ export function GoalsPage() {
                 maxLength={300}
                 onChange={(e) => setTitle(e.target.value)}
               />
-              <Button type="submit" disabled={!title.trim()}>
+              <Button variant="brand" type="submit" disabled={!title.trim()}>
                 <PlusIcon aria-hidden /> Add goal
               </Button>
               <NativeSelect

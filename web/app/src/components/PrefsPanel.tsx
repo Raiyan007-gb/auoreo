@@ -27,7 +27,7 @@ function ProposalRow({ p, onDone }: { p: PrefsProposal; onDone: () => void }) {
         <Badge variant="secondary">{p.action}</Badge>
         {p.old_text && <span className="text-xs text-muted-foreground line-through">{p.old_text}</span>}
         <span className="min-w-0 flex-1">{p.content}</span>
-        <Button size="sm" aria-label={`Approve preference ${p.id}`} onClick={() => void act(() => api.approvePref(p.id))}>
+        <Button variant="brand" size="sm" aria-label={`Approve preference ${p.id}`} onClick={() => void act(() => api.approvePref(p.id))}>
           <CheckIcon aria-hidden /> Approve
         </Button>
         <Button variant="outline" size="sm" aria-label={`Deny preference ${p.id}`} onClick={() => void act(() => api.denyPref(p.id))}>

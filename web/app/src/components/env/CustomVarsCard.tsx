@@ -26,7 +26,7 @@ function FlagToggles({ flags, onChange, prefix }: { flags: Flags; onChange: (f: 
   return (
     <div className="flex flex-col gap-2">
       {FLAG_LABELS.map(([key, label]) => (
-        <label key={key} className="flex items-center gap-2 text-[13px]">
+        <label key={key} className="flex items-center gap-2 text-ui">
           <input
             type="checkbox"
             className="size-4 accent-brand"
@@ -123,7 +123,7 @@ export function CustomVarsCard({ vars, onApplied, onError }: Props) {
     }
   };
   return (
-    <Card data-testid="custom-vars" className="gap-3 px-4.5">
+    <Card data-testid="custom-vars" className="gap-3">
       <CardHeader>
         <CardTitle className="text-sm">Add your own variable</CardTitle>
         <CardDescription>

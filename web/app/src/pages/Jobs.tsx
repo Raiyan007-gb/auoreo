@@ -108,13 +108,13 @@ function CronRow({
       <TableCell className="max-w-xs">
         <p className="font-mono text-xs font-medium">{j.name}</p>
         <p className="line-clamp-2 text-xs text-muted-foreground">{j.description}</p>
-        <p className="text-[11px] text-muted-foreground">
+        <p className="text-2xs text-muted-foreground">
           agent <code>{j.agent}</code> → {j.deliver.join(", ") || "no delivery"}
         </p>
       </TableCell>
       <TableCell>
         <code className="text-xs">{j.schedule}</code>
-        {j.tz && <p className="text-[11px] text-muted-foreground">{j.tz}</p>}
+        {j.tz && <p className="text-2xs text-muted-foreground">{j.tz}</p>}
         {j.error && <p className="text-xs text-destructive">{j.error}</p>}
       </TableCell>
       <TableCell className="text-xs" data-testid="cron-next">
@@ -124,7 +124,7 @@ function CronRow({
         {j.last_run ? (
           <div className="space-y-0.5">
             <StatusBadge status={j.last_run.status} />
-            <p className="text-[11px] whitespace-nowrap text-muted-foreground">{fmtWhen(j.last_run.scheduled_for)}</p>
+            <p className="text-2xs whitespace-nowrap text-muted-foreground">{fmtWhen(j.last_run.scheduled_for)}</p>
           </div>
         ) : (
           <span className="text-xs text-muted-foreground">never</span>
@@ -138,7 +138,7 @@ function CronRow({
       </TableCell>
       <TableCell>
         <div className="flex flex-wrap items-center gap-1">
-          <Button size="sm" onClick={onRun} disabled={busy !== null} aria-label={`Run ${j.name} now`}>
+          <Button size="sm" onClick={onRun} disabled={busy !== null} aria-label={`Run now: ${j.name}`}>
             <PlayIcon aria-hidden /> Run now
           </Button>
           <Button size="sm" variant="outline" onClick={onPause} disabled={busy !== null}>
@@ -229,7 +229,7 @@ export function JobsPage() {
   return (
     <div className="flex flex-col">
       <PageHeader title="Jobs" description="Scheduled jobs, webhook routes and the deliveries outbox." />
-      <div className="px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="page-body">
         <Tabs value={tab} onValueChange={(v) => setParams(v === "cron" ? {} : { tab: v }, { replace: true })}>
           <TabsList aria-label="Jobs sections">
             <TabsTrigger value="cron">Cron</TabsTrigger>

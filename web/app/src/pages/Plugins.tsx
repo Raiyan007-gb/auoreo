@@ -17,7 +17,8 @@ import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
 import { errorText, relTime } from "@/lib/utils";
 
-const VERIFY_VARIANT = { ok: "success", mismatch: "destructive", missing: "warning" } as const;
+const VERIFY_VARIANT = { ok: "success", mismatch: "destructive", missing: "outline" } as const;
+const VERIFY_TEXT = { ok: "locked", mismatch: "changed", missing: "not installed" } as const;
 const VERIFY_HINT = {
   ok: "lock.json matches the plugin folder",
   mismatch: "plugin folder changed since lock.json was written — reload reinstalls it",
@@ -152,7 +153,7 @@ function PluginRow({
       <TableCell>
         <Tip label={VERIFY_HINT[p.verify]}>
           <Badge variant={VERIFY_VARIANT[p.verify]} tabIndex={0}>
-            {p.verify}
+            {VERIFY_TEXT[p.verify]}
           </Badge>
         </Tip>
       </TableCell>
@@ -275,12 +276,28 @@ function McpTab() {
                 <TableRow key={s.name} data-testid="mcp-row" data-name={s.name}>
                   <TableCell>
                     <p className="font-mono text-xs font-medium">{s.name}</p>
-                    <p className="font-mono text-[11px] break-all text-muted-foreground">{s.path}</p>
+                    <p className="font-mono text-2xs break-all text-muted-foreground">{s.path}</p>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline">{s.description || "—"}</Badge>
                   </TableCell>
-                  <TableCell className="text-xs">{toolsOf(tools, s.name) || "not connected"}</TableCell>
+                  <TableCell className="text-xs" data-testid="mcp-tools">
+                    {s.available === false ? (
+                      <span className="flex flex-col gap-1">
+                        <Badge variant="outline" className="text-muted-foreground">Off</Badge>
+                        {s.unavailable_reason && (
+                          <span className="text-2xs text-muted-foreground">
+                            {s.unavailable_reason
+                              .replace(/^off — /, "")
+                              .split(/`([^`]+)`/)
+                              .map((part, i) => (i % 2 ? <code key={i} className="font-mono">{part}</code> : part))}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      toolsOf(tools, s.name) || "not connected"
+                    )}
+                  </TableCell>
                   <TableCell>
                     <Badge>{s.source}</Badge>
                   </TableCell>
@@ -365,7 +382,7 @@ export function PluginsPage() {
           </Button>
         }
       />
-      <div className="grid gap-4 px-4 pt-4 pb-10 sm:px-8 sm:pt-5 xl:grid-cols-[1fr_22rem]">
+      <div className="grid gap-4 page-body xl:grid-cols-[1fr_22rem]">
         <div className="min-w-0 space-y-3">
           <ErrorNote error={err} />
           <Tabs value={tab} onValueChange={setTab}>

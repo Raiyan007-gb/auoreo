@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { RUN_COMPACT_EVENT } from "@/lib/sessionOps";
 import { NAV } from "@/components/nav";
 import { RegistryGroups } from "@/components/PaletteGroups";
-import { bumpFreq, byFreq, readFreq, SESSION_VERBS, useRegistries } from "@/lib/palette";
+import { bumpFreq, byFreq, paletteFilter, readFreq, SESSION_VERBS, useRegistries } from "@/lib/palette";
 
 export const INSERT_COMMAND_EVENT = "auoreo:insert-command";
 
@@ -76,7 +76,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           aria-describedby={undefined}
         >
           <DialogPrimitive.Title className="sr-only">Command palette</DialogPrimitive.Title>
-          <Command label="Command palette" className="flex flex-col">
+          <Command label="Command palette" className="flex flex-col" filter={paletteFilter}>
             <Command.Input
               autoFocus
               value={search}
@@ -93,7 +93,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                       key={c.name}
                       data-testid="palette-command"
                       data-command={c.name}
-                      value={`/${c.name} ${c.description}`}
+                      value={`command|/${c.name}`}
+                      keywords={[c.description]}
                       className={itemCls}
                       onSelect={() => runKey(`cmd:${c.name}`, () => insert(`/${c.name} `))}
                     >
@@ -104,7 +105,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   ))}
                   {commands.some((c) => c.handler === "compact") && (
                     <Command.Item
-                      value="run compact now session context"
+                      value="action|compact now"
+                      keywords={["run compact session context"]}
                       className={itemCls}
                       onSelect={() => run(() => window.dispatchEvent(new CustomEvent(RUN_COMPACT_EVENT)))}
                     >
@@ -123,7 +125,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                       key={v.name}
                       data-testid="palette-verb"
                       data-command={v.name}
-                      value={`/${v.name} ${v.description}`}
+                      value={`verb|/${v.name}`}
+                      keywords={[v.description]}
                       className={itemCls}
                       onSelect={() => verb(v.name)}
                     >
@@ -136,7 +139,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               )}
               <Command.Group heading="Pages" className={groupCls}>
                 {NAV.map((n) => (
-                  <Command.Item key={n.to} value={`page ${n.label}`} className={itemCls} onSelect={() => run(() => void navigate(n.to))}>
+                  <Command.Item key={n.to} value={`page|${n.label}`} className={itemCls} onSelect={() => run(() => void navigate(n.to))}>
                     <n.icon className="size-4" aria-hidden />
                     {n.label}
                   </Command.Item>
@@ -147,7 +150,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   {sessions.slice(0, 20).map((s) => (
                     <Command.Item
                       key={s.id}
-                      value={`session ${s.title} ${s.id}`}
+                      value={`session|${s.title || "Untitled"} ${s.id}`}
                       className={itemCls}
                       onSelect={() => run(() => void navigate(`/session/${s.id}`))}
                     >
@@ -162,7 +165,8 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   {agents.map((a) => (
                     <Command.Item
                       key={a.name}
-                      value={`agent ${a.name} ${a.description}`}
+                      value={`agent|${a.name}`}
+                      keywords={[a.description]}
                       className={itemCls}
                       onSelect={() =>
                         run(() => {

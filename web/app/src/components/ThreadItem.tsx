@@ -1,4 +1,4 @@
-import { CheckIcon, CodeIcon, CopyIcon, FileTextIcon } from "lucide-react";
+import { CheckIcon, CodeIcon, CopyIcon, FileTextIcon, LoaderCircleIcon } from "lucide-react";
 import { useState } from "react";
 import { MarkdownText } from "@/components/MarkdownLazy";
 import { ThinkingBlock } from "@/components/ThinkingBlock";
@@ -69,7 +69,7 @@ export function ThreadItem({ item, awaiting = false, readOnly = false }: { item:
       return (
         <div className="group flex items-start justify-end gap-1" data-testid="msg-user">
           {!readOnly && <MessageTools text={item.text} />}
-          <div className="max-w-[80%] rounded-[16px_16px_4px_16px] bg-primary px-3.5 py-2.5 whitespace-pre-wrap text-primary-foreground">
+          <div className="max-w-[80%] rounded-[18px_18px_6px_18px] bg-primary px-4 py-2.5 leading-relaxed whitespace-pre-wrap text-primary-foreground shadow-card">
             {item.steer && <span className="mr-1 text-xs opacity-70">steer ·</span>}
             {item.text}
           </div>
@@ -94,6 +94,9 @@ export function ThreadItem({ item, awaiting = false, readOnly = false }: { item:
             item.level === "info" && "bg-muted text-muted-foreground",
           )}
         >
+          {item.code?.endsWith(".started") && (
+            <LoaderCircleIcon aria-hidden className="mr-1.5 inline size-3 animate-spin align-[-2px] motion-reduce:animate-none" />
+          )}
           {item.text}
         </div>
       );

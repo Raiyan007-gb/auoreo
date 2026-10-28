@@ -100,7 +100,7 @@ export function ShareButton({ sessionId }: { sessionId: string }) {
             <DialogClose asChild>
               <Button variant="ghost">Close</Button>
             </DialogClose>
-            <Button onClick={() => void create()} disabled={busy} data-testid="share-create">
+            <Button variant="brand" onClick={() => void create()} disabled={busy} data-testid="share-create">
               <Link2Icon aria-hidden /> Create link
             </Button>
           </DialogFooter>

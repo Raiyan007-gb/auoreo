@@ -42,7 +42,7 @@ function PlanReview({ q, busy, onAnswer }: { q: QuestionItem; busy: boolean; onA
         onChange={(e) => setFeedback(e.target.value)}
       />
       <div className="flex gap-2">
-        <Button size="sm" disabled={busy} onClick={() => answer(approve)}>
+        <Button variant="brand" size="sm" disabled={busy} onClick={() => answer(approve)}>
           <CheckIcon aria-hidden /> Approve plan
         </Button>
         <Button size="sm" variant="outline" disabled={busy} onClick={() => answer(keep)}>
@@ -148,7 +148,7 @@ export function QuestionForm({ request, onDone }: { request: QuestionAskedData; 
       )}
       <div className="flex items-center gap-2">
         {!plan && (
-          <Button type="submit" size="sm" disabled={busy}>
+          <Button variant="brand" type="submit" size="sm" disabled={busy}>
             Send answer
           </Button>
         )}

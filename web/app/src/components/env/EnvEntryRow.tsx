@@ -35,7 +35,7 @@ function ReadOnly({ entry }: { entry: EnvEntry }) {
   const shown = entry.kind === "secret" ? (entry.is_set ? "•••••• (set)" : "not set") : draftOf(entry) || "(unset)";
   return (
     <div className="grid gap-1" data-testid={`env-locked-${entry.name}`}>
-      <code className="block max-h-24 overflow-auto rounded-lg border bg-muted/60 px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap text-muted-foreground">
+      <code tabIndex={0} className="block max-h-24 overflow-auto rounded-lg border bg-muted/60 px-2.5 py-1.5 font-mono text-xs whitespace-pre-wrap text-muted-foreground">
         {shown}
       </code>
       <p className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -222,7 +222,7 @@ export function EnvEntryRow(props: RowProps) {
     >
       <div className="grid content-start gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <code className="font-mono text-[12.5px] font-medium break-all">{entry.name}</code>
+          <code className="font-mono text-xs font-medium break-all">{entry.name}</code>
           <Badges entry={entry} />
         </div>
         <p className="text-xs text-muted-foreground">{entry.description}</p>

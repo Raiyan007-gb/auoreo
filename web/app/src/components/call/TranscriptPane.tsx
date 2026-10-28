@@ -29,7 +29,7 @@ export function TranscriptPane({ lines }: { lines: readonly TranscriptLine[] }) 
       {lines.length === 0 && <li className="text-muted-foreground">Speak — transcribed utterances appear here.</li>}
       {lines.map((l) => (
         <li key={l.seq} data-testid="transcript-line" data-kind={l.kind} className={l.kind === "user" ? "" : "text-muted-foreground italic"}>
-          <span className="mr-1 font-mono text-[10px] text-muted-foreground">{new Date(l.at.endsWith("Z") ? l.at : `${l.at}Z`).toLocaleTimeString()}</span>
+          <span className="mr-1 font-mono text-2xs text-muted-foreground">{new Date(l.at.endsWith("Z") ? l.at : `${l.at}Z`).toLocaleTimeString()}</span>
           {l.text}
         </li>
       ))}

@@ -80,7 +80,7 @@ export function ApprovalCard({
             </p>
           )}
           {request.detail && !editing && (
-            <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-code px-3 py-2.5 font-mono text-[12.5px] whitespace-pre-wrap text-code-foreground">
+            <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-code px-3 py-2.5 font-mono text-xs whitespace-pre-wrap text-code-foreground">
               {request.detail}
             </pre>
           )}
@@ -117,7 +117,7 @@ export function ApprovalCard({
         </form>
       ) : (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Button disabled={busy} onClick={() => void send("once")} autoFocus={!compact}>
+          <Button variant="brand" disabled={busy} onClick={() => void send("once")} autoFocus={!compact}>
             <CheckIcon aria-hidden /> Approve once
           </Button>
           {matching > 1 && (

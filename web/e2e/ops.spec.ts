@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
-import { chatAndWait, createSession, createUntitled, send, shot } from "./helpers";
+import { chatAndWait, createSession, createUntitled, openMore, send, shot } from "./helpers";
 
 test("fork creates a new session with the same messages", async ({ page, request }) => {
   const s = await createSession(request, "e2e fork source");
@@ -8,7 +8,7 @@ test("fork creates a new session with the same messages", async ({ page, request
   await page.goto(`/session/${s.id}`);
   await expect(page.getByTestId("msg-user").first()).toContainText("hello from the fork source");
 
-  await page.getByRole("button", { name: "Fork" }).click();
+  await openMore(page).then(() => page.getByRole("menuitem", { name: "Fork" }).click());
   await expect(page).not.toHaveURL(new RegExp(`/session/${s.id}$`));
   await expect(page).toHaveURL(/\/session\/ses_/);
   const forkId = page.url().split("/").pop() ?? "";
@@ -38,16 +38,18 @@ test("archive hides a session from the list and the archived filter shows it", a
   await expect(row).toContainText("archived");
   await shot(page, "sessions-archived");
 
+  // Unarchiving moves it out of the archived-only view and back into the main list.
   await row.getByRole("button", { name: "Unarchive", exact: true }).click();
-  await expect(row).toHaveAttribute("data-archived", "false");
+  await expect(row).toBeHidden();
   await page.getByTestId("archived-filter").click();
   await expect(row).toBeVisible();
+  await expect(row).toHaveAttribute("data-archived", "false");
 });
 
 test("delete from the session page removes it after confirming", async ({ page, request }) => {
   const s = await createSession(request, "e2e delete me");
   await page.goto(`/session/${s.id}`);
-  await page.getByRole("button", { name: "Delete session" }).click();
+  await openMore(page).then(() => page.getByRole("menuitem", { name: "Delete session" }).click());
   const dialog = page.getByRole("dialog", { name: "Delete session?" });
   await expect(dialog).toContainText("e2e delete me");
   await shot(page, "delete-confirm");
@@ -63,7 +65,7 @@ test("export as Markdown downloads the transcript", async ({ page, request }) =>
   await page.goto(`/session/${s.id}`);
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("button", { name: "Export as Markdown" }).click(),
+    openMore(page).then(() => page.getByRole("menuitem", { name: "Export as Markdown" }).click()),
   ]);
   expect(download.suggestedFilename()).toBe(`${s.id}.md`);
   const path = await download.path();

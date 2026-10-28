@@ -1,13 +1,15 @@
 import type { MeetingDetail, MeetingInfo, MeetingStatus } from "@sdk/client";
-import { FileAudioIcon, PlusIcon, SparklesIcon, SquareIcon } from "lucide-react";
+import { FileAudioIcon, PlusIcon, SparklesIcon, SquareIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
 import { MarkdownText } from "@/components/MarkdownLazy";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogTitle } from "@/components/ui/dialog";
 import { Input, Label } from "@/components/ui/input";
 import { useAsync } from "@/hooks/useAsync";
 import { api } from "@/lib/api";
+import { toast } from "@/lib/toast";
 import { useControl } from "@/lib/controlContext";
 import { errorText } from "@/lib/utils";
 
@@ -65,16 +67,19 @@ function Transcript({ meeting }: { meeting: MeetingDetail }) {
 function MeetingPanel({
   id,
   onChanged,
+  onDeleted,
   version,
 }: {
   id: string;
   onChanged: () => void;
+  onDeleted: () => void;
   version: number;
 }) {
   const q = useAsync(() => api.getMeeting(id), [id, version]);
   const meeting = q.data;
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const waiting = Boolean(meeting?.summary_session_id && !meeting.summary);
   const reload = q.reload;
@@ -113,7 +118,42 @@ function MeetingPanel({
         <Badge variant={STATUS_BADGE[meeting.status]} data-testid="meeting-status">
           {meeting.status}
         </Badge>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Delete meeting"
+          className="text-muted-foreground hover:text-destructive"
+          disabled={busy !== null || meeting.status === "finalising"}
+          onClick={() => setConfirmDelete(true)}
+        >
+          <Trash2Icon aria-hidden />
+        </Button>
       </div>
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogTitle>Delete meeting?</DialogTitle>
+          <DialogDescription>
+            “{meeting.title}” is removed with its audio, transcript and summary. A summary session stays.
+          </DialogDescription>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setConfirmDelete(false);
+                void api.deleteMeeting(id).then(() => {
+                  toast.success(`Deleted “${meeting.title}”`);
+                  onDeleted();
+                }, (e: unknown) => setErr(errorText(e)));
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <p className="text-xs text-muted-foreground">
         {meeting.chunks} chunk{meeting.chunks === 1 ? "" : "s"} · {meeting.duration_s.toFixed(1)} s
         {meeting.speakers?.length ? ` · ${meeting.speakers.length} speakers` : ""}
@@ -139,7 +179,7 @@ function MeetingPanel({
           <Button variant="outline" disabled={busy !== null} onClick={() => fileRef.current?.click()}>
             <FileAudioIcon aria-hidden /> {busy === "upload" ? "Uploading…" : "Upload recording"}
           </Button>
-          <Button
+          <Button variant="brand"
             disabled={busy !== null || meeting.chunks === 0}
             onClick={() => void act("stop", () => api.stopMeeting(id))}
           >
@@ -179,7 +219,8 @@ function MeetingPanel({
 export function MeetingsPage() {
   const control = useControl();
   const listQ = useAsync(() => api.listMeetings(), []);
-  const meetings: MeetingInfo[] = listQ.data ?? [];
+  const [gone, setGone] = useState<ReadonlySet<string>>(new Set()); // deleted here; the list may lag a beat
+  const meetings: MeetingInfo[] = (listQ.data ?? []).filter((m) => !gone.has(m.id));
   const [selected, setSelected] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -189,7 +230,22 @@ export function MeetingsPage() {
     reloadList();
     setVersion((v) => v + 1);
   }, [reloadList]);
-  useEffect(() => control.listen((e) => e.type.startsWith("meeting.") && refresh()), [control, refresh]);
+  const forget = useCallback(
+    (id: string) => {
+      setGone((g) => new Set(g).add(id));
+      setSelected((s) => (s === id ? null : s));
+      reloadList();
+    },
+    [reloadList],
+  );
+  useEffect(
+    () =>
+      control.listen((e) => {
+        if (e.type === "meeting.deleted") forget(String(e.data.meeting_id ?? ""));
+        else if (e.type.startsWith("meeting.")) refresh();
+      }),
+    [control, refresh, forget],
+  );
 
   const start = async () => {
     try {
@@ -209,7 +265,7 @@ export function MeetingsPage() {
         title="Meetings"
         description="Record or upload a meeting, get a speaker-labelled transcript, then summarise it."
       />
-      <div className="grid gap-4 px-4 pt-4 pb-10 sm:px-8 sm:pt-5 md:grid-cols-[18rem_1fr]">
+      <div className="grid gap-4 page-body md:grid-cols-[18rem_1fr]">
         <aside className="space-y-3">
           <form
             className="flex gap-2"
@@ -225,7 +281,7 @@ export function MeetingsPage() {
               maxLength={200}
               onChange={(e) => setTitle(e.target.value)}
             />
-            <Button type="submit">
+            <Button variant="brand" type="submit">
               <PlusIcon aria-hidden /> Start
             </Button>
           </form>
@@ -250,13 +306,18 @@ export function MeetingsPage() {
             ))}
           </ul>
         </aside>
-        <main>
+        <section aria-label="Meeting">
           {current ? (
-            <MeetingPanel id={current} onChanged={reloadList} version={version} />
+            <MeetingPanel
+              id={current}
+              onChanged={reloadList}
+              onDeleted={() => forget(current)}
+              version={version}
+            />
           ) : (
             <EmptyState title="Start a meeting to upload a recording" />
           )}
-        </main>
+        </section>
       </div>
     </div>
   );

@@ -106,7 +106,7 @@ export function DeliveriesTable({ rows, onReplay }: { rows: DeliveryInfo[]; onRe
             <TableCell className="font-mono text-xs">{d.id}</TableCell>
             <TableCell>
               <p className="text-xs font-medium">{d.source}</p>
-              <p className="text-[11px] text-muted-foreground">{d.kind}</p>
+              <p className="text-2xs text-muted-foreground">{d.kind}</p>
             </TableCell>
             <TableCell className="font-mono text-xs">{d.target}</TableCell>
             <TableCell>

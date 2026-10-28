@@ -1,4 +1,4 @@
-import { ExternalLinkIcon, MonitorIcon, MoonIcon, SunIcon } from "lucide-react";
+import { ExternalLinkIcon, MonitorIcon, MoonIcon, Rows2Icon, Rows4Icon, SunIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ErrorNote, PageHeader } from "@/components/AppShell";
 import { EnvPanel } from "@/components/env/EnvPanel";
@@ -10,7 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAsync } from "@/hooks/useAsync";
 import { api, getStoredToken, hasMetaToken, setStoredToken } from "@/lib/api";
 import { isPwaEnabled, pwaSupported, setPwaEnabled } from "@/lib/pwa";
+import { useDensity } from "@/lib/density";
 import { getThemePref, setThemePref, type ThemePref } from "@/lib/theme";
+import { Segmented } from "@/components/ui/segmented";
 
 const THEMES: { value: ThemePref; label: string; icon: typeof SunIcon }[] = [
   { value: "light", label: "Light", icon: SunIcon },
@@ -32,6 +34,7 @@ export function SettingsPage() {
   const [token, setToken] = useState(getStoredToken);
   const [saved, setSaved] = useState(false);
   const [theme, setTheme] = useState<ThemePref>(getThemePref);
+  const [density, setDensity] = useDensity();
   const health = useAsync(() => api.health(), []);
   const [pwa, setPwa] = useState(isPwaEnabled);
   const [pwaNote, setPwaNote] = useState<string | null>(null);
@@ -45,7 +48,7 @@ export function SettingsPage() {
           setTab(v as Tab);
           history.replaceState(null, "", `#${v}`);
         }}
-        className="gap-5 px-4 pt-4 pb-10 sm:px-8 sm:pt-5"
+        className="gap-5 page-body"
       >
         <TabsList variant="line" aria-label="Settings sections">
           <TabsTrigger value="models" data-testid="tab-models">
@@ -109,23 +112,31 @@ export function SettingsPage() {
               <CardHeader>
                 <CardTitle>Theme</CardTitle>
               </CardHeader>
-              <div role="radiogroup" aria-label="Theme" className="flex gap-2">
-                {THEMES.map((t) => (
-                  <Button
-                    key={t.value}
-                    role="radio"
-                    aria-checked={theme === t.value}
-                    variant={theme === t.value ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => {
-                      setTheme(t.value);
-                      setThemePref(t.value);
-                    }}
-                  >
-                    <t.icon aria-hidden /> {t.label}
-                  </Button>
-                ))}
-              </div>
+              <Segmented
+                label="Theme"
+                value={theme}
+                options={THEMES}
+                onChange={(v) => {
+                  setTheme(v);
+                  setThemePref(v);
+                }}
+              />
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Table density</CardTitle>
+                <CardDescription>Row height for every table. Saved in this browser.</CardDescription>
+              </CardHeader>
+              <Segmented
+                label="Table density"
+                value={density}
+                onChange={setDensity}
+                options={[
+                  { value: "comfortable", label: "Comfortable", icon: Rows2Icon },
+                  { value: "compact", label: "Compact", icon: Rows4Icon },
+                ]}
+              />
             </Card>
 
             <Card>

@@ -1,11 +1,14 @@
 import type { PendingPermission, SessionInfo } from "@sdk/client";
+import type { QuestionAskedData } from "@sdk/events";
 import { RefreshCwIcon, ScrollTextIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ApprovalCard } from "@/components/ApprovalCard";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
+import { QuestionTabs } from "@/components/QuestionTabs";
 import { Button } from "@/components/ui/button";
+import { usePendingQuestions } from "@/hooks/useNeedsYou";
 import { api } from "@/lib/api";
 import { useControl } from "@/lib/controlContext";
 
@@ -28,7 +31,7 @@ const auditHref = (sessionId: string) =>
   `/audit?session_id=${encodeURIComponent(sessionId)}&action=permission.reply`;
 
 /**
- * Cross-session approval queue: `GET /api/permissions/pending` once, then kept live by WS
+ * The inbox: everything an agent is waiting on. Approvals are a cross-session queue: `GET /api/permissions/pending` once, then kept live by WS
  * `permission.requested/replied` events (the shared connection tails from
  * `GET /api/events/latest`, so history is never replayed) and the `connected` frame's
  * pending list. A 3s REST poll runs only while the WebSocket is down.
@@ -42,6 +45,15 @@ export function ApprovalsPage() {
   const [tick, setTick] = useState(0);
   const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
   const [decisions, setDecisions] = useState<Decision[]>([]);
+  const questions = usePendingQuestions();
+  const questionsBySession = useMemo(() => {
+    const m = new Map<string, QuestionAskedData[]>();
+    for (const q of questions.items) {
+      const ask = { request_id: q.request_id, questions: q.questions, timeout_s: q.timeout_s ?? undefined, expires_at: q.expires_at ?? undefined };
+      m.set(q.session_id, [...(m.get(q.session_id) ?? []), ask as unknown as QuestionAskedData]);
+    }
+    return [...m.entries()];
+  }, [questions.items]);
   const toolOf = useRef(new Map<string, string>()); // request id → tool, for the decisions list
   const markAnswered = (rid: string) => {
     setAnswered((a) => new Set(a).add(rid));
@@ -74,7 +86,7 @@ export function ApprovalsPage() {
       .listSessions(500)
       .then((s) => setSessions(Object.fromEntries(s.map((x) => [x.id, x]))))
       .catch(() => undefined);
-  }, [pending.length]);
+  }, [pending.length, questions.items.length]);
 
   useEffect(
     () =>
@@ -122,10 +134,10 @@ export function ApprovalsPage() {
   return (
     <div className="flex flex-col">
       <PageHeader
-        title="Approvals"
+        title="Inbox"
         description={
           <>
-            Agents pause here before risky actions. Nothing runs until you decide.{" "}
+            Agents pause here before risky actions and when they need an answer. Nothing runs until you decide.{" "}
             <span data-testid="approvals-live">{wsUp ? "Live over WebSocket." : "Polling every 3s (WebSocket down)."}</span>
           </>
         }
@@ -135,16 +147,41 @@ export function ApprovalsPage() {
           </Button>
         }
       />
-      <div className="flex flex-wrap items-start gap-6 px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="flex flex-wrap items-start gap-6 page-body">
         <section aria-labelledby="waiting" className="flex min-w-0 flex-[999_1_520px] flex-col gap-3.5">
-          <h2 id="waiting" className="flex items-center gap-2.5 text-[15px] font-semibold">
+          <h2 id="waiting" className="flex items-center gap-2.5 text-title font-semibold">
             Waiting for you
-            {groups.all.length > 0 && (
-              <span className="rounded-full bg-warning px-2 text-xs leading-5 font-semibold text-card">{groups.all.length}</span>
+            {groups.all.length + questions.items.length > 0 && (
+              <span className="rounded-full bg-warning px-2 text-xs leading-5 font-semibold text-card">
+                {groups.all.length + questions.items.length}
+              </span>
             )}
           </h2>
           <ErrorNote error={error} />
-          {groups.bySession.length === 0 && <EmptyState title="Nothing to approve">New requests show up here as they arrive.</EmptyState>}
+          {groups.bySession.length === 0 && questionsBySession.length === 0 && (
+            <EmptyState title="All clear">Approvals and questions show up here as they arrive.</EmptyState>
+          )}
+          {questionsBySession.map(([sid, asks]) => (
+            <section
+              key={`q-${sid}`}
+              aria-labelledby={`qgrp-${sid}`}
+              className="overflow-hidden rounded-xl border bg-card shadow-card"
+              data-testid="question-group"
+            >
+              <h3 id={`qgrp-${sid}`} className="flex flex-wrap items-center gap-2 border-b border-border-subtle bg-muted/40 px-4 py-2.5 text-sm font-medium">
+                <Link to={`/session/${sid}`} className="text-brand-ink hover:underline">
+                  {sessions[sid]?.title || "Untitled session"}
+                </Link>
+                <span className="font-mono text-xs text-muted-foreground">{sid}</span>
+                <Badge variant="info" className="ml-auto">
+                  {asks.length} question{asks.length === 1 ? "" : "s"}
+                </Badge>
+              </h3>
+              <div className="p-3">
+                <QuestionTabs pending={asks} onDone={questions.done} />
+              </div>
+            </section>
+          ))}
           {groups.bySession.map(([sid, items]) => (
             <section
               key={sid}
@@ -174,7 +211,7 @@ export function ApprovalsPage() {
           ))}
         </section>
         <aside aria-labelledby="recent-decisions" className="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5" data-testid="recent-decisions">
-          <h2 id="recent-decisions" className="text-[15px] font-semibold">
+          <h2 id="recent-decisions" className="text-title font-semibold">
             Recent decisions
           </h2>
           {decisions.length === 0 ? (
@@ -204,7 +241,7 @@ export function ApprovalsPage() {
           )}
           <p className="text-xs text-muted-foreground">
             “Always” rules live in your permissions files; every decision is kept in the{" "}
-            <Link to="/audit?action=permission.reply" className="text-brand-ink hover:underline">audit log</Link>.
+            <Link to="/audit?action=permission.reply" className="text-brand-ink underline underline-offset-2 hover:decoration-2">audit log</Link>.
           </p>
         </aside>
       </div>

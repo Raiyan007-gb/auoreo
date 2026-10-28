@@ -43,6 +43,12 @@ export async function chatAndWait(request: APIRequestContext, id: string, messag
   throw new Error(`session ${id} did not go idle`);
 }
 
+/** Open the session header's "More actions" menu (fork, compact, export, archive, delete). */
+export async function openMore(page: Page): Promise<void> {
+  await page.getByTestId("session-more").click();
+  await page.getByRole("menu").waitFor();
+}
+
 export async function send(page: Page, text: string): Promise<void> {
   const box = page.getByTestId("composer");
   await box.fill(text);

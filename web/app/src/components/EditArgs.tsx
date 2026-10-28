@@ -57,7 +57,7 @@ export function EditArgs({
       )}
       <p className="text-xs text-muted-foreground">Approved once with these arguments; the change is audited.</p>
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={busy || !parsed.value} data-testid="approval-edit-submit">
+        <Button variant="brand" type="submit" size="sm" disabled={busy || !parsed.value} data-testid="approval-edit-submit">
           <CheckIcon aria-hidden /> Approve edited
         </Button>
         <Button type="button" size="sm" variant="ghost" onClick={onCancel}>

@@ -60,3 +60,20 @@ export function useRegistries(open: boolean): Registries {
   return r;
 }
 
+
+/**
+ * cmdk filter for values shaped `kind|name` with the description in `keywords`: a name prefix
+ * ranks first, then a name substring, then every search word found in the description. No
+ * scattered-letter fuzzy matching, so "compact" no longer surfaces unrelated agents and plugins.
+ */
+export function paletteFilter(value: string, search: string, keywords?: string[]): number {
+  const q = search.trim().toLowerCase().replace(/^\//, "");
+  if (!q) return 1;
+  const bar = value.indexOf("|");
+  const kind = value.slice(0, Math.max(bar, 0)).toLowerCase();
+  const name = value.slice(bar + 1).toLowerCase().replace(/^\//, "");
+  if (name.startsWith(q)) return 1;
+  if (name.includes(q)) return 0.7;
+  const hay = [kind, name, ...(keywords ?? [])].join(" ").toLowerCase();
+  return q.split(/\s+/).every((w) => hay.includes(w)) ? 0.2 : 0;
+}

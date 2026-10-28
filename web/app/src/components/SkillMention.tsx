@@ -45,7 +45,7 @@ export function SkillMention({ text, onPick }: { text: string; onPick: (next: st
             <BookOpenIcon aria-hidden className="size-3.5 text-muted-foreground" />
             <span className="font-mono text-xs">@{s.name}</span>
             <span className="truncate text-xs text-muted-foreground">{s.description}</span>
-            <span className="ml-auto text-[10px] text-muted-foreground">{s.source}</span>
+            <span className="ml-auto text-2xs text-muted-foreground">{s.source}</span>
           </button>
         </li>
       ))}

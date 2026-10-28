@@ -30,7 +30,7 @@ test("doctor lists grouped checks and re-runs", async ({ page }) => {
   await expect(page.getByTestId("doctor-summary")).toContainText("ok");
   await expect(checks.filter({ hasText: "credentials" }).first()).toContainText("fake gateway");
   await expect(page.getByRole("heading", { name: "Server" })).toBeVisible();
-  await page.getByRole("button", { name: "Re-run checks" }).click();
+  await page.getByRole("button", { name: "Run again" }).click();
   await expect(checks.first()).toBeVisible();
   await shot(page, "doctor-checks");
 });

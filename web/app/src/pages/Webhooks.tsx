@@ -22,7 +22,7 @@ export function WebhooksPage() {
           </>
         }
       />
-      <div className="px-4 pt-4 pb-10 sm:px-8 sm:pt-5">
+      <div className="page-body">
         <WebhookRoutes tick={tick} />
       </div>
     </div>

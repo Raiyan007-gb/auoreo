@@ -129,7 +129,7 @@ export function ModelPicker({
       <ul className="grid max-h-120 overflow-auto rounded-lg border" data-testid="model-list">
         {shown.map((m) => (
           <li key={m.model_id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-border-subtle px-4 py-2.5 text-sm last:border-0 hover:bg-muted/40" data-testid={`model-row-${m.model_id}`}>
-            <code className="font-mono text-[13px] font-medium">{m.model_id}</code>
+            <code className="font-mono text-ui font-medium">{m.model_id}</code>
             {m.name !== m.model_id && <span className="text-muted-foreground">{m.name}</span>}
             <Badge variant={m.kind === "chat" ? "info" : m.kind === "embedding" ? "success" : "outline"}>{m.kind}</Badge>
             {ctx(m.context_window) && <span className="text-xs tabular-nums text-muted-foreground">{ctx(m.context_window)} context</span>}

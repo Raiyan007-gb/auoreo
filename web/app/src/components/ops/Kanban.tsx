@@ -66,7 +66,7 @@ function CreateTaskDialog({
           </div>
           <ErrorNote error={action.error} />
           <DialogFooter>
-            <Button type="submit" disabled={!title.trim() || action.busy !== null}>
+            <Button variant="brand" type="submit" disabled={!title.trim() || action.busy !== null}>
               Create task
             </Button>
           </DialogFooter>
@@ -86,10 +86,10 @@ function TaskCard({ t }: { t: KanbanTask }) {
     >
       <div className="flex items-start gap-2">
         <p className="min-w-0 flex-1 text-sm font-medium break-words">{t.title}</p>
-        <span className="font-mono text-[10px] text-muted-foreground">#{t.id}</span>
+        <span className="font-mono text-2xs text-muted-foreground">#{t.id}</span>
       </div>
       {t.body && <p className="text-xs whitespace-pre-wrap text-muted-foreground">{truncate(t.body, 240)}</p>}
-      <div className="flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-1 text-2xs text-muted-foreground">
         <Badge variant="outline">{t.board}</Badge>
         {t.worker && <span>worker {t.worker}</span>}
         {t.failures > 0 && <Badge variant="destructive">{t.failures} failures</Badge>}
@@ -121,7 +121,7 @@ export function KanbanBoard() {
         </div>
         <div className="ml-auto flex items-center gap-1">
           <RefreshButton onClick={tasks.reload} busy={tasks.loading} label="Refresh board" />
-          <Button onClick={() => setCreating(true)}>
+          <Button variant="brand" onClick={() => setCreating(true)}>
             <PlusIcon aria-hidden /> New task
           </Button>
         </div>

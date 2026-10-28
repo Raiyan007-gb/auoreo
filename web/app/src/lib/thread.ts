@@ -134,6 +134,23 @@ const notice = (s: ThreadState, e: ServerEvent, level: "info" | "warn" | "error"
   items: [...s.items, { kind: "notice", key: `n${e.seq}`, level, text, code }],
 });
 
+/** A result notice that takes the place of its in-progress one (`pending` code), keeping its key
+ *  so the row updates in place; appended when there is none (e.g. joined mid-way). */
+const settle = (
+  s: ThreadState,
+  e: ServerEvent,
+  pending: string,
+  level: "info" | "warn" | "error",
+  text: string,
+  code: string,
+): ThreadState => {
+  const i = s.items.findLastIndex((it) => it.kind === "notice" && it.code === pending);
+  if (i < 0) return notice(s, e, level, text, code);
+  const items = [...s.items];
+  items[i] = { kind: "notice", key: items[i]!.key, level, text, code };
+  return { ...s, items };
+};
+
 type Handler = (s: ThreadState, d: Record<string, unknown>, e: ServerEvent) => ThreadState;
 
 function finishRun(s: ThreadState, d: Record<string, unknown>, e: ServerEvent): ThreadState {
@@ -302,9 +319,10 @@ const HANDLERS: Record<string, Handler> = {
     notice(s, e, "info", `Compacting context (${str(d.trigger) || "manual"})…`, "compaction.started"),
   "compaction.completed": (s, d, e) => {
     const c = d as unknown as CompactionCompletedData;
-    return notice(
+    return settle(
       s,
       e,
+      "compaction.started",
       "info",
       `Context compacted: ${num(c.pre_tokens).toLocaleString()} → ${num(c.post_tokens).toLocaleString()} tokens, archived ${num(c.archived)} messages`,
       "compaction.completed",
@@ -312,11 +330,11 @@ const HANDLERS: Record<string, Handler> = {
   },
   "compaction.failed": (s, d, e) => {
     const c = d as unknown as CompactionFailedData;
-    return notice(s, e, "warn", `Compaction did not run: ${str(c.reason)}`, "compaction.failed");
+    return settle(s, e, "compaction.started", "warn", `Compaction did not run: ${str(c.reason)}`, "compaction.failed");
   },
   "compaction.skipped": (s, d, e) => {
     const c = d as unknown as CompactionSkippedData;
-    return notice(s, e, "warn", `Compaction skipped: ${str(c.reason)}`, "compaction.skipped");
+    return settle(s, e, "compaction.started", "warn", `Compaction skipped: ${str(c.reason)}`, "compaction.skipped");
   },
   "policy.choice": (s, d) => ({ ...s, policy: d as unknown as PolicyChoiceData }), // --- W1-C
   "session.title_updated": (s, d) =>({ ...s, title: str(d.title) || s.title }),
