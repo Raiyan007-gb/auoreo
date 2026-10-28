@@ -10,7 +10,7 @@ from typing import Annotated
 
 import typer
 
-from auoreo.cli.common import err_console, settings
+from auoreo.cli.common import err_console, settings, tcp_listener
 from auoreo.cli.serve_extras import ServeExtras
 from auoreo.core.logsetup import configure_logging, uvicorn_log_config
 from auoreo.core.settings import Settings
@@ -90,8 +90,7 @@ def serve(
     if uds is not None:  # --- W2-B: the daemon's socket (TCP only when --port is given)
         _serve_uds(st, uds, tcp=port is not None, extras=extras)
         return
-    sock = socket.socket(socket.AF_INET6 if ":" in st.host else socket.AF_INET)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock = tcp_listener(st.host)
     try:
         sock.bind((st.host, st.port))
     except OSError as exc:
@@ -216,8 +215,7 @@ def _serve_uds(st: Settings, path: Path, *, tcp: bool, extras: ServeExtras) -> N
         sockets = [uds_mod.bind_unix(path)]
         urls = [f"unix:{path}"]
         if tcp:
-            tsock = socket.socket(socket.AF_INET6 if ":" in st.host else socket.AF_INET)
-            tsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            tsock = tcp_listener(st.host)
             tsock.bind((st.host, st.port))
             sockets.append(tsock)
             urls.append(f"http://{st.host}:{tsock.getsockname()[1]}")

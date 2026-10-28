@@ -141,11 +141,13 @@ A factory returns None to skip; an app with `lifespan(services)` has it entered 
 mimetypes.add_type("application/manifest+json", ".webmanifest")  # not in every mime.types
 NO_CACHE = {"sw.js", "sw-assets.json", "manifest.webmanifest", "index.html"}
 """PWA files the browser must revalidate so a new build's service worker is picked up."""
+NO_FALLBACK = ("api/", "hooks/")
+"""Machine namespaces: an unknown path there is a real 404, never the SPA shell."""
 
 
 class SpaStaticFiles(StaticFiles):
     """Static files with an SPA fallback: unknown extension-less paths get index.html (200),
-    so deep links like /session/<id> work; missing assets still 404."""
+    so deep links like /session/<id> work; missing assets and unknown /api/ or /hooks/ paths still 404."""
 
     password: str | None = None
     """Set by `create_app`: `index.html` gets the token meta only for a valid cookie."""
@@ -157,7 +159,10 @@ class SpaStaticFiles(StaticFiles):
             if exc.status_code != 404:
                 raise
             response = Response(status_code=404)
-        if response.status_code == 404 and "." not in path.rsplit("/", 1)[-1]:
+        spa_path = (
+            not path.replace("\\", "/").lstrip("/").startswith(NO_FALLBACK)
+        )  # Starlette gives OS separators
+        if response.status_code == 404 and spa_path and "." not in path.rsplit("/", 1)[-1]:
             path, response = "index.html", await super().get_response("index.html", scope)
         if path.lstrip("/") in NO_CACHE or path in ("", "."):
             response.headers["Cache-Control"] = "no-cache"

@@ -241,12 +241,27 @@ def credential_checks(st: Settings, secret: Callable[[str], str | None] | None =
     return rows
 
 
+def _is_auoreo(host: str, port: int) -> bool:
+    """Does an auoreo server answer `/api/health` there? (then a busy port is expected, not a clash)"""
+    import json
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(f"http://{host}:{port}/api/health", timeout=1.5) as r:  # noqa: S310 - loopback probe
+            body = json.loads(r.read().decode("utf-8", errors="replace"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(body, dict) and body.get("status") == "ok" and "generation" in body
+
+
 def port_checks(st: Settings, *, serving: bool = False) -> list[Check]:
     """CLI: is the port free? From inside the server the port is ours, so it is reported as such."""
     if serving:
         return [Check("port", "ok", f"{st.host}:{st.port} serving (this process)")]
     with socket.socket() as s:
         free = s.connect_ex((st.host, st.port)) != 0
+    if not free and _is_auoreo(st.host, st.port):
+        return [Check("port", "ok", f"{st.host}:{st.port} in use by a running auoreo server")]
     return [
         Check(
             "port",

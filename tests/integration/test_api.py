@@ -238,6 +238,8 @@ async def test_routes_win_over_spa_mount(services: Services, settings: Settings,
         deep = await c.get("/session/ses_abc")  # SPA deep link → index.html, 200
         assert deep.status_code == 200 and "spa" in deep.text
         assert (await c.get("/assets/missing.js")).status_code == 404
+        assert (await c.get("/api/no-such-route")).status_code == 404  # never the SPA shell
+        assert (await c.get("/hooks/no-such-route")).status_code == 404
 
 
 async def test_events_latest_seq(client: httpx.AsyncClient, services: Services) -> None:

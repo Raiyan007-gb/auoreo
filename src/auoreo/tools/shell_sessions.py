@@ -257,7 +257,9 @@ class ShellRegistry(SessionScoped):
                 f"{', '.join(sorted(mine))}. Finish or interrupt one (write_stdin chars='\\u0003' "
                 "in tty mode) before starting another"
             )
-        argv = argv or ["bash", "-lc", cmd]
+        from auoreo.backends.sandbox import host_argv
+
+        argv = host_argv(argv or ["bash", "-lc", cmd])  # Windows: Git Bash, not the WSL stub
         master: int | None = None
         if tty:
             import pty

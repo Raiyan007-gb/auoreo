@@ -145,7 +145,15 @@ def gh_row() -> Check:
     if gh is None:
         return Check("gh_auth", "ok", "skipped: gh not installed (GitHub tools need it)")
     try:
-        proc = subprocess.run([gh, "auth", "status"], capture_output=True, text=True, timeout=10, check=False)
+        proc = subprocess.run(
+            [gh, "auth", "status"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=10,
+            check=False,
+        )
     except (OSError, subprocess.TimeoutExpired) as exc:
         return Check(
             "gh_auth", "warn", f"gh auth status failed: {type(exc).__name__}", "run `gh auth status`"

@@ -1,0 +1,3 @@
+# Bundled plugins are verified by a SHA-256 over their exact bytes (plugins/SIGNATURES.json):
+# keep them LF on every checkout so Windows clones (core.autocrlf=true) hash the same.
+plugins/** text=auto eol=lf

@@ -14,6 +14,7 @@ import contextlib
 import json
 import logging
 import os
+import sys
 import time
 from collections.abc import Callable, Iterable, Iterator
 from contextvars import ContextVar
@@ -38,6 +39,23 @@ ENV_ALLOWLIST = ("PATH", "HOME", "LANG", "TZ")
 else a tool needs comes from its manifest `requires_env`; tools that need a terminal type set
 `TERM` themselves (terminal_pty's `term` argument), so it is not inherited from the host."""
 ENV_ALLOWED_PREFIXES = ("AUOREO_TELEMETRY_",)
+WINDOWS_ENV_ALLOWLIST = (
+    "SYSTEMROOT",
+    "SYSTEMDRIVE",
+    "WINDIR",
+    "COMSPEC",
+    "PATHEXT",
+    "TEMP",
+    "TMP",
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PROGRAMFILES",
+    "PROGRAMDATA",
+)
+"""Windows only: non-secret OS variables a child cannot start without (no SYSTEMROOT → Winsock
+fails with WinError 10106; no COMSPEC/PATHEXT → commands are not found; no TEMP → temp files fail).
+Matched case-insensitively, since Windows environment names are."""
 ROTATION_SUFFIXES = ("#prev", "#rotated_at", "#prev_expires")
 UPDATED_SUFFIX = "#updated_at"
 """`<name>#updated_at` (epoch seconds) is written by every set/rotate; hidden from `names()`."""
@@ -298,6 +316,8 @@ def child_env(requires: list[str], secrets: SecretStore | None) -> dict[str, str
     """Scrubbed environment for subprocesses: allowlist + the tool's declared needs."""
     env = {k: os.environ[k] for k in ENV_ALLOWLIST if k in os.environ}
     env.update({k: v for k, v in os.environ.items() if k.startswith(ENV_ALLOWED_PREFIXES)})
+    if sys.platform == "win32":
+        env.update({k: v for k, v in os.environ.items() if k.upper() in WINDOWS_ENV_ALLOWLIST})
     for name in requires:
         value = secrets._resolve(name) if secrets else os.environ.get(name)
         if value is not None:

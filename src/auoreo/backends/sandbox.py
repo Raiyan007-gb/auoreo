@@ -12,9 +12,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import functools
 import os
 import re
+import shutil
 import signal
+import sys
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -161,10 +164,54 @@ class SandboxBackend(ABC):
         return extra
 
 
+_WSL_STUBS = ("/windows/system32/", "/windowsapps/")
+"""On Windows these `bash.exe` are WSL launchers, not a shell: without a distro they fail (UTF-16 errors)."""
+
+
+@functools.cache
+def windows_bash() -> str | None:
+    """A real bash on Windows (Git for Windows), never a WSL launcher stub; None when there is none."""
+    seen: list[Path] = [Path(d) / "bash.exe" for d in os.environ.get("PATH", "").split(os.pathsep) if d]
+    if git := shutil.which("git"):
+        root = Path(git).resolve().parent.parent  # <Git>/cmd/git.exe or <Git>/bin/git.exe
+        seen += [root / "bin" / "bash.exe", root / "usr" / "bin" / "bash.exe"]
+    for var, sub in (("ProgramFiles", "Git"), ("ProgramW6432", "Git"), ("LOCALAPPDATA", "Programs/Git")):
+        if base := os.environ.get(var):
+            seen.append(Path(base) / sub / "bin" / "bash.exe")
+    for path in seen:
+        if path.is_file() and not any(stub in path.as_posix().lower() for stub in _WSL_STUBS):
+            return str(path)
+    return None
+
+
+def host_argv(argv: list[str]) -> list[str]:
+    """`argv` for this host: on Windows a bare `bash` becomes Git Bash (see `windows_bash`)."""
+    if sys.platform == "win32" and argv and argv[0] == "bash" and (bash := windows_bash()):
+        return [bash, *argv[1:]]
+    return list(argv)
+
+
+async def _kill_tree(proc: asyncio.subprocess.Process) -> None:
+    """Windows stand-in for `killpg`: `taskkill /T` ends the child and everything it started."""
+    with contextlib.suppress(OSError):
+        killer = await asyncio.create_subprocess_exec(
+            "taskkill",
+            "/F",
+            "/T",
+            "/PID",
+            str(proc.pid),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await killer.wait()
+    with contextlib.suppress(ProcessLookupError):
+        proc.kill()
+
+
 async def run_local(spec: ExecSpec, *, backend: str, enforced: bool) -> ExecResult:
     """Plain subprocess in its own session; the whole process group dies on timeout."""
     proc = await asyncio.create_subprocess_exec(
-        *spec.argv,
+        *host_argv(spec.argv),
         cwd=str(spec.cwd),
         env=spec.env or None,
         stdin=asyncio.subprocess.PIPE if spec.stdin is not None else asyncio.subprocess.DEVNULL,
@@ -176,7 +223,10 @@ async def run_local(spec: ExecSpec, *, backend: str, enforced: bool) -> ExecResu
         out, err = await asyncio.wait_for(proc.communicate(spec.stdin), timeout=spec.timeout_s)
     except (TimeoutError, asyncio.CancelledError):
         with contextlib.suppress(ProcessLookupError):
-            os.killpg(proc.pid, signal.SIGKILL)
+            if hasattr(os, "killpg"):
+                os.killpg(proc.pid, signal.SIGKILL)
+            else:  # Windows: no process groups; take down the whole tree, then the child itself
+                await _kill_tree(proc)
         await proc.wait()
         task = asyncio.current_task()
         if task is not None and task.cancelling():

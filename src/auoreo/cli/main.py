@@ -16,10 +16,22 @@ def main() -> None:
     import auoreo.core.permissions
     import auoreo.core.redaction  # noqa: F401
 
+    _utf8_console()
     _configure_logging()
     from auoreo.cli.app import app
 
     app()
+
+
+def _utf8_console() -> None:
+    """Windows consoles default to a legacy code page (cp1252) that cannot print ✓ or →;
+    write UTF-8 instead, replacing anything the terminal still cannot show."""
+    if sys.platform != "win32":
+        return
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None and (stream.encoding or "").lower().replace("-", "") != "utf8":
+            reconfigure(encoding="utf-8", errors="replace")
 
 
 def _configure_logging() -> None:

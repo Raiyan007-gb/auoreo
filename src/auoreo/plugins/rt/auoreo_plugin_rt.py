@@ -288,7 +288,17 @@ class Runtime:
     async def serve(self) -> None:
         loop = asyncio.get_running_loop()
         reader = asyncio.StreamReader(limit=32 * 1024 * 1024)
-        await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
+        if sys.platform == "win32":
+            # The Proactor loop cannot wrap an inherited stdin pipe (`connect_read_pipe` fails);
+            # a daemon thread reads lines and hands them to the same StreamReader.
+            def pump() -> None:
+                for chunk in iter(sys.stdin.buffer.readline, b""):
+                    loop.call_soon_threadsafe(reader.feed_data, chunk)
+                loop.call_soon_threadsafe(reader.feed_eof)
+
+            threading.Thread(target=pump, name="stdin-pump", daemon=True).start()
+        else:
+            await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
         stop_task = asyncio.ensure_future(self.stopping.wait())
         while not self.stopping.is_set():
             line_task = asyncio.ensure_future(reader.readline())

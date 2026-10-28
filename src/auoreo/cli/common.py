@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import socket
+import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any, TypeVar
@@ -42,3 +44,15 @@ def dump_json(obj: Any) -> None:
     from auoreo.cli.output import dumps  # --- I5: `--mini` prints one line
 
     print(dumps(obj))
+
+
+def tcp_listener(host: str) -> socket.socket:
+    """An unbound TCP socket that will not share its port. POSIX: SO_REUSEADDR (fast restart
+    over TIME_WAIT). Windows: SO_EXCLUSIVEADDRUSE, because there SO_REUSEADDR lets a second
+    server bind a port that is already listening, and requests go to either one."""
+    sock = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET)
+    if sys.platform == "win32":
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+    else:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    return sock

@@ -9,7 +9,7 @@ from typing import Annotated
 
 import typer
 
-from auoreo.cli.common import err_console, settings
+from auoreo.cli.common import err_console, settings, tcp_listener
 from auoreo.core.secrets import SecretStore
 
 
@@ -57,8 +57,7 @@ def exec_server(
         err_console.print(f"[red]{exc}[/red]")
         raise typer.Exit(2) from exc
     assert secret is not None
-    sock = socket.socket(socket.AF_INET6 if ":" in host else socket.AF_INET)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock = tcp_listener(host)
     try:
         sock.bind((host, port))
     except OSError as exc:
