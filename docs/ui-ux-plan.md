@@ -58,10 +58,15 @@ also failing before these changes). Backend fixes need a server restart (`code_s
 
 ### Phase 1 — Friction fixes (1–2 days) — done 2026-10-28
 
-All ten items below are implemented. New API: `DELETE /api/goals/{id}`,
-`DELETE /api/voice/meetings/{id}`, `GET|POST /api/doctor/fixes`, `GET /api/context?session_id=…`
-(batch); a goal set to `done` without a progress value becomes 100%; forks are titled
-"<title> (fork)"; bundled MCP servers report `available: false` with the enable command.
+All ten items below are implemented; items 5, 6 and 10 were finished on 2026-11-04 after the
+drift report found them partial (the per-group cap `capGroup` in `lib/palette`; the Enable
+button backed by `POST /api/harness/mcp/bundled/{name}`; one approvals store,
+`lib/approvalsStore` + `hooks/useApprovals`, shared by the badge, the inbox and session
+threads). New API: `DELETE /api/goals/{id}`, `DELETE /api/voice/meetings/{id}`,
+`GET|POST /api/doctor/fixes`, `GET /api/context?session_id=…` (batch),
+`POST /api/harness/mcp/bundled/{name}`; a goal set to `done` without a progress value becomes
+100%; forks are titled "<title> (fork)"; bundled MCP servers report `available: false` with
+the enable command.
 Item 6 keeps the per-session checkbox usable for globally-off sources (the choice applies once
 the source is switched on) and labels them "off everywhere". Item 7 collapses each connector's
 preview (it differs per platform: Telegram renames, clamp warnings) and opens it when a label is
@@ -101,9 +106,9 @@ Done: one primary per screen (the default button is now neutral; each screen's m
 `brand`), skeleton loaders (`components/ui/skeleton`: lists, Sessions, Doctor), toasts
 (`lib/toast` + `components/ui/toast`: session archive/restore/delete, goal and meeting delete,
 doctor fixes, copy report), empty states with an action (Sessions → New session), row actions
-revealed on hover/focus (always shown on touch), lowercase decision pills on Audit.
-Left: the type/spacing scale pass, a table density toggle, sticky table headers (the tables sit in
-an `overflow-x-auto` wrapper, so they need their own scroll container first).
+revealed on hover/focus (always shown on touch), lowercase decision pills on Audit. The
+type/spacing scale pass, the table density toggle and the sticky table headers that this pass
+left open landed in the second pass described above.
 
 - **One primary per screen**: in dark mode, white "primary" buttons (Run now, Start, Search,
   Save) compete with the teal brand button. Use teal for the single main action, outline/ghost
@@ -121,12 +126,14 @@ an `overflow-x-auto` wrapper, so they need their own scroll container first).
 
 ### Phase 3 — Layout and navigation — done 2026-10-28
 
-- **Inbox** (`/inbox`, `/approvals` redirects): pending approvals and agent questions in one
-  view; the sidebar and top-bar badges count both (`hooks/useNeedsYou`). MCP link cards only
-  appear after their consent question was answered, so they are not counted twice.
+- **Inbox** (`/inbox`, `/approvals` redirects; the page component is still
+  `pages/Approvals.tsx`): pending approvals and agent questions in one view; the sidebar and
+  top-bar badges count both (`hooks/useNeedsYou`). MCP link cards only appear after their
+  consent question was answered, so they are not counted twice.
 - **Sidebar** groups fold (remembered per browser; a folded group still shows the current page and
   carries the waiting count). **Top bar**: breadcrumbs, search, inbox count; on phones it is the
-  app bar. **Mobile**: bottom tabs (Sessions, Inbox, Search) and an edge-to-edge composer.
+  app bar. **Mobile**: bottom tabs (Sessions, Inbox, Search) and a full-width composer (an 8 px
+  gutter, rounded).
 - **Session page**: agent, model, policy, tokens and context moved into the composer toolbar; the
   header keeps title, status, Thinking, Call, Share and ⋯. Below `xl` a button opens the side
   panel as a sheet. Finished runs of 3+ tool calls collapse into one expandable row.

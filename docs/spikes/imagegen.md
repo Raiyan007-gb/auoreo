@@ -44,13 +44,13 @@ approval and a cost ledger, never in the default pool, and the open question was
 
 ### Gaps found in the host (not fixed here: `src/auoreo/plugins/**` is out of scope)
 
-1. **No usage or audit hook for plugins.** Plugins can make two calls into the host,
-   `secret.get` and `pairing.request`, and send two notifications, `log` and
-   `connector.message`. None of them reaches `UsageLedger` or `AuditLog`. So the
-   `imagegen.cost` audit row the brief asked for cannot be written from a plugin without
-   editing the host. Proposed follow-up: a `usage.record {usd, model, purpose}` plugin → host
-   request. The host would check it against a manifest `consumes: [usage]` and write a
-   `usage` row with `purpose: plugin:imagegen`, plus an `imagegen.cost` audit row.
+1. **No usage or audit hook for plugins** (at the time of the spike). Plugins could make two
+   calls into the host, `secret.get` and `pairing.request`, and send two notifications,
+   `log` and `connector.message`; none reached `UsageLedger` or `AuditLog`. **Closed since:**
+   the host now serves `usage.record` (gated by a manifest `consumes: [usage]`) and
+   `audit.record` (rows namespaced `plugin.<name>.<action>`) in
+   `src/auoreo/plugins/requests.py`, exposed to plugins as `usage()` / `audit()` by the
+   plugin runtime; `plugins/imagegen` declares `consumes: [usage]` and reports both.
 2. **Tool results are text only.** `tool.call` answers `{content: str, is_error}`, so a
    plugin cannot return an image part. The model gets the file paths. The `read` tool or a
    vision tool can attach an image afterwards. Proposed follow-up: an optional
@@ -97,8 +97,8 @@ approval and a cost ledger, never in the default pool, and the open question was
 
 ## Follow-ups
 
-- Host: `usage.record` plugin request + `imagegen.cost` audit row (gap 1); image parts in
-  `tool.call` replies (gap 2); `session_dir` in `tool.call` (gap 3).
+- Host: image parts in `tool.call` replies (gap 2); `session_dir` in `tool.call` (gap 3).
+  Gap 1 (`usage.record` + the audit row) is done.
 - Per-session spend cap: refuse when the sum in `costs.jsonl` exceeds `max_usd_per_session`.
   This is easy once gap 1 lands in the ledger.
 - Live smoke with real keys (user checkpoint): one `low` gpt-image-1 call and one fal schnell

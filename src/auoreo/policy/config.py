@@ -19,7 +19,8 @@ class Arm(BaseModel):
     model: str
     effort: Effort | None = None
     top_k: int | None = Field(default=None, ge=1, le=50)
-    """Recorded with the arm; memory recall has no per-call limit yet, so it is not applied."""
+    """Memory recall depth for the turn: the runner passes it as the recall `limit` (8 when
+    the arm leaves it unset)."""
 
     @property
     def key(self) -> str:
