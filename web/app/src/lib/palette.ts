@@ -77,3 +77,24 @@ export function paletteFilter(value: string, search: string, keywords?: string[]
   const hay = [kind, name, ...(keywords ?? [])].join(" ").toLowerCase();
   return q.split(/\s+/).every((w) => hay.includes(w)) ? 0.2 : 0;
 }
+
+/**
+ * While a search is typed, keep only the best `n` matches of a group (scored like
+ * `paletteFilter`, stable for ties), so a word found in many descriptions cannot flood the list
+ * with agents, skills or plugins. With no search the whole group shows.
+ */
+export function capGroup<T>(
+  items: readonly T[],
+  search: string,
+  value: (t: T) => string,
+  keywords?: (t: T) => string[] | undefined,
+  n = 3,
+): T[] {
+  if (!search.trim()) return [...items];
+  return items
+    .map((t, i) => ({ t, i, score: paletteFilter(value(t), search, keywords?.(t)) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .slice(0, n)
+    .map((x) => x.t);
+}

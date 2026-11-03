@@ -62,3 +62,15 @@ test("command palette opens with Ctrl+K and navigates", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/harness$/);
 });
+
+test("command palette caps each registry group at three matches while searching", async ({ page, request }) => {
+  const skills = (await (await request.get("/api/harness/skills")).json()) as unknown[];
+  test.skip(skills.length < 4, "needs at least four skills to observe the cap");
+  await page.goto("/sessions");
+  await page.keyboard.press("Control+k");
+  const input = page.getByPlaceholder("Jump to a page, session, agent or command…");
+  await expect(input).toBeVisible();
+  await input.fill("e"); // matches every skill through its description
+  await expect(page.getByTestId("palette-skill").first()).toBeVisible();
+  expect(await page.getByTestId("palette-skill").count()).toBeLessThanOrEqual(3);
+});

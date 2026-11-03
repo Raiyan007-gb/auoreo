@@ -3,6 +3,7 @@ import { TERMINAL_RUN_EVENTS } from "@sdk/client";
 import type { PermissionRequestedData, QuestionAskedData } from "@sdk/events";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { approvalsStore } from "@/lib/approvalsStore";
 import { useEventHub } from "@/lib/eventsHub";
 import { emptyThread, fromMessages, type Item, reduceEvents, type ThreadState } from "@/lib/thread";
 
@@ -80,10 +81,8 @@ export function useThread(sessionId: string): ThreadView {
     };
     const reconcile = async () => {
       try {
-        const [perms, qs] = await Promise.all([
-          api.pendingPermissions(sessionId),
-          api.pendingQuestions(sessionId),
-        ]);
+        const [all, qs] = await Promise.all([approvalsStore.current(), api.pendingQuestions(sessionId)]);
+        const perms = all.filter((p) => p.session_id === sessionId);
         if (cancelled) return;
         setState((s) => ({
           ...s,

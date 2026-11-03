@@ -1,18 +1,17 @@
 import type { PendingPermission, SessionInfo } from "@sdk/client";
 import type { QuestionAskedData } from "@sdk/events";
 import { RefreshCwIcon, ScrollTextIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ApprovalCard } from "@/components/ApprovalCard";
 import { EmptyState, ErrorNote, PageHeader } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
 import { QuestionTabs } from "@/components/QuestionTabs";
 import { Button } from "@/components/ui/button";
+import { useApprovals } from "@/hooks/useApprovals";
 import { usePendingQuestions } from "@/hooks/useNeedsYou";
 import { api } from "@/lib/api";
 import { useControl } from "@/lib/controlContext";
-
-const POLL_MS = 3000;
 
 interface Decision {
   request_id: string;
@@ -31,18 +30,17 @@ const auditHref = (sessionId: string) =>
   `/audit?session_id=${encodeURIComponent(sessionId)}&action=permission.reply`;
 
 /**
- * The inbox: everything an agent is waiting on. Approvals are a cross-session queue: `GET /api/permissions/pending` once, then kept live by WS
- * `permission.requested/replied` events (the shared connection tails from
- * `GET /api/events/latest`, so history is never replayed) and the `connected` frame's
+ * The inbox: everything an agent is waiting on. Approvals are a cross-session queue read from
+ * the shared approvals store (`useApprovals`: one `GET /api/permissions/pending` per control
+ * connection, then live WS `permission.requested/replied` events; the shared connection tails
+ * from `GET /api/events/latest`, so history is never replayed) plus the `connected` frame's
  * pending list. A 3s REST poll runs only while the WebSocket is down.
  */
 export function ApprovalsPage() {
   const control = useControl();
   const wsUp = control.state === "open";
-  const [pending, setPending] = useState<PendingPermission[]>([]);
+  const { items: pending, error, refresh, remove } = useApprovals();
   const [sessions, setSessions] = useState<Record<string, SessionInfo>>({});
-  const [error, setError] = useState<unknown>(null);
-  const [tick, setTick] = useState(0);
   const [answered, setAnswered] = useState<ReadonlySet<string>>(new Set());
   const [decisions, setDecisions] = useState<Decision[]>([]);
   const questions = usePendingQuestions();
@@ -55,31 +53,13 @@ export function ApprovalsPage() {
     return [...m.entries()];
   }, [questions.items]);
   const toolOf = useRef(new Map<string, string>()); // request id → tool, for the decisions list
-  const markAnswered = (rid: string) => {
-    setAnswered((a) => new Set(a).add(rid));
-    setPending((p) => p.filter((x) => x.request_id !== rid));
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = () =>
-      api
-        .pendingPermissions()
-        .then((p) => {
-          if (cancelled) return;
-          setPending(p);
-          setError(null);
-        })
-        .catch((e: unknown) => !cancelled && setError(e));
-    void load();
-    // WS up: live permission.* events keep the list current (re-seeded on every `connected`).
-    // WS down: fall back to a 3s REST poll.
-    const t = wsUp ? null : setInterval(load, POLL_MS);
-    return () => {
-      cancelled = true;
-      if (t) clearInterval(t);
-    };
-  }, [tick, wsUp, control.connected]);
+  const markAnswered = useCallback(
+    (rid: string) => {
+      setAnswered((a) => new Set(a).add(rid));
+      remove(rid);
+    },
+    [remove],
+  );
 
   useEffect(() => {
     api
@@ -91,12 +71,7 @@ export function ApprovalsPage() {
   useEffect(
     () =>
       control.listen((e) => {
-        if (e.type === "permission.requested") {
-          const d = e.data as unknown as Omit<PendingPermission, "session_id">;
-          setPending((p) =>
-            p.some((x) => x.request_id === d.request_id) ? p : [...p, { ...d, session_id: e.aggregate_id }],
-          );
-        } else if (e.type === "permission.replied") {
+        if (e.type === "permission.replied") {
           const rid = String(e.data.request_id);
           const d: Decision = {
             request_id: rid,
@@ -110,7 +85,7 @@ export function ApprovalsPage() {
           markAnswered(rid);
         }
       }),
-    [control],
+    [control, markAnswered],
   );
 
   // Pending requests re-sent in the WS `connected` frame, minus anything answered since.
@@ -142,7 +117,7 @@ export function ApprovalsPage() {
           </>
         }
         actions={
-          <Button variant="outline" size="icon" aria-label="Refresh approvals" onClick={() => setTick((t) => t + 1)}>
+          <Button variant="outline" size="icon" aria-label="Refresh approvals" onClick={refresh}>
             <RefreshCwIcon />
           </Button>
         }

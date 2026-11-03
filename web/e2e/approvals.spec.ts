@@ -28,11 +28,17 @@ test("approvals page shows the cross-session queue and rejects inline", async ({
   const res = await request.post("/api/chat", { data: { session_id: s.id, message: BASH } });
   expect(res.status()).toBe(202);
 
+  const pendingFetches: string[] = [];
+  page.on("request", (r) => {
+    if (r.url().includes("/api/permissions/pending")) pendingFetches.push(r.url());
+  });
   await page.goto("/approvals");
   const group = page.getByTestId("approval-group").filter({ hasText: "e2e approvals queue" });
   await expect(group).toBeVisible();
   await expect(group.getByTestId("approval-card")).toContainText("bash");
   await shot(page, "approvals");
+  // One approvals store: the shell badge and the inbox page share a single seed request.
+  expect(pendingFetches).toHaveLength(1);
 
   await group.getByRole("button", { name: "Reject" }).click();
   await page.getByLabel("Reason for rejecting (optional)").fill("not now");

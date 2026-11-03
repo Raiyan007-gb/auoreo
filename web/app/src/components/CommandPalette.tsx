@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { RUN_COMPACT_EVENT } from "@/lib/sessionOps";
 import { NAV } from "@/components/nav";
 import { RegistryGroups } from "@/components/PaletteGroups";
-import { bumpFreq, byFreq, paletteFilter, readFreq, SESSION_VERBS, useRegistries } from "@/lib/palette";
+import { bumpFreq, byFreq, capGroup, paletteFilter, readFreq, SESSION_VERBS, useRegistries } from "@/lib/palette";
 
 export const INSERT_COMMAND_EVENT = "auoreo:insert-command";
 
@@ -147,7 +147,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               </Command.Group>
               {sessions.length > 0 && (
                 <Command.Group heading="Sessions" className={groupCls}>
-                  {sessions.slice(0, 20).map((s) => (
+                  {capGroup(sessions.slice(0, 20), search, (s) => `session|${s.title || "Untitled"} ${s.id}`).map((s) => (
                     <Command.Item
                       key={s.id}
                       value={`session|${s.title || "Untitled"} ${s.id}`}
@@ -162,7 +162,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               )}
               {agents.length > 0 && (
                 <Command.Group heading="New session with agent" className={groupCls}>
-                  {agents.map((a) => (
+                  {capGroup(agents, search, (a) => `agent|${a.name}`, (a) => [a.description]).map((a) => (
                     <Command.Item
                       key={a.name}
                       value={`agent|${a.name}`}
@@ -180,7 +180,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   ))}
                 </Command.Group>
               )}
-              <RegistryGroups reg={reg} onSession={onSession} run={runKey} go={(to) => void navigate(to)} insert={insert} />
+              <RegistryGroups reg={reg} search={search} onSession={onSession} run={runKey} go={(to) => void navigate(to)} insert={insert} />
             </Command.List>
           </Command>
         </DialogPrimitive.Content>

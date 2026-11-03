@@ -1,6 +1,7 @@
 import type { PendingQuestion } from "@sdk/client";
 import type { QuestionAskedData } from "@sdk/events";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useApprovals } from "@/hooks/useApprovals";
 import { api } from "@/lib/api";
 import { useControl } from "@/lib/controlContext";
 
@@ -67,43 +68,12 @@ export function usePendingQuestions(): { items: PendingQuestion[]; done: (reques
 
 /**
  * Everything waiting on a person, for the sidebar badge and the top bar: pending approvals
- * (seeded from `GET /api/permissions/pending`, then `permission.requested` / `permission.replied`)
- * plus pending questions. MCP link cards (`mcp.elicitation.open`) only appear after the consent
- * question here was answered, so they are not counted again.
+ * (the shared `useApprovals` store) plus pending questions. MCP link cards
+ * (`mcp.elicitation.open`) only appear after the consent question here was answered, so they
+ * are not counted again.
  */
 export function useNeedsYou(): { approvals: number; questions: number; total: number } {
-  const control = useControl();
-  const ready = useSeedReady();
-  const [ids, setIds] = useState<ReadonlySet<string>>(new Set());
+  const { items: approvals } = useApprovals();
   const { items } = usePendingQuestions();
-
-  useEffect(() => {
-    if (!ready) return;
-    let cancelled = false;
-    api
-      .pendingPermissions()
-      .then((p) => !cancelled && setIds(new Set(p.map((x) => x.request_id))))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [ready]);
-
-  useEffect(
-    () =>
-      control.listen((e) => {
-        const rid = String(e.data.request_id ?? "");
-        if (!rid) return;
-        if (e.type === "permission.requested") setIds((s) => new Set(s).add(rid));
-        else if (e.type === "permission.replied")
-          setIds((s) => {
-            const n = new Set(s);
-            n.delete(rid);
-            return n;
-          });
-      }),
-    [control],
-  );
-
-  return { approvals: ids.size, questions: items.length, total: ids.size + items.length };
+  return { approvals: approvals.length, questions: items.length, total: approvals.length + items.length };
 }
