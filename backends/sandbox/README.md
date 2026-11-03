@@ -10,6 +10,7 @@ shells). ABC: `src/auoreo/backends/sandbox.py` — `run(ExecSpec) -> ExecResult`
 | `docker` | no | fs + net (cap_drop ALL, no-new-privileges, uid 1000, pids/mem limits, `network_mode=none` for `net: none`) | `uv sync --extra sandbox-docker` + a daemon |
 | `bwrap` | no | fs + net (ro `/usr`, private `/proc` `/dev` PID ns, `--unshare-net` for `net: none`) | `bwrap` on PATH; Landlock layered inside when the kernel has it (ABI in `check()`) |
 | `seatbelt` | no | fs + net (`/usr/bin/sandbox-exec -p <SBPL>`: deny default, ro system, rw cwd + tmp, loopback-only for `net: proxy`) | macOS |
+| `fake` | no | claims fs + net, runs nothing: records every `ExecSpec` in `calls`, answers from the `responses` script (default: exit 0, command text on stdout), refuses long-lived processes | tests and CI only (`settings.backends.sandbox = "fake"`); never auto-probed |
 
 `none` + `security.sandbox_landlock: true` runs commands under the Landlock helper (fs only).
 

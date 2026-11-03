@@ -1,0 +1,12 @@
+kind: sandbox
+name: fake
+description: >-
+  Test double for an enforced sandbox: runs nothing, records every ExecSpec in `calls`,
+  answers from the `responses` script (default: exit 0 with the command text on stdout) and
+  reports enforced=true. Never auto-probed; select it with settings.backends.sandbox = "fake".
+impl: impl.py:Backend
+default: false
+requires_binaries: []
+requires_env: []
+license: MIT
+posture: ok
