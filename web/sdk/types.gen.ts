@@ -751,6 +751,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/harness/mcp/bundled/{bundle}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable Bundled Mcp
+         * @description Turn a bundled MCP server on: copy `mcp/<bundle>.yaml` into `<home>/mcp/` with
+         *     `enabled: true`, then reload the `mcp` kind (the API twin of `auoreo mcp add --bundle`).
+         */
+        post: operations["enable_bundled_mcp_api_harness_mcp_bundled__bundle__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/harness/reload": {
         parameters: {
             query?: never;
@@ -3125,6 +3146,23 @@ export interface components {
             timestamp: number;
             /** To Member */
             to_member: string;
+        };
+        /**
+         * BundledMcpResult
+         * @description `POST /api/harness/mcp/bundled/{name}`: the runtime definition written, then reloaded.
+         */
+        BundledMcpResult: {
+            /** Errors */
+            errors: string[];
+            /** Generation */
+            generation: number;
+            /** Name */
+            name: string;
+            /**
+             * Path
+             * @description The `<home>/mcp/<name>.yaml` that now enables the server.
+             */
+            path: string;
         };
         /** CapabilityRequest */
         CapabilityRequest: {
@@ -8310,6 +8348,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HarnessListing"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enable_bundled_mcp_api_harness_mcp_bundled__bundle__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                bundle: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundledMcpResult"];
                 };
             };
             /** @description Validation Error */

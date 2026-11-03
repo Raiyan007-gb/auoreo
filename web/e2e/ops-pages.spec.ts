@@ -33,6 +33,18 @@ test("plugins page lists telegram/discord, MCP servers, and logs a hot reload", 
   await shot(page, "plugins-mcp");
 });
 
+test("a bundled MCP server that is off can be enabled from the MCP tab", async ({ page }) => {
+  await page.goto("/plugins");
+  await page.getByRole("tab", { name: "MCP servers" }).click();
+  const row = page.locator('[data-testid="mcp-row"][data-name="time"]');
+  await expect(row).toContainText("Off");
+  await row.getByRole("button", { name: "Enable time" }).click();
+  // The runtime copy replaces the bundled one and the row leaves the Off state (connecting
+  // to the server itself is bounded by the bridge and may still be "not connected").
+  await expect(row).not.toContainText("Off", { timeout: 30_000 });
+  await expect(row).toContainText("runtime");
+});
+
 test("jobs: morning_brief runs now with the fake gateway; runs drawer and delivery replay", async ({ page }) => {
   await page.goto("/jobs");
   const row = page.locator('[data-testid="cron-row"][data-name="morning_brief"]');

@@ -23,6 +23,7 @@ export type ChatAccepted = S["ChatAccepted"];
 export type HarnessEntry = S["HarnessEntry"];
 export type HarnessListing = S["HarnessListing"];
 export type ReloadResult = S["ReloadResult"];
+export type BundledMcpResult = S["BundledMcpResult"];
 export type Health = S["Health"];
 export type SearchHit = S["SearchHit"];
 export type FactIn = S["FactIn"];
@@ -243,6 +244,9 @@ export function createClient(opts: ClientOptions = {}) {
     harness: () => request<HarnessListing>("GET", "/api/harness"),
     harnessKind: (kind: string) => request<HarnessEntry[]>("GET", `/api/harness/${enc(kind)}`),
     reload: () => request<ReloadResult>("POST", "/api/harness/reload"),
+    /** Turn a bundled MCP server on (`<home>/mcp/<name>.yaml` with `enabled: true`, then an `mcp` reload). */
+    enableBundledMcp: (name: string) =>
+      request<BundledMcpResult>("POST", `/api/harness/mcp/bundled/${enc(name)}`),
 
     // approvals + questions
     pendingPermissions: (sessionId?: string) =>

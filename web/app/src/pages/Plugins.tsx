@@ -249,8 +249,14 @@ function McpTab() {
     const [servers, tools] = await Promise.all([api.harnessKind("mcp"), api.harnessKind("tools")]);
     return { servers, tools };
   }, []);
+  const action = useAction();
   const toolsOf = (tools: HarnessEntry[], server: string) =>
     tools.filter((t) => t.name.startsWith(`mcp__${server}__`)).length;
+  /** Bundled servers ship off; enabling copies the definition into the runtime root and reloads. */
+  const enable = (name: string) =>
+    void action.run(name, () => api.enableBundledMcp(name)).then((r) => {
+      if (r) state.reload();
+    });
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
@@ -260,6 +266,7 @@ function McpTab() {
         </p>
         <RefreshButton onClick={state.reload} busy={state.loading} label="Refresh MCP servers" />
       </div>
+      {action.error && <ErrorNote error={action.error} />}
       <AsyncBody state={state} empty="No MCP servers configured" isEmpty={(d) => d.servers.length === 0}>
         {({ servers, tools }) => (
           <Table aria-label="MCP servers">
@@ -292,6 +299,18 @@ function McpTab() {
                               .split(/`([^`]+)`/)
                               .map((part, i) => (i % 2 ? <code key={i} className="font-mono">{part}</code> : part))}
                           </span>
+                        )}
+                        {s.source === "bundled" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-fit"
+                            aria-label={`Enable ${s.name}`}
+                            disabled={action.busy === s.name}
+                            onClick={() => enable(s.name)}
+                          >
+                            Enable
+                          </Button>
                         )}
                       </span>
                     ) : (

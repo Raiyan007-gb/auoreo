@@ -122,6 +122,15 @@ class ReloadResult(BaseModel):
     note: str | None = None
 
 
+class BundledMcpResult(BaseModel):
+    """`POST /api/harness/mcp/bundled/{name}`: the runtime definition written, then reloaded."""
+
+    name: str
+    path: str = Field(description="The `<home>/mcp/<name>.yaml` that now enables the server.")
+    generation: int
+    errors: list[str]
+
+
 class Health(BaseModel):
     status: Literal["ok"]
     version: str

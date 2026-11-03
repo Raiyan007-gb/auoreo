@@ -12,23 +12,21 @@ A running server is asked to reload its definitions afterwards.
 
 from __future__ import annotations
 
-import shutil
-import tempfile
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
-import yaml
 from rich.table import Table
 
 from auoreo.automation.client import local
 from auoreo.cli import target
 from auoreo.cli.common import console, dump_json, err_console, settings
+from auoreo.core import mcp_bundled
 from auoreo.core.paths import bundled_root, ensure_home
 from auoreo.core.redaction import redact
 from auoreo.core.services import Services
-from auoreo.harness.discovery import Candidate, Root, default_roots
-from auoreo.harness.loader import LoadError, load_mcp
+from auoreo.harness.discovery import default_roots
+from auoreo.harness.loader import LoadError
 from auoreo.harness.manifests import McpServerManifest
 from auoreo.harness.registry import Harness
 
@@ -144,7 +142,10 @@ def add(
     if bundle:
         if url or command:
             raise typer.BadParameter("--bundle takes no command or --url")
-        doc = bundled_doc(bundle, name, disabled)
+        try:
+            doc = mcp_bundled.bundled_doc(bundle, name, enabled=not disabled)
+        except KeyError as exc:
+            raise typer.BadParameter(str(exc.args[0])) from exc
         name = str(doc["name"])
     else:
         if bool(url) == bool(command) or not name:
@@ -159,42 +160,25 @@ def add(
         doc["env"] = env_map
     if headers := _pairs(header, "--header"):
         doc["headers"] = headers
-    dest = ensure_home(settings().home) / "mcp" / f"{name}.yaml"
+    home = ensure_home(settings().home)
+    dest = home / "mcp" / f"{name}.yaml"
     if dest.exists() and not force:
         err_console.print(f"[red]{dest} exists; pass --force to replace it[/red]")
         raise typer.Exit(1)
-    text = yaml.safe_dump(doc, sort_keys=False)
-    with tempfile.TemporaryDirectory() as tmp:
-        staged = Path(tmp) / f"{name}.yaml"
-        staged.write_text(text, encoding="utf-8")
-        try:
-            manifest = load_mcp(Candidate("mcp", name, staged, Root("runtime", Path(tmp)))).manifest
-        except LoadError as exc:
-            err_console.print(f"[red]{exc}[/red]")
-            raise typer.Exit(1) from exc
-        if not no_check:
-            ok, detail, _ = _check(manifest, timeout)
-            if not ok:
-                err_console.print(
-                    f"[red]connection check failed: {detail}[/red] (nothing written; --no-check)"
-                )
-                raise typer.Exit(1)
-            console.print(f"check: {detail}")
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(staged), dest)
+    try:
+        manifest = mcp_bundled.validate_definition(doc)
+    except LoadError as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from exc
+    if not no_check:
+        ok, detail, _ = _check(manifest, timeout)
+        if not ok:
+            err_console.print(f"[red]connection check failed: {detail}[/red] (nothing written; --no-check)")
+            raise typer.Exit(1)
+        console.print(f"check: {detail}")
+    mcp_bundled.write_definition(home, doc, force=True)
     console.print(f"wrote {dest}")
     _reload()
-
-
-def bundled_doc(bundle: str, name: str | None, disabled: bool) -> dict[str, Any]:
-    """The bundled `mcp/<bundle>.yaml` as a runtime definition (enabled unless --disabled)."""
-    folder = bundled_root() / "mcp"
-    src = folder / f"{bundle}.yaml"
-    if not src.is_file() or bundle.startswith((".", "_")) or "/" in bundle:
-        known = ", ".join(sorted(p.stem for p in folder.glob("*.yaml"))) or "none"
-        raise typer.BadParameter(f"no bundled MCP server '{bundle}' (bundled: {known})")
-    doc = yaml.safe_load(src.read_text(encoding="utf-8")) or {}
-    return {**doc, "name": name or doc.get("name", bundle), "enabled": not disabled}
 
 
 @app.command("rm")

@@ -36,6 +36,7 @@ from .body_upload_audio_api_voice_meetings_meeting_id_audio_post import (
 )
 from .bridge_delivered import BridgeDelivered
 from .bridge_envelope import BridgeEnvelope
+from .bundled_mcp_result import BundledMcpResult
 from .cancel_api_sessions_session_id_cancel_post_response_cancel_api_sessions_session_id_cancel_post import (
     CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost,
 )
@@ -341,6 +342,7 @@ __all__ = (
     "BodyUploadAudioApiVoiceMeetingsMeetingIdAudioPost",
     "BridgeDelivered",
     "BridgeEnvelope",
+    "BundledMcpResult",
     "CancelApiSessionsSessionIdCancelPostResponseCancelApiSessionsSessionIdCancelPost",
     "CapabilityRequest",
     "CapabilityToken",

@@ -828,6 +828,39 @@
         "title": "BridgeEnvelope",
         "type": "object"
       },
+      "BundledMcpResult": {
+        "description": "`POST /api/harness/mcp/bundled/{name}`: the runtime definition written, then reloaded.",
+        "properties": {
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "generation": {
+            "title": "Generation",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "description": "The `<home>/mcp/<name>.yaml` that now enables the server.",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "generation",
+          "errors"
+        ],
+        "title": "BundledMcpResult",
+        "type": "object"
+      },
       "CapabilityRequest": {
         "properties": {
           "session_id": {
@@ -12694,6 +12727,81 @@
           }
         },
         "summary": "Listing",
+        "tags": [
+          "harness"
+        ]
+      }
+    },
+    "/api/harness/mcp/bundled/{bundle}": {
+      "post": {
+        "description": "Turn a bundled MCP server on: copy `mcp/<bundle>.yaml` into `<home>/mcp/` with\n`enabled: true`, then reload the `mcp` kind (the API twin of `auoreo mcp add --bundle`).",
+        "operationId": "enable_bundled_mcp_api_harness_mcp_bundled__bundle__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bundle",
+            "required": true,
+            "schema": {
+              "title": "Bundle",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundledMcpResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Enable Bundled Mcp",
         "tags": [
           "harness"
         ]
