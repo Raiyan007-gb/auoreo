@@ -37,7 +37,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `sdk/python/` | Generated Python client (`scripts/gen_sdk.sh`, re-run after API changes) + hand-written SSE extras |
 | `src/auoreo/policy/`, `src/auoreo/remote/`, `src/auoreo/perception/`, `src/auoreo/goals/`, `src/auoreo/suggestions/`, `src/auoreo/skillhub/`, `src/auoreo/mcp/` | Bandit model/effort policy; daemon + exec-server + bridge; sensor sessions; goals; consent-first suggestions; skills hub (taps, lockfile, quarantine); MCP bridge + sampling |
 | `packaging/`, `Dockerfile`, `compose.yaml`, `packages/npm/`, `desktop/` | Wheel build hook, PyInstaller spec, update-manifest signing; container; npm launcher; Electron shell |
-| `docs/` | `roadmap-m3-plus.md`, `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md`, `environments.md`, `environment.md` (web-managed env), `remote.md`, `perception.md`, `teleop.md`, `release.md` |
+| `docs/` | `roadmap-m3-plus.md`, `compat.md` (`/v1`, `/mcp`, `/acp`), `voice.md`, `desktop.md`, `environments.md`, `environment.md` (web-managed env), `remote.md`, `perception.md`, `teleop.md`, `release.md`; `designs/` holds approved EGM design documents (index in its README) |
 
 Definition roots, highest precedence first: `~/.auoreo/` → `<cwd>/.auoreo/` → repo root
 (bundled) → `extra_roots` from the stored settings.
@@ -98,6 +98,31 @@ versioned dependency, and note it in the commit body as one trailer per source:
 replays compare snapshots (`tests/fixtures/snapshots/`, refresh with `AUOREO_SNAPSHOT=update`,
 never in CI). Tools declare `net: none | proxy | direct` (I9 egress: `proxy` goes through the
 loopback egress proxy, `direct` needs a `net_justification` + approval).
+
+## Design workflow (EGM)
+
+Design-sized changes (a new subsystem or backend kind, a schema change, a new wire contract,
+anything whose shape is not obvious) go through the Elephant-Goldfish Model plugin
+(`google/elephant-goldfish-model`): the main session drafts, fresh-context reviewer subagents
+critique, a human approves before any code is written. A small, clear fix skips it. The seven
+commands are typed by a person, never auto-invoked by the model; in Claude Code the form is
+`/egm:<name>`, in Codex pick the skill from the picker.
+
+| Command | Run it when | Writes |
+|---|---|---|
+| `egm-brainstorm <idea>` | An idea needs scoping before a design: clarifying questions in chat, then six reviewer lenses stress-test it | `concepts_brief.md` |
+| `egm-draft` | A brief or notes exist and you want the design document, written section by section with approval gates | `design_draft.md` |
+| `egm-review <doc>` | The draft is complete: five stages of fresh reviewers check clarity, fit with the code and implementation readiness | stage reports + `consolidated_review_report.md` |
+| `egm-resolve` | A review produced findings: classify each as fix or contest, then apply the agreed edits to the document | `goldfish_review_report.md` |
+| `egm-review-loop` | One reviewer group should re-run on a specific range after edits, without the full five stages | one report |
+| `egm-drift-report <dir>` | Weekly, after a large merge, or before planning the next milestone: compare `docs/designs/` (and the roadmap) with the code | `<date>_DRIFT_REPORT.md` |
+| `egm-bootstrap <path>` | A subtree has no documentation; it generates a README.md per directory. This file already maps the repo, so limit it to one subtree and review the diff | `README.md` files |
+
+Conventions here: working files go to `.artifacts/egm/` (the `EGM artifact directory` line in
+CLAUDE.md; git-ignored); an approved design moves to `docs/designs/<feature>.md` and its index;
+reviewers run without CLAUDE.md or AGENTS.md, so name the Invariants section above as a review
+criterion in the prompt and save any URL they need as a file first; the plugin's nine reviewer
+agents (`egm:egm-design`, `egm:egm-zoom-out`, …) are read-only and spawn through the Agent tool.
 
 ## Spec drift (deliberate)
 
