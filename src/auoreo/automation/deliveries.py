@@ -12,7 +12,7 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError
 
 from auoreo.automation import lock
@@ -154,6 +154,30 @@ class Outbox:
             )
         return len(rows)
 
+    async def prune(self, keep: int) -> int:
+        """Delete terminal rows (`delivered|failed|unknown`) beyond the newest `keep`; `pending`
+        and `delivering` rows are never touched, and `keep <= 0` keeps everything. A pruned
+        row's `(kind, source, external_id)` can be enqueued again: dedupe lasts as long as
+        the row does."""
+        if keep <= 0:
+            return 0
+        newest = (
+            select(DeliveryRow.id)
+            .where(DeliveryRow.status.in_(TERMINAL))
+            .order_by(DeliveryRow.id.desc())
+            .limit(keep)
+        )
+        stmt = (
+            delete(DeliveryRow)
+            .where(DeliveryRow.status.in_(TERMINAL), DeliveryRow.id.not_in(newest))
+            .returning(DeliveryRow.id)
+            .execution_options(synchronize_session=False)
+        )
+        async with self.s.db.session() as s:
+            removed = (await s.execute(stmt)).scalars().all()
+            await s.commit()
+        return len(removed)
+
     async def get(self, delivery_id: int) -> DeliveryRow | None:
         async with self.s.db.session() as s:
             return await s.get(DeliveryRow, delivery_id)
@@ -197,6 +221,9 @@ class DeliveryWorker:
         n = await self.outbox.recover()
         if n:
             log.warning("marked %d interrupted deliveries as unknown", n)
+        pruned = await self.outbox.prune(self.s.settings.automation_deliveries_keep)
+        if pruned:
+            log.info("pruned %d old deliveries", pruned)
         _WAKERS[id(self.s)] = self._wake
         for i in range(self.s.settings.automation_workers):
             self._tasks.append(asyncio.create_task(self._loop(), name=f"deliveries:worker{i}"))
@@ -223,6 +250,7 @@ class DeliveryWorker:
         if row is None:
             return False
         await self.process(row)
+        await self.outbox.prune(self.s.settings.automation_deliveries_keep)
         return True
 
     async def process(self, row: DeliveryRow) -> DeliveryRow:

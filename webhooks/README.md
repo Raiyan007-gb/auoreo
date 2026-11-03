@@ -81,3 +81,9 @@ raw body, current then `#prev` (401) → JSON object (415 / 400) → event/filte
 duplicate delivery id (200 duplicate) → rate limit (429) → enqueue → **202**. The agent runs
 afterwards in its own non-interactive session; a `deliveries` row tracks it. `deliver_only`
 routes deliver synchronously instead: **200** delivered, **502** when every target failed.
+
+A delivery id counts as a duplicate for as long as its `deliveries` row exists: the worker
+keeps the newest `automation_deliveries_keep` finished rows (1000 by default, 0 = all) and
+prunes older `delivered|failed|unknown` rows at start and after each delivery, so an event
+re-sent after its row was pruned is accepted again. `pending` and `delivering` rows are never
+pruned.

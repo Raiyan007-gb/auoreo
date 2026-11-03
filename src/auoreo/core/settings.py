@@ -188,6 +188,10 @@ class Settings(BaseSettings):
     """Outbox poll interval (rows enqueued by another process, e.g. `auoreo webhook test`)."""
     automation_run_timeout_s: int = Field(default=900, ge=10)
     """Agent timeout for webhook deliveries (jobs use their own `timeout_s`)."""
+    automation_deliveries_keep: int = Field(default=1000, ge=0)
+    """Terminal delivery rows kept, newest first; older `delivered|failed|unknown` rows are
+    pruned at worker start and after each delivery (0 = keep everything). A pruned row no
+    longer blocks a re-sent delivery id: dedupe lasts as long as the row does."""
     # --- M5b
     searxng_url: str | None = None
     """Base URL of a SearXNG instance for `web_search` (JSON format enabled), e.g. `http://localhost:8888`."""

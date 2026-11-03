@@ -177,6 +177,38 @@ async def test_background_worker_drains_the_queue(settings: Settings, workdir: P
         await svc.close()
 
 
+# ------------------------------------------------------------------ retention
+
+
+async def test_prune_keeps_only_the_newest_terminal_rows(services: Services) -> None:
+    ob = Outbox(services)
+    rows = [await ob.enqueue("webhook", "gh", f"d{i}", {"prompt": "x"}) for i in range(5)]
+    assert all(r is not None for r in rows)
+    for r in rows[:4]:  # d0..d3 reach a terminal state (d1 fails); d4 stays pending
+        assert r is not None and await ob.claim(r.id) is not None
+        await ob.finish(r.id, ok=r.external_id != "d1", error="boom" if r.external_id == "d1" else None)
+    assert await ob.prune(keep=2) == 2  # d0 and d1 go; the newest two terminal rows and the pending one stay
+    assert sorted(r.external_id for r in await ob.list(limit=10)) == ["d2", "d3", "d4"]
+    assert not await ob.exists("webhook", "gh", "d0")  # a re-sent d0 is accepted again
+    assert await ob.prune(keep=2) == 0
+    assert await ob.prune(keep=0) == 0  # 0 = keep everything
+
+
+async def test_worker_prunes_after_each_delivery(settings: Settings, workdir: Path) -> None:
+    st = settings.model_copy(update={"automation_deliveries_keep": 1})
+    svc = await Services.create(st, cwd=workdir, gateway=FakeGateway(), with_mcp=False, with_memory=False)
+    try:
+        ob = Outbox(svc)
+        for i in range(3):
+            await ob.enqueue("job", "j", f"r{i}", {"prompt": "hi", "deliver": ["log"]})
+        worker = DeliveryWorker(svc)
+        while await worker.run_once():
+            pass
+        assert [r.external_id for r in await ob.list()] == ["r2"]
+    finally:
+        await svc.close()
+
+
 async def test_dynamic_provider_wins_over_folder_backend(services: Services) -> None:
     class Mine(DeliveryProvider):
         async def send(self, target: str, text: str, *, meta: dict[str, Any]) -> DeliveryReceipt:

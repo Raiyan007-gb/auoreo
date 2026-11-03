@@ -225,6 +225,7 @@ ITEMS: list[Item] = [
     S("automation_start_delay_s", ""),
     S("automation_poll_s", ""),
     S("automation_run_timeout_s", ""),
+    S("automation_deliveries_keep", "terminal delivery rows kept (0 = all)"),
     S("teams_max_depth", "delegation depth limit"),
     S("teams_max_children", "concurrent children per parent"),
     S("teams_child_timeout_s", ""),
