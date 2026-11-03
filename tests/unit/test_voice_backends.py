@@ -46,7 +46,7 @@ def load(h: Harness, st: Settings, kind: str, name: str) -> Any:
 def test_manifests_defaults_and_posture(harness: Harness) -> None:
     for kind, default in {"stt": "faster_whisper", "tts": "kittentts", "vad": "fake", "wake": "fake"}.items():
         assert harness.select_backend(kind, None).manifest.name == default
-    assert harness.select_backend("desktop", None).manifest.name == "cua_driver"
+    assert harness.select_backend("desktop", None) is None  # desktop control is opt-in: no default
     b = harness.snapshot.backends
     assert b["tts/piper"].manifest.posture == "gpl-isolated" and "GPL" in b["tts/piper"].manifest.license
     assert b["wake/openwakeword"].manifest.posture == "nc-opt-in"

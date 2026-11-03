@@ -5,11 +5,14 @@ The `computer` tool lets an agent observe and drive native apps. It talks to the
 
 | Backend | Default | Use |
 |---|---|---|
-| `cua_driver` | yes | `cua-driver mcp` over MCP stdio (≥ 0.20). Needs a display and the driver's accessibility + screen-recording permissions. |
+| `cua_driver` | opt-in | `cua-driver mcp` over MCP stdio (≥ 0.20). Needs a display and the driver's accessibility + screen-recording permissions. `settings.backends.desktop = "cua_driver"`. |
 | `fake` | | In-memory windows, Pillow-drawn screenshots, recorded actions, scriptable verify verdicts. Tests and keyless demos (`settings.backends.desktop = "fake"`). |
 
-`auoreo doctor` and `GET /api/voice/status` report readiness; `cua_driver.check()` says
-whether the binary is missing, the display is missing, or the version is below the floor.
+Desktop control is off until you pick a backend: no `desktop` backend is selected by
+default, the `computer` tool refuses with the remedy (`set settings.backends.desktop`) and
+`auoreo doctor` warns `backend:desktop: none selected`. With a backend selected, `auoreo
+doctor` and `GET /api/voice/status` report readiness; `cua_driver.check()` says whether the
+binary is missing, the display is missing, or the version is below the floor.
 
 ## The tool
 

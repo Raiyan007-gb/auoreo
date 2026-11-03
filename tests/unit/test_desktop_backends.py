@@ -165,6 +165,11 @@ def test_doctor_lists_voice_and_desktop_kinds(home: Path) -> None:
         assert f"backend:{kind}" in rows
     assert rows["backend:vad"]["level"] == "ok" and rows["backend:wake"]["level"] == "ok"
     assert rows["backend:stt"]["level"] == "warn" and "faster_whisper" in rows["backend:stt"]["detail"]
-    assert rows["backend:desktop"]["level"] == "warn" and "cua_driver" in rows["backend:desktop"]["detail"]
+    assert rows["backend:desktop"]["level"] == "warn" and "none selected" in rows["backend:desktop"]["detail"]
+    opted = Settings(
+        home=home, backends={"desktop": "cua_driver"}, cua_driver_command="definitely-not-cua-driver"
+    )
+    cua = {r["check"]: r for r in _backend_checks(opted, h)}
+    assert cua["backend:desktop"]["level"] == "warn" and "cua_driver" in cua["backend:desktop"]["detail"]
     piper = {r["check"]: r for r in _backend_checks(Settings(home=home, backends={"tts": "piper"}), h)}
     assert "[gpl-isolated]" in piper["backend:tts"]["detail"]

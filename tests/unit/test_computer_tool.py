@@ -73,6 +73,26 @@ async def audit_rows(svc: Services) -> list[AuditRow]:
         return [r for r in (await s.execute(select(AuditRow))).scalars() if r.action == "computer.act"]
 
 
+async def test_no_desktop_backend_selected_refuses_with_the_remedy(
+    home: Path, workdir: Path, gateway: FakeGateway
+) -> None:
+    """Desktop control is opt-in: with no `settings.backends.desktop` the tool refuses and says
+    how to turn it on, instead of failing with an internal error."""
+    st = Settings(
+        home=home,
+        gateway="fake",
+        approval_timeout_s=2,
+        backends={k: v for k, v in FAKES.items() if k != "desktop"},
+    )
+    svc = await Services.create(st, cwd=workdir, gateway=gateway, with_mcp=False)
+    try:
+        out = await call(svc, ctx_for(svc, workdir), {"op": "screenshot"})
+        assert out.is_error
+        assert "no 'desktop' backend selected" in out.content and "settings.backends.desktop" in out.content
+    finally:
+        await svc.close()
+
+
 async def test_screenshot_click_type_scroll(services: Services, workdir: Path) -> None:
     ctx = ctx_for(services, workdir)
     desk = services.backend("desktop")
