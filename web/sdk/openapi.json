@@ -8408,6 +8408,16 @@
             "title": "Bucket",
             "type": "string"
           },
+          "cache_write_tokens": {
+            "default": 0,
+            "title": "Cache Write Tokens",
+            "type": "integer"
+          },
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "calls": {
             "title": "Calls",
             "type": "integer"
@@ -8610,6 +8620,21 @@
       },
       "UsageTotals": {
         "properties": {
+          "cache_hit_ratio": {
+            "default": 0.0,
+            "title": "Cache Hit Ratio",
+            "type": "number"
+          },
+          "cache_write_tokens": {
+            "default": 0,
+            "title": "Cache Write Tokens",
+            "type": "integer"
+          },
+          "cached_tokens": {
+            "default": 0,
+            "title": "Cached Tokens",
+            "type": "integer"
+          },
           "calls": {
             "title": "Calls",
             "type": "integer"

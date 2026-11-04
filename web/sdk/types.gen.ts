@@ -6377,6 +6377,16 @@ export interface components {
              * @description Start of the bucket (UTC)
              */
             bucket: string;
+            /**
+             * Cache Write Tokens
+             * @default 0
+             */
+            cache_write_tokens: number;
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
             /** Calls */
             calls: number;
             /** Completion Tokens */
@@ -6456,6 +6466,21 @@ export interface components {
         };
         /** UsageTotals */
         UsageTotals: {
+            /**
+             * Cache Hit Ratio
+             * @default 0
+             */
+            cache_hit_ratio: number;
+            /**
+             * Cache Write Tokens
+             * @default 0
+             */
+            cache_write_tokens: number;
+            /**
+             * Cached Tokens
+             * @default 0
+             */
+            cached_tokens: number;
             /** Calls */
             calls: number;
             /** Completion Tokens */

@@ -163,6 +163,12 @@ class UsageTotals(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     cost_usd: float
+    cached_tokens: int = 0
+    """Prompt tokens served from the provider cache (a subset of `prompt_tokens`)."""
+    cache_write_tokens: int = 0
+    """Prompt tokens written to the provider cache (a subset of `prompt_tokens`)."""
+    cache_hit_ratio: float = 0.0
+    """`cached_tokens / prompt_tokens` over main-turn calls only (auxiliary calls excluded)."""
 
 
 class UsageSummary(BaseModel):

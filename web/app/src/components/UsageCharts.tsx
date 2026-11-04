@@ -110,6 +110,14 @@ export function UsageCharts({ series }: { series: UsageSeries }) {
           value={(p) => p.prompt_tokens + p.completion_tokens}
           fmt={(n) => fmtTokens(Math.round(n))}
         />
+        <BarChart
+          title="Cached tokens"
+          testId="chart-cached"
+          points={series.points}
+          bucket={series.bucket}
+          value={(p) => p.cached_tokens ?? 0}
+          fmt={(n) => fmtTokens(Math.round(n))}
+        />
         <BarChart title="Cost" testId="chart-cost" points={series.points} bucket={series.bucket} value={(p) => p.cost_usd} fmt={fmtUsd} />
       </CardContent>
     </Card>

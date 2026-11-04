@@ -89,6 +89,22 @@ async def test_usage_timeseries_and_budget(client: httpx.AsyncClient, services: 
     assert week["bucket"] == "day"
 
 
+async def test_usage_endpoints_report_cache_tokens(
+    client: httpx.AsyncClient, services: Services, gateway: FakeGateway
+) -> None:
+    gateway.queue(Scripted(text="cached reply", cached_tokens=40, cache_write_tokens=10))
+    sid = (await client.post("/api/sessions", json={})).json()["id"]
+    await client.post("/api/chat", json={"session_id": sid, "message": "hi"})
+    await _idle(client, sid)
+    summary = (await client.get("/api/usage/summary?days=1")).json()
+    assert summary["total"]["cached_tokens"] == 40 and summary["total"]["cache_write_tokens"] == 10
+    row = next(r for r in summary["by_model"] if r["calls"])
+    assert row["cached_tokens"] == 40 and row["cache_write_tokens"] == 10
+    series = (await client.get("/api/usage/timeseries?days=1")).json()
+    assert sum(p["cached_tokens"] for p in series["points"]) == 40
+    assert sum(p["cache_write_tokens"] for p in series["points"]) == 10
+
+
 async def test_question_answer_validation_is_422(
     client: httpx.AsyncClient, services: Services, gateway: FakeGateway
 ) -> None:

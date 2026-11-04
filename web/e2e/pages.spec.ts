@@ -31,6 +31,8 @@ test("usage, settings, audit and doctor render", async ({ page }) => {
   await page.goto("/usage");
   await expect(page.getByRole("heading", { name: "Usage" })).toBeVisible();
   await expect(page.getByText("Total tokens")).toBeVisible();
+  await expect(page.getByTestId("usage-cache-hit")).toHaveText(/^\d+%$/); // cached / prompt, main turns
+  await expect(page.getByTestId("chart-cached")).toBeVisible();
   await shot(page, "usage-page");
 
   await page.goto("/settings#general");

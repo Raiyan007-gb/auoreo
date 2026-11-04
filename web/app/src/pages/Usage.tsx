@@ -28,6 +28,8 @@ function Stat({ label, value, hint, testId }: { label: string; value: string; hi
 }
 
 const tokens = (r: UsageTotals) => r.prompt_tokens + r.completion_tokens;
+/** Share of the prompt served from the provider cache, as a whole percent. */
+const pct = (ratio: number | undefined) => `${Math.round((ratio ?? 0) * 100)}%`;
 
 function TotalsTable({
   label,
@@ -49,6 +51,8 @@ function TotalsTable({
           <TableHead className="text-right">Calls</TableHead>
           <TableHead className="text-right">Prompt</TableHead>
           <TableHead className="text-right">Completion</TableHead>
+          <TableHead className="text-right">Cached</TableHead>
+          <TableHead className="text-right">Cache hit</TableHead>
           <TableHead className="text-right">Total</TableHead>
           <TableHead className="text-right">Cost</TableHead>
           {extra && <TableHead>{extra.head}</TableHead>}
@@ -61,6 +65,8 @@ function TotalsTable({
             <TableCell className="text-right tabular-nums">{r.calls}</TableCell>
             <TableCell className="text-right tabular-nums">{fmtTokens(r.prompt_tokens)}</TableCell>
             <TableCell className="text-right tabular-nums">{fmtTokens(r.completion_tokens)}</TableCell>
+            <TableCell className="text-right tabular-nums">{fmtTokens(r.cached_tokens ?? 0)}</TableCell>
+            <TableCell className="text-right tabular-nums">{pct(r.cache_hit_ratio)}</TableCell>
             <TableCell className="text-right tabular-nums">{fmtTokens(tokens(r))}</TableCell>
             <TableCell className="text-right tabular-nums">{fmtUsd(r.cost_usd)}</TableCell>
             {extra && <TableCell>{extra.cell(r)}</TableCell>}
@@ -222,6 +228,12 @@ export function UsagePage() {
                 testId="usage-total-tokens"
                 value={fmtTokens(tokens(s.total))}
                 hint={`${s.total.prompt_tokens.toLocaleString()} prompt + ${s.total.completion_tokens.toLocaleString()} completion`}
+              />
+              <Stat
+                label="Cache hit"
+                testId="usage-cache-hit"
+                value={pct(s.total.cache_hit_ratio)}
+                hint={`${(s.total.cached_tokens ?? 0).toLocaleString()} cached, ${(s.total.cache_write_tokens ?? 0).toLocaleString()} written`}
               />
               <Stat label="Cost" testId="usage-total-cost" value={fmtUsd(s.total.cost_usd)} />
               <Stat label="Model calls" testId="usage-total-calls" value={s.total.calls.toLocaleString()} hint={`across ${s.by_session.length} session${s.by_session.length === 1 ? "" : "s"}`} />

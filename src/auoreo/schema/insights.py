@@ -50,6 +50,8 @@ class UsagePoint(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     cost_usd: float
+    cached_tokens: int = 0
+    cache_write_tokens: int = 0
 
 
 class UsageBudget(BaseModel):
