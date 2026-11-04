@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import select
 
+from auoreo.core import metrics_text
 from auoreo.core import observability as obs
 from auoreo.core.db import MessageArchiveRow, MessageRow
 from auoreo.gateway.errors import GatewayError
@@ -58,6 +59,19 @@ if TYPE_CHECKING:
     from auoreo.runtime.runner import SessionRuntime
 
 log = logging.getLogger(__name__)
+# Registered here (the `gateway/budgets.py` precedent): `observability.count` drops names
+# missing from its allowlist, which silently lost these three before M7.
+_METRICS = {
+    "compaction_completed_total": (
+        {"trigger", "source"},
+        "Context compactions completed, by trigger, source.",
+    ),
+    "compaction_failures_total": ({"trigger", "failure_class"}, "Context compactions that failed."),
+    "compaction_tokens_reclaimed_total": (set(), "Prompt tokens reclaimed by compaction."),
+}
+for _name, (_labels, _help) in _METRICS.items():
+    obs.METRICS.setdefault(_name, ("counter", frozenset(_labels)))
+    metrics_text.HELP.setdefault(_name, _help)
 
 Trigger = Literal["pressure", "overflow", "manual", "idle", "hygiene"]
 MAX_FAILURES = 3

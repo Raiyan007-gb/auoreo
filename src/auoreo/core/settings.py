@@ -38,6 +38,7 @@ from auoreo.core.settings_i5 import I5Settings  # --- I5
 from auoreo.core.settings_i6 import I6Settings  # --- I6
 from auoreo.core.settings_i8 import I8Settings  # --- I8
 from auoreo.core.settings_i9 import I9Settings  # --- I9
+from auoreo.core.settings_m7 import M7Settings  # --- M7
 from auoreo.core.settings_models import (
     LiveKitSettings,
     LiveKitSipSettings,
@@ -434,6 +435,7 @@ class Settings(BaseSettings):
     i5: I5Settings = Field(default_factory=I5Settings)  # --- I5
     i8: I8Settings = Field(default_factory=I8Settings)  # --- I8
     i9: I9Settings = Field(default_factory=I9Settings)  # --- I9
+    m7: M7Settings = Field(default_factory=M7Settings)  # --- M7: every M7 feature flag (off)
     smart_timeout: float | None = Field(default=None, gt=0, le=120)  # --- I9: AUOREO_SMART_TIMEOUT
     env: EnvSettings = Field(default_factory=EnvSettings)  # --- ENV: web-managed custom variables
 

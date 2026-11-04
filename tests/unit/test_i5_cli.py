@@ -183,6 +183,13 @@ def test_event_levels() -> None:
     assert at_least("run.blocked", None, "warn") and not at_least("message.delta", None, "info")
 
 
+def test_m7_event_levels() -> None:
+    """M7: a prefix change and a merge conflict must surface under `logs --level warn`."""
+    assert level_of("cache.prefix_changed") == "warn" and level_of("merge.conflicts") == "warn"
+    assert level_of("merge.failed") == "error" and level_of("worktree.created") == "info"
+    assert level_of("context.masked") == "info" and level_of("inbound.routed") == "info"
+
+
 def test_logs_level_filters(cli_env: Path) -> None:
     assert runner.invoke(app, ["run", "hello", "--format", "json"]).exit_code == 0
     every = runner.invoke(app, ["logs", "--json"]).stdout.splitlines()
