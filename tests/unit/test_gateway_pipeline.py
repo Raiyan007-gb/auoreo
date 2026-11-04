@@ -56,6 +56,67 @@ def test_anthropic_cache_breakpoints_on_tools_system_and_last_user() -> None:
     assert marks == 3 <= 4
 
 
+CC = {"type": "ephemeral"}
+CLAUDE = "anthropic/claude-sonnet-5-5"
+
+
+def _tool_loop(**extra: Any) -> dict[str, Any]:
+    """system, user, assistant(tool call), tool result: the shape of a step inside a tool turn."""
+    kw = _kwargs(**extra)
+    kw["messages"] = [
+        {"role": "system", "content": "stable system prompt"},
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": None, "tool_calls": [{"id": "c1", "type": "function"}]},
+        {"role": "tool", "tool_call_id": "c1", "content": "result"},
+    ]
+    return kw
+
+
+def test_legacy_layout_is_the_default_and_marks_the_last_user_message() -> None:
+    out = shape(_tool_loop(), ShapeContext(model=CLAUDE))
+    assert out["messages"][1]["content"][-1]["cache_control"] == CC  # the turn's opening message
+    assert "cache_control" not in out["messages"][3]  # the tool tail stays uncached
+    assert str(out).count("cache_control") == 3
+
+
+def test_tail_layout_adds_a_fourth_mark_on_the_tool_result() -> None:
+    out = shape(_tool_loop(), ShapeContext(model=CLAUDE, cache_layout="tail"))
+    assert out["tools"][-1]["cache_control"] == CC
+    assert out["messages"][0]["content"][-1]["cache_control"] == CC
+    assert out["messages"][1]["content"][-1]["cache_control"] == CC  # last user message kept
+    assert out["messages"][3]["cache_control"] == CC  # role=tool: message-level key
+    assert str(out).count("cache_control") == 4
+
+
+def test_tail_layout_skips_unmarkable_tails() -> None:
+    kw = _tool_loop()
+    kw["messages"].append({"role": "assistant", "content": None})
+    out = shape(kw, ShapeContext(model=CLAUDE, cache_layout="tail"))
+    assert out["messages"][3]["cache_control"] == CC and "cache_control" not in out["messages"][4]
+    thinking = _tool_loop()
+    thinking["messages"].append(
+        {"role": "assistant", "content": [{"type": "thinking", "thinking": "hm"}]},
+    )
+    out = shape(thinking, ShapeContext(model=CLAUDE, cache_layout="tail"))
+    assert out["messages"][3]["cache_control"] == CC
+    assert "cache_control" not in str(out["messages"][4])
+
+
+def test_tail_layout_adds_no_fifth_mark_when_the_last_message_is_the_user() -> None:
+    out = shape(_kwargs(), ShapeContext(model=CLAUDE, cache_layout="tail"))
+    assert str(out).count("cache_control") == 3
+    no_tools = _kwargs()
+    no_tools.pop("tools", None)
+    assert str(shape(no_tools, ShapeContext(model=CLAUDE, cache_layout="tail"))).count("cache_control") == 2
+
+
+def test_tail_layout_leaves_other_families_and_inputs_alone() -> None:
+    src = _tool_loop()
+    assert "cache_control" not in str(shape(src, ShapeContext(model="openai/gpt-5", cache_layout="tail")))
+    shape(src, ShapeContext(model=CLAUDE, cache_layout="tail"))
+    assert "cache_control" not in str(src)
+
+
 def test_caching_skipped_for_non_anthropic_or_disabled_and_inputs_untouched() -> None:
     src = _kwargs()
     assert "cache_control" not in str(shape(src, ShapeContext(model="openai/gpt-5")))

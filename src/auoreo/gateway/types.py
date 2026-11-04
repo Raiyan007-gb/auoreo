@@ -177,8 +177,17 @@ class Gateway(Protocol):
         """Max input tokens for a model id or routing group (spec §11.9 S0)."""
         ...
 
-    def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
-        """Estimated USD cost of one call, or None when the model has no known pricing."""
+    def price(
+        self,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        *,
+        cached_tokens: int = 0,
+        cache_write_tokens: int = 0,
+    ) -> float | None:
+        """Estimated USD cost of one call, or None when the model has no known pricing.
+        `cached_tokens` and `cache_write_tokens` are subsets of `prompt_tokens`."""
         ...
 
     def supports_vision(self, model: str) -> bool:

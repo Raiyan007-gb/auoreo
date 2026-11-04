@@ -25,7 +25,7 @@ from litellm import exceptions as lx
 from auoreo.core.redaction import redact
 from auoreo.core.settings import Settings
 from auoreo.gateway import auxiliary as aux
-from auoreo.gateway import deploy, openrouter
+from auoreo.gateway import credparams, deploy, openrouter, pricing
 from auoreo.gateway.authflow import SLOT_KEY, AuthFlow
 from auoreo.gateway.budgets import BudgetTracker
 from auoreo.gateway.ctxprobe import Window, guard_min_context, resolve_window
@@ -118,14 +118,6 @@ def map_error(exc: BaseException) -> GatewayError:
 # reasoning models) is dropped by LiteLLM instead of failing the turn.
 litellm.drop_params = True
 
-# LiteLLM env-var name → completion kwarg. Names come from `litellm.validate_environment`,
-# so any provider LiteLLM knows works by prefix: `anthropic/…` → ANTHROPIC_API_KEY,
-# `gemini/…` → GEMINI_API_KEY | GOOGLE_API_KEY, `azure/…` → AZURE_API_KEY + _BASE + _VERSION.
-_SUFFIX_PARAM = {"_API_KEY": "api_key", "_API_BASE": "api_base", "_API_VERSION": "api_version"}
-_EXACT_PARAM = {"VERTEXAI_PROJECT": "vertex_project", "VERTEXAI_LOCATION": "vertex_location"}
-# Endpoint secrets a Settings → Models connection stores, passed even when LiteLLM does not list them.
-_ENDPOINT_SECRETS = {"OLLAMA": ("OLLAMA_API_BASE",), "AZURE": ("AZURE_API_BASE", "AZURE_API_VERSION")}
-
 
 def env_names(model: str) -> list[str]:
     """Credential env names LiteLLM still needs for `model` (empty when the env has them)."""
@@ -136,31 +128,9 @@ def env_names(model: str) -> list[str]:
     return [str(n) for n in found.get("missing_keys") or []]
 
 
-def _param_for(name: str) -> str | None:
-    if name in _EXACT_PARAM:
-        return _EXACT_PARAM[name]
-    return next((p for sfx, p in _SUFFIX_PARAM.items() if name.endswith(sfx)), None)
-
-
 def credential_params(model: str, secret: Callable[[str], str | None]) -> dict[str, str]:
-    """Credentials for `model` from env / keyring / secrets.db, keyed by LiteLLM kwarg.
-
-    The provider prefix picks the names; `<PREFIX>_API_KEY` is the fallback convention for
-    providers LiteLLM cannot describe. Keys only in the secret store (not in the env) are
-    passed explicitly, so LiteLLM never needs them in `os.environ`."""
-    params: dict[str, str] = {}
-    for name in env_names(model):
-        param = _param_for(name)
-        if param and param not in params and (value := secret(name)):
-            params[param] = value
-    prefix = provider_of(model).upper().replace("-", "_")
-    if prefix and "api_key" not in params and (value := secret(f"{prefix}_API_KEY")):
-        params["api_key"] = value
-    for name in _ENDPOINT_SECRETS.get(prefix, ()):  # Ollama / Azure endpoints from Settings → Models
-        param = _param_for(name)
-        if param and param not in params and (value := secret(name)):
-            params[param] = value
-    return params
+    """Credentials for `model` from env / keyring / secrets.db, keyed by LiteLLM kwarg."""
+    return credparams.params(provider_of(model).upper().replace("-", "_"), env_names(model), secret)
 
 
 def credential_status(model: str, secret: Callable[[str], str | None]) -> tuple[bool, str]:
@@ -300,6 +270,7 @@ class LiteLLMGateway:
             caching=request.prompt_caching and tuning.prompt_caching,
             cache_ttl=tuning.cache_ttl,
             omit=request.omit_fields,
+            cache_layout=self.settings.m7.token.cache_layout,
         )
         return shape(kwargs, ctx)
 
@@ -357,7 +328,13 @@ class LiteLLMGateway:
         dep = usage.deployment or deploy.provider_id(self.settings, primary_deployment(self.settings, model))
         cost = usage.cost_usd
         if cost is None:
-            cost = self.price(dep, usage.prompt_tokens, usage.completion_tokens)
+            cost = self.price(
+                dep,
+                usage.prompt_tokens,
+                usage.completion_tokens,
+                cached_tokens=usage.cached_tokens,
+                cache_write_tokens=usage.cache_write_tokens,
+            )
         slot = (kwargs.get("metadata") or {}).get(SLOT_KEY)
         self.budgets.add(dep, cost, usage.tags, slot)
         if slot:
@@ -449,18 +426,29 @@ class LiteLLMGateway:
                 return int(window)
         return None
 
-    def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
-        for dep in self._deployments(model)[:1]:
-            for candidate in lookup_names(deploy.provider_id(self.settings, dep)):
-                try:
-                    p, c = litellm.cost_per_token(
-                        model=candidate, prompt_tokens=prompt_tokens, completion_tokens=completion_tokens
-                    )
-                except Exception:
-                    continue
-                if p or c:
-                    return float(p + c)
-        return None
+    def price(
+        self,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        *,
+        cached_tokens: int = 0,
+        cache_write_tokens: int = 0,
+    ) -> float | None:
+        names = [
+            n
+            for dep in self._deployments(model)[:1]
+            for n in lookup_names(deploy.provider_id(self.settings, dep))
+        ]
+        return pricing.price(
+            litellm.cost_per_token,
+            names,
+            prompt_tokens,
+            completion_tokens,
+            cached=cached_tokens,
+            written=cache_write_tokens,
+            cache_aware=self.settings.m7.token.cached_pricing,
+        )
 
     def supports_response_schema(self, model: str) -> bool:
         return _any_candidate(model, lambda c: bool(litellm.supports_response_schema(model=c)))

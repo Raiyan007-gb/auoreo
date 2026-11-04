@@ -65,6 +65,8 @@ class Scripted:
     finish: str | None = None  # finish reason override (e.g. "length"); default stop/tool_calls
     delay_s: float = 0.0  # sleep before streaming (liveness tests)
     reasoning: str = ""  # streamed as ReasoningDelta chunks before the text
+    cached_tokens: int = 0  # reported on the yielded Usage (cache tests)
+    cache_write_tokens: int = 0
 
 
 class FakeGateway:
@@ -132,7 +134,13 @@ class FakeGateway:
                     yield ToolCallDelta(f"call_{self._n}", name, frag, seq)
             yield ToolCall(id=f"call_{self._n}", name=name, arguments=raw)
         prompt = prompt_chars(request.messages) // 4
-        yield Usage(prompt_tokens=prompt, completion_tokens=max(1, len(item.text) // 4), cost_usd=0.0)
+        yield Usage(
+            prompt_tokens=prompt,
+            completion_tokens=max(1, len(item.text) // 4),
+            cost_usd=0.0,
+            cached_tokens=item.cached_tokens,
+            cache_write_tokens=item.cache_write_tokens,
+        )
         yield Finish(item.finish or ("tool_calls" if item.tool_calls else "stop"))
 
     def _auto(self, request: LLMRequest) -> Scripted:
@@ -184,8 +192,19 @@ class FakeGateway:
     def context_window(self, model: str) -> int:
         return self.context_window_tokens
 
-    def price(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
-        return 0.0
+    def price(
+        self,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+        *,
+        cached_tokens: int = 0,
+        cache_write_tokens: int = 0,
+    ) -> float | None:
+        if not (cached_tokens or cache_write_tokens):
+            return 0.0
+        total = (prompt_tokens + completion_tokens) * 1e-6
+        return round(total - cached_tokens * 0.9e-6 + cache_write_tokens * 0.25e-6, 9)
 
     def supports_vision(self, model: str) -> bool:
         return self.vision

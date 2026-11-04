@@ -206,6 +206,9 @@ class ShapeContext:
     caching: bool = True
     cache_ttl: str = "5m"
     omit: tuple[str, ...] = ()
+    cache_layout: str = "legacy"
+    """`legacy`: breakpoints on tools, system, last user message. `tail` (M7): plus the last
+    markable message, so a tool loop's growing tail is cached too."""
 
 
 def unsupported_parts(kwargs: dict[str, Any], ctx: ShapeContext) -> dict[str, Any]:
@@ -259,8 +262,38 @@ def _mark_last_block(message: dict[str, Any], cc: dict[str, str]) -> dict[str, A
     return message
 
 
+_UNMARKABLE_BLOCKS = frozenset({"thinking", "redacted_thinking"})
+
+
+def _markable(message: dict[str, Any]) -> bool:
+    """A message Anthropic accepts a breakpoint on: non-empty, not ending in a thinking block."""
+    content = message.get("content")
+    if not content:
+        return False
+    if isinstance(content, list):
+        last = content[-1]
+        return not (isinstance(last, dict) and last.get("type") in _UNMARKABLE_BLOCKS)
+    return True
+
+
+def _mark_tail(msgs: list[dict[str, Any]], cc: dict[str, str]) -> None:
+    """Mark the last markable message in place (`role: tool` takes a message-level key,
+    which LiteLLM copies onto the Anthropic `tool_result` block); no-op if already marked."""
+    for i in range(len(msgs) - 1, 0, -1):
+        if not _markable(msgs[i]):
+            continue
+        if "cache_control" not in str(msgs[i]):
+            msgs[i] = (
+                {**msgs[i], "cache_control": cc}
+                if msgs[i].get("role") == "tool"
+                else _mark_last_block(msgs[i], cc)
+            )
+        return
+
+
 def _anthropic_cache(kwargs: dict[str, Any], ctx: ShapeContext) -> dict[str, Any]:
-    """Breakpoints: last tool definition | stable system prompt | last user message."""
+    """Breakpoints: last tool definition | stable system prompt | last user message
+    (| last markable message with the `tail` layout)."""
     cc: dict[str, str] = {"type": "ephemeral"}
     if ctx.cache_ttl != "5m":
         cc["ttl"] = ctx.cache_ttl
@@ -278,6 +311,9 @@ def _anthropic_cache(kwargs: dict[str, Any], ctx: ShapeContext) -> dict[str, Any
     last_user = next((i for i in range(len(msgs) - 1, 0, -1) if msgs[i].get("role") == "user"), None)
     if last_user is not None and used < MAX_BREAKPOINTS:
         msgs[last_user] = _mark_last_block(msgs[last_user], cc)
+        used += 1
+    if ctx.cache_layout == "tail" and used < MAX_BREAKPOINTS:
+        _mark_tail(msgs, cc)
     out["messages"] = msgs
     return out
 
