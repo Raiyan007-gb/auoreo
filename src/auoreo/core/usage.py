@@ -7,20 +7,51 @@ used and the row is marked `estimated`.
 from __future__ import annotations
 
 import time
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator
 from datetime import UTC, timedelta
-from typing import Any, TypeVar
+from typing import Any, Protocol, TypeVar
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 
 from auoreo.core import observability as obs
-from auoreo.core import usage_attrib
+from auoreo.core import usage_attrib, usage_metrics
 from auoreo.core.db import Database, SessionRow, UsageRow, utcnow
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Usage
 
-PriceFn = Callable[[str, int, int], float | None]
+
+class PriceFn(Protocol):
+    """`(model, prompt_tokens, completion_tokens)`, plus `cached_tokens` and `cache_write_tokens`
+    keywords when the call had a cache split (subsets of `prompt_tokens`)."""
+
+    def __call__(
+        self,
+        model: str,
+        prompt: int,
+        completion: int,
+        /,
+        *,
+        cached_tokens: int = 0,
+        cache_write_tokens: int = 0,
+    ) -> float | None: ...
+
+
 T = TypeVar("T")
+
+
+def cache_hit_ratio(cached_tokens: int, prompt_tokens: int) -> float:
+    """Share of the prompt served from the provider cache, in [0, 1]; 0 without a prompt."""
+    return min(1.0, cached_tokens / prompt_tokens) if prompt_tokens > 0 else 0.0
+
+
+def _main_prompt() -> Any:
+    """Prompt tokens of main-turn calls only (`outcome` is set for those, not for title,
+    compaction and other auxiliary calls): the denominator of the hit ratio."""
+    return func.coalesce(func.sum(case((UsageRow.outcome == "ok", UsageRow.prompt_tokens), else_=0)), 0)
+
+
+def _main_cached() -> Any:
+    return func.coalesce(func.sum(case((UsageRow.outcome == "ok", UsageRow.cached_tokens), else_=0)), 0)
 
 
 class UsageLedger:
@@ -42,7 +73,13 @@ class UsageLedger:
         cost, estimated = usage.cost_usd, usage.estimated
         if cost is None and self.price is not None:
             try:
-                cost = self.price(model, usage.prompt_tokens, usage.completion_tokens)
+                split = {"cached_tokens": usage.cached_tokens, "cache_write_tokens": usage.cache_write_tokens}
+                cost = self.price(
+                    model,
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                    **{k: v for k, v in split.items() if v},
+                )
             except Exception:  # pricing must never fail a turn
                 cost = None
             estimated = True
@@ -68,6 +105,7 @@ class UsageLedger:
             s.add(row)
             await s.commit()
         obs.record_usage(model, usage.prompt_tokens, usage.completion_tokens, cost)  # --- W0-D
+        usage_metrics.record_cache_usage(model, usage.cached_tokens, usage.cache_write_tokens)
         return row
 
     def meter(self, session_id: str, run_id: str, model: str) -> UsageMeter:
@@ -109,14 +147,21 @@ class UsageLedger:
             func.coalesce(func.sum(UsageRow.prompt_tokens), 0),
             func.coalesce(func.sum(UsageRow.completion_tokens), 0),
             func.coalesce(func.sum(UsageRow.cost_usd), 0.0),
+            func.coalesce(func.sum(UsageRow.cached_tokens), 0),
+            func.coalesce(func.sum(UsageRow.cache_write_tokens), 0),
+            _main_cached(),
+            _main_prompt(),
         ).where(UsageRow.session_id.in_(session_ids))
         async with self.db.session() as s:
-            n, p, c, cost = (await s.execute(q)).one()
+            n, p, c, cost, cached, written, m_cached, m_prompt = (await s.execute(q)).one()
         return {
             "calls": int(n),
             "prompt_tokens": int(p),
             "completion_tokens": int(c),
             "cost_usd": float(cost or 0.0),
+            "cached_tokens": int(cached),
+            "cache_write_tokens": int(written),
+            "cache_hit_ratio": cache_hit_ratio(int(m_cached), int(m_prompt)),
         }
 
     async def session_cost(self, session_id: str) -> float:
@@ -157,6 +202,10 @@ class UsageLedger:
                     func.coalesce(func.sum(UsageRow.prompt_tokens), 0),
                     func.coalesce(func.sum(UsageRow.completion_tokens), 0),
                     func.coalesce(func.sum(UsageRow.cost_usd), 0.0),
+                    func.coalesce(func.sum(UsageRow.cached_tokens), 0),
+                    func.coalesce(func.sum(UsageRow.cache_write_tokens), 0),
+                    _main_cached(),
+                    _main_prompt(),
                 )
                 .where(UsageRow.created_at >= since)
                 .group_by(col)
@@ -171,8 +220,13 @@ class UsageLedger:
                     "prompt_tokens": int(p),
                     "completion_tokens": int(c),
                     "cost_usd": float(cost or 0.0),
+                    "cached_tokens": int(cached),
+                    "cache_write_tokens": int(written),
+                    "cache_hit_ratio": cache_hit_ratio(int(m_cached), int(m_prompt)),
+                    "main_cached_tokens": int(m_cached),
+                    "main_prompt_tokens": int(m_prompt),
                 }
-                for k, n, p, c, cost in rows
+                for k, n, p, c, cost, cached, written, m_cached, m_prompt in rows
             ]
 
         by_model = await grouped(UsageRow.model)
@@ -183,6 +237,11 @@ class UsageLedger:
             "prompt_tokens": sum(r["prompt_tokens"] for r in by_model),
             "completion_tokens": sum(r["completion_tokens"] for r in by_model),
             "cost_usd": sum(r["cost_usd"] for r in by_model),
+            "cached_tokens": sum(r["cached_tokens"] for r in by_model),
+            "cache_write_tokens": sum(r["cache_write_tokens"] for r in by_model),
+            "cache_hit_ratio": cache_hit_ratio(
+                sum(r["main_cached_tokens"] for r in by_model), sum(r["main_prompt_tokens"] for r in by_model)
+            ),
         }
         return {"days": days, "total": total, "by_model": by_model, "by_session": by_session}
 
@@ -191,7 +250,12 @@ class UsageLedger:
         now = utcnow()
         since = now - timedelta(days=max(days, 0) or 1)
         q = select(
-            UsageRow.created_at, UsageRow.prompt_tokens, UsageRow.completion_tokens, UsageRow.cost_usd
+            UsageRow.created_at,
+            UsageRow.prompt_tokens,
+            UsageRow.completion_tokens,
+            UsageRow.cost_usd,
+            UsageRow.cached_tokens,
+            UsageRow.cache_write_tokens,
         ).where(UsageRow.created_at >= since)
         async with self.db.session() as s:
             rows = (await s.execute(q)).all()
@@ -212,9 +276,11 @@ class UsageLedger:
                 "prompt_tokens": 0,
                 "completion_tokens": 0,
                 "cost_usd": 0.0,
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
             }
             cur += step
-        for ts, p, c, cost in rows:
+        for ts, p, c, cost, cached, written in rows:
             pt = out.setdefault(
                 floor(ts),
                 {
@@ -223,12 +289,16 @@ class UsageLedger:
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
                     "cost_usd": 0.0,
+                    "cached_tokens": 0,
+                    "cache_write_tokens": 0,
                 },
             )
             pt["calls"] += 1
             pt["prompt_tokens"] += int(p or 0)
             pt["completion_tokens"] += int(c or 0)
             pt["cost_usd"] += float(cost or 0.0)
+            pt["cached_tokens"] += int(cached or 0)
+            pt["cache_write_tokens"] += int(written or 0)
         return [out[k] for k in sorted(out)]
 
 

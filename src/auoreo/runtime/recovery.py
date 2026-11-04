@@ -60,6 +60,8 @@ class StepOutput:
     finish: str | None = None
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cached_tokens: int = 0
+    cache_write_tokens: int = 0
     truncated: bool = False
     empty: bool = False
     continuations: int = 0
@@ -113,6 +115,8 @@ class _Collect:
                 await self.meter.record(item)
                 out.prompt_tokens += item.prompt_tokens
                 out.completion_tokens += item.completion_tokens
+                out.cached_tokens += item.cached_tokens
+                out.cache_write_tokens += item.cache_write_tokens
                 await self.emit("usage", {"model": self.request.model, **item.event_data()})
             case Finish(reason=reason):
                 out.finish = reason
@@ -180,7 +184,13 @@ async def model_step(
         out = await _recover_empty(runner, sid, run_id, request, out, kind)
     if out.finish == "length" and not out.calls:
         out = await _recover_length(runner, sid, run_id, request, out, touch)
-    budget.record(out.prompt_tokens, out.completion_tokens, out.model_calls)
+    budget.record(
+        out.prompt_tokens,
+        out.completion_tokens,
+        out.model_calls,
+        cached=out.cached_tokens,
+        cache_write=out.cache_write_tokens,
+    )
     return out
 
 
@@ -257,6 +267,8 @@ def _merge(old: StepOutput, new: StepOutput, *, joined: bool) -> StepOutput:
         text=old.text + new.text if joined else new.text,
         prompt_tokens=old.prompt_tokens + new.prompt_tokens,
         completion_tokens=old.completion_tokens + new.completion_tokens,
+        cached_tokens=old.cached_tokens + new.cached_tokens,
+        cache_write_tokens=old.cache_write_tokens + new.cache_write_tokens,
         model_calls=old.model_calls + new.model_calls,
         continuations=old.continuations,
         escalated=old.escalated,

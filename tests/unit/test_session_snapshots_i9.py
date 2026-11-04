@@ -28,6 +28,7 @@ SNAPSHOTS = Path(__file__).resolve().parents[1] / "fixtures" / "snapshots"
 VOLATILE_KEYS = re.compile(
     r"(^|_)(id|ids|at|ts|time|ms|duration|elapsed|latency|seq|created|updated|started|finished)$"
     r"|tokens$|^tools$|^cwd$|^cost_usd$|^generation$"  # prompt size / catalog / host-dependent
+    r"|^cache_hit_ratio$"  # a ratio of prompt sizes
 )
 GENERATED = re.compile(
     r"\b(ses|run|msg|evt|call|tc|req)_[A-Za-z0-9]{6,}\b|\b[0-9a-f]{32}\b|\b[0-9a-f-]{36}\b"

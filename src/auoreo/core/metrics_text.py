@@ -17,7 +17,7 @@ MAX_SERIES = 100
 HELP: dict[str, str] = {
     "events_published_total": "Events appended to the event store.",
     "run_completed_total": "Agent runs finished, by terminal status.",
-    "tokens_total": "LLM tokens, by model and type (prompt|completion).",
+    "tokens_total": "LLM tokens by model and type; cached and cache_write are subsets of prompt.",
     "cost_usd_total": "Estimated LLM spend in USD, by model.",
     "active_sse_connections": "Open /api/events streams.",
     "compaction_runs_total": "Context compactions run.",

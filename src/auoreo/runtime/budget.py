@@ -21,6 +21,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from auoreo.core.usage import cache_hit_ratio
+
 if TYPE_CHECKING:
     from auoreo.core.settings_models import LoopSettings
     from auoreo.tools.executor import ToolOutcome
@@ -83,6 +85,8 @@ class TurnBudget:
     tools: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    cached_tokens: int = 0
+    cache_write_tokens: int = 0
     grace_used: bool = False
     _wrapped: set[str] = field(default_factory=set)
     _deltas: deque[int] = field(default_factory=lambda: deque(maxlen=DIMINISHING_COUNT))
@@ -110,10 +114,14 @@ class TurnBudget:
         else:
             self.iterations.consume()
 
-    def record(self, prompt: int, completion: int, calls: int = 1) -> None:
+    def record(
+        self, prompt: int, completion: int, calls: int = 1, *, cached: int = 0, cache_write: int = 0
+    ) -> None:
         self.model_calls += calls
         self.prompt_tokens += prompt
         self.completion_tokens += completion
+        self.cached_tokens += cached
+        self.cache_write_tokens += cache_write
 
     def exhausted(self) -> str | None:
         """Why the budget is spent (`iterations` / `wall_clock` / `tokens`), else None."""
@@ -164,6 +172,9 @@ class TurnBudget:
             "tools": self.tools,
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
+            "cached_tokens": self.cached_tokens,
+            "cache_write_tokens": self.cache_write_tokens,
+            "cache_hit_ratio": cache_hit_ratio(self.cached_tokens, self.prompt_tokens),
             "duration_ms": int(self.elapsed() * 1000),
             "budget": {"used": self.iterations.used, "total": self.iterations.total},
         }
