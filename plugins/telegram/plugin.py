@@ -4,7 +4,8 @@ Inbound: long-poll `getUpdates(offset, timeout=25)`. A message from a chat that 
 allowlist gets a 6-digit pairing code (issued and stored by the host); once the operator runs
 `auoreo plugin pair telegram <code>` the chat is allowlisted and its messages become a session.
 Outbound: `sendMessage`, chunked at 4000 characters, plain text (no `parse_mode`), with
-`message_thread_id` when replying inside a forum topic.
+`message_thread_id` when replying inside a forum topic. When the host sends `meta.citations`
+(M7), the answer ends with a plain-text "Sources:" list (trimmed before the answer ever is).
 Approvals: `/approve [id|all]`, `/deny [id|all] [reason]` and `/pending` from a paired chat are
 forwarded like any message; the host answers them (owner check, FIFO or by request id) in
 `auoreo.plugins.chat_approvals` instead of starting a run.
@@ -40,6 +41,7 @@ import httpx
 API = "https://api.telegram.org"
 CHUNK = 4000
 CAPTION_MAX = 1024
+SOURCES_MAX = 1500
 VOICE_MAX_BYTES = 16 * 2**20
 NAME = "telegram"
 
@@ -130,6 +132,33 @@ class TokenLock:
             with contextlib.suppress(FileNotFoundError):
                 self.path.unlink()
         self.held = False
+
+
+def sources_block(citations: Any, limit: int = SOURCES_MAX) -> str:
+    """`Sources:` + one numbered plain-text line per citation (`title — url`), at most `limit`
+    characters: trailing entries are dropped to fit. Titles are untrusted, so each is flattened
+    to one line; the tool call id is not shown. "" when there is nothing to list."""
+    lines: list[str] = []
+    for item in citations if isinstance(citations, list) else ():
+        url = item.get("url") if isinstance(item, dict) else None
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")) or not url.isprintable():
+            continue
+        raw = item.get("title") if isinstance(item.get("title"), str) else ""
+        title = " ".join("".join(ch if ch.isprintable() else " " for ch in raw).split())[:120]
+        line = f"{len(lines) + 1}. {title} — {url}" if title else f"{len(lines) + 1}. {url}"
+        if len("Sources:") + sum(len(x) + 1 for x in lines) + len(line) + 1 > limit:
+            break
+        lines.append(line)
+    return "\n".join(["Sources:", *lines]) if lines else ""
+
+
+def with_sources(parts: list[str], block: str, size: int = CHUNK) -> list[str]:
+    """Put the block after the answer: in the last message when it fits, else in its own."""
+    if not block:
+        return parts
+    if len(parts[-1]) + 2 + len(block) <= size:
+        return [*parts[:-1], f"{parts[-1]}\n\n{block}"]
+    return [*parts, block]
 
 
 def chunk(text: str, size: int = CHUNK) -> list[str]:
@@ -253,7 +282,7 @@ class Plugin:
             sent += 1
         stream = self.streams.pop(target, None)
         if not media or (text and not caption):
-            parts = chunk(text or "(empty)")
+            parts = with_sources(chunk(text or "(empty)"), sources_block(meta.get("citations")))
             if stream and stream["mode"] == "edit" and stream.get("message_id") is not None:
                 payload = {"chat_id": target, "message_id": stream["message_id"], "text": parts.pop(0)}
                 last = await self._api("editMessageText", payload)

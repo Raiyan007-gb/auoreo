@@ -10,7 +10,8 @@ pending approvals instead of starting a run (`plugins.chat_approvals`, spec §19
 
 M7: a connector config with `routes` picks the agent per message (`plugins.routes`); a routed
 agent gets its own session under the key `<chat_id>:<agent>` and each decision is audited as
-`inbound.routed`. Without `routes` nothing here changes.
+`inbound.routed`. Without `routes` nothing here changes. With `m7.agents.citations` on, the
+reply meta carries `citations` built from the run's tool events (`plugins.citations`).
 """
 
 from __future__ import annotations
@@ -217,8 +218,11 @@ class InboundRouter:
         sid = await self.session_for(chat_id, str(params.get("user", "")), route.agent, route.key)
         await route.audit(self.s, self.plugin, chat_id, sid)
         interactive = bool(self.s.settings.teams2.chat_approvals)
+        from auoreo.plugins import citations
+
+        seq = await citations.mark(self.s)  # --- M7: None unless `m7.agents.citations` is on
         run_id = await self.s.coordinator.submit(sid, text, interactive=interactive)
-        reply = "(done)"
+        reply, cite = "(done)", {}
         if run_id is not None:
             async with contextlib.AsyncExitStack() as stack:
                 if interactive:
@@ -231,6 +235,8 @@ class InboundRouter:
                     await stack.enter_async_context(relay)
                 await self.s.coordinator.wait(sid, self.timeout_s)
             result = self.s.coordinator.result(run_id)
+            if found := await citations.for_run(self.s, sid, run_id, seq, result):
+                cite = {"citations": found}
             if result is None:
                 reply = "(no answer)"
             elif result.status in {"completed", "max_steps"}:
@@ -240,7 +246,7 @@ class InboundRouter:
         from auoreo.automation.deliveries import voice_notes  # --- I7: MEDIA: envelope
 
         reply, extra = await voice_notes(self.s, self.plugin, reply)
-        receipt = await send(chat_id, route.label + reply, {**meta, "session_id": sid, **extra})
+        receipt = await send(chat_id, route.label + reply, {**meta, "session_id": sid, **extra, **cite})
         return {
             "ok": bool(receipt.get("ok")),
             "session_id": sid,
