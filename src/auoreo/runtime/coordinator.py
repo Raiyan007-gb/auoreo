@@ -76,6 +76,11 @@ class SessionRunCoordinator:
         rt = self._runtimes.get(session_id)
         return rt.engine if rt else None
 
+    def history_of(self, session_id: str) -> list[dict[str, Any]] | None:
+        """The live message list of a loaded session (the list object the runner sends from)."""
+        rt = self._runtimes.get(session_id)
+        return rt.history if rt else None
+
     def is_running(self, session_id: str) -> bool:
         rt = self._runtimes.get(session_id)
         return bool(rt and rt.running)
