@@ -102,13 +102,15 @@ def strip_allow(rules: list[Any]) -> list[Any]:
 
 
 def sanitize_agent_manifest(manifest: Any) -> Any:
-    """An untrusted project agent keeps its prompt but loses allow rules + permissive modes."""
+    """An untrusted project agent keeps its prompt; allow rules, permissive modes and its tenant go."""
     update: dict[str, Any] = {}
     rules = strip_allow(list(manifest.permissions))
     if len(rules) != len(manifest.permissions):
         update["permissions"] = rules
     if manifest.permission_mode in PERMISSIVE_MODES:
         update["permission_mode"] = None
+    if getattr(manifest, "memory_tenant", None):  # M7: a shadowing project agent picks no tenant
+        update["memory_tenant"] = None
     return manifest.model_copy(update=update) if update else manifest
 
 

@@ -179,6 +179,9 @@ class AgentManifest(_Strict):
     permissions: list[Rule] = Field(default_factory=list)
     memory: bool = True
     temperature: float | None = Field(default=None, ge=0, le=2)
+    memory_tenant: str | None = Field(default=None, pattern=SLUG_RE, max_length=48)
+    """M7: the fact-store partition `agent:<slug>` this agent reads and writes (honoured when
+    `m7.agents.memory_tenants` is on; MEMORY.md / USER.md / PREFS.md stay shared)."""
 
 
 class SkillManifest(BaseModel):

@@ -286,7 +286,7 @@ class MemoryStore(SearchMixin, I4StoreMixin):
     def add_transcript(self, session_id: str, role: str, text: str) -> None:
         self.db.execute(
             "INSERT INTO transcript(session_id, role, text, created_at) VALUES (?,?,?,?)",
-            (session_id, role, text, time.time()),
+            (session_id, self.transcript_tag() + role, text, time.time()),
         )
         self.db.commit()
 
