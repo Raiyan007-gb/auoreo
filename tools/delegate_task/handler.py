@@ -5,13 +5,17 @@ foreground batch joins every child's <task-notification> into one result, in tas
 conversation + this agent's exact system prompt and tools (provider cache hits);
 `allowedTools`, `inherit_mcp_toolsets` and `handoff` shape the child per spawn; `budget{max_tokens,max_usd,
 timeout_ms}` bounds it. `action=list|steer|stop` manage this session's children; they are
-synchronous and bypass the pause switch and the depth limit."""
+synchronous and bypass the pause switch and the depth limit. `worktree=true` (M7,
+`m7.orch.worktrees`) runs the child in its own git worktree on branch `auoreo/<name>-<hex>`
+(`teams.worktree_spawn`); merging the branch back is not this tool's job."""
 
 import asyncio
 import json
 import uuid
 from typing import Any
 
+from auoreo.runtime.subtask import WorktreeError
+from auoreo.teams import worktree_spawn
 from auoreo.teams.fork import FrozenTurn
 from auoreo.teams.tooling import attempt, teams_for
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
@@ -26,14 +30,41 @@ def _prompt(task: dict[str, Any]) -> str:
     return prompt
 
 
+async def _tree(ctx: ToolContext, task: dict[str, Any], args: dict, name: str) -> Any:
+    """The task's own git worktree when `worktree` is set (M7 W4); errors start no child."""
+    if not _pick(task, args, "worktree"):
+        return None
+    try:
+        return await worktree_spawn.prepare(ctx.services["services"], f"{name}-{uuid.uuid4().hex[:4]}")
+    except (WorktreeError, OSError) as exc:
+        raise ToolError(str(exc)) from exc
+
+
 async def _spawn(
-    teams: Any, ctx: ToolContext, task: dict[str, Any], name: str, background: bool, args: dict
+    teams: Any,
+    ctx: ToolContext,
+    task: dict[str, Any],
+    name: str,
+    background: bool,
+    args: dict,
+    tree: Any = None,
+) -> Any:
+    try:
+        return await _start(teams, ctx, task, name, background, args, tree)
+    except ToolError:
+        if tree is not None:  # the spawn failed: the worktree made for it goes too
+            await worktree_spawn.rollback(ctx.services["services"], [tree])
+        raise
+
+
+async def _start(
+    teams: Any, ctx: ToolContext, task: dict[str, Any], name: str, background: bool, args: dict, tree: Any
 ) -> Any:
     return await attempt(
         teams.spawn(
             ctx.session_id,
             agent=task.get("agent") or "default",
-            prompt=_prompt(task),
+            prompt=_prompt(task) + (worktree_spawn.child_note(tree) if tree else ""),
             name=name,
             background=background,
             model=task.get("model"),
@@ -45,6 +76,8 @@ async def _spawn(
             inherit_mcp_toolsets=_pick(task, args, "inherit_mcp_toolsets") or False,
             handoff=bool(_pick(task, args, "handoff")),
             frozen=_frozen(ctx),
+            cwd=tree.path if tree else None,
+            worktree=worktree_spawn.payload(tree) if tree else None,
         )
     )
 
@@ -66,7 +99,9 @@ def _frozen(ctx: ToolContext) -> FrozenTurn | None:
 async def _single(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     name = args.get("name") or f"task_{uuid.uuid4().hex[:6]}"
     background = bool(args.get("background", False))
-    member = await _spawn(teams, ctx, args, name, background, args)
+    tree = await _tree(ctx, args, args, name)
+    member = await _spawn(teams, ctx, args, name, background, args, tree)
+    note = f"\n{worktree_spawn.summary(tree)}" if tree else ""
     meta = {
         "task_id": member.task_id,
         "subagent_id": member.subagent_id,
@@ -74,16 +109,17 @@ async def _single(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
         "agent": member.agent,
         "team": member.team_id,
         "role": member.role,
+        **({"worktree": {"path": str(tree.path), "branch": tree.branch}} if tree else {}),
     }
     if background:
         return ToolResult(
             f"Started background task '{name}' (task-id {member.task_id}, agent {member.agent}). "
             "Its result will arrive later as a task-notification message; "
-            f"call wait_agent(name='{name}') to block on it.",
+            f"call wait_agent(name='{name}') to block on it.{note}",
             meta={**meta, "status": member.status},
         )
     return ToolResult(
-        member.notification(),
+        member.notification() + note,
         is_error=member.status != "completed",
         meta={**meta, "status": member.status, "usage": member.usage},
     )
@@ -96,6 +132,21 @@ def _names(tasks: list[dict[str, Any]]) -> list[str]:
     if dupes:
         raise ToolError(f"duplicate task names in tasks[]: {', '.join(dupes)}")
     return names
+
+
+async def _batch_trees(
+    ctx: ToolContext, tasks: list[dict[str, Any]], names: list[str], args: dict
+) -> dict[str, Any]:
+    """One worktree per task that asks for one, created serially and all-or-nothing: when
+    one fails, those made in this call are removed and no child starts."""
+    trees: dict[str, Any] = {}
+    for task, name in zip(tasks, names, strict=True):
+        try:
+            trees[name] = await _tree(ctx, task, args, name)
+        except ToolError:
+            await worktree_spawn.rollback(ctx.services["services"], [t for t in trees.values() if t])
+            raise
+    return trees
 
 
 async def _batch(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
@@ -117,11 +168,12 @@ async def _batch(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     )
     gate = asyncio.Semaphore(max(1, limit))
     await attempt(teams.ensure_team(ctx.session_id))  # one team before the concurrent spawns
+    trees = await _batch_trees(ctx, tasks, names, args)
 
     async def one(task: dict[str, Any], name: str) -> tuple[str, Any]:
         async with gate:
             try:
-                return name, await _spawn(teams, ctx, task, name, background, args)
+                return name, await _spawn(teams, ctx, task, name, background, args, trees[name])
             except ToolError as exc:
                 return name, exc
 
@@ -134,6 +186,9 @@ async def _batch(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
             rows.append({"name": name, "status": "failed", "error": str(res)})
             continue
         rows.append({"name": name, "task_id": res.task_id, "agent": res.agent, "status": res.status})
+        if trees[name] is not None:
+            rows[-1]["worktree"] = {"path": str(trees[name].path), "branch": trees[name].branch}
+            parts.append(worktree_spawn.summary(trees[name]))
         parts.append(f"- '{name}' task-id {res.task_id} ({res.agent})" if background else res.notification())
     done = sum(r["status"] == "completed" for r in rows)
     if background:

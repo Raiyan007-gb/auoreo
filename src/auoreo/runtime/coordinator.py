@@ -245,6 +245,7 @@ class SessionRunCoordinator:
                 workflow="chat",
                 model=req.model,
                 parent_id=sid,
+                cwd=rt.cwd,  # M7 W4: workflow steps stay in the session's workspace root
             )
             crt = await self.runtime(child.id)
             crt.interactive = rt.interactive

@@ -339,3 +339,16 @@ async def test_review_child_gets_the_worktree_as_its_cwd(services: Services, wor
     tree, rt = await review()
     assert rt.cwd == tree and tree.parent == workdir / ".auoreo" / "worktrees"
     await services.coordinator.wait(rt.session_id, 20)
+
+
+async def test_forks_and_workflow_steps_keep_the_workspace_root(services: Services, workdir: Path) -> None:
+    from auoreo.core.sessions_ops import fork_session
+
+    git_init(workdir)
+    plain = await services.create_session()
+    assert (await services.coordinator.runtime((await fork_session(services, plain.id)).id)).cwd is None
+    flags_on(services)
+    tree = await _tree(services)
+    row = await services.create_session(cwd=tree)
+    fork = await fork_session(services, row.id)
+    assert (await services.coordinator.runtime(fork.id)).cwd == tree

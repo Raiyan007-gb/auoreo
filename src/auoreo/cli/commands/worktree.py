@@ -1,6 +1,8 @@
 """H4: `auoreo new-feature <slug>` and `auoreo worktree gc` (spec §25.15; logic in
 `runtime/worktrees.py`). Worktrees live under `<repo>/.auoreo/worktrees/` (or
-`g6.review.worktree_root`), hidden from git by a `*` .gitignore."""
+`g6.review.worktree_root`), hidden from git by a `*` .gitignore. With `m7.orch.worktrees`, gc also
+covers the orchestrator root (`runtime/cwd.orch_root`) and keeps the worktrees of claimed kanban
+tasks; it prints its plan and emits no event."""
 
 from __future__ import annotations
 
@@ -21,6 +23,44 @@ app = typer.Typer(no_args_is_help=True)
 def _root() -> Path | None:
     raw = settings().g6.review.worktree_root
     return Path(raw).expanduser() if raw else None
+
+
+async def _plan(days: float, force: bool) -> tuple[Path, list[wt.GcItem]]:
+    st = settings()
+    if not st.m7.orch.worktrees:
+        return await wt.plan_gc(Path.cwd(), _root(), days, force=force)
+    from auoreo.runtime.cwd import orch_root
+
+    keep = await _protected()
+    top, items = await wt.plan_gc(Path.cwd(), _root(), days, force=force, protected=keep)
+    extra = orch_root(st, top)
+    if extra != (_root() or top / ".auoreo" / "worktrees"):
+        items += (await wt.plan_gc(Path.cwd(), extra, days, force=force, protected=keep))[1]
+    return top, items
+
+
+async def _protected() -> set[Path]:
+    """Worktrees of claimed kanban tasks; empty (with a note) when the store cannot be read."""
+    from auoreo.core.db import Database
+    from auoreo.teams.worktree_spawn import protected_paths
+
+    st = settings()
+    if not _exists(st.db_path):
+        return set()
+    try:
+        db = Database(st.db_path, encryption=st.db_encryption)
+        await db.init()
+        try:
+            return await protected_paths(db)
+        finally:
+            await db.close()
+    except Exception as exc:  # gc still works without the task store
+        err_console.print(f"[yellow]note:[/yellow] kanban store not readable ({escape(str(exc))})")
+        return set()
+
+
+def _exists(path: Path) -> bool:
+    return path.exists()
 
 
 def new_feature(
@@ -75,7 +115,7 @@ def gc(
     """Remove stale `.auoreo/worktrees/*`: merged, untouched, missing or orphaned (dirty ones are kept)."""
     days = settings().cli2.worktree_stale_days if older_than is None else older_than
     try:
-        top, items = asyncio.run(wt.plan_gc(Path.cwd(), _root(), days, force=force))
+        top, items = asyncio.run(_plan(days, force))
     except WorktreeError as exc:
         err_console.print(f"[red]{escape(str(exc))}[/red]")
         raise typer.Exit(1) from exc

@@ -275,10 +275,10 @@ async def task_worktree(cwd: Path, root: Path, slug: str, *, max_worktrees: int 
 
 
 async def discard_worktree(cwd: Path, tree: NewFeature) -> None:
-    """Undo a worktree created by a spawn that then failed. A resumed one is left alone; the
-    branch goes only when it has no commit of its own."""
-    if tree.resumed:
-        return
+    """Undo a worktree created by a spawn that then failed. A resumed or dirty one is left
+    alone; the branch goes only when it has no commit of its own."""
+    if tree.resumed or await _ok("status", "--porcelain", cwd=tree.path):
+        return  # resumed, or a child already wrote there: nothing is thrown away
     top = await toplevel(cwd)
     async with _LOCKS.setdefault(str(top), asyncio.Lock()):
         await _ok("worktree", "remove", "--force", str(tree.path), cwd=top)

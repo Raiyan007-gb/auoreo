@@ -55,3 +55,15 @@ class ToolPartialDrop(BaseModel):
 
     run_id: str | None = None
     call_ids: list[str]
+
+
+class WorktreeCreated(BaseModel):
+    """`data` of a `worktree.created` event (M7 W4), emitted on the child session that runs in
+    the worktree. `resumed` = an existing folder or branch was reused (never reset)."""
+
+    path: str
+    branch: str
+    base: str = Field(description="Short sha of the server checkout's HEAD the branch started from")
+    resumed: bool = False
+    task_id: int | None = Field(default=None, description="Kanban task, when the dispatcher made it")
+    board: str | None = None

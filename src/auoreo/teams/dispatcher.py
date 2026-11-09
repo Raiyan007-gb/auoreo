@@ -10,7 +10,9 @@ the holder of the automation single-writer lock dispatches. Every `interval_s`:
    any run of a PR task) or while its profile is at its cap (`profile_caps`/`default_cap`);
    otherwise atomically claim it for a new worker name and run a worker session
    (`agent = task.profile or i3.kanban.agent`, non-interactive, no memory) pinned to the
-   task's board (`KanbanStore.worker_boards`, see `teams.kanban_guard`).
+   task's board (`KanbanStore.worker_boards`, see `teams.kanban_guard`). With `m7.orch.worktrees` the worker
+   runs in its own git worktree on branch `auoreo/k<board>-<id>` (`teams.worktree_spawn`): the
+   task carries path and branch as an attachment, and a worktree failure unclaims the task.
 3. when the run ends: a task still claimed by that worker is failure-counted (`block`, so
    `FAILURE_LIMIT=2` auto-blocks it); the guard is set from the outcome.
 
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import re
 import secrets
@@ -30,6 +33,8 @@ from typing import TYPE_CHECKING, Any
 
 from auoreo.automation import lock
 from auoreo.runtime.inbox import RunOptions
+from auoreo.runtime.subtask import WorktreeError
+from auoreo.teams import worktree_spawn
 from auoreo.teams.kanban import KanbanError, KanbanStore
 from auoreo.teams.worker_log import RotatingLog, worker_log_path
 
@@ -157,7 +162,20 @@ class KanbanDispatcher:
         claimed = await kb.claim(row.board, name, task_id=row.id)
         if claimed is None:  # someone else took it
             return False
-        ses = await self.s.create_session(title=f"kanban:{row.board}#{row.id}"[:120], agent=profile)
+        tree = None
+        if self.s.settings.m7.orch.worktrees:  # --- M7 W4: one worktree per task
+            try:
+                tree = await worktree_spawn.prepare(self.s, f"k{row.board}-{row.id}")
+            except (WorktreeError, OSError) as exc:
+                log.warning("kanban task %s: no worktree (%s); unclaimed", row.id, exc)
+                await kb.release(row.id, name)
+                self._guard(row.id, self.cfg.quota_cooldown_s, "worktree failed")
+                return False
+        ses = await self.s.create_session(
+            title=f"kanban:{row.board}#{row.id}"[:120], agent=profile, cwd=tree.path if tree else None
+        )
+        if tree is not None:
+            await self._attach(kb, row.id, tree, name)
         await kb.set_session(row.id, ses.id)
         kb.worker_boards[ses.id] = row.board
         kb.worker_names[ses.id] = name
@@ -167,6 +185,7 @@ class KanbanDispatcher:
         w.log.write({"type": "worker.spawned", "task": row.id, "session_id": ses.id, "profile": profile})
         self.running[ses.id] = w
         prompt = PROMPT.format(worker=name, board=row.board, id=row.id, title=row.title, body=row.body)
+        prompt += worktree_spawn.child_note(tree) if tree else ""
         options = RunOptions(skip_memory=True, tools_deny=WORKER_DENY)
         w.run_id = await self.s.coordinator.submit(ses.id, prompt, interactive=False, options=options)
         await self.s.emit(
@@ -174,8 +193,18 @@ class KanbanDispatcher:
             "kanban.worker_spawned",
             {"id": row.id, "board": row.board, "worker": name, "session_id": ses.id, "profile": profile},
         )
+        if tree is not None:
+            data = worktree_spawn.payload(tree, task_id=row.id, board=row.board)
+            await self.s.emit(ses.id, "worktree.created", data)
         w.task = asyncio.create_task(self._watch(w), name=f"kanban:worker:{name}")
         return True
+
+    async def _attach(self, kb: KanbanStore, task_id: int, tree: Any, by: str) -> None:
+        """The durable task-to-worktree mapping (used on re-dispatch and by `worktree gc`)."""
+        ref, note = str(tree.path), f"{worktree_spawn.BRANCH_NOTE}{tree.branch}"
+        known = [json.loads(r.text) for r in await kb.comments(task_id, structured=True)]
+        if not any(k.get("ref") == ref for k in known):
+            await kb.attach(task_id, ref, note=note, by=by)
 
     async def _watch(self, w: Worker) -> None:
         coord = self.s.coordinator
