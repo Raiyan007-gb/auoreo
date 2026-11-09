@@ -29,12 +29,12 @@ from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
 from auoreo.policy.bandit import BanditPolicy, Choice
+from auoreo.runtime import request_layout as layout
 from auoreo.runtime.attachments import user_message  # --- I5
 from auoreo.runtime.budget import GRACE_NOTE, TurnBudget, all_free
 from auoreo.runtime.compaction import CompactionError, CompactionService
 from auoreo.runtime.empty import EMPTY_SENTINEL
 from auoreo.runtime.guards import LoopGuards
-from auoreo.runtime import request_layout as layout
 from auoreo.runtime.inbox import Inbox, RunOptions
 from auoreo.runtime.liveness import LivenessWatchdog
 from auoreo.runtime.nudges import MemoryNudge, recall_query
@@ -107,6 +107,7 @@ class AgentRunner:
         self.compaction = CompactionService(services, self.usage)
         self.policy = BanditPolicy(services, self.usage)  # --- W1-C (off unless bandit.enabled)
         self.nudge = MemoryNudge(services)  # --- G2b
+        self.prefix = layout.PrefixTracker()  # --- M7: cache.prefix_changed (m7.token.telemetry)
 
     # ------------------------------------------------------------ persistence
     async def load_history(self, session_id: str) -> list[dict[str, Any]]:
@@ -316,7 +317,8 @@ class AgentRunner:
                     layout.build, self, spec, rt, tools, context, turn_msg, last_step, run_id, note
                 )
                 await self.compaction.pre_step(rt, build())  # `build` re-renders after compaction
-                await self.s.emit(sid, "step.started", {"run_id": run_id, "step": step, "tools": len(tools)})
+                started = {"run_id": run_id, "step": step, "tools": len(tools)}
+                await self.s.emit(sid, "step.started", started | layout.tool_counts(self, spec, rt.state))
                 budget.consume_step(grace=exhausted is not None)
                 try:
                     out = await model_step(self, rt, run_id, build, budget, turn.watchdog.touch)

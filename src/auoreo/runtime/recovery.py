@@ -19,8 +19,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 from auoreo.core import observability as obs
@@ -37,6 +38,7 @@ from auoreo.gateway.types import (
     Usage,
 )
 from auoreo.memory.scrubber import StreamingContextScrubber
+from auoreo.runtime import request_layout as layout
 from auoreo.runtime.budget import OUT_OF_BAND
 from auoreo.runtime.empty import NOTES, attempts, classify, valid_call
 
@@ -72,13 +74,17 @@ class StepOutput:
 
 
 Touch = Callable[..., Any]
+CacheFields = Callable[[Usage], Awaitable[dict[str, Any]]]
 
 
 class _Collect:
     """Per-call stream state: redacted deltas out, tool calls + usage + finish reason in."""
 
-    def __init__(self, s: Any, sid: str, run_id: str, request: LLMRequest, meter: Any) -> None:
+    def __init__(
+        self, s: Any, sid: str, run_id: str, request: LLMRequest, meter: Any, cache: CacheFields
+    ) -> None:
         self.s, self.sid, self.run_id, self.request, self.meter = s, sid, run_id, request, meter
+        self.cache = cache  # --- M7: prefix/tool hashes for the `usage` event ({} when off)
         self.out = StepOutput()
         self.parts: list[str] = []
         self.thoughts: list[str] = []
@@ -117,7 +123,8 @@ class _Collect:
                 out.completion_tokens += item.completion_tokens
                 out.cached_tokens += item.cached_tokens
                 out.cache_write_tokens += item.cache_write_tokens
-                await self.emit("usage", {"model": self.request.model, **item.event_data()})
+                data = {"model": self.request.model, **item.event_data(), **await self.cache(item)}
+                await self.emit("usage", data)
             case Finish(reason=reason):
                 out.finish = reason
 
@@ -144,13 +151,21 @@ class _Collect:
 
 
 async def stream(
-    runner: AgentRunner, sid: str, run_id: str, request: LLMRequest, touch: Touch | None = None
+    runner: AgentRunner,
+    sid: str,
+    run_id: str,
+    request: LLMRequest,
+    touch: Touch | None = None,
+    *,
+    track: bool = False,
 ) -> StepOutput:
-    """Stream one call: redacted deltas out, tool calls + usage + finish reason in."""
+    """Stream one call: redacted deltas out, tool calls + usage + finish reason in. `track`
+    marks the step's own request (not a recovery nudge) for the M7 prefix tracker."""
     s = runner.s
     purpose = str(request.metadata.get("purpose", "turn"))
     meter = runner.usage.meter(sid, run_id, request.model)  # latency + outcome per call
-    col = _Collect(s, sid, run_id, request, meter)
+    cache = partial(layout.cache_fields, runner, sid, run_id, request, track)
+    col = _Collect(s, sid, run_id, request, meter, cache)
     try:
         async for item in meter.wrap(
             obs.traced_stream(s.gateway.stream(request), model=request.model, purpose=purpose)
@@ -175,11 +190,11 @@ async def model_step(
     sid = rt.session_id
     request = build()
     try:
-        out = await stream(runner, sid, run_id, request, touch)
+        out = await stream(runner, sid, run_id, request, touch, track=True)
     except GatewayError as exc:
         await runner.compaction.recover_overflow(rt, exc, request.model)  # or re-raises
         request = build()
-        out = await stream(runner, sid, run_id, request, touch)
+        out = await stream(runner, sid, run_id, request, touch, track=True)
     if (kind := classify(out.text, out.calls, out.reasoning, out.finish)) is not None:
         out = await _recover_empty(runner, sid, run_id, request, out, kind)
     if out.finish == "length" and not out.calls:
