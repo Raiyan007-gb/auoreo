@@ -64,9 +64,13 @@ def reload_command(kind: str) -> Callable[..., None]:
 
 
 # ------------------------------------------------------------------ plugin get/set
-def _manifest(name: str) -> PluginManifest:
+def _harness() -> Harness:
     st = settings()
-    h = Harness(default_roots(ensure_home(st.home), Path.cwd(), bundled_root(), st.extra_roots))
+    return Harness(default_roots(ensure_home(st.home), Path.cwd(), bundled_root(), st.extra_roots))
+
+
+def _manifest(name: str, harness: Harness | None = None) -> PluginManifest:
+    h = harness or _harness()
     d = h.plugins.get(name)
     if d is None:
         err_console.print(
@@ -108,7 +112,8 @@ def plugin_set(
     """Set one plugin config value in the settings store (validated; secrets are refused)."""
     st = settings()
     try:
-        parsed = cv.set_value(ensure_home(st.home), _manifest(name), key, value)
+        h = _harness()  # M7: a connector route must name a known agent
+        parsed = cv.set_value(ensure_home(st.home), _manifest(name, h), key, value, set(h.agents))
     except cv.PluginConfigError as exc:
         err_console.print(f"[red]{escape(str(exc))}[/red]")
         raise typer.Exit(2) from exc

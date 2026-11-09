@@ -7,16 +7,22 @@ State lives in files under `<home>/plugins/<name>/` (and the allowlist in the se
 
 `/approve`, `/deny [reason]`, `/approve all` and `/pending` from a paired owner chat answer
 pending approvals instead of starting a run (`plugins.chat_approvals`, spec §19.9).
+
+M7: a connector config with `routes` picks the agent per message (`plugins.routes`); a routed
+agent gets its own session under the key `<chat_id>:<agent>` and each decision is audited as
+`inbound.routed`. Without `routes` nothing here changes.
 """
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
 import secrets
 import time
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -28,6 +34,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 CODE_TTL_S = 3600
 Send = Callable[[str, str, dict[str, Any]], Awaitable[dict[str, Any]]]
+_LOCKS: dict[str, asyncio.Lock] = {}
+"""One lock per `sessions.json`: the host builds a router per message."""
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -116,6 +124,33 @@ class PairingStore:
         return True
 
 
+@dataclass(frozen=True)
+class Routed:
+    """One routing decision. Without `routes` only `agent` is set and nothing else changes."""
+
+    agent: str | None  # bound when the session is created (None = the default agent)
+    key: str | None  # sessions.json key; None = the bare chat id
+    why: str = ""  # "" = the connector has no routes (no audit row)
+    named: str = ""  # the agent's name for the audit row and approval prompts
+    routed: bool = False  # a rule picked an agent other than the connector's own
+
+    @property
+    def label(self) -> str:
+        return f"[{self.named}] " if self.routed else ""
+
+    async def audit(self, services: Services, plugin: str, chat_id: str, sid: str) -> None:
+        if not self.why:
+            return
+        await services.audit.record(
+            actor="system",
+            action="inbound.routed",
+            session_id=sid,
+            decision="allow",
+            reason=self.why,
+            detail={"plugin": plugin, "chat_id": chat_id[:64], "agent": self.named},
+        )
+
+
 class InboundRouter:
     """`connector.message` → session (created on first contact) → reply via delivery."""
 
@@ -131,13 +166,20 @@ class InboundRouter:
             **file_config(self.s.settings.home, self.plugin),
         }
 
-    async def session_for(self, chat_id: str, user: str, agent: str | None) -> str:
+    async def session_for(self, chat_id: str, user: str, agent: str | None, key: str | None = None) -> str:
+        """The session of `key` (default: the chat id), created with `agent` on first contact.
+        Serialized per plugin: the host runs one task per message."""
+        key = key or chat_id
+        async with _LOCKS.setdefault(str(self.path), asyncio.Lock()):
+            return await self._session_for(chat_id, user, agent, key)
+
+    async def _session_for(self, chat_id: str, user: str, agent: str | None, key: str) -> str:
         mapping = _read_json(self.path)
-        sid = mapping.get(chat_id)
+        sid = mapping.get(key)
         if sid and await self.s.get_session(sid) is not None:
             return str(sid)
         row = await self.s.create_session(title=f"{self.plugin}: {user or chat_id}"[:120], agent=agent)
-        mapping[chat_id] = row.id
+        mapping[key] = row.id
         _write_json(self.path, mapping)
         await self.s.emit(
             "server",
@@ -145,6 +187,20 @@ class InboundRouter:
             {"plugin": self.plugin, "chat_id": chat_id, "session_id": row.id},
         )
         return row.id
+
+    async def _route(self, params: dict[str, Any], chat_id: str, fixed: str | None) -> Routed:
+        """Which agent answers: the connector's fixed one, or the first matching route."""
+        cfg = self._config()
+        if not cfg.get("routes"):
+            return Routed(fixed, None)
+        from auoreo.plugins import routes
+
+        payload, owner = routes.payload_of(params), routes.is_owner(cfg, chat_id)
+        pick = routes.select(cfg["routes"], payload, owner=owner, agents=self.s.harness.agents)
+        default = fixed or self.s.settings.agent
+        if pick.agent is None or pick.agent == default:
+            return Routed(fixed, None, pick.why, default)
+        return Routed(pick.agent, routes.session_key(chat_id, pick.agent), pick.why, pick.agent, True)
 
     async def handle(self, params: dict[str, Any], send: Send, agent: str | None = None) -> dict[str, Any]:
         chat_id, text = str(params.get("chat_id", "")), str(params.get("text", ""))
@@ -157,14 +213,17 @@ class InboundRouter:
             answer = await handle_command(self.s, self.plugin, chat_id, text)
             receipt = await send(chat_id, answer, meta)
             return {"ok": bool(receipt.get("ok")), "command": True, "detail": receipt.get("detail")}
-        sid = await self.session_for(chat_id, str(params.get("user", "")), agent)
+        route = await self._route(params, chat_id, agent)  # --- M7: `routes` in the connector config
+        sid = await self.session_for(chat_id, str(params.get("user", "")), route.agent, route.key)
+        await route.audit(self.s, self.plugin, chat_id, sid)
         interactive = bool(self.s.settings.teams2.chat_approvals)
         run_id = await self.s.coordinator.submit(sid, text, interactive=interactive)
         reply = "(done)"
         if run_id is not None:
             async with contextlib.AsyncExitStack() as stack:
                 if interactive:
-                    await stack.enter_async_context(ApprovalNotifier(self.s, sid, chat_id, send))
+                    notifier = ApprovalNotifier(self.s, sid, chat_id, send, agent=route.named)
+                    await stack.enter_async_context(notifier)
                 if self._config().get("stream"):  # --- I7: partial replies (drafts / edits)
                     from auoreo.plugins.streaming import StreamRelay
 
@@ -181,7 +240,7 @@ class InboundRouter:
         from auoreo.automation.deliveries import voice_notes  # --- I7: MEDIA: envelope
 
         reply, extra = await voice_notes(self.s, self.plugin, reply)
-        receipt = await send(chat_id, reply, {**meta, "session_id": sid, **extra})
+        receipt = await send(chat_id, route.label + reply, {**meta, "session_id": sid, **extra})
         return {
             "ok": bool(receipt.get("ok")),
             "session_id": sid,

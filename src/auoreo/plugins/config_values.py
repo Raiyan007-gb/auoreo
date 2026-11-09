@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Collection
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +55,9 @@ def parse_value(raw: str) -> Any:
         return raw
 
 
-def set_value(home: Path, manifest: PluginManifest, key: str, raw: str) -> Any:
+def set_value(
+    home: Path, manifest: PluginManifest, key: str, raw: str, agents: Collection[str] | None = None
+) -> Any:
     from auoreo.plugins.host import validate_config
 
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,63}", key):
@@ -72,7 +75,7 @@ def set_value(home: Path, manifest: PluginManifest, key: str, raw: str) -> Any:
     value = parse_value(raw)
     candidate = {**file_config(home, manifest.name), key: value}
     try:
-        validate_config(manifest, candidate)
+        validate_config(manifest, candidate, agents)
     except Exception as exc:
         raise PluginConfigError(str(exc)) from exc
     write_settings_value(home, f"plugins.{manifest.name}.{key}", value)

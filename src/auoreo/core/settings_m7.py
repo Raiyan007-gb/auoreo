@@ -42,12 +42,11 @@ class M7Ssh(_Tolerant):
 
 
 class M7Agents(_Tolerant):
-    """W3 agents and bots."""
+    """W3 agents and bots. Connector routing has no switch here: it is on when a connector's
+    config has `routes` (docs/designs/m7-agents-bots.md, open question 4)."""
 
     memory_tenants: bool = False
     """Honour `memory_tenant` on agent manifests."""
-    connector_routes: bool = False
-    """Route inbound connector messages to agents by rule."""
     citations: bool = False
     """Structured `citations[]` on replies."""
 
