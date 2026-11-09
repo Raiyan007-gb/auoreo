@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from auoreo.core import floors
+from auoreo.core.permissions_globs import SENSITIVE_WRITE_GLOBS as SENSITIVE_WRITE_GLOBS
 from auoreo.harness.manifests import Rule
 
 if TYPE_CHECKING:
@@ -46,31 +47,6 @@ _FILE_PERMISSIONS = frozenset({"read", "edit"})
 
 MAX_PATTERN_LEN = 2048
 SENSITIVE_NOTE = "sensitive write target always asks"
-# Sensitive write targets (§19.7): always `ask`, even under yolo / acceptEdits.
-SENSITIVE_WRITE_GLOBS: tuple[str, ...] = (
-    "~/.ssh/*",
-    "~/.bashrc",
-    "~/.bash_profile",
-    "~/.bash_login",
-    "~/.profile",
-    "~/.zshrc",
-    "~/.zprofile",
-    "~/.zshenv",
-    "~/.netrc",
-    "~/.pgpass",
-    "~/.npmrc",
-    "~/.pypirc",
-    "~/.aws/*",
-    "~/.config/gh/*",
-    "~/.gnupg/*",
-    "/etc/*",
-    "*/.git/hooks/*",
-    "$AUOREO_HOME/settings.json",
-    "$AUOREO_HOME/.env",
-    "$AUOREO_HOME/trusted_workspaces.json",  # an agent must never trust a workspace itself
-    "$AUOREO_HOME/.db.key",
-    "$AUOREO_HOME/.secrets.key",
-)
 
 
 def _wild(pattern: str) -> re.Pattern[str]:

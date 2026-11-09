@@ -32,6 +32,7 @@ from auoreo.harness.manifests import (
     VariantsFile,
     WorkflowManifest,
 )
+from auoreo.harness.manifests_hosts import load_host
 from auoreo.harness.manifests_webhook import WebhookManifest, filter_leaves, strip_raw
 from auoreo.tools.context import ToolContext, ToolResult
 
@@ -172,9 +173,6 @@ class Loaded:
     manifest: Any
     source: str
     path: Path
-
-
-# --------------------------------------------------------------------------- helpers
 
 
 def _validate[M: BaseModel](model: type[M], data: dict[str, Any], path: Path, text: str) -> M:
@@ -471,6 +469,7 @@ LOADERS: dict[str, Callable[[Candidate], Any]] = {
     "webhooks": load_webhook,
     "plugins": load_plugin,
     "policies": load_policy,
+    "hosts": load_host,
     "backends": load_backend,
     "tools": load_tool,
     "agents": load_agent,

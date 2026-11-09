@@ -23,6 +23,17 @@ from auoreo.harness.manifests_webhook import WebhookManifest as WebhookManifest 
 
 NAME_RE = r"^[a-z][a-z0-9_]*$"
 SLUG_RE = r"^[a-z0-9][a-z0-9._-]*$"
+_DEVICES = (f"{p}{i}" for p in ("com", "lpt") for i in range(1, 10))
+RESERVED_NAMES = frozenset({"con", "prn", "aux", "nul", *_DEVICES})
+"""Windows device names: never a definition file name, with or without an extension."""
+
+
+def check_reserved(name: str) -> str:
+    """Field validator body: refuse a Windows reserved device name (any letter case)."""
+    if name.lower() in RESERVED_NAMES:
+        raise ValueError(f"'{name}' is a reserved device name on Windows")
+    return name
+
 
 Action = Literal["allow", "ask", "deny"]
 NET_JUSTIFICATION = {  # --- I9: injected into `net: direct` tools (checked by tools/netstage.py)

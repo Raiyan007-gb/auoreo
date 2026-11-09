@@ -57,6 +57,7 @@ NAMED_KINDS = (
     "webhooks",
     "plugins",
     "policies",
+    "hosts",
 )
 
 
@@ -96,6 +97,7 @@ class Snapshot:
     webhooks: dict[str, Loaded] = field(default_factory=dict)
     plugins: dict[str, Loaded] = field(default_factory=dict)
     policies: dict[str, Loaded] = field(default_factory=dict)
+    hosts: dict[str, Loaded] = field(default_factory=dict)  # M7: runtime root only
     permission_layers: list[Loaded] = field(default_factory=list)  # low → high precedence
     variants: Loaded | None = None
     errors: list[LoadError] = field(default_factory=list)
@@ -267,6 +269,11 @@ class Harness:
     @property
     def policies(self) -> dict[str, Loaded]:
         return self._snap.policies
+
+    @property
+    def hosts(self) -> dict[str, Loaded]:
+        """SSH host inventory (`hosts/<name>.yaml`, runtime root only)."""
+        return self._snap.hosts
 
     @property
     def errors(self) -> list[LoadError]:

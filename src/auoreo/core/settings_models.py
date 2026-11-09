@@ -157,6 +157,10 @@ class SshEnvironment(BaseModel):
     known_hosts: Path | None = None
     """Required to connect: there is no host-key bypass (a mismatch fails closed)."""
     connect_timeout_s: float = Field(default=10.0, gt=0, le=120)
+    keepalive_interval_s: float | None = Field(default=None, ge=0, le=3600)
+    """M7: seconds between SSH keepalives (0 = off). Set in memory for `hosts/<name>.yaml`
+    hosts; None keeps the asyncssh default. A build without this field rejects a stored
+    `environment_ssh` that sets it, so do not persist it before a rollback is ruled out."""
 
 
 class NamedEnvironment(BaseModel):
