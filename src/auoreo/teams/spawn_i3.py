@@ -87,14 +87,14 @@ def register_usage(m: Member) -> None:
     )
 
 
-def member_extras(t: TeamsService, m: Member, manifest: Any) -> dict[str, Any]:
+def member_extras(t: TeamsService, m: Member, manifest: Any, cwd: Any = None) -> dict[str, Any]:
     """`team_members` metadata columns for a new child (spec §16.4)."""
     return {
         "subagent_id": m.subagent_id,
         "agent_type": m.agent,
         "model": m.model or getattr(manifest, "model", None),
         "color": color_for(m.name),
-        "cwd": str(t.s.cwd),
+        "cwd": str(cwd or t.s.cwd),  # audit only; the runtime reads `session.created`
     }
 
 

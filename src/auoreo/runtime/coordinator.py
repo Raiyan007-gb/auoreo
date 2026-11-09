@@ -18,6 +18,7 @@ from auoreo.core.permissions import PermissionEngine
 from auoreo.harness.manifests import WorkflowManifest
 from auoreo.memory.scrubber import sanitize_context
 from auoreo.runtime import commands
+from auoreo.runtime import cwd as session_cwd
 from auoreo.runtime.compaction_idle import IdleCompactor
 from auoreo.runtime.hooks import hooks_of
 from auoreo.runtime.inbox import InboxFull, InputKind, RunOptions, TurnRequest
@@ -28,6 +29,8 @@ from auoreo.runtime.workflow_loop import run_looping, step_input
 from auoreo.tools.context import restore_state
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from auoreo.core.services import Services
 
 log = logging.getLogger(__name__)
@@ -69,8 +72,13 @@ class SessionRunCoordinator:
             subagent=row.parent_id is not None,
         )
         restore_state(rt.state, rt.history)  # tool_search tools, plan, verify verdict, plan mode
+        await session_cwd.load(self.s, rt)  # --- M7 W4: validated per-session cwd (flag off: no-op)
         self._runtimes[session_id] = rt
         return rt
+
+    def cwd_for(self, session_id: str) -> Path:
+        """The workspace root of a loaded session (the server cwd for any other id)."""
+        return session_cwd.cwd_of(self._runtimes.get(session_id), self.s)
 
     def engine_for(self, session_id: str) -> PermissionEngine | None:
         rt = self._runtimes.get(session_id)
@@ -179,13 +187,17 @@ class SessionRunCoordinator:
             await hooks.run(
                 "SessionStart",
                 session_id=rt.session_id,
-                payload={"agent": agent, "workflow": rt.workflow, "cwd": str(self.s.cwd)},
+                payload={"agent": agent, "workflow": rt.workflow, "cwd": str(session_cwd.cwd_of(rt, self.s))},
                 match_key=agent,
             )
         except Exception:
             log.exception("SessionStart hooks failed")
 
     async def _run_request(self, rt: SessionRuntime, req: TurnRequest) -> TurnResult:
+        if rt.cwd_error:  # --- M7 W4: fail closed, never run in the parent checkout instead
+            error = {"code": "CONFIG", "message": rt.cwd_error}
+            await self.s.emit(rt.session_id, "run.failed", {"run_id": req.run_id, **error})
+            return TurnResult(req.run_id, "failed", "", error)
         await self._session_start(rt, req.agent or rt.agent)
         wf_name = req.workflow or rt.workflow
         wf = self.s.harness.workflows.get(wf_name)

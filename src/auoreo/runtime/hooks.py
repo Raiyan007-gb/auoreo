@@ -277,7 +277,7 @@ class HookRunner:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(self.s.cwd),
+                cwd=str(self.s.coordinator.cwd_for(session_id)),  # M7 W4; scripts resolve globally
                 env=env,
             )
         except OSError as exc:

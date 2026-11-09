@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from auoreo.runtime.compaction_plan import tool_calls_in
+from auoreo.runtime.cwd import cwd_of
 from auoreo.runtime.hooks import hooks_of
 
 if TYPE_CHECKING:
@@ -82,7 +83,12 @@ def _resolve(cwd: Path, raw: str) -> Path | None:
     return path
 
 
-def restore_files(services: Services, middle: list[dict[str, Any]], tail: list[dict[str, Any]]) -> list[str]:
+def restore_files(
+    services: Services,
+    middle: list[dict[str, Any]],
+    tail: list[dict[str, Any]],
+    rt: SessionRuntime | None = None,
+) -> list[str]:
     cfg = services.settings.compaction
     if cfg.restore_files <= 0:
         return []
@@ -90,7 +96,7 @@ def restore_files(services: Services, middle: list[dict[str, Any]], tail: list[d
     blocks: list[str] = []
     used = 0
     for raw in reversed([p for p in _paths(tool_calls_in(middle)) if p not in shown]):  # newest first
-        path = _resolve(services.cwd, raw)
+        path = _resolve(cwd_of(rt, services), raw)
         if path is None:
             continue
         if len(blocks) >= cfg.restore_files:
@@ -146,7 +152,7 @@ async def session_metadata(services: Services, rt: SessionRuntime) -> str:
         "agent": rt.agent,
         "workflow": rt.workflow,
         "model": rt.model,
-        "cwd": str(services.cwd),
+        "cwd": str(cwd_of(rt, services)),
     }
     text = "\n".join(f"{k}: {v}" for k, v in meta.items() if v not in (None, ""))
     return f"<session-metadata>\n{text[: services.settings.compaction.metadata_chars]}\n</session-metadata>"
@@ -159,7 +165,7 @@ async def restore_block(
     parts: list[str] = []
     try:
         parts.append(await session_metadata(services, rt))
-        parts += restore_files(services, middle, tail)
+        parts += restore_files(services, middle, tail, rt)
         parts += restore_skills(services, middle, tail)
         parts += restore_mode(rt)
     except Exception:
@@ -178,7 +184,7 @@ async def rerun_session_start(services: Services, rt: SessionRuntime, compaction
     payload = {
         "agent": rt.agent,
         "workflow": rt.workflow,
-        "cwd": str(services.cwd),
+        "cwd": str(cwd_of(rt, services)),
         "source": "compact",
         "compaction_id": compaction_id,
     }

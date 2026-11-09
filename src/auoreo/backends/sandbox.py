@@ -89,13 +89,18 @@ class ExecSpec:
     under bwrap/none, a port-scoped seatbelt rule; docker gets no network (it cannot reach
     the host loopback). Without a port, `proxy` runs with no network at all."""
 
+    git_allow: list[Path] = field(default_factory=list)
+    """M7 W4: git metadata of a worktree session (engine-computed, see `runtime/cwd.git_allow`).
+    These `writable` mounts are exempt from the `danger-full-access` rule and always audited."""
+
     def outside_cwd(self) -> list[Path]:
         """Extra mounts that are not inside `cwd` (they need `danger-full-access`)."""
         root = self.cwd.resolve()
+        exempt = {p.resolve() for p in self.git_allow}
         out: list[Path] = []
         for p in [*self.readable, *self.writable]:
             rp = p.resolve()
-            if rp != root and root not in rp.parents:
+            if rp != root and root not in rp.parents and rp not in exempt:
                 out.append(rp)
         return out
 
@@ -152,6 +157,9 @@ class SandboxBackend(ABC):
 
     async def check_mounts(self, spec: ExecSpec) -> list[Path]:
         """Validate host mounts beyond `cwd`; audit them. Raises `SandboxError`."""
+        if spec.git_allow:
+            mounts = [str(p) for p in spec.git_allow]
+            await self._audit("sandbox.mount", {"backend": self.name, "args": mounts, "why": "git_allow"})
         extra = spec.outside_cwd()
         if not extra:
             return []

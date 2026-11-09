@@ -10,6 +10,10 @@ gc: worktrees registered under the worktree root that are clean and either merge
 main checkout's HEAD (or `origin/HEAD`) or untouched for `stale_days` are removed; missing
 folders are pruned; unregistered folders under the root are orphans. Dirty worktrees are
 never removed without `force`.
+
+M7 W4 (`m7.orch.worktrees`): `task_worktree` is the orchestrator's entry (delegate_task, the
+kanban dispatcher): no network, no `gh`, base = the server checkout's `HEAD`, never a branch
+reset, one `git worktree add` at a time per repository, a cap and a Windows path-length guard.
 """
 
 from __future__ import annotations
@@ -18,7 +22,9 @@ import asyncio
 import json
 import re
 import shutil
+import sys
 import time
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -77,6 +83,8 @@ async def new_feature(
     base: str | None = None,
     fetch: bool = True,
     force: bool = False,
+    check_pr: bool = True,
+    reset: bool = True,
 ) -> NewFeature:
     if not SLUG_RE.fullmatch(slug):
         raise WorktreeError(f"invalid slug '{slug}' (lowercase [a-z0-9._-], '/'-separated)")
@@ -86,7 +94,9 @@ async def new_feature(
     if (dest / ".git").exists():
         return NewFeature(dest, branch, base or "", resumed=True, notes=["resumed existing worktree"])
     notes: list[str] = []
-    if shutil.which("gh") is None:
+    if not check_pr:
+        pass
+    elif shutil.which("gh") is None:
         notes.append("gh not found: skipped the open-PR scope check")
     elif (url := await _open_pr(top, branch)) and not force:
         raise WorktreeError(f"an open PR already uses {branch}: {url} (pass --force to continue anyway)")
@@ -99,7 +109,15 @@ async def new_feature(
             "origin/HEAD" if await _ok("rev-parse", "--verify", "--quiet", "origin/HEAD", cwd=top) else "HEAD"
         )
     _prepare_root(root)
-    await _git("worktree", "add", "--quiet", "-B", branch, str(dest), base, cwd=top)
+    if reset:
+        await _git("worktree", "add", "--quiet", "-B", branch, str(dest), base, cwd=top)
+    elif await _ok("rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", cwd=top):
+        # never `-B`: an existing branch is checked out as it is (git refuses one that is
+        # already checked out in another worktree), so a re-dispatched task keeps its commits
+        await _git("worktree", "add", "--quiet", str(dest), branch, cwd=top)
+        return NewFeature(dest, branch, base, resumed=True, notes=[*notes, "resumed existing branch"])
+    else:
+        await _git("worktree", "add", "--quiet", "-b", branch, str(dest), base, cwd=top)
     return NewFeature(dest, branch, base, notes=notes)
 
 
@@ -140,8 +158,15 @@ def _age_s(path: Path, commit_ts: str | None) -> float:
 
 
 async def plan_gc(
-    cwd: Path, root: Path | None, stale_days: float, *, force: bool = False
+    cwd: Path,
+    root: Path | None,
+    stale_days: float,
+    *,
+    force: bool = False,
+    protected: Collection[Path] = (),
 ) -> tuple[Path, list[GcItem]]:
+    """`protected`: worktrees of claimed or running tasks; they are kept whatever their state."""
+    keep = {_resolved(p) for p in protected}
     top = await toplevel(cwd)
     root = (root or top / ".auoreo" / "worktrees").resolve()
     listing = await _ok("worktree", "list", "--porcelain", cwd=top) or ""
@@ -152,6 +177,9 @@ async def plan_gc(
         if root not in path.parents:
             continue
         registered.add(path)
+        if path in keep:
+            items.append(GcItem(path, "task claimed or running", "keep"))
+            continue
         if not path.exists():
             items.append(GcItem(path, "folder missing", "prune"))
             continue
@@ -184,3 +212,75 @@ async def apply_gc(top: Path, items: list[GcItem], registered_force: bool = Fals
             shutil.rmtree(i.path)
             continue
         await _git("worktree", "remove", *(["--force"] if registered_force else []), str(i.path), cwd=top)
+
+
+# ------------------------------------------------------------------ M7 W4: task worktrees
+WINDOWS_RESERVED = frozenset(
+    {"con", "prn", "aux", "nul", *(f"{d}{n}" for d in ("com", "lpt") for n in range(1, 10))}
+)
+MAX_SLUG = 48
+MAX_WINDOWS_PATH = 200
+_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def task_slug(raw: str) -> str:
+    """A flat slug that is safe as a folder on every OS and as a git ref: lowercase
+    `[a-z0-9._-]`, no path separators or `..`, no leading/trailing dot or dash, no `.lock`
+    suffix, and never a Windows reserved device name (`con`, `nul`, `com1`…, with or without
+    an extension)."""
+    slug = re.sub(r"[^a-z0-9._-]+", "-", raw.lower())
+    slug = re.sub(r"\.{2,}", ".", slug)[:MAX_SLUG].strip(".-")
+    slug = slug.removesuffix(".lock").strip(".-")
+    if not slug:
+        raise WorktreeError(f"'{raw}' has no characters usable in a worktree name")
+    if slug.split(".", 1)[0] in WINDOWS_RESERVED:
+        slug = f"t-{slug}"
+    return slug
+
+
+def check_path_length(dest: Path, *, windows: bool | None = None) -> None:
+    windows = sys.platform == "win32" if windows is None else windows
+    if windows and len(str(dest)) >= MAX_WINDOWS_PATH:
+        raise WorktreeError(
+            f"worktree path is {len(str(dest))} characters; Windows needs it under {MAX_WINDOWS_PATH} "
+            "(set m7.orch.worktree_root to a shorter folder)"
+        )
+
+
+async def _live(top: Path, root: Path) -> int:
+    listing = await _ok("worktree", "list", "--porcelain", cwd=top) or ""
+    base = _resolved(root)
+    return sum(1 for e in _entries(listing) if base in _resolved(Path(e["worktree"])).parents)
+
+
+async def task_worktree(cwd: Path, root: Path, slug: str, *, max_worktrees: int = 8) -> NewFeature:
+    """Create (or resume) the worktree of one task on branch `auoreo/<slug>`."""
+    slug = task_slug(slug)
+    top = await toplevel(cwd)
+    async with _LOCKS.setdefault(str(top), asyncio.Lock()):
+        dest = root / slug
+        if not (dest / ".git").exists():
+            check_path_length(dest)
+            if await _live(top, root) >= max_worktrees:
+                raise WorktreeError(
+                    f"{max_worktrees} worktrees are live under {root} (m7.orch.max_worktrees); "
+                    "merge or remove some (`auoreo worktree gc`)"
+                )
+        head = await _ok("rev-parse", "--short", "HEAD", cwd=top)
+        if not head:
+            raise WorktreeError(f"{top} has no commit to branch from")
+        out = await new_feature(top, slug, root, base="HEAD", fetch=False, check_pr=False, reset=False)
+        out.base = out.base if out.base not in ("", "HEAD") else head
+        return out
+
+
+async def discard_worktree(cwd: Path, tree: NewFeature) -> None:
+    """Undo a worktree created by a spawn that then failed. A resumed one is left alone; the
+    branch goes only when it has no commit of its own."""
+    if tree.resumed:
+        return
+    top = await toplevel(cwd)
+    async with _LOCKS.setdefault(str(top), asyncio.Lock()):
+        await _ok("worktree", "remove", "--force", str(tree.path), cwd=top)
+        if await _ok("merge-base", "--is-ancestor", tree.branch, "HEAD", cwd=top) is not None:
+            await _ok("branch", "-D", tree.branch, cwd=top)
