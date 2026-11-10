@@ -18,6 +18,21 @@ config_schema:
     agent:
       type: string
       description: Agent for Telegram sessions (default agent when unset).
+    routes:
+      type: array
+      maxItems: 32
+      description: >-
+        Ordered rules that pick the agent for a message (first match wins; no match = `agent`).
+        `match` is a filter over {text, user, chat_id, name}; `restrict: owners` (default) needs
+        the chat in `owners`, `restrict: chat` lets any paired chat use the route.
+      items:
+        type: object
+        properties:
+          match: {type: object}
+          agent: {type: string, minLength: 1}
+          restrict: {type: string, enum: [owners, chat], default: owners}
+        required: [match, agent]
+        additionalProperties: false
     poll_timeout_s:
       type: integer
       minimum: 1

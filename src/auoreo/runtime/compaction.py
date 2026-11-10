@@ -32,6 +32,7 @@ from auoreo.core.db import MessageArchiveRow, MessageRow
 from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import LLMRequest
 from auoreo.harness.manifests import HookEvent
+from auoreo.memory.recall import memory_for_agent_name
 from auoreo.runtime.compaction_extras import assemble
 from auoreo.runtime.compaction_i4 import PostCompaction, hygiene_due, meter, skill_prune_plan
 from auoreo.runtime.compaction_plan import (
@@ -410,7 +411,9 @@ class CompactionService:
             self.committing.discard(rt.session_id)
         if self.s.memory is not None:
             try:
-                await self.s.memory.record_message(rt.session_id, "compaction", str(msg["content"]))
+                memory = await memory_for_agent_name(self.s, rt.agent)  # --- M7: the agent's tenant
+                if memory is not None:
+                    await memory.record_message(rt.session_id, "compaction", str(msg["content"]))
             except Exception:  # indexing must never undo a committed compaction
                 log.exception("failed to index compaction summary")
         return replace(meta, pre_tokens=pre, post_tokens=post, archived=end - start)

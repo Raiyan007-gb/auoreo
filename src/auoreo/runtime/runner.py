@@ -28,6 +28,7 @@ from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
+from auoreo.memory.recall import memory_for, recall_block
 from auoreo.policy.bandit import BanditPolicy, Choice
 from auoreo.runtime import request_layout as layout
 from auoreo.runtime.attachments import user_message  # --- I5
@@ -37,7 +38,7 @@ from auoreo.runtime.empty import EMPTY_SENTINEL
 from auoreo.runtime.guards import LoopGuards
 from auoreo.runtime.inbox import Inbox, RunOptions
 from auoreo.runtime.liveness import LivenessWatchdog
-from auoreo.runtime.nudges import MemoryNudge, recall_query
+from auoreo.runtime.nudges import MemoryNudge
 from auoreo.runtime.recovery import model_step
 from auoreo.runtime.run_overrides import apply_run_options  # --- G5a
 from auoreo.runtime.session_sources import apply_session_sources, inject_mentions
@@ -208,17 +209,14 @@ class AgentRunner:
         await self.s.emit(sid, "message.created", {"run_id": run_id, "role": "user", "content": text})
         turn_msg = rt.history[-1]  # located by identity each step: compaction moves indices
         await inject_mentions(self, rt, spec, text, run_id)  # `@skill` loads that skill for the turn
-        if self.s.memory is not None:
-            await self.s.memory.record_message(sid, "user", text)
-
-        memory_block = ""
-        if self.s.memory is not None and spec.agent.manifest.memory and not options.skip_memory:
-            try:
-                top_k = (choice.arm.top_k if choice else None) or 8  # bandit arm may tune recall depth
-                query = await recall_query(self.s, rt, text)  # --- G2b: opt-in rewrite, fail-open
-                memory_block = await self.s.memory.context_block(query, limit=top_k, session_id=sid)
-            except Exception:  # recall must never fail the turn
-                log.exception("memory recall failed")
+        memory = await memory_for(self.s, spec.agent.manifest)  # --- M7: the agent's tenant or `local`
+        if memory is not None:
+            await memory.record_message(sid, "user", text)
+        top_k = (choice.arm.top_k if choice else None) or 8  # bandit arm may tune recall depth
+        skip = options.skip_memory  # recall never fails the turn (memory/recall.py)
+        memory_block = (
+            "" if skip else await recall_block(self.s, memory, rt, spec.agent.manifest, text, top_k)
+        )
         st = self.s.settings
         context = render_context(
             spec, self.s.cwd, engine.mode, memory_block, st.locale or "", tone_of(text, st), st
@@ -245,7 +243,7 @@ class AgentRunner:
             interactive=rt.interactive,
             question=question,
             emit=emit,
-            services={"memory": self.s.memory, "services": self.s, "engine": engine, "spec": spec}
+            services={"memory": memory, "services": self.s, "engine": engine, "spec": spec}
             | {"context": context, "options": options, "turn_msg": turn_msg},  # I3: exact fork seed
         )
         with (
@@ -256,8 +254,8 @@ class AgentRunner:
             span.set("status", result.status)
             obs.count("run_completed_total", status=result.status)
         await self.policy.finish(sid, run_id, result.status)
-        if self.s.memory is not None and result.text:
-            await self.s.memory.record_message(sid, "assistant", result.text)
+        if memory is not None and result.text:
+            await memory.record_message(sid, "assistant", result.text)
         await self.s.set_session_status(sid, "idle")
         await self.s.emit(sid, "turn.summary", {"run_id": run_id, **turn.budget.summary(result.status)})
         extra: dict[str, Any] = {"error": result.error} if result.error else {}

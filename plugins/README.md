@@ -41,6 +41,42 @@ entry point. Plugins never receive secrets they did not declare in `consumes`.
 | `reply_to` | Connector-specific reply target (`message_id`, `thread_id`, `channel_id`, `interaction_token`, …) |
 | `media` | Voice notes from a `MEDIA:` envelope in the reply: `[{path, mime, duration_s, kind}]` — Opus `.ogg` for telegram/discord/matrix/feishu/whatsapp/signal, MP3 elsewhere, ≤ 16 MiB, files under `<home>/sessions/` only (`auoreo.voice.notes`) |
 | `stream` | `"partial"`: a streamed preview of a reply still being written (only with `plugins.<name>.stream: true`); the final text follows as a normal send |
+| `citations` | With `m7.agents.citations` on: `[{tool_call_id, url, title}]`, the pages the turn fetched (`web_fetch`) plus the `web_search` hits the answer names, at most 8. `title` may be null and is untrusted: render it as plain text. Telegram appends a "Sources:" list; a provider that ignores the key loses nothing |
+
+## Connector routes (M7)
+
+A connector whose `config_schema` declares `routes` (today: Telegram) can send one chat to
+several agents. Rules are tried in order and the first match wins; no match means the
+connector's `agent` (or the default agent), exactly as without `routes`.
+
+```bash
+auoreo plugin set telegram owners '["123456"]'
+auoreo plugin set telegram routes '[
+  {"match": {"field": "text", "regex": "^/ops\\b"}, "agent": "ops"},
+  {"match": {"field": "text", "regex": "\\?$"}, "agent": "researcher", "restrict": "chat"}
+]'
+```
+
+- `match` is the webhook filter shape (`equals`, `contains`, `in`, `regex`, `exists`, and
+  `all` / `any` / `not`) over `{text, user, chat_id, name}`. `regex` is Python `re.search`:
+  case-sensitive, unanchored unless the pattern anchors, at most 200 characters, and it sees
+  the first 1000 characters of the message. `in_file` is not available. Python's `re` has no
+  timeout, so do not write patterns with nested repetition.
+- `restrict: owners` (the default) needs the chat in the connector's `owners` list and never
+  matches while `owners` is unset or empty; `restrict: chat` lets any paired chat use the route.
+  Pairing allowlists chats, not people: pair private chats for agents with powerful tools.
+  `user` is a display name the sender chooses, so do not use it to authorize anything.
+- A routed agent has its own session per chat (`<chat_id>:<agent>` in
+  `<home>/plugins/<name>/sessions.json`), so it does not see what the chat told another agent.
+  Its replies start with `[<agent>] ` and approval prompts name the agent.
+- Saving is refused for a regex that does not compile, `in_file`, or an agent that does not
+  exist. If the stored config goes stale anyway, the bad route is skipped and the message
+  falls through to the next route or the fixed agent.
+- Every decision is an audit row `inbound.routed` (`reason`: `rule`, `default`,
+  `owners_only`, `invalid_route`, `unknown_agent`). `/approve`, `/deny` and `/pending` are
+  answered before routing.
+- Rollback: remove `routes` before running an older build (its schema rejects the key and
+  the plugin would stay off as `invalid_config`).
 
 
 ## Trust tiers (I6, spec §25.15)

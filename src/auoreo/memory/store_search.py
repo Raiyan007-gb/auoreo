@@ -31,6 +31,10 @@ _TABLES: dict[str, tuple[str, str, str, str]] = {
 }
 
 
+AGENT_NS = "agent:"
+"""M7: reserved namespace of per-agent tenants (`memory_tenant` on an agent manifest)."""
+
+
 @dataclass
 class Row:
     kind: str  # fact | chunk | transcript
@@ -210,9 +214,17 @@ class SearchMixin:
             for r in rows
         }
 
+    def transcript_tag(self) -> str:
+        """M7: `transcript` has no tenant column (and M7 adds none), so an `agent:<slug>` tenant
+        tags the `role` of its rows (`agent:<slug>|user`); `local` and team stores skip them."""
+        return f"{self.tenant}|" if self.tenant.startswith(AGENT_NS) else ""
+
     def search_transcript(self, query: str, limit: int, session_id: str | None) -> list[Row]:
         where = " AND b.session_id = ?" if session_id else ""
         extra: tuple[Any, ...] = (session_id,) if session_id else ()
+        tag = self.transcript_tag()
+        where += " AND substr(b.role, 1, ?) = ?" if tag else " AND substr(b.role, 1, ?) != ?"
+        extra += (len(tag), tag) if tag else (len(AGENT_NS), AGENT_NS)
         ids: list[int] = []
         if self.trigram and has_cjk(query):
             ids = self._cjk_rows("transcript", query, limit, where, extra)
@@ -234,10 +246,20 @@ class SearchMixin:
             ).fetchall()
         }
         return [
-            Row("transcript", i, found[i][1], found[i][2], -1.0, {"role": found[i][3]})
+            Row("transcript", i, found[i][1], found[i][2], -1.0, {"role": found[i][3][len(tag) :]})
             for i in ids
             if i in found
         ]
 
 
-__all__ = ["CJK", "STOPWORDS", "Row", "SearchMixin", "active", "cjk_terms", "fts_query", "has_cjk"]
+__all__ = [
+    "AGENT_NS",
+    "CJK",
+    "STOPWORDS",
+    "Row",
+    "SearchMixin",
+    "active",
+    "cjk_terms",
+    "fts_query",
+    "has_cjk",
+]

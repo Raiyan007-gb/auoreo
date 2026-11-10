@@ -17,9 +17,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from jsonschema import Draft202012Validator
-from jsonschema.exceptions import best_match
-
 from auoreo.core.secrets import child_env
 from auoreo.harness.manifests import PluginManifest
 from auoreo.plugins import install as inst
@@ -33,6 +30,8 @@ from auoreo.plugins.bridge import (
     tool_prefix,
     unregister_delivery,
 )
+from auoreo.plugins.config_check import ConfigError as ConfigError
+from auoreo.plugins.config_check import validate_config as validate_config
 from auoreo.plugins.connectors import InboundRouter, PairingStore, file_config
 from auoreo.plugins.protocol import RpcError, RpcPeer
 from auoreo.plugins.quarantine import is_quarantined  # --- H1b
@@ -48,19 +47,6 @@ log = logging.getLogger(__name__)
 MAX_RESTARTS_PER_HOUR = 5
 BACKOFF_MIN_S, BACKOFF_MAX_S = 1.0, 30.0
 WATCH_TICK_S = 1.0
-
-
-class ConfigError(ValueError):
-    pass
-
-
-def validate_config(manifest: PluginManifest, config: dict[str, Any]) -> None:
-    """Raise `ConfigError` naming the JSON pointer of the first (best) schema violation."""
-    Draft202012Validator.check_schema(manifest.config_schema)
-    err = best_match(Draft202012Validator(manifest.config_schema).iter_errors(config))
-    if err is not None:
-        pointer = "/" + "/".join(str(p) for p in err.absolute_path)
-        raise ConfigError(f"settings plugins.{manifest.name} invalid at {pointer}: {err.message}")
 
 
 @dataclass
@@ -168,7 +154,7 @@ class PluginHost:
         st.error = None
         st.config = self.config_for(st.name)
         try:
-            validate_config(st.manifest, st.config)
+            validate_config(st.manifest, st.config, set(self.s.harness.agents))
         except Exception as exc:  # fail loud: the plugin stays off until the config is fixed
             st.status, st.error = "invalid_config", str(exc)
             log.error("plugin %s disabled: %s", st.name, exc)

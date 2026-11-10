@@ -29,6 +29,13 @@ def test_every_m7_feature_is_off_by_default(home: Path) -> None:
     assert m7.token.cache_layout == "legacy" and m7.token.context_carrier == "splice"
 
 
+def test_connector_routing_has_no_flag_and_a_stored_one_is_ignored(home: Path) -> None:
+    """Routing is opt-in by `routes` in a connector's config (design m7-agents-bots, question 4)."""
+    st = Settings(home=home, m7={"agents": {"connector_routes": True, "citations": True}})
+    assert not hasattr(st.m7.agents, "connector_routes") and st.m7.agents.citations is True
+    assert set(type(st.m7.agents).model_fields) == {"memory_tenants", "citations"}
+
+
 def test_unknown_keys_are_ignored_so_a_rollback_never_breaks_startup(home: Path) -> None:
     st = Settings(home=home, m7={"token": {"telemetry": True, "from_a_newer_build": 1}, "future": {}})
     assert st.m7.token.telemetry is True

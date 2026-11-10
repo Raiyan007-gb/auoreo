@@ -9,6 +9,7 @@
 - Decay: a fact with `half_life_days` ranks × 0.5^(age/half_life); `expires_at` ends it.
 - Contradictions: top-500 FTS candidates, flagged when entity overlap ≥ 0.3 and the
   polarity/number score ≥ 0.3 (never overwritten).
+- M7: `agent:<slug>` tenants for agents that declare `memory_tenant` (`for_agent`).
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from auoreo.memory import ledger
 from auoreo.memory.contradiction import is_contradiction, top_terms
 from auoreo.memory.files import read_capped, truncate
 from auoreo.memory.store import MemoryStore, Row
+from auoreo.memory.store_search import AGENT_NS
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -157,7 +159,8 @@ class I4ServiceMixin:
     async def authorize_tenant(self, requested: str, *, session_id: str | None, tool: str) -> None:
         """Explicit tenant reads: the local tenant or the session's own team tenant only."""
         allowed = {self.store.tenant, await self.tenant_for_session(session_id)}
-        if requested in allowed:
+        own = requested == self.store.tenant or not requested.startswith(AGENT_NS)  # M7: never cross-agent
+        if requested in allowed and own:
             return
         await self.s.audit.record(
             actor="agent",
@@ -180,12 +183,32 @@ class I4ServiceMixin:
             cache[tenant_id] = factory(self.s, store)
         return cache[tenant_id]
 
+    async def for_agent(self, manifest: Any) -> Any:
+        """M7: the service for an agent's `memory_tenant` (`agent:<slug>`, provisioned on first
+        use), or `self` when `m7.agents.memory_tenants` is off or the agent names none."""
+        slug = getattr(manifest, "memory_tenant", None)
+        if not slug or not self.s.settings.m7.agents.memory_tenants:
+            return self
+        tenant_id = f"{AGENT_NS}{slug}"
+        cache: dict[str, Any] = self.__dict__.setdefault("_tenant_services", {})
+        if tenant_id not in cache:
+            await self.provision_tenant(tenant_id, kind="agent")
+            # opened in the worker thread: no sqlite connection is made on the event loop
+            store = await self._run(MemoryStore, self.store.path, self.store.dims, tenant_id)
+            if tenant_id in cache:  # a concurrent first turn won the race
+                await self._run(store.close)
+            else:
+                factory: Any = type(self)
+                cache[tenant_id] = factory(self.s, store)
+        return cache[tenant_id]
+
     def close_tenants(self) -> None:
         for svc in self.__dict__.pop("_tenant_services", {}).values():
             svc.close()
 
 
 __all__ = [
+    "AGENT_NS",
     "MEMORY_TAG",
     "SCOPES",
     "TENANT_DENY",

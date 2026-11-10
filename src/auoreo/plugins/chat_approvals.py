@@ -42,9 +42,23 @@ def is_owner(services: Services, plugin: str, chat_id: str) -> bool:
     return not isinstance(owners, list) or not owners or chat_id in {str(o) for o in owners}
 
 
-def describe(p: Pending) -> str:
+def describe(p: Pending, agent: str = "") -> str:
+    """`agent` (M7): named when the connector routes one chat to several agents."""
     pattern = p.pattern if len(p.pattern) <= 200 else p.pattern[:200] + "…"
-    return f"[{p.request_id[:8]}] {p.tool} ({p.permission}): {pattern}"
+    who = f"{agent}: " if agent else ""
+    return f"[{p.request_id[:8]}] {who}{p.tool} ({p.permission}): {pattern}"
+
+
+def _agents(services: Services, plugin: str) -> dict[str, str]:
+    """`session id → agent` when the connector has `routes`, else {} (prompts stay as they were)."""
+    home = services.settings.home
+    cfg = {**services.settings.plugins.get(plugin, {}), **file_config(home, plugin)}
+    if not cfg.get("routes"):
+        return {}
+    from auoreo.plugins.routes import session_agents
+
+    fixed = str(cfg.get("agent") or services.settings.agent)
+    return session_agents(home / "plugins" / plugin / "sessions.json", fixed)
 
 
 def _targets(pending: list[Pending], words: list[str]) -> tuple[list[Pending], list[str]]:
@@ -73,10 +87,12 @@ async def handle_command(services: Services, plugin: str, chat_id: str, text: st
         )
         return "Only a paired owner of this AUOREO server can answer approvals."
     pending = services.approvals.pending()
+    names = _agents(services, plugin)
     if cmd == "/pending":
         if not pending:
             return "No approvals are pending."
-        return "Pending approvals (oldest first):\n" + "\n".join(describe(p) for p in pending[:20])
+        lines = [describe(p, names.get(p.session_id, "")) for p in pending[:20]]
+        return "Pending approvals (oldest first):\n" + "\n".join(lines)
     if not pending:
         return "No approvals are pending."
     chosen, rest = _targets(pending, words[1:])
@@ -86,7 +102,7 @@ async def handle_command(services: Services, plugin: str, chat_id: str, text: st
     for p in chosen:
         engine_for = services.coordinator.engine_for
         if await reply_with_grants(services.approvals, engine_for, p.request_id, reply, reason):
-            done.append(describe(p))
+            done.append(describe(p, names.get(p.session_id, "")))
         await services.audit.record(
             actor=actor,
             action="approval.chat",
@@ -102,8 +118,11 @@ async def handle_command(services: Services, plugin: str, chat_id: str, text: st
 class ApprovalNotifier:
     """Push each new approval request of `session_id` to the chat while a run is in flight."""
 
-    def __init__(self, services: Services, session_id: str, chat_id: str, send: Send) -> None:
+    def __init__(
+        self, services: Services, session_id: str, chat_id: str, send: Send, *, agent: str = ""
+    ) -> None:
         self.s = services
+        self.agent = agent
         self.session_id = session_id
         self.chat_id = chat_id
         self.send = send
@@ -127,7 +146,7 @@ class ApprovalNotifier:
                     continue
                 self.seen.add(p.request_id)
                 text = (
-                    f"Approval needed {describe(p)}\n"
+                    f"Approval needed {describe(p, self.agent)}\n"
                     f"Reply /approve {p.request_id[:8]} or /deny {p.request_id[:8]} [reason]."
                 )
                 with contextlib.suppress(Exception):
