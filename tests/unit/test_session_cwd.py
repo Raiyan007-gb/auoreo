@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -218,6 +219,39 @@ async def test_bash_runs_in_the_worktree_with_a_git_allowance(
     gateway.route("PARENTSH", Scripted(tool_calls=[("bash", {"command": "true"})]), Scripted(text="k"))
     await turn(services, parent.id, "PARENTSH run")
     assert fake.calls[-1].cwd == services.cwd and fake.calls[-1].git_allow == []
+
+
+async def test_the_git_allowance_ignores_what_the_worker_wrote_into_its_worktree(
+    services: Services, workdir: Path
+) -> None:
+    """`<worktree>/.git` is a file inside the worker's cwd, so the worker can rewrite it. The
+    allowance comes from the server repository's own records: pointing `.git` at the parent's
+    git directory (or replacing it with a repository) never makes that directory writable."""
+    git_init(workdir)
+    flags_on(services)
+    tree = await _tree(services)
+    other = await _tree(services, "job-2")
+    common = workdir / ".git"
+    admin = common / "worktrees" / tree.name
+    ctx = SimpleNamespace(services={"services": services}, cwd=tree)
+    honest = {p.resolve() for p in await session_cwd.git_allow(ctx)}
+    assert admin.resolve() in honest and (common / "objects").resolve() in honest
+    assert common.resolve() not in honest and (common / "worktrees" / other.name).resolve() not in honest
+
+    (tree / ".git").write_text(f"gitdir: {common}\n", encoding="utf-8")
+    session_cwd._GIT_ALLOW.clear()  # a restarted server computes it again
+    assert {p.resolve() for p in await session_cwd.git_allow(ctx)} == honest
+
+    (tree / ".git").unlink()
+    git(tree, "init", "--quiet")
+    session_cwd._GIT_ALLOW.clear()
+    assert {p.resolve() for p in await session_cwd.git_allow(ctx)} == honest
+
+    # a worker that points its own admin record at a sibling gains nothing: both fail closed
+    (admin / "gitdir").write_text(f"{other / '.git'}\n", encoding="utf-8")
+    session_cwd._GIT_ALLOW.clear()
+    assert await session_cwd.git_allow(ctx) == []
+    assert await session_cwd.git_allow(SimpleNamespace(services=ctx.services, cwd=other)) == []
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="needs bash")
