@@ -24,6 +24,7 @@ from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import Finish, LLMRequest, TextDelta, Usage, tool_schema
 from auoreo.runtime.compaction_extras import prior_checkpoint
 from auoreo.runtime.compaction_plan import drop_oldest_group, render_transcript, text_only
+from auoreo.runtime.request_layout import wire
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -109,7 +110,7 @@ class Summarizer:
             instruction = f"{template}\n\n{SCOPE_NOTE}\n\n{WRITE_NOW}"
             messages = (
                 {"role": "system", "content": system},
-                *(text_only(m) for m in head),
+                *(text_only(wire(m)) for m in head),  # M7: a persisted context block as it was sent
                 transcript,
                 {"role": "user", "content": instruction},
             )

@@ -1,10 +1,24 @@
 """Request layout for the agent loop: what one model step sends, and how stable its prefix is.
 
-`build()` freezes the request of a step: the system prompt, the session history with this
+`build()` freezes the request of a step: the system prompt, the session history with each
 turn's `<context>` block on its user message, an optional request-only note, then the
 request-time repairs (`runtime/sequence.py`, `runtime/multimodal.py`).
 
 M7 W1b (`docs/designs/m7-token-economy.md`), off by default:
+
+* `m7.token.context_carrier`: where the per-turn context block (date, memory recall, permission
+  reminder, locale, tone, exposed variables) lives. `splice` adds it to the current turn's user
+  message at request time only; the next turn sends that message without it, so the cached
+  prefix breaks there. `persisted` stores the rendered block WITH the turn's user message, under
+  the message-level key `CONTEXT_KEY`, and `wire()` renders it the same way in every later
+  request, so the prefix only grows. The key is structural: `content` stays exactly what the user
+  sent, so everything that reads `content` (transcripts, exports, fork seeds, the messages API,
+  memory) is unaffected, and the key never reaches a provider (`wire` drops it). Trade-offs: each
+  turn keeps its block until compaction (more prompt tokens, read from the cache), old blocks go
+  stale (the date or reminder of that turn), and recalled memories and exposed variable values
+  are copied into `messages` rows and JSON exports, outside memory deletion and variable
+  rotation. Rollback: a build without this module ignores the key when rendering but sends it to
+  the provider as an unknown message field; switch back to `splice` and compact first.
 
 * `m7.token.telemetry`: `PrefixTracker` compares the hash chain of each main-turn request
   (`gateway/caching.py`, carried back on `Usage.cache`) with the previous one of the session and
@@ -14,10 +28,15 @@ M7 W1b (`docs/designs/m7-token-economy.md`), off by default:
 
 from __future__ import annotations
 
+import logging
 from collections import OrderedDict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from sqlalchemy import select
+
+from auoreo.core.db import MessageRow
 from auoreo.gateway.caching import CacheInfo, divergence
 from auoreo.gateway.types import LLMRequest, tool_schema
 from auoreo.runtime.compaction_plan import turn_index
@@ -31,7 +50,73 @@ if TYPE_CHECKING:
     from auoreo.runtime.runner import AgentRunner, SessionRuntime
     from auoreo.tools.context import SessionState
 
+log = logging.getLogger(__name__)
+
 TRACKED_SESSIONS = 512
+CONTEXT_KEY = "auoreo_context"
+"""Message-level key holding a turn's rendered context block (`context_carrier = persisted`)."""
+CARRY_SCAN = 64  # rows searched (newest first) for the turn's message when attaching its block
+
+
+# ------------------------------------------------------------------ context carrier
+def has_context(message: dict[str, Any]) -> bool:
+    """Whether `message` carries a persisted context block."""
+    return CONTEXT_KEY in message
+
+
+def strip_context(message: dict[str, Any]) -> dict[str, Any]:
+    """`message` without its context block (the same object when it has none)."""
+    if CONTEXT_KEY not in message:
+        return message
+    return {k: v for k, v in message.items() if k != CONTEXT_KEY}
+
+
+def plain(messages: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Messages for a reader outside the model loop (share link, export, events): no blocks."""
+    return [strip_context(m) for m in messages]
+
+
+def _block(context: str) -> str:
+    return f"<context>\n{context}\n</context>"
+
+
+def wire(message: dict[str, Any]) -> dict[str, Any]:
+    """`message` as it is sent: the persisted block rendered in front of the content and the
+    key removed (the same object when it has none). Deterministic, so prompt-cache safe."""
+    if CONTEXT_KEY not in message:
+        return message
+    out = strip_context(message)
+    context, content = message[CONTEXT_KEY], out.get("content")
+    if not context:
+        return out
+    if isinstance(content, list):
+        out["content"] = [{"type": "text", "text": _block(context)}, *content]
+    else:
+        out["content"] = f"{_block(context)}\n\n{content or ''}"
+    return out
+
+
+async def carry(runner: AgentRunner, rt: SessionRuntime, turn_msg: dict[str, Any], context: str) -> None:
+    """`persisted` carrier: attach the turn's rendered block to its user message, in the live
+    history (in place: the turn locates its message by identity) and in its `messages` row.
+    Runs after memory recall and context rendering, which read the history without the block."""
+    if not context or runner.s.settings.m7.token.context_carrier != "persisted":
+        return
+    before = dict(turn_msg)
+    turn_msg[CONTEXT_KEY] = context
+    async with runner.s.db.session() as s:
+        q = (
+            select(MessageRow)
+            .where(MessageRow.session_id == rt.session_id)
+            .order_by(MessageRow.idx.desc())
+            .limit(CARRY_SCAN)
+        )
+        for row in (await s.execute(q)).scalars():
+            if row.message == before:
+                row.message = dict(turn_msg)
+                await s.commit()
+                return
+    log.warning("context block of session %s not persisted: its message row was not found", rt.session_id)
 
 
 def build(
@@ -49,7 +134,9 @@ def build(
     msgs: list[dict[str, Any]] = [{"role": "system", "content": spec.system_prompt}]
     turn_user_idx = turn_index(rt.history, turn_msg)
     for i, m in enumerate(rt.history):
-        if i == turn_user_idx and context:
+        if CONTEXT_KEY in m:  # a persisted block (this turn's or an earlier one)
+            m = wire(m)
+        elif i == turn_user_idx and context:
             m = {**m, "content": f"<context>\n{context}\n</context>\n\n{m['content']}"}
         msgs.append(m)
     if note:
@@ -164,4 +251,15 @@ def tool_counts(runner: AgentRunner, spec: AgentSpec, state: SessionState) -> di
     return {"deferred": len(spec.deferred) - loaded, "loaded": loaded}
 
 
-__all__ = ["PrefixTracker", "build", "cache_fields", "tool_counts"]
+__all__ = [
+    "CONTEXT_KEY",
+    "PrefixTracker",
+    "build",
+    "cache_fields",
+    "carry",
+    "has_context",
+    "plain",
+    "strip_context",
+    "tool_counts",
+    "wire",
+]

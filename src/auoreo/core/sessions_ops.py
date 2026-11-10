@@ -98,10 +98,12 @@ async def delete_session(svc: Services, session_id: str) -> None:
 
 
 async def export_session(svc: Services, session_id: str, fmt: str = "json") -> str:
+    from auoreo.runtime.request_layout import plain  # M7: persisted context blocks stay private
+
     row = await _require(svc, session_id)
     async with svc.db.session() as s:
         q = select(MessageRow).where(MessageRow.session_id == session_id).order_by(MessageRow.idx)
-        messages = [dict(r.message) for r in (await s.execute(q)).scalars()]
+        messages = plain(dict(r.message) for r in (await s.execute(q)).scalars())
     exporters = {"json": _export_json, "md": _export_md}
     if fmt not in exporters:
         raise ValueError(f"unknown export format '{fmt}' (use json or md)")

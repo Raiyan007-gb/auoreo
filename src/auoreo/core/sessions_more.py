@@ -103,7 +103,9 @@ async def shared_view(svc: Services, token: str) -> dict[str, Any] | None:
     if session_id is None:
         return None
     row = await _require(svc, session_id)
-    messages = await svc.coordinator.runner.load_history(session_id)
+    from auoreo.runtime.request_layout import plain  # M7: persisted context blocks stay private
+
+    messages = plain(await svc.coordinator.runner.load_history(session_id))
     return {"session": session_info(row), "messages": redact_obj(messages, force=True)}
 
 
@@ -129,7 +131,9 @@ async def revert_session(svc: Services, session_id: str, to_idx: int) -> int:
         return 0
     svc.coordinator.forget(session_id)  # the next turn reloads the shortened history
     data: dict[str, Any] = {"to_idx": to_idx, "removed": len(cut)}
-    if len(json.dumps(cut, default=str)) <= REVERT_EVENT_CAP:
+    from auoreo.runtime.request_layout import plain  # M7: no context block in the event
+
+    if len(json.dumps(cut := plain(cut), default=str)) <= REVERT_EVENT_CAP:
         data["removed_messages"] = cut
     await svc.emit(session_id, "session.reverted", data)
     return len(cut)

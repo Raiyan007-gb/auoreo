@@ -225,6 +225,7 @@ class AgentRunner:
         )
         context = self.nudge.apply(rt, spec, text, options, context)  # --- G2b: §11.8 nudge
         context = "" if options.exact is not None else context  # I3: the fork's prefix stays exact
+        await layout.carry(self, rt, turn_msg, context)  # --- M7: m7.token.context_carrier=persisted
         rt.generation += 1  # the liveness watchdog is bound to this turn's generation
         turn = Turn(TurnBudget.for_turn(st.loop, subagent=rt.subagent), LivenessWatchdog(self.s, rt, run_id))
 

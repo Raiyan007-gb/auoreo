@@ -19,6 +19,7 @@ from typing import Any
 from auoreo.core.redaction import redact
 from auoreo.gateway.types import text_of
 from auoreo.runtime.compaction_plan import turn_index
+from auoreo.runtime.request_layout import has_context
 
 PER_MESSAGE_CHARS = 4_000
 _ROLES = {"user": "user", "assistant": "assistant", "tool": "tool result"}
@@ -97,12 +98,13 @@ def cache_key(system_prompt: str, tool_schemas: list[dict[str, Any]], history: l
 
 def exact_history(history: list[dict[str, Any]], turn_msg: Any, context: str) -> list[dict[str, Any]]:
     """The parent's history as the model saw it in the current step: this turn's user message
-    carries the `<context>` block (as `AgentRunner._request` renders it) and every still-open
-    tool call of the trailing assistant message gets a placeholder result."""
+    carries the `<context>` block (as `request_layout.build` renders it; a persisted block is
+    copied as is and rendered by the child the same way) and every still-open tool call of the
+    trailing assistant message gets a placeholder result."""
     out: list[dict[str, Any]] = []
     idx = turn_index(history, turn_msg) if turn_msg is not None else -1
     for i, m in enumerate(history):
-        if i == idx and context:
+        if i == idx and context and not has_context(m):
             m = {**m, "content": f"<context>\n{context}\n</context>\n\n{m['content']}"}
         out.append(dict(m))
     answered = {m.get("tool_call_id") for m in out if m.get("role") == "tool"}
