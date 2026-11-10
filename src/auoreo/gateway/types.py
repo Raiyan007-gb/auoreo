@@ -5,7 +5,10 @@ from __future__ import annotations
 import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
+
+if TYPE_CHECKING:
+    from auoreo.gateway.caching import CacheInfo
 
 ContentPart = dict[str, Any]
 """OpenAI-style content part: `{"type": "text", "text": …}` or
@@ -83,6 +86,9 @@ class LLMRequest:
     """Anthropic-family cache breakpoints (also gated by `gateway_tuning.prompt_caching`)."""
     turn_state: str | None = None
     """Per-turn stickiness token sent as `x-auoreo-turn-state`; defaults to `metadata.run_id`."""
+    volatile_tail: bool = False
+    """The last message is request-only (a step-limit or grace note) and will not be sent again:
+    the prefix tracker (`runtime/request_layout.py`) leaves it out of the expected prefix."""
     response_format: Any = None
     """Structured output: a `{type: json_schema, json_schema: {...}}` dict or a Pydantic model
     class (normalised to `json_schema` + `strict: true`, spec §25.9)."""
@@ -143,6 +149,14 @@ class Usage:
     deployment: str | None = None
     """The deployment that served the call (budget attribution)."""
     tags: tuple[str, ...] = ()
+    cache: CacheInfo | None = None
+    """M7 `m7.token.telemetry`: prefix/tool hashes and breakpoints of the request as shaped."""
+
+    @property
+    def span_attrs(self) -> dict[str, Any]:
+        """`llm.call` span attributes (`observability.traced_stream`): integers add up per call."""
+        tokens = {"tokens.prompt": self.prompt_tokens, "tokens.completion": self.completion_tokens}
+        return {**tokens, **(self.cache.span_attrs() if self.cache is not None else {})}
 
     def event_data(self) -> dict[str, Any]:
         """Token fields for a `usage` event payload."""

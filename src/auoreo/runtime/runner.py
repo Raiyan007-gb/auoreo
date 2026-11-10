@@ -25,22 +25,21 @@ from auoreo.core.permissions import PermissionEngine
 from auoreo.core.policy import policy_engine
 from auoreo.core.usage import UsageLedger
 from auoreo.gateway.errors import GatewayError
-from auoreo.gateway.types import LLMRequest, ToolCall, tool_schema
+from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors, render_context
 from auoreo.policy.bandit import BanditPolicy, Choice
+from auoreo.runtime import request_layout as layout
 from auoreo.runtime.attachments import user_message  # --- I5
 from auoreo.runtime.budget import GRACE_NOTE, TurnBudget, all_free
-from auoreo.runtime.compaction import CompactionError, CompactionService, turn_index
+from auoreo.runtime.compaction import CompactionError, CompactionService
 from auoreo.runtime.empty import EMPTY_SENTINEL
 from auoreo.runtime.guards import LoopGuards
 from auoreo.runtime.inbox import Inbox, RunOptions
 from auoreo.runtime.liveness import LivenessWatchdog
-from auoreo.runtime.multimodal import prepare_messages
 from auoreo.runtime.nudges import MemoryNudge, recall_query
 from auoreo.runtime.recovery import model_step
 from auoreo.runtime.run_overrides import apply_run_options  # --- G5a
-from auoreo.runtime.sequence import repair
 from auoreo.runtime.session_sources import apply_session_sources, inject_mentions
 from auoreo.runtime.stopgates import StopGates, prompt_hook
 from auoreo.runtime.tool_round import ABORTED_BEFORE_DISPATCH, tool_round
@@ -108,6 +107,7 @@ class AgentRunner:
         self.compaction = CompactionService(services, self.usage)
         self.policy = BanditPolicy(services, self.usage)  # --- W1-C (off unless bandit.enabled)
         self.nudge = MemoryNudge(services)  # --- G2b
+        self.prefix = layout.PrefixTracker()  # --- M7: cache.prefix_changed (m7.token.telemetry)
 
     # ------------------------------------------------------------ persistence
     async def load_history(self, session_id: str) -> list[dict[str, Any]]:
@@ -225,6 +225,7 @@ class AgentRunner:
         )
         context = self.nudge.apply(rt, spec, text, options, context)  # --- G2b: §11.8 nudge
         context = "" if options.exact is not None else context  # I3: the fork's prefix stays exact
+        await layout.carry(self, rt, turn_msg, context)  # --- M7: m7.token.context_carrier=persisted
         rt.generation += 1  # the liveness watchdog is bound to this turn's generation
         turn = Turn(TurnBudget.for_turn(st.loop, subagent=rt.subagent), LivenessWatchdog(self.s, rt, run_id))
 
@@ -313,9 +314,12 @@ class AgentRunner:
                 note = GRACE_NOTE.format(why=exhausted) if exhausted else None
                 note = note or (STEP_LIMIT_NOTE if last_step else None)
                 tools = options.exact.tools if options.exact else self._available(spec, rt.state, options)
-                build = partial(self._request, spec, rt, tools, context, turn_msg, last_step, run_id, note)
+                build = partial(
+                    layout.build, self, spec, rt, tools, context, turn_msg, last_step, run_id, note
+                )
                 await self.compaction.pre_step(rt, build())  # `build` re-renders after compaction
-                await self.s.emit(sid, "step.started", {"run_id": run_id, "step": step, "tools": len(tools)})
+                started = {"run_id": run_id, "step": step, "tools": len(tools)}
+                await self.s.emit(sid, "step.started", started | layout.tool_counts(self, spec, rt.state))
                 budget.consume_step(grace=exhausted is not None)
                 try:
                     out = await model_step(self, rt, run_id, build, budget, turn.watchdog.touch)
@@ -457,44 +461,3 @@ class AgentRunner:
             if (allow is None or any(fnmatch.fnmatchcase(t.name, g) for g in allow))
             and not any(fnmatch.fnmatchcase(t.name, g) for g in options.tools_deny)
         ]
-
-    def _request(
-        self,
-        spec: AgentSpec,
-        rt: SessionRuntime,
-        tools: list[ToolDef],
-        context: str,
-        turn_msg: dict[str, Any],
-        last_step: bool,
-        run_id: str,
-        note: str | None = None,
-    ) -> LLMRequest:
-        msgs: list[dict[str, Any]] = [{"role": "system", "content": spec.system_prompt}]
-        turn_user_idx = turn_index(rt.history, turn_msg)
-        for i, m in enumerate(rt.history):
-            if i == turn_user_idx and context:
-                m = {**m, "content": f"<context>\n{context}\n</context>\n\n{m['content']}"}
-            msgs.append(m)
-        if note:
-            msgs.append({"role": "user", "content": note})
-        msgs = prepare_messages(repair(msgs), self.s.gateway.supports_vision(spec.model))
-        variant = spec.variant
-        temperature = spec.agent.manifest.temperature
-        if temperature is None and variant is not None:
-            temperature = variant.temperature
-        return LLMRequest(
-            model=spec.model,
-            messages=tuple(msgs),
-            tools=tuple(tool_schema(t.name, t.manifest.description, t.manifest.parameters) for t in tools),
-            tool_choice="none" if last_step else "auto",
-            temperature=temperature,
-            omit_fields=tuple(variant.omit_fields) if variant else (),
-            reasoning_effort=self.policy.effort(run_id, spec.agent.manifest.effort),
-            metadata={
-                "session_id": rt.session_id,
-                "run_id": run_id,
-                **self.compaction.post.marks(rt.session_id),
-            },
-            variant=variant,
-            turn_state=run_id,
-        )

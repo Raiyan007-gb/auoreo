@@ -319,8 +319,8 @@ async def traced[T](awaitable: Awaitable[T], name: str, **attrs: Any) -> T:
 
 
 async def traced_stream(stream: AsyncIterable[Any], *, model: str, purpose: str) -> AsyncIterator[Any]:
-    """Wrap a gateway stream in an `llm.call` span; token counts come from `Usage` items.
-    The span is current only while the next item is awaited (see `_next_in`)."""
+    """Wrap a gateway stream in an `llm.call` span; attributes come from the items' `span_attrs`
+    (`Usage`: integers add up). The span is current only while the next item is awaited."""
     otel, writer = _ensure(), tracefile.active()
     if not otel and writer is None:
         async for item in stream:
@@ -331,7 +331,7 @@ async def traced_stream(stream: AsyncIterable[Any], *, model: str, purpose: str)
     raw = _state.tracer.start_span("llm.call", attributes=base) if otel else None
     attrs = dict(base) if writer is not None else None
     handle, it = Span(raw, attrs), aiter(stream)
-    prompt = completion = 0
+    found: dict[str, Any] = {"tokens.prompt": 0, "tokens.completion": 0}
     text: list[str] = []
     try:
         while True:
@@ -339,8 +339,8 @@ async def traced_stream(stream: AsyncIterable[Any], *, model: str, purpose: str)
                 item = await _next_in(raw, it)
             except StopAsyncIteration:
                 break
-            prompt += int(getattr(item, "prompt_tokens", 0) or 0)
-            completion += int(getattr(item, "completion_tokens", 0) or 0)
+            for key, value in (getattr(item, "span_attrs", None) or {}).items():
+                found[key] = found.get(key, 0) + value if isinstance(value, int) else value
             if _state.capture_content and isinstance(getattr(item, "text", None), str):
                 text.append(item.text)
             yield item
@@ -348,8 +348,8 @@ async def traced_stream(stream: AsyncIterable[Any], *, model: str, purpose: str)
         handle.error(exc)
         raise
     finally:
-        handle.set("tokens.prompt", prompt)
-        handle.set("tokens.completion", completion)
+        for key, value in found.items():
+            handle.set(key, value)
         if text:
             handle.content("llm.completion", "".join(text))
         if raw is not None:

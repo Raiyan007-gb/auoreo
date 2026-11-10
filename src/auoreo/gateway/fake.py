@@ -22,6 +22,8 @@ scripted tool call as `ToolCallDelta` fragments first; a scripted `error` with t
 yields `ToolCallDrop` before raising (abandoned partial calls).
 Every request is kept in `requests` (with its `reasoning_effort`); `efforts` lists the effort
 of each main-turn call (no `metadata.purpose`) in order.
+`telemetry = True` (M7; set from `m7.token.telemetry` by `make_gateway`) shapes each request like
+the real gateway (`cache_layout` picks the Anthropic layout) and reports it on `Usage.cache`.
 """
 
 from __future__ import annotations
@@ -36,7 +38,9 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
+from auoreo.gateway.caching import CacheInfo, describe
 from auoreo.gateway.errors import GatewayError
+from auoreo.gateway.pipeline import ShapeContext, shape
 from auoreo.gateway.structured import needs_schema, normalize_response_format
 from auoreo.gateway.types import (
     Finish,
@@ -83,6 +87,8 @@ class FakeGateway:
         self.missing_credentials: set[str] = set()  # models `has_credentials` reports as keyless
         self.structured = True  # --- I2: what `supports_response_schema` reports
         self.stream_partials = False
+        self.telemetry = False  # --- M7: report `Usage.cache` (prefix/tool hashes, breakpoints)
+        self.cache_layout = "legacy"
         self._n = 0
 
     def has_credentials(self, model: str) -> bool:
@@ -140,8 +146,23 @@ class FakeGateway:
             cost_usd=0.0,
             cached_tokens=item.cached_tokens,
             cache_write_tokens=item.cache_write_tokens,
+            cache=self._cache(request) if self.telemetry else None,
         )
         yield Finish(item.finish or ("tool_calls" if item.tool_calls else "stop"))
+
+    def _cache(self, request: LLMRequest) -> CacheInfo:
+        """The request as the real gateway would shape it (marks included), reduced to hashes."""
+        kwargs: dict[str, Any] = {"model": request.model, "messages": list(request.messages)}
+        if request.tools:
+            kwargs["tools"] = list(request.tools)
+        ctx = ShapeContext(
+            model=request.model,
+            variant=request.variant,
+            caching=request.prompt_caching,
+            omit=request.omit_fields,
+            cache_layout=self.cache_layout,
+        )
+        return describe(shape(kwargs, ctx))
 
     def _auto(self, request: LLMRequest) -> Scripted:
         if request.metadata.get("purpose") == "hyde":

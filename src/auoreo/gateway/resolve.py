@@ -82,7 +82,10 @@ def make_gateway(settings: Settings, secret: Callable[[str], str | None]) -> Gat
     def fake() -> Gateway:
         from auoreo.gateway.fake import FakeGateway
 
-        return FakeGateway()
+        gateway = FakeGateway()
+        gateway.telemetry = settings.m7.token.telemetry  # --- M7: keyless runs report hashes too
+        gateway.cache_layout = settings.m7.token.cache_layout
+        return gateway
 
     def real() -> Gateway:
         from auoreo.gateway.gateway import LiteLLMGateway

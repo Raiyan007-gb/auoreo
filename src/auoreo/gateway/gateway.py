@@ -17,6 +17,7 @@ import inspect
 import logging
 import random
 from collections.abc import AsyncIterator, Callable
+from dataclasses import replace
 from typing import Any
 
 import litellm
@@ -25,7 +26,7 @@ from litellm import exceptions as lx
 from auoreo.core.redaction import redact
 from auoreo.core.settings import Settings
 from auoreo.gateway import auxiliary as aux
-from auoreo.gateway import credparams, deploy, openrouter, pricing
+from auoreo.gateway import caching, credparams, deploy, openrouter, pricing
 from auoreo.gateway.authflow import SLOT_KEY, AuthFlow
 from auoreo.gateway.budgets import BudgetTracker
 from auoreo.gateway.ctxprobe import Window, guard_min_context, resolve_window
@@ -322,6 +323,8 @@ class LiteLLMGateway:
         async for item in assemble(resp, request, idle_s=idle, deployments=deps, map_error=map_error):
             if isinstance(item, Usage):
                 self._spend(item, served, kwargs)
+                if self.settings.m7.token.telemetry:  # --- M7: hashes of the request as sent
+                    item = replace(item, cache=caching.describe(kwargs))
             yield item
 
     def _spend(self, usage: Usage, model: str, kwargs: dict[str, Any]) -> None:

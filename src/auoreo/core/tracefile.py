@@ -32,7 +32,8 @@ TRACKS: dict[str, int] = {"interaction": 1, "llm": 2, "tool": 3}
 SPAN_TRACK: dict[str, str] = {"agent.run": "interaction", "llm.call": "llm", "tool.call": "tool"}
 ARGS: dict[str, frozenset[str]] = {
     "agent.run": frozenset({"model", "agent", "status"}),
-    "llm.call": frozenset({"model", "purpose", "tokens.prompt", "tokens.completion"}),
+    "llm.call": frozenset({"model", "purpose", "tokens.prompt", "tokens.completion"})
+    | frozenset({"cache.prefix_hash", "tools.hash", "cache.breakpoints"}),  # --- M7 telemetry
     "tool.call": frozenset({"tool", "decision"}),
     "approval": frozenset({"tool", "decision"}),
     "compaction": frozenset(),
