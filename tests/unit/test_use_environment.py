@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from auoreo.core import hosts
 from auoreo.core.diagnostics import run_checks
 from auoreo.core.permissions import PermissionEngine, Rule
 from auoreo.core.services import Services
@@ -123,3 +124,26 @@ async def test_doctor_lists_environment_rows(services: Services) -> None:
     assert by["environment:box"].level == "ok" and "local (local)" in by["environment:box"].detail
     cloud = by["environment:cloud"]
     assert cloud.level == "warn" and re.search(r"DAYTONA_API_KEY", cloud.detail)
+
+
+async def test_unknown_name_lists_both_sources_when_hosts_are_on(services: Services, workdir: Path) -> None:
+    services.settings.environments = {"box": NamedEnvironment(backend="local")}
+    fields = {"host": "lab.example", "user": "u", "key_secret": "secret:SSH_KEY_LAB"}
+    hosts.write_host(services.settings.home, "lab", fields)
+    services.harness.reload()
+    ctx = make_ctx(services, workdir)
+    text, err, _ = await call(services, ctx, "use_environment", {"name": "nope"})
+    assert err and text.endswith(
+        "unknown environment 'nope' (settings.environments: box)"
+    )  # flag off: as before
+    text, err, _ = await call(services, ctx, "use_environment", {})
+    assert not err and "lab" not in text
+    services.settings.m7.ssh.hosts = True
+    text, err, _ = await call(services, ctx, "use_environment", {"name": "nope"})
+    assert err and "unknown environment 'nope' (settings.environments: box; hosts: lab)" in text
+    text, err, _ = await call(services, ctx, "use_environment", {})
+    assert not err and "- box: backend local" in text and "- lab: backend ssh — ssh host file" in text
+    assert "lab.example" not in text and "SSH_KEY_LAB" not in text
+    manifest = services.harness.tools["use_environment"].manifest
+    assert "justification" in manifest.parameters["properties"]
+    assert manifest.net == "none"  # documented deviation: the `ssh` gate, not the net stage, covers it

@@ -11,6 +11,12 @@ parameters:
       type: string
       default: ""
       description: Environment name from settings.environments, "default" to reset, or "" to list.
+    justification:
+      type: string
+      maxLength: 500
+      description: >-
+        Why this session must reach the host. Needed the first time a session uses an SSH host
+        (a human reviews it); ignored otherwise.
   additionalProperties: false
 permission: environment
 pattern_arg: name

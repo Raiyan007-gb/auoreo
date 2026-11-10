@@ -4,9 +4,10 @@ A repository can ship a `.auoreo/` folder. Until the user trusts that workspace,
 *inert* definitions load from it (agents, skills, prompts, prompt families, commands,
 workflows, variants — text the model reads). Everything that executes code or widens
 permissions is skipped: hooks (shell commands), MCP servers (stdio commands), tool
-handlers, backends (impl.py), plugins, Starlark policies, scheduled jobs and webhook
-routes. Permission files still load, but only their deny/ask rules and floors; ALLOW
-rules are dropped, and project agents lose `allow` rules and permissive modes.
+handlers, backends (impl.py), plugins, Starlark policies, scheduled jobs, webhook routes
+and SSH host files (which choose the address a stored key is offered to). Permission files
+still load, but only their deny/ask rules and floors; ALLOW rules are dropped, and project
+agents lose `allow` rules and permissive modes.
 
 Trust is stored as realpaths in `<home>/trusted_workspaces.json` and granted with
 `auoreo trust [path]`, `POST /api/workspace/trust` or the UI banner. The real process
@@ -24,7 +25,9 @@ from typing import Any
 
 TRUST_FILE = "trusted_workspaces.json"
 TRUST_ALL_ENV = "AUOREO_SECURITY_TRUST_ALL_WORKSPACES"
-UNTRUSTED_SKIP = frozenset({"hooks", "mcp", "tools", "backends", "plugins", "policies", "jobs", "webhooks"})
+UNTRUSTED_SKIP = frozenset(
+    {"hooks", "mcp", "tools", "backends", "plugins", "policies", "jobs", "webhooks", "hosts"}
+)
 """Kinds never loaded from an untrusted project root."""
 PERMISSIVE_MODES = frozenset({"yolo", "acceptEdits", "smart"})
 SKIP_NOTE = "skipped: workspace not trusted (run `auoreo trust`)"

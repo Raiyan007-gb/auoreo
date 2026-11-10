@@ -9,7 +9,7 @@ import contextlib
 import json
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -96,6 +96,8 @@ class SessionState:
     pending_user_messages: list[str] = field(default_factory=list)
     sandbox_note_shown: bool = False  # `[sandbox: not enforced …]` told once per session
     environment: str | None = None  # W2-A: `use_environment` override (settings.environments key)
+    ssh_granted: dict[str, str] = field(default_factory=dict)
+    """M7: `ssh` grants of this session (target key → grant id); never restored after a restart."""
 
 
 TOOLS_LOADED_PREFIX = "loaded (callable from the next step):"
@@ -264,15 +266,32 @@ class ToolContext:
         except (KeyError, LookupError) as exc:
             raise ToolError(str(exc)) from exc
 
-    async def authorize(self, tool: str, permission: str, pattern: str, default: str = "ask") -> None:
+    async def authorize(
+        self,
+        tool: str,
+        permission: str,
+        pattern: str,
+        default: str = "ask",
+        *,
+        sticky: bool = True,
+        context: Mapping[str, Any] | None = None,
+        detail: str | None = None,
+        justification: str | None = None,
+    ) -> None:
         """Check a *secondary* permission from inside a handler (e.g. a URL fetched by a
         tool whose own permission is `read`). Floors and rules apply; `ask` goes to the
-        human when interactive. Raises `ToolError` unless the call is allowed."""
+        human when interactive. Raises `ToolError` unless the call is allowed.
+
+        `sticky=False` gives `net_direct` semantics: only a rule or a human reply allows (a
+        permission mode such as `yolo` does not), and an `always` reply is not remembered.
+        `context` is passed to the policy engine."""
         engine = self.services.get("engine")
         if engine is None:
             return
-        decision = engine.evaluate(permission, pattern, default, interactive=self.interactive)
-        if decision.action == "allow":
+        decision = engine.evaluate(
+            permission, pattern, default, interactive=self.interactive, context=context
+        )
+        if decision.action == "allow" and (sticky or decision.reason != "mode"):
             return
         if decision.action == "deny":
             raise ToolError(f"permission denied for {permission} `{pattern[:200]}` ({decision.detail})")
@@ -282,8 +301,16 @@ class ToolContext:
                 f"{permission} `{pattern[:200]}` needs approval but this run is non-interactive; "
                 "allow it with a permission rule"
             )
-        outcome = await svc.approvals.request(self.session_id, tool, permission, pattern, pattern[:2000])
+        outcome = await svc.approvals.request(
+            self.session_id,
+            tool,
+            permission,
+            pattern,
+            (detail or pattern)[:2000],
+            one_shot=not sticky,
+            justification=justification,
+        )
         if not outcome.granted:
             raise ToolError(f"user rejected {permission} `{pattern[:200]}`")
-        if outcome.reply == "always":
+        if outcome.reply == "always" and sticky:
             engine.grant_always(permission, pattern)
