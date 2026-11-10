@@ -264,6 +264,7 @@ class LiteLLMGateway:
             prefs = openrouter.provider_prefs(i2.openrouter, structured=bool(request.tools or fmt))
             kwargs["extra_body"] = {"usage": {"include": True}, **({"provider": prefs} if prefs else {})}
         self.auth.apply_pool(kwargs, self._deployments(model))
+        m7 = self.settings.m7.token
         ctx = ShapeContext(
             model=deployment,
             variant=variant,
@@ -271,7 +272,8 @@ class LiteLLMGateway:
             caching=request.prompt_caching and tuning.prompt_caching,
             cache_ttl=tuning.cache_ttl,
             omit=request.omit_fields,
-            cache_layout=self.settings.m7.token.cache_layout,
+            cache_layout=m7.cache_layout,
+            cache_key=str(metadata.get("session_id") or "") if m7.openai_cache_key else "",
         )
         return shape(kwargs, ctx)
 

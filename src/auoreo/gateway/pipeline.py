@@ -209,6 +209,8 @@ class ShapeContext:
     cache_layout: str = "legacy"
     """`legacy`: breakpoints on tools, system, last user message. `tail` (M7): plus the last
     markable message, so a tool loop's growing tail is cached too."""
+    cache_key: str = ""
+    """M7 `openai_cache_key`: sent as `prompt_cache_key` to OpenAI-family models ("" = off)."""
 
 
 def unsupported_parts(kwargs: dict[str, Any], ctx: ShapeContext) -> dict[str, Any]:
@@ -318,8 +320,23 @@ def _anthropic_cache(kwargs: dict[str, Any], ctx: ShapeContext) -> dict[str, Any
     return out
 
 
+_CACHE_KEY_PROVIDERS = frozenset({"", "openai", "azure"})
+"""LiteLLM providers that accept `prompt_cache_key` (elsewhere it would be dropped)."""
+
+
+def _openai_cache(kwargs: dict[str, Any], ctx: ShapeContext) -> dict[str, Any]:
+    """OpenAI caches prefixes on its own; a stable `prompt_cache_key` routes the requests of
+    one session to the same cache. A caller-supplied key wins."""
+    if not ctx.cache_key or "prompt_cache_key" in kwargs:
+        return kwargs
+    if provider_of(ctx.model) not in _CACHE_KEY_PROVIDERS:
+        return kwargs
+    return {**kwargs, "prompt_cache_key": ctx.cache_key}
+
+
 _CACHERS: dict[str, Callable[[dict[str, Any], ShapeContext], dict[str, Any]]] = {
     "anthropic": _anthropic_cache,
+    "openai": _openai_cache,
 }
 
 

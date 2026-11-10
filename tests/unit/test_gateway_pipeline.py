@@ -242,3 +242,51 @@ def test_builtin_aliases_follow_provider_and_user_aliases_win(home) -> None:  # 
     assert expand_alias(custom, "sonnet") == "sonnet"  # a routing group named like an alias wins
     assert primary_deployment(custom, "sonnet") == "x/y"
     assert expand_alias(custom, "unknown/model") == "unknown/model"
+
+
+# ------------------------------------------------------------------ M7 1.6: OpenAI cache key
+def test_openai_cache_key_is_sent_only_with_a_key_and_caching_on() -> None:
+    src = _kwargs()
+    out = shape(src, ShapeContext(model="openai/gpt-5", cache_key="sess_1"))
+    assert out["prompt_cache_key"] == "sess_1" and "prompt_cache_key" not in src
+    assert out["messages"] == src["messages"] and "cache_control" not in str(out)
+    assert shape(_kwargs(), ShapeContext(model="gpt-4o", cache_key="sess_1"))["prompt_cache_key"] == "sess_1"
+    assert shape(_kwargs(), ShapeContext(model="azure/gpt-4o", cache_key="s"))["prompt_cache_key"] == "s"
+    assert shape(src, ShapeContext(model="openai/gpt-5")) == src  # no key (flag off): unchanged
+    off = shape(src, ShapeContext(model="openai/gpt-5", cache_key="sess_1", caching=False))
+    assert "prompt_cache_key" not in off
+
+
+def test_openai_cache_key_stays_off_other_families_and_unsupported_routes() -> None:
+    for model in (CLAUDE, "gemini/gemini-2.5-pro", "moonshot/kimi-k2", "ollama/llama3"):
+        assert "prompt_cache_key" not in shape(_kwargs(), ShapeContext(model=model, cache_key="sess_1"))
+    # LiteLLM 1.106 lists the parameter for openai and azure only; elsewhere it would be dropped.
+    routed = shape(_kwargs(), ShapeContext(model="openrouter/openai/gpt-5", cache_key="sess_1"))
+    assert "prompt_cache_key" not in routed
+
+
+def test_openai_cache_key_respects_a_caller_value_and_variant_omit() -> None:
+    kept = shape(_kwargs(prompt_cache_key="mine"), ShapeContext(model="openai/gpt-5", cache_key="sess_1"))
+    assert kept["prompt_cache_key"] == "mine"
+    omitted = shape(
+        _kwargs(), ShapeContext(model="openai/gpt-5", cache_key="sess_1", omit=("prompt_cache_key",))
+    )
+    assert "prompt_cache_key" not in omitted
+
+
+@pytest.mark.parametrize(("flag", "expected"), [(False, None), (True, "sess_42")])
+def test_gateway_sends_the_session_id_as_cache_key_behind_the_flag(
+    home: Any, flag: bool, expected: str | None
+) -> None:
+    from auoreo.gateway.gateway import LiteLLMGateway
+    from auoreo.gateway.types import LLMRequest
+
+    st = Settings(
+        home=home, models={"main": {"models": ["openai/gpt-5"]}}, m7={"token": {"openai_cache_key": flag}}
+    )
+    gw = LiteLLMGateway(st, lambda _n: None)
+    msgs = ({"role": "user", "content": "hi"},)
+    kw = gw._kwargs(LLMRequest(model="main", messages=msgs, metadata={"session_id": "sess_42"}), "main")
+    assert kw.get("prompt_cache_key") == expected
+    bare = gw._kwargs(LLMRequest(model="main", messages=msgs), "main")  # no session: no key
+    assert "prompt_cache_key" not in bare

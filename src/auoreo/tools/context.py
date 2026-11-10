@@ -199,6 +199,9 @@ class ToolContext:
     services: dict[str, Any] = field(default_factory=dict)
     env: dict[str, str] = field(default_factory=dict)
     """Scrubbed environment for child processes (allowlist + tool `requires_env`)."""
+    read_dedupe: dict[str, Any] = field(default_factory=dict)
+    """M7 `read_dedupe`: path → full reads of THIS turn (the runner builds one context per
+    turn, so the state never outlives it); see `tools/read_dedupe.py`."""
 
     async def progress(
         self,

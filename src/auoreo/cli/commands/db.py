@@ -1,5 +1,5 @@
-"""`auoreo db upgrade|current|history|backup|restore|rotate-key|encrypt` against `<home>/state.db`
-(and, for backup/restore/rotate-key/encrypt, `<home>/memory.db`)."""
+"""`auoreo db upgrade|current|history|backup|restore|rotate-key|encrypt|recompute-costs` against
+`<home>/state.db` (and, for backup/restore/rotate-key/encrypt, `<home>/memory.db`)."""
 
 from __future__ import annotations
 
@@ -283,3 +283,42 @@ def encrypt(
         console.print(f"plaintext backup: {bak} (delete it once verified)")
     if not done:
         console.print("nothing to convert")
+
+
+@app.command("recompute-costs")  # --- M7 1.4
+def recompute_costs(
+    days: Annotated[
+        int | None, typer.Option("--days", min=1, help="Only rows of the last N days (default: all).")
+    ] = None,
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Report what would change; write nothing.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Re-price estimated usage rows that have cached or cache-write tokens with the cache-aware
+    rates (needs m7.token.cached_pricing). Prices are today's; provider-reported costs and rows
+    without a current price are kept. Runs only on request, never at startup; safe to repeat."""
+    from auoreo.cli.common import with_services
+    from auoreo.core.services import Services
+    from auoreo.core.usage_reprice import RepriceReport
+    from auoreo.core.usage_reprice import recompute_costs as run
+
+    st = settings()
+    if not st.m7.token.cached_pricing:
+        err_console.print("[red]m7.token.cached_pricing is off: costs would be recomputed unchanged[/red]")
+        raise typer.Exit(2)
+
+    async def go(svc: Services) -> RepriceReport:
+        return await run(svc.db, svc.gateway.price, days=days, dry_run=dry_run)
+
+    report = with_services(go, st, memory=False)
+    if as_json:
+        print(json.dumps(report.as_dict(), indent=2))
+        return
+    verb = "would re-price" if dry_run else "re-priced"
+    window = f"last {days} days" if days else "all rows"
+    console.print(
+        f"{verb} {report.repriced} of {report.scanned} estimated rows with cache tokens ({window}): "
+        f"${report.old_total:.6f} -> ${report.new_total:.6f}"
+    )
+    console.print(f"unchanged {report.unchanged} · no current price {report.unpriced}")
