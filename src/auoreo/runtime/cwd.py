@@ -195,7 +195,7 @@ async def _git_paths(cwd: Path, server_cwd: Path) -> list[Path]:
         for d in (sorted(records.iterdir()) if records.is_dir() else [])
         if _norm(d) == os.path.join(_norm(records), os.path.normcase(d.name))  # a real folder there
         and (line := _first_line(d / "gitdir"))
-        and _pointer(line) == want
+        and _pointer(os.path.join(d, line)) == want  # relative with `worktree.useRelativePaths`
     ]
     if len(mine) != 1:  # unknown here, or two records claim this folder: no allowance
         return []
