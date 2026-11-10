@@ -1,5 +1,28 @@
 # M7 plan: token economy, SSH/cloud, specialized agents and bots, orchestration
 
+## Status (2026-11-10)
+
+Wave 0 and Wave 1 are merged. Where a design document and this plan differ, the design
+document was followed; the differences are listed here so the plan is not read as built.
+
+| Step | State |
+|---|---|
+| 0.1–0.4 | done |
+| 1.1 telemetry, 1.2 tail breakpoint, 1.4 cached pricing, 1.5 aggregates | done (the previous-turn breakpoint and the bandit ratio stay deferred by the design) |
+| 1.3 context carrier | done; the block is persisted under a message key (`auoreo_context`), not as the first text part. Switch to `splice` and compact before rolling back to a build without `runtime/request_layout.py` |
+| 1.4 `db recompute-costs` | done, without the `price:cached` tag (the design rejects a tag on the bounded `tags` column; a marker column belongs in `0009`) |
+| 1.6 OpenAI cache key, 1.7 read dedupe | done behind their flags (the design had deferred both; built on the owner's instruction to work the plan). OpenRouter-routed OpenAI models get no key |
+| 1.8 tool-order determinism | test only; the code already passed |
+| 2.1 ssh gate, 2.2 inventory | done for the approved first wave: `auoreo ssh add\|list\|test`, CLI trust-on-first-use. `keygen`, `import`, jump host, rotation and the extra manifest fields are deferred by the design |
+| 2.3 per-host policy, audit, usage | not built: the design moves it to a later hosts wave |
+| 3.1 `is_unattended` for connector sessions | not built: the design drops it from this wave |
+| 3.2 memory tenants | done; transcripts are isolated by a role tag because memory.db has no tenant column |
+| 3.3 connector routes | done; no `m7.agents.connector_routes` flag (routing is on when a connector config has `routes`), routes need an owner chat by default |
+| 3.4 citations | done from tool events in `plugins/citations.py`; `run.completed` is unchanged |
+| 4.1 session cwd | done with no schema change (cwd comes from the `session.created` event); a worktree never inherits trust; ACP and the MCP server are not switched |
+| 4.2 worktree per task | done; `task_ref`, `worktree.removed|gc` events and `i3.kanban.worktree` are deferred by the design |
+| Wave 2, F.1 | not started |
+
 ## Context
 
 AUOREO's roadmap (M3–M6) is fully shipped and was drift-corrected on 2026-11-04. The owner

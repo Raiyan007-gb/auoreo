@@ -21,6 +21,7 @@ generic engine that discovers, validates and runs capabilities defined as folder
 | `webhooks/<route>.yaml` | `POST /hooks/<route>`: HMAC-verified ingress → agent session → delivery |
 | `plugins/<name>/plugin.yaml` + `pyproject.toml` | Out-of-process plugins (own venv, JSON-RPC over stdio): tools, delivery providers, connectors |
 | `policies/<name>.star` | Starlark exec policies: `# key: value` header + `decide(req)`; run after floors, before rules |
+| `hosts/<name>.yaml` | SSH host inventory (M7, `m7.ssh.hosts`): name, host, port, user, `key_secret` (a secret name, never key material); loaded from `~/.auoreo/hosts/` only, managed with `auoreo ssh add\|list\|test`; known_hosts and trust state under `<home>/ssh/` |
 | `commands/<name>.md` | Slash commands (`/compact`, `/model`, `/plan`, `/review`); `handler: prompt` renders the body |
 | `memory/*.md` | Templates copied into `~/.auoreo/memory/` |
 | `src/auoreo/core/env_catalog*.py`, `settings_store.py`, `env_store.py`, `live_settings.py`, `env_*.py` | The variable catalog (feeds Settings → Environment only), the settings store in `state.db` (`app_settings` + history + version counter; pydantic source in `settings.py`; one-time `settings.json` migration), live apply (in-place `svc.settings`, per-area refresh, DB-version + secrets.db watcher), custom variables, the one-time `.env` import; API `api/routers/env_api.py` |
