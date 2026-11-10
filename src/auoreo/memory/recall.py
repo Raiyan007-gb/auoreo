@@ -27,8 +27,9 @@ async def memory_for(services: Services, manifest: Any) -> Any:
     than reading and writing the shared `local` tenant.
     """
     mem = services.memory
-    if mem is None:
-        return None
+    wanted = getattr(manifest, "memory_tenant", None) and services.settings.m7.agents.memory_tenants
+    if mem is None or not wanted:
+        return mem  # flag off or no tenant: the shared service, untouched
     try:
         return await mem.for_agent(manifest)
     except Exception:
