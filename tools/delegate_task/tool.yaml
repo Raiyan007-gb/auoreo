@@ -51,6 +51,11 @@ parameters:
       description: >-
         The child must answer with the handoff JSON {purpose, files:[path:line], done,
         commit_hash?, summary<=80 chars} (validated, one retry); usage is added for you.
+    worktree:
+      type: boolean
+      default: false
+      description: >-
+        Run the child in its own git worktree on a new branch auoreo/<name>-<hex> created from the committed HEAD (uncommitted changes are not carried over); its file tools and commands run there, it commits on its branch, and you merge the branch yourself. Needs m7.orch.worktrees and a git checkout. Shell commands are confined to the worktree only under an enforced sandbox; without one this is branch separation, not confinement.
     budget:
       type: object
       description: Per-child limits; exhaustion forces one summarise-now reply, then TOOL_BUDGET_EXCEEDED.
@@ -87,6 +92,7 @@ parameters:
               - {type: boolean}
               - {type: array, items: {type: string, minLength: 1, maxLength: 100}, maxItems: 50}
           handoff: {type: boolean}
+          worktree: {type: boolean, description: Per-task override of the top-level worktree flag.}
           budget:
             type: object
             properties:

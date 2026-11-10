@@ -209,6 +209,11 @@ class KanbanStore:
             await self._event("blocked", row)
         return row
 
+    async def release(self, task_id: int, worker: str) -> KanbanTaskRow:
+        """Undo a claim whose worker never started (no failure is counted)."""
+        free = {"status": "ready", "worker": None, "session_id": None, "heartbeat_at": None}
+        return await self._transition(task_id, worker, allowed=("claimed",), **free)
+
     async def comment(self, task_id: int, author: str, text: str) -> KanbanCommentRow:
         await self.get(task_id)
         row = KanbanCommentRow(task_id=task_id, author=author, text=text)

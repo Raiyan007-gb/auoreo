@@ -124,6 +124,7 @@ async def run_subtask(inv: Invocation) -> Expanded:
             prompt=text,
             name=f"{m.name}_{tag}",
             background=True,
+            cwd=worktree if s.settings.m7.orch.session_cwd else None,  # M7 W4: tools run there
         )
     except ValueError as exc:  # TeamsError: depth limit, unknown agent, …
         await s.emit(

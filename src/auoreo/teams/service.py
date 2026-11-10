@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from auoreo.core.db import TeamMemberRow, TeamRow
+from auoreo.runtime.cwd import plans_of
 from auoreo.teams import spawn_i3
 from auoreo.teams.board import Board
 from auoreo.teams.ceiling import CeilingEngine, clamp, inherited, leaf_permissions, role_for
@@ -38,6 +39,8 @@ from auoreo.teams.scope import workflow_team
 from auoreo.teams.supervisor import Supervisor
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from auoreo.core.services import Services
 
 __all__ = [
@@ -265,6 +268,8 @@ class TeamsService:
         inherit_mcp_toolsets: bool | list[str] = False,
         handoff: bool = False,
         frozen: FrozenTurn | None = None,
+        cwd: Path | None = None,
+        worktree: dict[str, Any] | None = None,
     ) -> Member:
         parent = await self.s.get_session(parent_session_id)
         if parent is None:
@@ -298,7 +303,14 @@ class TeamsService:
         base = {"parent": parent_session_id, "name": name, "agent": agent}
         await self.s.emit(parent_session_id, "subagent.spawn_requested", {**base, "background": background})
 
-        child = await self.s.create_session(title=name, agent=agent, model=model, parent_id=parent_session_id)
+        # --- M7 W4: the child's workspace root: its own worktree, else its parent's (a worker's
+        # helper stays in the worker's worktree); None = the server cwd (always, with the flag off)
+        cwd = cwd or (await self.s.coordinator.runtime(parent_session_id)).cwd
+        child = await self.s.create_session(
+            title=name, agent=agent, model=model, parent_id=parent_session_id, cwd=cwd
+        )
+        if worktree is not None:
+            await self.s.emit(child.id, "worktree.created", worktree)
         member = Member(team.id, name, agent, child.id, parent_session_id, depth, background, model=model)
         member.subagent_id = spawn_i3.next_subagent_id(self.sa_counters, parent_session_id)
         try:
@@ -311,7 +323,7 @@ class TeamsService:
                         session_id=child.id,
                         depth=depth,
                         status="queued",
-                        **spawn_i3.member_extras(self, member, child_manifest),
+                        **spawn_i3.member_extras(self, member, child_manifest, cwd),
                     )
                 )
                 await s.commit()
@@ -331,7 +343,7 @@ class TeamsService:
             [],
             [],
             clamp(child_mode, parent_mode),
-            str(self.s.cwd / ".auoreo" / "plans"),
+            plans_of(crt, self.s),
             session_rules=rules,
             denied=denied | parent_denied | spawn_i3.denied_permissions(tools, allowed, extra_deny),
         )

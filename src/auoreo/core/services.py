@@ -186,12 +186,18 @@ class Services:
         workflow: str | None = None,
         model: str | None = None,
         parent_id: str | None = None,
+        cwd: Path | str | None = None,
     ) -> SessionRow:
         agent = agent or self.settings.agent
         workflow = workflow or self.settings.workflow
         self.harness.agent(agent)  # validate early
         if workflow not in self.harness.workflows:
             raise KeyError(f"unknown workflow '{workflow}' (known: {sorted(self.harness.workflows)})")
+        where = self.cwd
+        if cwd is not None:  # --- M7 W4: a worktree child is born with its validated cwd
+            from auoreo.runtime.cwd import for_new_session
+
+            where = await for_new_session(self, cwd)
         row = SessionRow(
             id=f"ses_{uuid.uuid4().hex[:16]}",
             title=title or "",
@@ -206,7 +212,7 @@ class Services:
         await self.emit(
             row.id,
             "session.created",
-            {"agent": agent, "workflow": workflow, "parent_id": parent_id, "cwd": str(self.cwd)},
+            {"agent": agent, "workflow": workflow, "parent_id": parent_id, "cwd": str(where)},
         )
         return row
 

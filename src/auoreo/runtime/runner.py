@@ -34,6 +34,7 @@ from auoreo.runtime import request_layout as layout
 from auoreo.runtime.attachments import user_message  # --- I5
 from auoreo.runtime.budget import GRACE_NOTE, TurnBudget, all_free
 from auoreo.runtime.compaction import CompactionError, CompactionService
+from auoreo.runtime.cwd import SessionCwd, cwd_of, plans_of  # --- M7 W4: per-session cwd
 from auoreo.runtime.empty import EMPTY_SENTINEL
 from auoreo.runtime.guards import LoopGuards
 from auoreo.runtime.inbox import Inbox, RunOptions
@@ -61,7 +62,7 @@ STEP_LIMIT_NOTE = (
 
 
 @dataclass
-class SessionRuntime:
+class SessionRuntime(SessionCwd):
     """Per-session live state, owned by the coordinator."""
 
     session_id: str
@@ -149,16 +150,15 @@ class AgentRunner:
 
     def _engine(self, rt: SessionRuntime, spec: AgentSpec) -> PermissionEngine:
         mode = spec.agent.manifest.permission_mode or self.s.settings.permission_mode
-        plans = str(self.s.cwd / ".auoreo" / "plans")
         if rt.engine is None:
-            rt.engine = PermissionEngine(list(spec.rules), floors(self.s.harness), mode, plans)
+            rt.engine = PermissionEngine(list(spec.rules), floors(self.s.harness), mode, plans_of(rt, self.s))
         else:  # keep session rules + always-grants, refresh definitions
             rt.engine.rules = list(spec.rules)
             rt.engine.floors = floors(self.s.harness)
             rt.engine.mode = "plan" if rt.state.plan_mode else mode
             rt.engine.__post_init__()
         rt.engine.policies = policy_engine(self.s.harness)  # child CeilingEngines get it here too
-        rt.engine.context = {"agent": spec.name, "session_id": rt.session_id, "cwd": str(self.s.cwd)}
+        rt.engine.context = {"agent": spec.name, "session_id": rt.session_id, "cwd": str(cwd_of(rt, self.s))}
         if rt.state.plan_mode:
             rt.engine.mode = "plan"
         return rt.engine
@@ -219,7 +219,7 @@ class AgentRunner:
         )
         st = self.s.settings
         context = render_context(
-            spec, self.s.cwd, engine.mode, memory_block, st.locale or "", tone_of(text, st), st
+            spec, cwd_of(rt, self.s), engine.mode, memory_block, st.locale or "", tone_of(text, st), st
         )
         context = self.nudge.apply(rt, spec, text, options, context)  # --- G2b: §11.8 nudge
         context = "" if options.exact is not None else context  # I3: the fork's prefix stays exact
@@ -236,7 +236,7 @@ class AgentRunner:
 
         ctx = ToolContext(
             session_id=sid,
-            cwd=self.s.cwd,
+            cwd=cwd_of(rt, self.s),
             home=self.s.settings.home,
             harness=self.s.harness,
             state=rt.state,

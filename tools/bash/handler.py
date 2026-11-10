@@ -1,6 +1,7 @@
 """bash through the selected sandbox backend (`ctx.backend("sandbox")`, spec §19.8)."""
 
 from auoreo.backends.sandbox import ExecSpec, SandboxError, denial_text, sandbox_note
+from auoreo.runtime.cwd import git_allow
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 
 CAP = 30_000
@@ -16,6 +17,7 @@ def _clip(text: str) -> str:
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
     timeout = int(args.get("timeout_s", 120))
     policy = ctx.exec_policy
+    allow = await git_allow(ctx)  # M7 W4: a worktree session may write its own git metadata
     spec = ExecSpec(
         argv=["bash", "-c", args["command"]],
         cwd=ctx.cwd,
@@ -24,6 +26,8 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
         mode=policy.mode,  # type: ignore[arg-type]
         net=policy.net,  # type: ignore[arg-type]
         merge_stderr=True,
+        writable=allow,
+        git_allow=allow,
     )
     sandbox = ctx.backend("sandbox")
     try:

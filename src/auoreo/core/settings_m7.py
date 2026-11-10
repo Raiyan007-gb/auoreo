@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _Tolerant(BaseModel):
@@ -57,7 +57,18 @@ class M7Orch(_Tolerant):
     session_cwd: bool = False
     """Per-session workspace root."""
     worktrees: bool = False
-    """`worktree: true` on delegate_task and the kanban dispatcher."""
+    """`worktree: true` on delegate_task and the kanban dispatcher (requires `session_cwd`)."""
+    max_worktrees: int = Field(default=8, ge=1, le=64)
+    """Live orchestrator worktrees per repository; over the cap a spawn fails, nothing is evicted."""
+    worktree_root: str | None = None
+    """Where orchestrator worktrees go; default `<home>/worktrees/<repo>-<hash8>/` (outside the
+    checkout), after `g6.review.worktree_root` when that is set."""
+
+    @model_validator(mode="after")
+    def _worktrees_need_a_session_cwd(self) -> M7Orch:
+        if self.worktrees and not self.session_cwd:
+            raise ValueError("m7.orch.worktrees requires m7.orch.session_cwd (else isolation is prompt-only)")
+        return self
 
 
 class M7Settings(_Tolerant):

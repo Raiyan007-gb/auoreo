@@ -64,6 +64,7 @@ async def fork_session(svc: Services, session_id: str) -> SessionRow:
         workflow=parent.workflow,
         model=parent.model,
         parent_id=parent.id,
+        cwd=(await svc.coordinator.runtime(session_id)).cwd,  # M7 W4: a fork keeps the workspace root
     )
     if messages:
         async with svc.db.session() as s:
