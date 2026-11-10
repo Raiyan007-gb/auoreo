@@ -25,7 +25,7 @@ async def test_run_checks_without_services(home: Path) -> None:
     assert names.index("rtc:ice") > otel
     extras = {"keyring", "ws_auth", "workspace_trust", "memory_reembed"}  # H1b + I4
     extras |= {"disk", "settings_schema", "worktrees", "desktop_tcc"}  # I5
-    extras |= {"desktop:health"}  # I8 (`livekit:worker` only when the worker is enabled)
+    assert "desktop:health" not in names  # I8: desktop control is opt-in, no backend selected by default
     extras |= {"egress-proxy", "egress-sandbox", "ws-server", "search", "plugin-signatures"}  # I9, I6
     assert extras <= set(names[otel + 1 :])  # every EXTRA_CHECKS row comes after the built-ins
     assert "audit" not in names  # no state.db yet

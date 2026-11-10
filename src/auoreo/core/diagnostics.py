@@ -10,6 +10,7 @@ secret value in its detail (credential rows name env vars, never their contents)
 from __future__ import annotations
 
 import asyncio
+import importlib
 import os
 import shutil
 import socket
@@ -473,13 +474,11 @@ from auoreo.core.diagnostics_i2 import i2_checks  # noqa: E402  --- I2: rotated-
 EXTRA_CHECKS.append(i2_checks)
 
 
-async def _i4_checks(st: Settings) -> list[Check]:  # --- I4: workspace trust, re-embed (lazy: no cycle)
-    from auoreo.core.diagnostics_i4 import i4_checks
-
-    return await i4_checks(st)
+def _lazy(module: str, fn: str) -> ExtraCheck:  # imported on first use: these modules import this one
+    return lambda st: getattr(importlib.import_module(module), fn)(st)
 
 
-EXTRA_CHECKS.append(_i4_checks)
+EXTRA_CHECKS.append(_lazy("auoreo.core.diagnostics_i4", "i4_checks"))  # --- I4: workspace trust, re-embed
 from auoreo.core.diagnostics_i6 import i6_checks  # noqa: E402  --- I6: plugin trust + GitHub /meta cache
 
 EXTRA_CHECKS.append(i6_checks)
@@ -494,13 +493,7 @@ from auoreo.core.diagnostics_i8 import i8_checks  # noqa: E402  --- I8: desktop 
 EXTRA_CHECKS.append(i8_checks)
 
 
-async def _i9_checks(st: Settings) -> list[Check]:  # --- I9: egress proxy, ws server, reverse proxy
-    from auoreo.core.diagnostics_i9 import i9_checks
-
-    return await i9_checks(st)
-
-
-EXTRA_CHECKS.append(_i9_checks)
+EXTRA_CHECKS.append(_lazy("auoreo.core.diagnostics_i9", "i9_checks"))  # --- I9: egress proxy, ws, proxy
 from auoreo.core.diagnostics_env import env_checks  # noqa: E402  --- leftover .env, provider connections
 
 EXTRA_CHECKS.append(env_checks)
