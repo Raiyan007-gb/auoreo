@@ -202,7 +202,7 @@ async def test_recall_runs_before_the_block_is_attached(
         seen.append(([dict(m) for m in rt.history[-7:-1]], dict(rt.history[-1])))
         return text
 
-    monkeypatch.setattr("auoreo.runtime.runner.recall_query", spy)
+    monkeypatch.setattr("auoreo.runtime.nudges.recall_query", spy)  # memory/recall.py imports it per call
     sess = await services.create_session()
     await turn(services, sess.id, "first")
     await turn(services, sess.id, "second")
