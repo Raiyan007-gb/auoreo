@@ -57,6 +57,7 @@ def test_slugs_are_safe_on_every_os() -> None:
         assert slug.startswith("t-") and slug.split(".", 1)[0] not in wt.WINDOWS_RESERVED
     assert wt.task_slug("a..b") == "a.b" and wt.task_slug(".hidden.") == "hidden"
     assert wt.task_slug("x.lock") == "x" and len(wt.task_slug("z" * 300)) <= wt.MAX_SLUG
+    assert wt.task_slug("x.lock.lock") == "x" and wt.task_slug("y.lock-.lock.") == "y"  # git refuses *.lock
     for slug in map(wt.task_slug, ("../x", "con", "a b", "K1-7", "é/ü\\n")):
         assert wt.SLUG_RE.fullmatch(slug) and "/" not in slug and not set(slug) & set('<>:"|?*\\')
     with pytest.raises(WorktreeError, match="no characters"):
