@@ -10,6 +10,12 @@ connect_timeout=)` with:
 One connection per backend instance (reopened if it drops); each command is a channel
 running `bash -lc <cmd>` (with `term_type` when tty). The host's own environment applies:
 the local child env is never shipped to the remote side.
+
+With `settings.m7.ssh.hosts` on: the key is read as `SecretStore.candidates` (the current
+value, then `<NAME>#prev` inside its rotation grace window; the next one is tried only after
+a key-import or authentication failure), and every socket open calls `net_audit` (attached
+by the environment pool or the CLI; a no-op when absent). `keepalive_interval_s` is passed
+as asyncssh `keepalive_interval` when set.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import shlex
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from auoreo.backends import BackendStatus
@@ -48,6 +55,8 @@ class Backend(EnvironmentBackend):
     def __init__(self, settings: Any) -> None:
         super().__init__(settings)
         self._conn: Any = None
+        self.net_audit: Callable[[dict[str, Any]], Awaitable[None]] | None = None
+        """Called with `{mode, host, port}` after every socket open (M7 `net.ssh` audit)."""
         self._lock = asyncio.Lock()
         self.table = ProcTable(self.name, int(getattr(settings, "shell_max_processes", 8) or 8))
 
@@ -66,13 +75,18 @@ class Backend(EnvironmentBackend):
             out.append(f"known_hosts file not found: {cfg.known_hosts}")
         if not cfg.key_secret:
             out.append('environment_ssh.key_secret is required ("secret:<NAME>" in the secret store)')
-        elif not self._secret(cfg.key_secret):
+        elif not self._keys(cfg.key_secret):
             out.append(f"secret {cfg.key_secret.removeprefix('secret:')} is not set")
         return out
 
-    def _secret(self, ref: str) -> str | None:
+    def _keys(self, ref: str) -> list[str]:
+        """Key texts to offer, in order. Never logged, returned to a tool or put in an error."""
         store = SecretStore(self.settings.home, getattr(self.settings, "keyring", "allow-file"))
-        return store.get(ref.removeprefix("secret:"))
+        name = ref.removeprefix("secret:")
+        if getattr(getattr(getattr(self.settings, "m7", None), "ssh", None), "hosts", False):
+            return store.candidates(name, by="backend:ssh")
+        value = store.get(name)
+        return [value] if value else []
 
     @property
     def target(self) -> str:
@@ -84,30 +98,47 @@ class Backend(EnvironmentBackend):
         if problems := self._problems():
             raise ShellError(f"ssh environment not configured: {'; '.join(problems)}")
         cfg = self.cfg
-        key_text = self._secret(cfg.key_secret) or ""
-        try:
-            key = asyncssh.import_private_key(key_text)
-        except (asyncssh.KeyImportError, ValueError) as exc:
-            raise ShellError(f"ssh key {cfg.key_secret} is not a valid private key: {exc}") from None
+        failure: ShellError | None = None
+        for key_text in self._keys(cfg.key_secret) or [""]:
+            try:
+                key = asyncssh.import_private_key(key_text)
+            except (asyncssh.KeyImportError, ValueError) as exc:
+                failure = ShellError(f"ssh key {cfg.key_secret} is not a valid private key: {exc}")
+                continue
+            try:
+                conn = await self._open(asyncssh, cfg, key)
+            except asyncssh.PermissionDenied:
+                failure = ShellError(
+                    f"ssh {self.target}: authentication failed (key {cfg.key_secret} rejected)"
+                )
+                continue
+            if self.net_audit is not None:
+                await self.net_audit({"mode": "ssh", "host": cfg.host, "port": cfg.port})
+            return conn
+        assert failure is not None
+        raise failure from None
+
+    async def _open(self, asyncssh: Any, cfg: Any, key: Any) -> Any:
+        extra: dict[str, Any] = {}
+        if getattr(cfg, "keepalive_interval_s", None) is not None:
+            extra["keepalive_interval"] = cfg.keepalive_interval_s
         try:
             return await asyncssh.connect(
                 cfg.host, cfg.port, username=cfg.username, client_keys=[key],
                 known_hosts=str(cfg.known_hosts.expanduser()), connect_timeout=cfg.connect_timeout_s,
-                agent_path=None, config=None, preferred_auth="publickey", password=None,
+                agent_path=None, config=None, preferred_auth="publickey", password=None, **extra,
             )  # fmt: skip
         except asyncssh.HostKeyNotVerifiable as exc:
             raise ShellError(
                 f"ssh {self.target}: host key does not match {cfg.known_hosts} — refusing to connect "
                 f"(fail closed; verify the host and update known_hosts): {exc.reason}"
             ) from None
-        except asyncssh.PermissionDenied:
-            raise ShellError(
-                f"ssh {self.target}: authentication failed (key {cfg.key_secret} rejected)"
-            ) from None
         except TimeoutError:
             raise ShellError(
                 f"ssh {self.target}: connect timed out after {cfg.connect_timeout_s:g}s"
             ) from None
+        except asyncssh.PermissionDenied:
+            raise
         except (OSError, asyncssh.Error) as exc:
             raise ShellError(f"ssh {self.target}: connection failed: {exc}") from None
 

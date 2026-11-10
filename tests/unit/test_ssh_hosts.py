@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from typer.testing import CliRunner
 
 from auoreo.core import hosts
 from auoreo.core.permissions import SENSITIVE_WRITE_GLOBS, PermissionEngine, Rule
@@ -287,3 +288,35 @@ def test_flag_defaults_off_and_needs_no_restart() -> None:
 
     assert Settings().m7.ssh.hosts is False
     assert not any("m7" in str(k) for k in env_catalog.RESTART_REQUIRED)
+
+
+# ------------------------------------------------------------------ CLI: add, list
+def test_cli_add_and_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from auoreo.cli.app import app
+
+    monkeypatch.setenv("AUOREO_HOME", str(tmp_path))
+    run = CliRunner().invoke
+    base = ["--host", "10.0.0.5", "--user", "ubuntu", "--key", "SSH_KEY_LAB"]
+    r = run(app, ["ssh", "add", "lab", *base])
+    assert r.exit_code == 0 and "lab.yaml" in r.stdout
+    assert hosts.read_hosts(tmp_path)[0]["lab"].key_secret == "secret:SSH_KEY_LAB"
+    again = ["ssh", "add", "lab", "--host", "10.0.0.6", "--user", "ubuntu", "--key", "SSH_KEY_LAB"]
+    assert run(app, again).exit_code == 2  # exists
+    assert run(app, [*again, "--force"]).exit_code == 0
+    assert hosts.read_hosts(tmp_path)[0]["lab"].host == "10.0.0.6"
+    bad = [
+        ["ssh", "add", "con", "--host", "h", "--user", "u", "--key", "K"],
+        ["ssh", "add", "meta", "--host", "169.254.169.254", "--user", "u", "--key", "K"],
+        ["ssh", "add", "raw", "--host", "h", "--user", "u", "--key", "-----BEGIN OPENSSH PRIVATE KEY-----"],
+    ]
+    for argv in bad:
+        assert run(app, argv).exit_code == 2
+    hosts.trust(tmp_path, "10.0.0.6", 22, KEY_A)
+    hosts.write_host(tmp_path, "new", {"host": "h.example", "user": "u", "key_secret": "secret:K2"})
+    r = run(app, ["ssh", "list", "--json"])
+    rows = {row["name"]: row for row in json.loads(r.stdout)}
+    want = {"name": "lab", "host": "10.0.0.6", "port": 22, "user": "ubuntu", "key": "SSH_KEY_LAB"}
+    assert rows["lab"] == {**want, "trusted": True}
+    assert rows["new"]["trusted"] is False
+    text = run(app, ["ssh", "list"]).stdout
+    assert "lab" in text and "10.0.0.6:22" in text and "SSH_KEY_LAB" in text

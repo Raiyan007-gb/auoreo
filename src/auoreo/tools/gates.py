@@ -3,7 +3,8 @@
 
 - `external_dir_gate`: file tools whose `path` is outside cwd ask `external_directory`.
 - `unattended_gate`: an `ask` with no human → `approvals.unattended.<kind>` (default deny).
-- `secret_names`: the per-call secret scope (`requires_env` + operator `secret:` refs).
+- `secret_names`: the per-call secret scope (`requires_env` + operator `secret:` refs, plus
+  the key names of `hosts/<name>.yaml` hosts for the three environment tools).
 """
 
 from __future__ import annotations
@@ -50,6 +51,19 @@ def _operator_refs(node: Any, key: str = "") -> Iterator[str]:
             yield node
 
 
+HOST_KEY_TOOLS = frozenset({"use_environment", "exec_command", "write_stdin"})
+
+
+def host_key_names(harness: Any, tool: ToolDef, settings: Any) -> set[str]:
+    """M7: `key_secret` names of the host inventory, for the tools that may open an SSH
+    connection only. Hosts load from the runtime root only, so a project cannot widen this."""
+    on = getattr(getattr(getattr(settings, "m7", None), "ssh", None), "hosts", False)
+    if not on or tool.manifest.name not in HOST_KEY_TOOLS:
+        return set()
+    loaded = (getattr(harness, "hosts", None) or {}).values()
+    return {h.manifest.key_secret.removeprefix("secret:") for h in loaded}
+
+
 def secret_names(tool: ToolDef, settings: Any, harness: Any = None) -> list[str]:
     """A tool call's secret scope (spec §25.11): the tool's `requires_env`, operator-configured
     settings refs, and the `requires_env` of environment/selected backends the call may use.
@@ -66,6 +80,7 @@ def secret_names(tool: ToolDef, settings: Any, harness: Any = None) -> list[str]
             names.update(m.requires_env)
         if m.kind == "environment":
             names.update(_DESCRIBED_KEY.findall(m.description))
+    names.update(host_key_names(harness, tool, settings))
     return sorted(names)
 
 

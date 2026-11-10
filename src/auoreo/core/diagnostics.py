@@ -394,13 +394,13 @@ async def run_checks(settings: Settings, *, services: Services | None = None) ->
     out[at:at] = rows
     # --- end W1-E
     # --- W2-A: named execution environments (settings.environments), each with its check()
-    if settings.environments:
+    if settings.environments or settings.m7.ssh.hosts:
         from auoreo.tools.environments import describe
 
         eh = services.harness if services is not None else None
         try:
             eh = eh or Harness(default_roots(settings.home, Path.cwd(), bundled_root(), settings.extra_roots))
-            for name, ok, detail, fix in await describe(settings, eh):
+            for name, ok, detail, fix in await describe(settings, eh, getattr(services, "audit", None)):
                 out.append(Check(f"environment:{name}", "ok" if ok else "warn", detail, "" if ok else fix))
         except HarnessError:
             pass  # already reported by the harness row

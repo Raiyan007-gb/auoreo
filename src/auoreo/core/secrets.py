@@ -232,9 +232,11 @@ class SecretStore:
             self._save(data)
         return bool(old and grace_s > 0)
 
-    def candidates(self, name: str) -> list[str]:
-        """`[current, previous]` — the previous value only inside its grace window."""
-        out = [v for v in (self._resolve(name), self._resolve(f"{name}#prev")) if v]
+    def candidates(self, name: str, *, by: str | None = None) -> list[str]:
+        """`[current, previous]` — the previous value only inside its grace window. With `by`
+        the read is scope-checked and audited like `get(name, by=by)` (name only)."""
+        current = self._resolve(name) if by is None else self.get(name, by=by)
+        out = [v for v in (current, self._resolve(f"{name}#prev")) if v]
         return list(dict.fromkeys(out))
 
     def purge_expired(self, now: float | None = None) -> list[str]:
