@@ -15,6 +15,7 @@ is expanded inline.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 import uuid
 from pathlib import Path
@@ -33,9 +34,29 @@ class WorktreeError(RuntimeError):
     pass
 
 
-async def _git(*args: str, cwd: Path, stdin: bytes | None = None, env: dict[str, str] | None = None) -> bytes:
+NO_HOOKS = ("-c", f"core.hooksPath={os.devnull}")
+"""Every git call the harness makes runs no hook (M7 W4 Wave 2): a `post-checkout`,
+`reference-transaction` or `post-merge` in the shared hooks directory (or a configured
+`core.hooksPath`) would otherwise run as the server user, outside every sandbox, and a worker
+without an enforced sandbox can write those. `os.devnull` names no directory, so no file under
+it can exist; `-c` wins over every config file."""
+
+
+def _verb(args: tuple[str, ...]) -> str:
+    """The git subcommand in `args` (after any leading `-c key=value` pairs)."""
+    rest = list(args)
+    while len(rest) >= 2 and rest[0] == "-c":
+        rest = rest[2:]
+    return rest[0] if rest else "git"
+
+
+async def _git_rc(
+    *args: str, cwd: Path, stdin: bytes | None = None, env: dict[str, str] | None = None
+) -> tuple[int, bytes, bytes]:
+    """`git <args>` with hooks disabled, a scrubbed environment and a timeout: `(code, out, err)`."""
     proc = await asyncio.create_subprocess_exec(
         "git",
+        *NO_HOOKS,
         *args,
         cwd=cwd,
         stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
@@ -48,9 +69,14 @@ async def _git(*args: str, cwd: Path, stdin: bytes | None = None, env: dict[str,
     except TimeoutError:
         proc.kill()
         await proc.wait()
-        raise WorktreeError(f"git {args[0]} timed out") from None
-    if proc.returncode != 0:
-        raise WorktreeError(f"git {args[0]} failed: {err.decode(errors='replace').strip()[-300:]}")
+        raise WorktreeError(f"git {_verb(args)} timed out") from None
+    return proc.returncode or 0, out, err
+
+
+async def _git(*args: str, cwd: Path, stdin: bytes | None = None, env: dict[str, str] | None = None) -> bytes:
+    code, out, err = await _git_rc(*args, cwd=cwd, stdin=stdin, env=env)
+    if code != 0:
+        raise WorktreeError(f"git {_verb(args)} failed: {err.decode(errors='replace').strip()[-300:]}")
     return out
 
 
