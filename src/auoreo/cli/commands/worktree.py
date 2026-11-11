@@ -25,7 +25,7 @@ def _root() -> Path | None:
     return Path(raw).expanduser() if raw else None
 
 
-async def _plan(days: float, force: bool) -> tuple[Path, list[wt.GcItem]]:
+async def _plan(days: float, force: bool, protected: set[Path] | None = None) -> tuple[Path, list[wt.GcItem]]:
     st = settings()
     if not st.m7.orch.worktrees:
         return await wt.plan_gc(Path.cwd(), _root(), days, force=force)
@@ -33,6 +33,8 @@ async def _plan(days: float, force: bool) -> tuple[Path, list[wt.GcItem]]:
     from auoreo.teams.worktree_gc import guard_from_settings
 
     g = await guard_from_settings(st, _note)
+    if protected is not None:
+        protected |= g.protected
     top, items = await wt.plan_gc(
         Path.cwd(), _root(), days, force=force, protected=g.protected, activity=g.activity
     )
@@ -97,9 +99,24 @@ def gc(
         bool, typer.Option("--force", help="Also remove worktrees with uncommitted changes.")
     ] = False,
     as_json: Annotated[bool, typer.Option("--json")] = False,
+    reconcile: Annotated[
+        bool,
+        typer.Option(
+            "--reconcile",
+            help="M7: also delete merged auoreo/* branches, report drift against kanban attachments, "
+            "and journal removals for the server's worktree.removed/gc events.",
+        ),
+    ] = False,
+    restore: Annotated[
+        bool,
+        typer.Option("--restore", help="With --reconcile: recreate a missing branch at its recorded tip."),
+    ] = False,
 ) -> None:
     """Remove stale `.auoreo/worktrees/*`: merged, untouched, missing or orphaned (dirty ones are kept)."""
     days = settings().cli2.worktree_stale_days if older_than is None else older_than
+    if reconcile or restore:
+        _reconcile(days, dry_run=dry_run, yes=yes, force=force, as_json=as_json, restore=restore)
+        return
     try:
         top, items = asyncio.run(_plan(days, force))
     except WorktreeError as exc:
@@ -124,3 +141,49 @@ def gc(
         raise typer.Exit(1) from exc
     if not as_json:
         console.print(f"removed {len(todo)} worktree(s)")
+
+
+def _reconcile(days: float, *, dry_run: bool, yes: bool, force: bool, as_json: bool, restore: bool) -> None:
+    """`gc --reconcile` (M7 W4 Wave 2, `teams/worktree_reconcile.py`): writes no event; a running
+    server turns the journal under `<home>/worktrees/` into `worktree.removed|gc` events."""
+    from auoreo.teams import worktree_reconcile as rc
+
+    st = settings()
+    if not st.m7.orch.worktrees:
+        err_console.print("[red]--reconcile needs m7.orch.worktrees[/red]")
+        raise typer.Exit(1)
+
+    async def plan() -> tuple[Path, list[wt.GcItem], list[rc.Finding], rc.Records]:
+        protected: set[Path] = set()
+        top, items = await _plan(days, force, protected)
+        rec = await rc.records_from_settings(st, _note)
+        return top, items, await rc.plan(top, items, rec, protected, restore=restore), rec
+
+    try:
+        top, items, findings, rec = asyncio.run(plan())
+    except WorktreeError as exc:
+        err_console.print(f"[red]{escape(str(exc))}[/red]")
+        raise typer.Exit(1) from exc
+    todo = [i for i in items if i.action != "keep"]
+    acts = [f for f in findings if f.action in ("delete_branch", "restore")]
+    if as_json:
+        rows = [{"path": str(i.path), "reason": i.reason, "action": i.action} for i in items]
+        dump_json({"worktrees": rows, "findings": [rc.finding_dict(f) for f in findings]})
+    else:
+        for i in items:
+            console.print(f"{i.action:6} {i.path}  ({escape(i.reason)})")
+        for f in findings:
+            console.print(f"{f.action:6} {escape(f.branch or f.path or '')}  ({escape(f.reason)})")
+        if not items and not findings:
+            console.print("nothing to reconcile")
+    if dry_run or not (todo or acts):
+        return
+    if not yes:
+        typer.confirm(f"Remove/prune {len(todo)} worktree(s) and change {len(acts)} branch(es)?", abort=True)
+    try:
+        asyncio.run(rc.apply(top, items, findings, st.home, refs=rec.refs, force=force))
+    except WorktreeError as exc:
+        err_console.print(f"[red]{escape(str(exc))}[/red]")
+        raise typer.Exit(1) from exc
+    if not as_json:
+        console.print(f"reconciled: {len(todo)} worktree(s), {len(acts)} branch change(s); journal written")
