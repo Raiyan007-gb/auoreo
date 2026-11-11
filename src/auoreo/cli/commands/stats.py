@@ -19,8 +19,15 @@ def stats(
     by_subagent: Annotated[
         bool, typer.Option("--by-subagent", help="Group by delegated subagent (spec §25.15).")
     ] = False,
+    token_economy: Annotated[
+        bool,
+        typer.Option("--token-economy", help="M7 token-economy gates: measured value, threshold, verdict."),
+    ] = False,
 ) -> None:
     """Token and cost usage per model and per session (or per project / subagent)."""
+    if token_economy:  # --- M7 W1 Wave 2: read-only, no model call
+        _token_economy(days, as_json)
+        return
     if project:  # --- G5a
         _by_project(days, as_json)
         return
@@ -100,3 +107,27 @@ def _by_subagent(days: int, as_json: bool) -> None:
             f"{r['cost_usd']:.4f}",
         )
     console.print(table)
+
+
+def _token_economy(days: int, as_json: bool) -> None:
+    from auoreo.core.token_report import Report, build
+
+    async def go(svc: Services) -> Report:
+        return await build(svc.db, svc.settings, svc.gateway.price, days)
+
+    report = with_services(go, memory=False)
+    if as_json:
+        dump_json(report.as_dict())
+        return
+    table = Table(title=f"token economy gates (last {days}d)")
+    for col in ("gate", "measurement", "value", "threshold", "samples", "verdict", "decides"):
+        table.add_column(col, justify="right" if col in ("value", "samples") else "left")
+    for g in report.gates:
+        value = "-" if g.value is None else f"{g.value:.3f}"
+        table.add_row(
+            g.id, g.measurement, value, g.threshold, f"{g.samples}/{g.min_samples}", g.verdict, g.decides
+        )
+    console.print(table)
+    flags = " · ".join(f"{k}={v}" for k, v in report.flags.items())
+    console.print(f"flags: {flags}")
+    console.print(" · ".join(f"{k} {v}" for k, v in report.notes.items()))

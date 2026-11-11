@@ -440,6 +440,43 @@ PR description; a step passes when it adds no new failure to that list.
 *   **Snapshots**: refresh with `AUOREO_SNAPSHOT=update` only if a snapshot legitimately changes
     (the `turn.summary` payload gains keys), never in CI.
 
+## Wave 2 implementation notes
+
+Built from the Wave 2 draft (`.artifacts/egm/m7-token-economy-w2/`, not reviewed) with its
+recommended default for every open decision; all of it is off by default or read-only.
+
+*   **Report.** `auoreo stats --token-economy [--days N] [--json]` (`core/token_report.py`,
+    loading in `core/token_report_data.py`) prints gates B1, B2, T1, R1-R3, M1-M3 and C1 with
+    the draft's thresholds, read from `state.db` only. The draft gives a minimum sample count
+    only for R1 (200 turns), M1 (30 sessions) and C1 (200 outcomes); the others are this build's
+    choice: B1 100 turns, B2 and T1 50 calls, R2 and R3 share R1's 200, M3 shares M1's 30, M2 one
+    compaction. T1 is reported as `median measured h / median expected P_prev/P` with
+    pass at 0.8 or more (no `turn_start` needed). R1-R3 count route-eligible turns with the pure
+    rule in `policy/route.py`; history size comes from the current `messages` rows (chars / 4)
+    and the attachment and exact-fork conditions cannot be read from stored data (treated as
+    absent). M3 finds the first point where the maskable size reaches `mask.min_tokens` by a
+    binary search over history prefixes.
+*   **Cache multipliers (M3).** Anthropic documents a cache read at 0.1x the input price and a
+    write at 1.25x (5-minute) or 2x (1-hour); some newer models read at a lower rate
+    (pricing page, checked 2026-11-11). The report therefore reads
+    `m7.token.mask.cache_read_multiplier` (0.1) and `cache_write_multiplier` (unset: 1.25 or 2.0
+    from `gateway_tuning.cache_ttl`).
+*   **Masking** (`m7.token.masking = "compaction"`; `economic` is not built and is rejected as a
+    value). The pure plan lives in `runtime/masking_plan.py`, the spill and rewrite in
+    `runtime/masking.py`. Spill names: the call id when it matches `[A-Za-z0-9_-]{1,96}` and is
+    not a Windows device name (`con`, `nul`, `com1`, ...; the draft did not exclude those), else
+    `h_<sha256[:16]>`. Spills are written as bytes so an unmask is byte-exact on Windows too.
+    `context.masked.gate` is always `pressure` (masking runs only inside a compaction run).
+    The notice rule rewrites every read-dedupe notice after a masked `read` result up to the
+    next real user message. Rewritten notices are not restored by `/compact unmask=`. Nothing
+    removes `<home>/sessions/<sid>/` today, so spill files are kept like the executor's.
+*   **Bandit.** `cache_ratio` is recorded on every outcome; `m7.token.bandit_cache_signal`
+    (`binary` default, `ratio`) picks the reward term.
+*   **Re-pricing.** `usage_reprice_mark` in `schema_meta`; `auoreo db recompute-costs --all`.
+    With `--days`, rows older than the window and below the mark are only reached with `--all`.
+*   **Not built:** the cheap-model route (runtime part), the `turn_start` breakpoint, masking's
+    `economic` trigger and any `0009` revision.
+
 --------------------------------------------------------------------------------
 
 *Drafted with EGM*

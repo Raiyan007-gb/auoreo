@@ -17,13 +17,29 @@ class _Tolerant(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class M7Mask(_Tolerant):
+    """W1 Wave 2 observation masking (`m7.token.masking`) and the report's mask gates."""
+
+    keep_recent: int = Field(default=10, ge=0)
+    """The last N tool results are never masked."""
+    min_chars: int = Field(default=2000, ge=1)
+    """Only string tool results of at least this many characters are masked."""
+    min_tokens: int = Field(default=8000, ge=0)
+    """Report gate M3: the maskable size from which a session counts as a masking candidate."""
+    cache_read_multiplier: float = Field(default=0.1, ge=0)
+    """Cache-read price / input price used by report gate M3 (Anthropic default; some models differ)."""
+    cache_write_multiplier: float | None = Field(default=None, ge=0)
+    """Cache-write price / input price for gate M3; None = 1.25 (`cache_ttl` 5m) or 2.0 (1h)."""
+
+
 class M7Token(_Tolerant):
     """W1 token economy."""
 
     telemetry: bool = False
     """Prefix/tool hashes and breakpoints on `usage` events; `cache.prefix_changed` warnings."""
     cache_layout: Literal["legacy", "tail"] = "legacy"
-    """Anthropic breakpoints: `legacy` = last user message; `tail` = last message + previous turn."""
+    """Anthropic breakpoints: `legacy` = last user message; `tail` = the last user message plus the
+    last markable message (the tail). There is no previous-turn breakpoint (Wave 2: not built)."""
     context_carrier: Literal["splice", "persisted"] = "splice"
     """Per-turn context block: spliced at request time, or persisted with the turn message."""
     cached_pricing: bool = False
@@ -32,6 +48,14 @@ class M7Token(_Tolerant):
     """Send `prompt_cache_key = session_id` to OpenAI-family models."""
     read_dedupe: bool = False
     """A repeated, unchanged `read` in the same turn returns a short notice."""
+    mask: M7Mask = Field(default_factory=M7Mask)
+    masking: Literal["off", "compaction"] = "off"
+    """`compaction`: every compaction run first replaces old bulky tool results by placeholders
+    (originals spilled under `sessions/<id>/tool-results/masked/`); `/compact unmask=` restores."""
+    bandit_cache_signal: Literal["binary", "ratio"] = "binary"
+    """Bandit reward cache term: `binary` (any cached token) or `ratio` (cached / prompt over
+    main-turn calls). `cache_ratio` is always recorded in the outcome signals; switch only after
+    report gate C1 passes, and keep `bandit.weights.cache_hit = 0` with `cached_pricing` on."""
 
 
 class M7Ssh(_Tolerant):

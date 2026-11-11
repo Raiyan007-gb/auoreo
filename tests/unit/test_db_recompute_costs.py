@@ -1,10 +1,11 @@
-"""`auoreo db recompute-costs [--days N] [--dry-run]` (M7 step 1.4 remainder).
+"""`auoreo db recompute-costs [--days N] [--dry-run] [--all]` (M7 step 1.4 remainder, Wave 2 mark).
 
 Estimated rows that carry a cache split are re-priced with the current, cache-aware price
 function. Provider-reported costs, rows without cache tokens and rows the price table does not
 know are left alone; a second run changes nothing; `--dry-run` writes nothing. There is no
 marker on the row (the design rules out the `price:cached` tag and a new column needs a
-migration), so idempotence comes from the price being a pure function of the row.
+migration): a completed run stores the highest scanned id as `usage_reprice_mark` in
+`schema_meta` and the next run starts after it, unless `--all`.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ from typer.testing import CliRunner
 
 from auoreo.cli.app import app
 from auoreo.core import usage_reprice
-from auoreo.core.db import UsageRow, utcnow
+from auoreo.core.db import Meta, UsageRow, utcnow
 from auoreo.core.services import Services
 from auoreo.core.usage import UsageLedger
 from auoreo.gateway.types import Usage
@@ -93,13 +94,61 @@ async def test_rows_keep_their_tags_and_other_columns(services: Services) -> Non
 
 
 async def test_second_run_changes_nothing(services: Services) -> None:
+    """Wave 2: a completed run stores a high-water mark; the next run scans only newer rows."""
     await _seed(services)
     await usage_reprice.recompute_costs(services.db, new_price)
     first = {k: r.cost_usd for k, r in (await _rows(services)).items()}
     again = await usage_reprice.recompute_costs(services.db, new_price)
+    assert (again.scanned, again.repriced, again.unchanged, again.unpriced) == (0, 0, 0, 0)
+    assert {k: r.cost_usd for k, r in (await _rows(services)).items()} == first
+
+
+async def test_all_rescans_every_row_and_finds_them_current(services: Services) -> None:
+    await _seed(services)
+    await usage_reprice.recompute_costs(services.db, new_price)
+    first = {k: r.cost_usd for k, r in (await _rows(services)).items()}
+    again = await usage_reprice.recompute_costs(services.db, new_price, all_rows=True)
     assert (again.scanned, again.repriced, again.unchanged, again.unpriced) == (4, 0, 3, 1)
     assert {k: r.cost_usd for k, r in (await _rows(services)).items()} == first
-    assert again.old_total == pytest.approx(again.new_total)
+    assert again.old_total == pytest.approx(again.new_total) and again.all_rows is True
+
+
+async def _mark(svc: Services) -> str | None:
+    async with svc.db.session() as s:
+        row = await s.get(Meta, usage_reprice.MARK_KEY)
+        return None if row is None else row.value
+
+
+async def test_the_mark_is_the_highest_scanned_id_and_newer_rows_are_scanned(services: Services) -> None:
+    await _seed(services)
+    report = await usage_reprice.recompute_costs(services.db, new_price)
+    rows = await _rows(services)
+    assert usage_reprice.MARK_KEY == "usage_reprice_mark"
+    assert await _mark(services) == str(rows["r6"].id) == str(report.mark)
+    await UsageLedger(services.db, old_price).record("s", "r7", "m", Usage(1000, 100, cached_tokens=800))
+    later = await usage_reprice.recompute_costs(services.db, new_price)
+    assert (later.scanned, later.repriced) == (1, 1)
+    assert (await _rows(services))["r7"].cost_usd == pytest.approx(380e-6)
+    assert await _mark(services) == str((await _rows(services))["r7"].id)
+
+
+async def test_a_dry_run_leaves_the_mark(services: Services) -> None:
+    await _seed(services)
+    await usage_reprice.recompute_costs(services.db, new_price, dry_run=True)
+    assert await _mark(services) is None
+    await usage_reprice.recompute_costs(services.db, new_price)
+    mark = await _mark(services)
+    await UsageLedger(services.db, old_price).record("s", "r7", "m", Usage(1000, 100, cached_tokens=800))
+    dry = await usage_reprice.recompute_costs(services.db, new_price, dry_run=True)
+    assert dry.scanned == 1 and await _mark(services) == mark
+
+
+async def test_a_run_that_scans_nothing_keeps_the_mark(services: Services) -> None:
+    await _seed(services)
+    await usage_reprice.recompute_costs(services.db, new_price)
+    mark = await _mark(services)
+    await usage_reprice.recompute_costs(services.db, new_price)
+    assert await _mark(services) == mark
 
 
 async def test_dry_run_reports_without_writing(services: Services) -> None:
@@ -189,7 +238,10 @@ def test_cli_dry_run_then_real_run(cli_env: Path, home: Path, monkeypatch: pytes
     assert real.exit_code == 0 and "re-priced 1" in real.output
     assert _cost(home) == pytest.approx(380e-6)  # the fake gateway's cache-aware price
     again = runner.invoke(app, ["db", "recompute-costs", "--json"])
-    assert json.loads(again.stdout)["repriced"] == 0
+    assert json.loads(again.stdout)["scanned"] == 0  # above the mark only
+    full = runner.invoke(app, ["db", "recompute-costs", "--all", "--json"])
+    report = json.loads(full.stdout)
+    assert (report["scanned"], report["repriced"], report["all_rows"]) == (1, 0, True)
 
 
 def test_startup_never_reprices(cli_env: Path, home: Path, monkeypatch: pytest.MonkeyPatch) -> None:

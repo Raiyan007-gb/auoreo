@@ -27,6 +27,8 @@ _EXACT: dict[str, str] = {
     "permission.requested": "warn",
     "cache.prefix_changed": "warn",  # --- M7: a prompt-cache prefix broke mid-session
     "merge.conflicts": "warn",  # --- M7: a worktree merge-back hit conflicts
+    "context.masked": "info",  # --- M7 Wave 2: observation masking (call ids and counts only)
+    "context.unmasked": "info",
 }
 _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\.(failed|crashed|error|invalid_config)$"), "error"),

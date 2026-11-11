@@ -294,10 +294,15 @@ def recompute_costs(
         bool, typer.Option("--dry-run", help="Report what would change; write nothing.")
     ] = False,
     as_json: Annotated[bool, typer.Option("--json")] = False,
+    all_rows: Annotated[
+        bool, typer.Option("--all", help="Rescan rows below the last run's high-water mark too.")
+    ] = False,
 ) -> None:
     """Re-price estimated usage rows that have cached or cache-write tokens with the cache-aware
     rates (needs m7.token.cached_pricing). Prices are today's; provider-reported costs and rows
-    without a current price are kept. Runs only on request, never at startup; safe to repeat."""
+    without a current price are kept. Runs only on request, never at startup; safe to repeat.
+    A completed run remembers the last row it scanned; the next run starts after it (`--all`:
+    from the first row)."""
     from auoreo.cli.common import with_services
     from auoreo.core.services import Services
     from auoreo.core.usage_reprice import RepriceReport
@@ -309,16 +314,17 @@ def recompute_costs(
         raise typer.Exit(2)
 
     async def go(svc: Services) -> RepriceReport:
-        return await run(svc.db, svc.gateway.price, days=days, dry_run=dry_run)
+        return await run(svc.db, svc.gateway.price, days=days, dry_run=dry_run, all_rows=all_rows)
 
     report = with_services(go, st, memory=False)
     if as_json:
         print(json.dumps(report.as_dict(), indent=2))
         return
     verb = "would re-price" if dry_run else "re-priced"
-    window = f"last {days} days" if days else "all rows"
+    scope = "every row" if all_rows else "rows after the last run's mark"
+    window = f"last {days} days, {scope}" if days else scope
     console.print(
         f"{verb} {report.repriced} of {report.scanned} estimated rows with cache tokens ({window}): "
         f"${report.old_total:.6f} -> ${report.new_total:.6f}"
     )
-    console.print(f"unchanged {report.unchanged} · no current price {report.unpriced}")
+    console.print(f"unchanged {report.unchanged} · no current price {report.unpriced} · mark {report.mark}")

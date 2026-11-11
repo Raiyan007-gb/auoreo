@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from auoreo.core.settings import Settings
-from auoreo.core.usage import UsageLedger
+from auoreo.core.usage import UsageLedger, cache_hit_ratio
 from auoreo.policy.config import Arm, BanditSettings, BanditWeights
 from auoreo.policy.store import BanditStore
 
@@ -101,13 +101,15 @@ def _norm(value: float, mean: float) -> float:
     return min(value / mean, NORM_CAP)
 
 
-def reward(w: BanditWeights, signals: dict[str, Any]) -> float:
-    """`w1·success − w2·normCost − w3·normLatency + w4·cacheHit − w5·fallbacks − w6·corrections`."""
+def reward(w: BanditWeights, signals: dict[str, Any], cache_signal: str = "binary") -> float:
+    """`w1·success − w2·normCost − w3·normLatency + w4·cacheHit − w5·fallbacks − w6·corrections`.
+    `cache_signal = "ratio"` (`m7.token.bandit_cache_signal`) uses `cache_ratio` as cacheHit."""
+    cache = signals.get("cache_ratio", 0.0) if cache_signal == "ratio" else signals.get("cache_hit", 0)
     return (
         w.success * float(signals.get("success", 0))
         - w.cost * float(signals.get("norm_cost", 0.0))
         - w.latency * float(signals.get("norm_latency", 0.0))
-        + w.cache_hit * float(signals.get("cache_hit", 0))
+        + w.cache_hit * float(cache)
         - w.fallbacks * min(float(signals.get("fallbacks", 0)), NORM_CAP)
         - w.corrections * float(signals.get("corrections", 0))
     )
@@ -120,6 +122,8 @@ def signals_of(status: str, rows: list[Any], means: tuple[float, float], n_prior
     latency = sum(int(r.latency_ms or 0) for r in rows)
     mean_cost = (means[0] * n_prior + cost) / (n_prior + 1)
     mean_latency = (means[1] * n_prior + latency) / (n_prior + 1)
+    ok = [r for r in rows if r.outcome == "ok"]  # --- M7: main-turn rows, the Wave 1 definition
+    prompt = sum(int(getattr(r, "prompt_tokens", 0) or 0) for r in ok)
     return {
         "status": status,
         "success": 1 if status == "completed" else 0,
@@ -128,6 +132,7 @@ def signals_of(status: str, rows: list[Any], means: tuple[float, float], n_prior
         "norm_cost": round(_norm(cost, mean_cost), 4),
         "norm_latency": round(_norm(latency, mean_latency), 4),
         "cache_hit": 1 if any((r.cached_tokens or 0) > 0 for r in rows) else 0,
+        "cache_ratio": round(cache_hit_ratio(sum(int(r.cached_tokens or 0) for r in ok), prompt), 4),
         "fallbacks": sum(1 for r in rows if r.outcome not in (None, "ok")),
         "corrections": 0,
         "calls": len(rows),
@@ -206,7 +211,7 @@ class BanditPolicy:
         prior = min(sum(p for p, _ in stats.values()), 200)
         signals = signals_of(status, rows, await self.store.means(choice.context_key), prior)
         signals["explore"] = choice.explore
-        value = round(reward(self.cfg.weights, signals), 6)
+        value = round(reward(self.cfg.weights, signals, self.s.settings.m7.token.bandit_cache_signal), 6)
         await self.store.record(
             session_id=session_id,
             run_id=run_id,

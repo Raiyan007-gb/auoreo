@@ -96,9 +96,15 @@ async def _compact(inv: Invocation) -> Expanded:
 
         try:  # S4(d): manual compaction requires idle and holds the start lock throughout
             async with inv.coord.compaction_lock(sid):
+                kwargs = compact_args(inv.args)
+                if (target := kwargs.pop("unmask", None)) is not None:  # --- M7: restore masked results
+                    from auoreo.runtime.masking import unmask
+
+                    await unmask(comp, inv.rt, target)
+                    return Expanded(inv.text, handled=True)
                 # the service already emitted compaction.skipped / compaction.failed
                 with contextlib.suppress(CompactionError):
-                    await comp.compact(sid, trigger="manual", **compact_args(inv.args))
+                    await comp.compact(sid, trigger="manual", **kwargs)
         except SessionBusy:
             reason = "busy: a turn is running; /compact runs only when the session is idle"
             await s.emit(sid, "compaction.skipped", {"trigger": "manual", "reason": reason})
@@ -106,12 +112,16 @@ async def _compact(inv: Invocation) -> Expanded:
 
 
 _COMPACT_ARG = re.compile(r"(up_to|from|retain)=(\S+)")
+_UNMASK_ARG = re.compile(r"(?:^|\s)unmask=(\S+)")
 _COMPACT_KEYS = {"up_to": "up_to", "from": "from_", "retain": "retain_ratio"}
 
 
 def compact_args(args: str) -> dict[str, Any]:
-    """`/compact up_to=40`, `/compact from=12`, `/compact retain=0.1` (unparsable values ignored)."""
+    """`/compact up_to=40`, `/compact from=12`, `/compact retain=0.1` (unparsable values ignored);
+    `/compact unmask=<call id|all>` restores masked tool results instead of compacting."""
     out: dict[str, Any] = {}
+    if unmask := _UNMASK_ARG.search(args):
+        out["unmask"] = unmask.group(1)
     for key, raw in _COMPACT_ARG.findall(args):
         with contextlib.suppress(ValueError):
             value: float = float(raw) if key == "retain" else int(raw)
