@@ -6,6 +6,7 @@ all-or-nothing batch, an existing branch resumed (never reset), a concurrent bat
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -49,15 +50,23 @@ async def _children(svc: Services, parent: str) -> list[str]:
 
 # ------------------------------------------------------------------ slugs and guards
 def test_slugs_are_safe_on_every_os() -> None:
-    assert wt.task_slug("../../etc/passwd") == "etc-passwd"
-    assert wt.task_slug("A\\B/C:d*e") == "a-b-c-d-e"
-    assert wt.task_slug("task_ab12-9f") == "task_ab12-9f"
+    def tag(raw: str) -> str:  # a changed or shortened name ends in 8 hex of sha256(raw)
+        return hashlib.sha256(raw.encode()).hexdigest()[:8]
+
+    assert wt.task_slug("../../etc/passwd") == f"etc-passwd-{tag('../../etc/passwd')}"
+    win = "A\\B/C:d*e"
+    assert wt.task_slug(win) == f"a-b-c-d-e-{tag(win)}"
+    assert wt.task_slug("task_ab12-9f") == "task_ab12-9f"  # already a slug: unchanged
     for reserved in ("CON", "nul", "com1", "LPT9", "aux.txt", "prn.tar.gz"):
         slug = wt.task_slug(reserved)
         assert slug.startswith("t-") and slug.split(".", 1)[0] not in wt.WINDOWS_RESERVED
-    assert wt.task_slug("a..b") == "a.b" and wt.task_slug(".hidden.") == "hidden"
-    assert wt.task_slug("x.lock") == "x" and len(wt.task_slug("z" * 300)) <= wt.MAX_SLUG
-    assert wt.task_slug("x.lock.lock") == "x" and wt.task_slug("y.lock-.lock.") == "y"  # git refuses *.lock
+    assert (
+        wt.task_slug("a..b") == f"a.b-{tag('a..b')}"
+        and wt.task_slug(".hidden.") == f"hidden-{tag('.hidden.')}"
+    )
+    assert wt.task_slug("x.lock") == f"x-{tag('x.lock')}" and len(wt.task_slug("z" * 300)) <= wt.MAX_SLUG
+    assert wt.task_slug("x.lock.lock") == f"x-{tag('x.lock.lock')}"  # git refuses *.lock
+    assert wt.task_slug("y.lock-.lock.") == f"y-{tag('y.lock-.lock.')}"
     for slug in map(wt.task_slug, ("../x", "con", "a b", "K1-7", "é/ü\\n")):
         assert wt.SLUG_RE.fullmatch(slug) and "/" not in slug and not set(slug) & set('<>:"|?*\\')
     with pytest.raises(WorktreeError, match="no characters"):

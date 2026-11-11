@@ -19,6 +19,7 @@ reset, one `git worktree add` at a time per repository, a cap and a Windows path
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 import shutil
@@ -234,20 +235,30 @@ MAX_WINDOWS_PATH = 200
 _LOCKS: dict[str, asyncio.Lock] = {}
 
 
+def _readable(slug: str) -> str:
+    slug = re.sub(r"\.{2,}", ".", slug).strip(".-")
+    while slug.endswith(".lock"):  # every one: `x.lock.lock` must not end up as `x.lock`
+        slug = slug.removesuffix(".lock").strip(".-")
+    return slug
+
+
 def task_slug(raw: str) -> str:
     """A flat slug that is safe as a folder on every OS and as a git ref: lowercase
     `[a-z0-9._-]`, no path separators or `..`, no leading/trailing dot or dash, no `.lock`
     suffix, and never a Windows reserved device name (`con`, `nul`, `com1`…, with or without
-    an extension)."""
-    slug = re.sub(r"[^a-z0-9._-]+", "-", raw.lower())
-    slug = re.sub(r"\.{2,}", ".", slug)[:MAX_SLUG].strip(".-")
-    while slug.endswith(".lock"):  # every one: `x.lock.lock` must not end up as `x.lock`
-        slug = slug.removesuffix(".lock").strip(".-")
+    an extension). A name that already is such a slug is kept as it is; any other (changed by
+    the rules above, or longer than `MAX_SLUG`) ends in `-<8 hex of sha256(raw)>`, so two
+    names never share one worktree and branch (`a_b`/`a/b`, `x`/`X`, two long names)."""
+    slug = _readable(re.sub(r"[^a-z0-9._-]+", "-", raw.lower()))
     if not slug:
         raise WorktreeError(f"'{raw}' has no characters usable in a worktree name")
     if slug.split(".", 1)[0] in WINDOWS_RESERVED:
         slug = f"t-{slug}"
-    return slug
+    if slug == raw and len(slug) <= MAX_SLUG:
+        return slug
+    tag = hashlib.sha256(raw.encode("utf-8", "surrogatepass")).hexdigest()[:8]
+    head = _readable(slug[: MAX_SLUG - len(tag) - 1])
+    return f"{head}-{tag}" if head else f"t-{tag}"
 
 
 def check_path_length(dest: Path, *, windows: bool | None = None) -> None:
@@ -285,7 +296,20 @@ async def task_worktree(cwd: Path, root: Path, slug: str, *, max_worktrees: int 
             top, slug, root, base="HEAD", fetch=False, check_pr=False, reset=False, harden=True
         )
         out.base = out.base if out.base not in ("", "HEAD") else head
+        if out.resumed and (on := await _checked_out(top, dest)) != f"refs/heads/{out.branch}":
+            raise WorktreeError(
+                f"{dest} is on {on or 'no branch'}, not {out.branch}; refusing to resume it "
+                "(remove it with `git worktree remove` or pick another task name)"
+            )
         return out
+
+
+async def _checked_out(top: Path, dest: Path) -> str | None:
+    """The branch the server repository records for the worktree at `dest` (never read from
+    `<dest>/.git`, which the worker owns)."""
+    listing = await _ok("worktree", "list", "--porcelain", cwd=top) or ""
+    want = _resolved(dest)
+    return next((e.get("branch") for e in _entries(listing) if _resolved(Path(e["worktree"])) == want), None)
 
 
 async def discard_worktree(cwd: Path, tree: NewFeature) -> None:

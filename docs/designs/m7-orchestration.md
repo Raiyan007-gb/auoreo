@@ -171,7 +171,9 @@ resume of an existing `<wt>/.git`, `_prepare_root`) and adds keywords rather tha
     out (`git worktree add <dest> <branch>`); if it is checked out in another worktree the spawn
     fails with a clear error. The CLI `new-feature` keeps `reset=True`;
 *   slug: `k<board>-<task_id>` for kanban, `<name>-<4 hex>` for `delegate_task`, lowercased and
-    validated by `SLUG_RE`;
+    validated by `SLUG_RE`; a name the rules change (or one over 48 characters) gets
+    `-<8 hex of sha256(name)>` so two tasks never share a worktree, and a worktree whose
+    recorded branch is not `auoreo/<slug>` is not resumed;
 *   a per-repo `asyncio.Lock` serializes `git worktree add` (a `delegate_task` batch of up to 3
     would otherwise race on git's lock files);
 *   a path-length guard (on Windows the full worktree path must stay under 200 characters) and the

@@ -22,6 +22,7 @@ from auoreo.gateway.fake import Scripted
 from auoreo.harness.manifests import Rule
 from auoreo.runtime import cwd as session_cwd
 from auoreo.runtime import worktrees as wt
+from auoreo.runtime.subtask import WorktreeError
 from tests.teams_helpers import RoutedGateway, call_tool, tool_ctx, turn
 from tests.worktree_helpers import flags_on, git, git_init
 
@@ -309,3 +310,27 @@ async def test_a_sandboxed_worker_cannot_destroy_the_shared_object_store(
     git(workdir, "fsck", "--no-dangling")
     assert git(workdir, "log", "-1", "--format=%s", tree.branch) == "sandboxed"
     assert git(workdir, "log", "-1", "--format=%s", "main") == "init"
+
+
+# ------------------------------------------------------------------ 4: slugs never collide
+async def test_long_or_normalized_names_get_their_own_worktree(services: Services, workdir: Path) -> None:
+    git_init(workdir)
+    long = "a" * 60
+    assert wt.task_slug(f"{long}-ab12") != wt.task_slug(f"{long}-cd34")
+    assert len(wt.task_slug(f"{long}-ab12")) <= wt.MAX_SLUG
+    for one, other in (("ka_b-1", "ka/b-1"), ("ka-b-1", "ka/b-1"), ("Job", "job"), ("con", "t-con")):
+        assert wt.task_slug(one) != wt.task_slug(other), (one, other)
+    assert wt.task_slug("kdefault-5") == "kdefault-5"  # a name that is already a slug is kept
+    a = await _tree(services, f"{long}-ab12")
+    b = await _tree(services, f"{long}-cd34")
+    assert a.path != b.path and a.branch != b.branch and not b.resumed
+
+
+async def test_a_worktree_on_another_branch_is_not_resumed(services: Services, workdir: Path) -> None:
+    git_init(workdir)
+    tree = await _tree(services, "job")
+    git(tree.path, "switch", "--quiet", "-c", "auoreo/someone-else")  # the worker moved its HEAD
+    with pytest.raises(WorktreeError, match="refusing to resume"):
+        await _tree(services, "job")
+    git(tree.path, "switch", "--quiet", "auoreo/job")
+    assert (await _tree(services, "job")).resumed
