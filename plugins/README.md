@@ -32,6 +32,9 @@ entry point. Plugins never receive secrets they did not declare in `consumes`.
 | `await host.audit(action, detail)` | none (namespaced) | Audit row `plugin.<name>.<action>`; detail redacted, ≤ 4 KiB |
 | `await host.usage(session_id, model, cost_usd)` | `consumes: [usage]` | Spend in the usage ledger (budgets, `auoreo stats`); ≤ $100 per call |
 | `host.log(level, message)` | none | Plugin log line in the server log |
+| `await host.voice_transcribe(chat_id, mime, data)` | `consumes: [voice]`, `m7.agents.voice_inbound`, paired chat | M7: `{text, duration_s}`; size, per-note and per-day caps host side; audited `plugin.voice` without the text; an older host raises code -32601 |
+| `await host.state_get()` / `await host.state_set(obj)` | `consumes: [state]` | M7: one JSON object (≤ 16 KiB) in `<home>/plugins/<name>/state.json` (cursors, counters) |
+| `host.proxy` | `consumes: ["net:proxy"]` | M7: the egress-proxy URL with a host-minted token, set at `initialize` (None when no proxy runs); revoked when the plugin stops |
 | `await host.oauth_token(connector)` | `consumes: ["oauth:<connector>"]` | Short-lived OAuth access token minted host side from the `oauth/<connector>` refresh token (`auoreo login <connector>`, `connectors/<name>/oauth.yaml`); in-memory TTL cache, audited `plugin.oauth`; the refresh token never reaches the plugin |
 
 ## Delivery `meta` keys a provider may receive
@@ -78,6 +81,45 @@ auoreo plugin set telegram routes '[
 - Rollback: remove `routes` before running an older build (its schema rejects the key and
   the plugin would stay off as `invalid_config`).
 
+## Inbound voice notes (M7)
+
+`m7.agents.voice_inbound` (requires `m7.agents.strict_origins`) lets a connector that
+consumes `voice` transcribe notes with the selected `stt` backend. Telegram (`voice: true`)
+refuses notes over `voice_max_seconds` / `voice_max_bytes` before download, fetches the file
+with `getFile` (the URL contains the bot token and is never logged) and sends the transcript
+with `media: [{kind: "voice", mime, duration_s}]`. The host measures the decoded audio,
+enforces `m7.agents.voice_max_seconds` (120), `voice_max_bytes` (5 MiB) and
+`voice_daily_seconds` (600 per plugin per UTC day, charged before the STT call, in
+`<home>/plugins/<name>/voice_quota.json`), prefixes the text `[voice] ` and never treats it as
+`/approve`, `/deny` or an engine slash command. Rollback: remove `voice*` from the stored
+Telegram config first (the older schema rejects the keys).
+
+## Consent-gated posting and the Mastodon connector (M7)
+
+A plugin that consumes `consent:post` (the bundled `mastodon`) never answers in place: the
+drafted reply becomes a suggestion of kind `post` (`deliver: home`, key
+`post:<plugin>:<status id>`, body = the exact text), and only `auoreo.plugins.consent.post`
+— run when that suggestion is accepted — may call its `delivery.send`. Any other send (a
+delivery spec, `suggestions_home`, a forged `meta.consent_id`) is refused by the host and
+audited `plugin.post`; the plugin also refuses a send without `consent_id` and uses it as the
+`Idempotency-Key`. `m7.agents.post_consent` (requires `strict_origins`) switches reply mode
+and posting on; `post_daily_cap` (10) bounds posts per plugin per UTC day. Commands,
+approval prompts and streaming are off for such a connector.
+
+```bash
+auoreo secrets set mastodon/access_token   # scopes: read:notifications write:statuses
+auoreo plugin set mastodon instance '"example.social"'
+auoreo config set m7.agents.strict_origins true && auoreo config set m7.agents.post_consent true
+```
+
+Mastodon polls `GET /api/v1/notifications?types[]=mention&min_id=<cursor>` every
+`poll_interval_s` (≥ 60) through the egress proxy only (`net:proxy`; no proxy, no request),
+keeps the cursor and the day's request count in plugin state (the first poll records the
+cursor and answers no backlog), stops for the day at `daily_read_cap` and pauses five minutes
+when `X-RateLimit-Remaining` is 0. An unpaired account gets a pairing code for the operator
+and no public reply. Accepting a `post` suggestion records consent; the post is sent by the
+suggestion action runner (`post` type) through `consent.post`. Rollback: deny pending `post`
+suggestions before running an older build.
 
 ## Trust tiers (I6, spec §25.15)
 

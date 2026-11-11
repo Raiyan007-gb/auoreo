@@ -216,31 +216,33 @@ class InboundRouter:
         chat_id, text = str(params.get("chat_id", "")), str(params.get("text", ""))
         if not chat_id or not text.strip():
             return {"ok": False, "detail": "empty message"}
+        from auoreo.plugins import consent
         from auoreo.plugins.chat_approvals import ApprovalNotifier, handle_command, is_command
 
         meta = {"reply_to": params.get("reply_to"), "connector": params.get("name")}
+        public = consent.reply_mode(self.s, self.plugin)  # --- M7: replies become suggestions
         if is_voice(params):  # --- M7: a transcript is never a chat or engine command
             text = f"{VOICE_PREFIX}{text}"
             params = {**params, "text": text}
-        elif is_command(text):
+        elif is_command(text) and not public:
             answer = await handle_command(self.s, self.plugin, chat_id, text)
             receipt = await send(chat_id, answer, meta)
             return {"ok": bool(receipt.get("ok")), "command": True, "detail": receipt.get("detail")}
         route = await self._route(params, chat_id, agent)  # --- M7: `routes` in the connector config
         sid = await self.session_for(chat_id, str(params.get("user", "")), route.agent, route.key)
         await route.audit(self.s, self.plugin, chat_id, sid)
-        interactive = bool(self.s.settings.teams2.chat_approvals)
+        interactive = bool(self.s.settings.teams2.chat_approvals) and not public
         from auoreo.plugins import citations
 
         seq = await citations.mark(self.s)  # --- M7: None unless `m7.agents.citations` is on
         run_id = await self.s.coordinator.submit(sid, text, interactive=interactive)
-        reply, cite = "(done)", {}
+        reply, cite, draft = "(done)", {}, ""
         if run_id is not None:
             async with contextlib.AsyncExitStack() as stack:
                 if interactive:
                     notifier = ApprovalNotifier(self.s, sid, chat_id, send, agent=route.named)
                     await stack.enter_async_context(notifier)
-                if self._config().get("stream"):  # --- I7: partial replies (drafts / edits)
+                if self._config().get("stream") and not public:  # --- I7: partial replies (drafts / edits)
                     from auoreo.plugins.streaming import StreamRelay
 
                     relay = StreamRelay(self.s, sid, chat_id, send, {**meta, "session_id": sid})
@@ -252,9 +254,11 @@ class InboundRouter:
             if result is None:
                 reply = "(no answer)"
             elif result.status in {"completed", "max_steps"}:
-                reply = result.text or "(empty answer)"
+                reply, draft = result.text or "(empty answer)", result.text or ""
             else:
                 reply = f"(run {result.status}: {(result.error or {}).get('message', '')})".strip()
+        if public:
+            return await consent.propose_reply(self.s, self.plugin, params, draft, sid) | {"run_id": run_id}
         from auoreo.automation.deliveries import voice_notes  # --- I7: MEDIA: envelope
 
         reply, extra = await voice_notes(self.s, self.plugin, reply)

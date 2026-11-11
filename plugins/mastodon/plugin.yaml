@@ -1,0 +1,49 @@
+name: mastodon
+version: 0.1.0
+description: >-
+  Mastodon connector (read-only mention polling with a persisted cursor and quotas) and
+  consent-gated delivery: a reply is posted only for an accepted suggestion.
+provides: [connector, delivery]
+consumes: [sessions, "secrets:mastodon/access_token", "consent:post", state, "net:proxy"]
+permissions: [messaging]
+config_schema:
+  type: object
+  properties:
+    instance:
+      type: string
+      pattern: "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+      description: Host name of the bot account's instance (HTTPS only, e.g. example.social).
+    allowlist:
+      type: array
+      items: {type: string}
+      description: Accounts (`user@host`) allowed to reach the agent (added by `auoreo plugin pair mastodon <code>`).
+    agent:
+      type: string
+      description: Agent for Mastodon sessions (default agent when unset).
+    poll_interval_s:
+      type: integer
+      minimum: 60
+      maximum: 86400
+      default: 120
+      description: Seconds between two notification polls.
+    daily_read_cap:
+      type: integer
+      minimum: 1
+      maximum: 10000
+      default: 200
+      description: Notification requests per UTC day; polling stops for the day at the cap.
+    visibility:
+      type: string
+      enum: [public, unlisted, private, direct]
+      default: unlisted
+      description: Visibility of posted replies.
+    max_chars:
+      type: integer
+      minimum: 1
+      maximum: 100000
+      default: 500
+      description: Longer approved replies are refused (never trimmed).
+  required: [instance]
+  additionalProperties: false
+entry: plugin.py:Plugin
+enabled: false

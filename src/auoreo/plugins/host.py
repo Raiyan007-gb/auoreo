@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from auoreo.core.secrets import child_env
 from auoreo.harness.manifests import PluginManifest
+from auoreo.plugins import consent
 from auoreo.plugins import install as inst
 from auoreo.plugins import requests_m7 as m7
 from auoreo.plugins.bridge import (
@@ -389,6 +390,8 @@ class PluginHost:
             peer = st.peer
             if peer is None or not peer.alive:
                 return {"ok": False, "detail": f"plugin '{st.name}' is not running", "external_id": None}
+            if (refused := await consent.gate(self.s, st, meta)) is not None:  # --- M7
+                return {**refused, "external_id": None}
             params = {"name": name, "target": target, "text": text, "meta": meta}
             res = await peer.request("delivery.send", params, timeout=self.s.settings.plugins_tool_timeout_s)
             return res if isinstance(res, dict) else {"ok": False, "detail": "bad reply"}

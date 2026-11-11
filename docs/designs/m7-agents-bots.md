@@ -446,6 +446,31 @@ remove or justify). Phases each leave the build green.
     Telegram test bot for Sources rendering.
 *   Confirm file sizes: `runner.py` and `host.py` not above their current line counts.
 
+## Wave 2 implementation notes (voice, Mastodon)
+
+Built from the Wave 2 draft (items D and E, every open decision at its default); deviations:
+
+*   **API details checked** (fetched 2026-11-11): Mastodon notification ids are strings "not
+    guaranteed to be a number", so the cursor is sent as `min_id` and compared numerically only
+    when every id is numeric; the rate-limit reset format is not documented, so
+    `X-RateLimit-Remaining: 0` pauses polling for the documented five-minute window instead of
+    "for the day" (the day stop is `daily_read_cap`). `Idempotency-Key` is kept for up to an
+    hour. Telegram `getFile` returns `file_path`; the download is
+    `/file/bot<token>/<file_path>`, at most 20 MB, as the draft assumed.
+*   **Proxy gate.** The egress-proxy token is minted for plugins that declare `net:proxy` in
+    `consumes` (the draft tied it to Mastodon by name). Without a proxy the Mastodon plugin
+    makes no request (fail closed rather than direct).
+*   **First poll** records the cursor and answers no backlog.
+*   **Voice length** is measured host side after decoding, before the STT call, and charged
+    first; the `voice.transcribed` event is not emitted for connector notes (it carries text).
+*   **httpx logging.** httpx logs request URLs at INFO, which for Telegram contain the bot
+    token; both connector plugins set the `httpx` logger to WARNING.
+*   **Accept → post.** `auoreo.plugins.consent.post(services, suggestion_id)` is the entry the
+    suggestion `post` action calls; that dispatch lives in `suggestions/actions.py` (built
+    separately). Until it is wired, accepting a `post` suggestion records consent and posts
+    nothing.
+*   Reply mode proposes only a completed answer; a failed run proposes nothing.
+
 --------------------------------------------------------------------------------
 
 *Drafted with EGM (Elephant-Goldfish-Mouse design workflow)*
