@@ -79,6 +79,9 @@ def list_(as_json: Annotated[bool, typer.Option("--json", help="Print JSON.")] =
             "user": m.user,
             "key": m.key_secret.removeprefix("secret:"),
             "trusted": bool(hosts.known_keys(home, m.host, m.port)),
+            "schema": m.version,
+            "tags": list(m.tags),
+            "jump": m.jump,
         }
         for m in found.values()
     ]
@@ -87,7 +90,12 @@ def list_(as_json: Annotated[bool, typer.Option("--json", help="Print JSON.")] =
     else:
         for r in rows:
             mark = "yes" if r["trusted"] else "no"
-            typer.echo(f"{r['name']}  {r['host']}:{r['port']}  {r['user']}  key={r['key']}  trusted={mark}")
+            extra = f"  via={r['jump']}" if r["jump"] else ""
+            extra += f"  tags={','.join(r['tags'])}" if r["tags"] else ""
+            extra += "  (schema 2: older builds ignore this host)" if r["schema"] >= 2 else ""
+            typer.echo(
+                f"{r['name']}  {r['host']}:{r['port']}  {r['user']}  key={r['key']}  trusted={mark}{extra}"
+            )
         if not rows:
             typer.echo("no hosts (add one with `auoreo ssh add`)")
     for line in problems:

@@ -86,6 +86,8 @@ class EnvironmentPool(SessionScoped):
             self._drop(name)
         if env is None:
             raise ToolError(hosts.unknown_message(svc, name))
+        if env.host is not None and env.host.problem:  # M7 v2: never half a definition
+            raise ToolError(f"environment '{name}': {env.host.problem}")
         try:
             bdef = svc.harness.select_backend(KIND, env.backend)
             if bdef is None:
@@ -93,6 +95,8 @@ class EnvironmentPool(SessionScoped):
             inst = bdef.load()(apply_overrides(svc.settings, env.overrides))
         except (KeyError, ValueError) as exc:
             raise ToolError(f"environment '{name}': {exc}") from exc
+        if env.host is not None:
+            inst.host_ext = env.host
         ssh_gate.attach(inst, svc.settings, svc.audit.record, name)
         self.instances[name] = inst
         return inst
@@ -100,7 +104,9 @@ class EnvironmentPool(SessionScoped):
     @staticmethod
     def _same(inst: Any, env: hosts.ResolvedEnv) -> bool:
         want = env.overrides.get("environment_ssh")
-        return env.origin != "host-file" or getattr(inst, "cfg", None) == want
+        if env.origin != "host-file":
+            return True
+        return getattr(inst, "cfg", None) == want and getattr(inst, "host_ext", None) == env.host
 
     def _drop(self, name: str) -> None:
         old = self.instances.pop(name)
@@ -339,12 +345,16 @@ async def describe(settings: Any, harness: Any, audit: Any = None) -> list[tuple
     async def one(name: str) -> tuple[str, bool, str, str]:
         env = hosts.resolve_environment(svc, name)
         assert env is not None
+        if env.host is not None and env.host.problem:
+            return name, False, env.host.problem, f"fix hosts/{name}.yaml or its jump host"
         async with limit:
             try:
                 bdef = harness.select_backend(KIND, env.backend)
                 if bdef is None:
                     raise KeyError(f"no '{KIND}' backend '{env.backend}'")
                 inst = bdef.load()(apply_overrides(settings, env.overrides))
+                if env.host is not None:
+                    inst.host_ext = env.host
                 if audit is not None:
                     ssh_gate.attach(inst, settings, audit.record, name, actor="operator")
                 status = await asyncio.wait_for(inst.check(), 10)
@@ -363,4 +373,7 @@ async def describe(settings: Any, harness: Any, audit: Any = None) -> list[tuple
     for name in hosts.shadowed_hosts(svc):
         note = f"host file `{name}` shadowed by settings.environments"
         out.append((f"{name} (host file)", False, note, "rename the host file or the settings entry"))
+    for name, loaded in sorted(hosts.host_files(svc).items()):
+        for note in getattr(loaded, "warnings", ()) or ():
+            out.append((f"{name} (host file)", False, note, f"remove the key from hosts/{name}.yaml"))
     return out

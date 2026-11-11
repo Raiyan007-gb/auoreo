@@ -57,6 +57,9 @@ class Backend(EnvironmentBackend):
         self._conn: Any = None
         self.net_audit: Callable[[dict[str, Any]], Awaitable[None]] | None = None
         """Called with `{mode, host, port}` after every socket open (M7 `net.ssh` audit)."""
+        self.host_ext: Any = None
+        """M7 v2 `core.hosts.HostRuntime` of a host file (tags, audit mode, jump hop), set by
+        the environment pool after construction; None for settings entries."""
         self._lock = asyncio.Lock()
         self.table = ProcTable(self.name, int(getattr(settings, "shell_max_processes", 8) or 8))
 

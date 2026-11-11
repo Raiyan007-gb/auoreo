@@ -39,6 +39,25 @@ class M7Ssh(_Tolerant):
 
     hosts: bool = False
     """The `hosts/<name>.yaml` inventory and the per-host `ssh` permission."""
+    policy_fields: bool = False
+    """hosts-b: `environment` and `host` in the exec-policy request."""
+    exec_audit: bool = False
+    """hosts-b: `environment.exec` rows carry tool, call_id, run_id, host_id, grant_id (and
+    the redacted command for hosts with `audit_commands: redacted`)."""
+    usage_tag: bool = False
+    """hosts-b: requests made while an environment is selected carry the usage tag `env=<name>`."""
+    chat_grants: bool = False
+    """hosts-b: let a chat `/approve <id>` answer `ssh`/`sftp` cards (off: web UI or a rule only)."""
+    rotate_grace_h: float = Field(default=24, ge=0, le=24 * 30)
+    """hosts-b: hours the previous key keeps working after `auoreo ssh rotate`."""
+    jump: bool = False
+    """hosts-c: one-hop jump hosts (`jump: <host>` in a host file). Off: such a host is refused."""
+    transfer: bool = False
+    """hosts-c: the `env_transfer` tool (one file over the granted SSH connection)."""
+    transfer_max_bytes: int = Field(default=64 * 1024 * 1024, ge=1, le=4 * 1024**3)
+    """hosts-c: largest file `env_transfer` moves."""
+    web: bool = False
+    """hosts-c: `/api/hosts` and the Hosts page (fingerprints and state; no key operations)."""
 
 
 class M7Agents(_Tolerant):

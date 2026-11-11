@@ -17,7 +17,7 @@ import base64
 import hashlib
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from auoreo.core.db_migrate import migrate_lock
 from auoreo.core.fsutil import write_private
 from auoreo.core.settings_models import SshEnvironment
-from auoreo.harness.manifests_hosts import HostManifest, unsafe_address
+from auoreo.harness.manifests_hosts import HostManifest, parse_host, unsafe_address
 
 HEADER = "# Written by `auoreo ssh add`. No key material here: key_secret names a stored secret.\n"
 _KEY_TYPE = re.compile(r"^[A-Za-z0-9@._+-]{1,64}$")
@@ -68,18 +68,31 @@ def _manifest(name: str, fields: Mapping[str, Any]) -> HostManifest:
 
 def write_host(home: Path, name: str, fields: Mapping[str, Any], *, force: bool = False) -> Path:
     """Validate and write `<home>/hosts/<name>.yaml` atomically. Refuses an existing file
-    unless `force` (`FileExistsError`); invalid input raises `ValueError`."""
-    manifest = _manifest(name, fields)
+    unless `force` (`FileExistsError`); invalid input raises `ValueError`. v2 keys are written
+    only when set, with `schema: 2` (`HostManifest.to_file`)."""
+    manifest = _manifest(name, {k: v for k, v in fields.items() if k != "schema"})
     target = hosts_dir(home) / f"{manifest.name}.yaml"
     if target.exists() and not force:
         raise FileExistsError(f"{target} exists (use --force to overwrite)")
     target.parent.mkdir(parents=True, exist_ok=True)
-    write_private(target, HEADER + yaml.safe_dump(manifest.model_dump(), sort_keys=False))
+    write_private(target, HEADER + yaml.safe_dump(manifest.to_file(), sort_keys=False))
     return target
 
 
+def delete_host(home: Path, name: str) -> bool:
+    """Remove `<home>/hosts/<name>.yaml`; False when there is none. Secrets and
+    `known_hosts` are untouched (`auoreo ssh rm --forget-key` drops the latter)."""
+    _manifest(name, {"host": "h", "user": "u", "key_secret": "secret:X"})  # name check only
+    try:
+        (hosts_dir(home) / f"{name}.yaml").unlink()
+    except FileNotFoundError:
+        return False
+    return True
+
+
 def read_hosts(home: Path) -> tuple[dict[str, HostManifest], list[str]]:
-    """`(hosts by name, problems)` from `<home>/hosts/*.yaml` (manifests only, no network)."""
+    """`(hosts by name, problems)` from `<home>/hosts/*.yaml` (manifests only, no network).
+    A loaded file's reader warnings (an ignored unknown key) are listed as problems too."""
     out: dict[str, HostManifest] = {}
     problems: list[str] = []
     base = hosts_dir(home)
@@ -90,10 +103,76 @@ def read_hosts(home: Path) -> tuple[dict[str, HostManifest], list[str]]:
             data = yaml.safe_load(path.read_text(encoding="utf-8"))
             if not isinstance(data, dict) or data.get("name") != path.stem:
                 raise ValueError("name must match the file name")
-            out[path.stem] = _manifest(path.stem, data)
+            out[path.stem], notes = parse_host(data)
+            problems.extend(f"{path}: {note}" for note in notes)
         except (OSError, ValueError, yaml.YAMLError) as exc:
             problems.append(f"{path}: {str(exc).splitlines()[0][:200]}")
     return out, problems
+
+
+# ------------------------------------------------------------------ v2 runtime data
+@dataclass(frozen=True)
+class JumpHop:
+    """The bastion of a host: its own address, user, key and keepalive (`known_hosts` is the
+    shared harness file). The target's key is never offered to it."""
+
+    name: str
+    host: str
+    port: int
+    user: str
+    key_secret: str
+    keepalive_interval_s: float
+
+
+@dataclass(frozen=True)
+class HostRuntime:
+    """v2 data of a host file that travels beside the `SshEnvironment` override (which is
+    `extra="forbid"` and must not gain keys): set on the backend as `host_ext`."""
+
+    name: str
+    tags: tuple[str, ...] = ()
+    audit_commands: str = "hash"
+    jump: JumpHop | None = None
+    problem: str | None = None
+    """Why this host may not be used (a broken jump chain, jump hosts switched off)."""
+
+
+def resolve_chain(found: Mapping[str, HostManifest], name: str) -> HostManifest | None:
+    """The jump host of `name`, or None. `ValueError` for a broken chain: the jump is
+    missing, is the host itself, or has a jump of its own (one hop only, so no cycle)."""
+    m = found[name]
+    if m.jump is None:
+        return None
+    if m.jump == name:
+        raise ValueError(f"host '{name}' names itself as its jump host")
+    hop = found.get(m.jump)
+    if hop is None:
+        raise ValueError(f"host '{name}': jump host '{m.jump}' is not defined")
+    if hop.jump is not None:
+        raise ValueError(f"host '{name}': jump host '{m.jump}' has a jump of its own (one hop only)")
+    return hop
+
+
+def jump_enabled(settings: Any) -> bool:
+    return bool(getattr(getattr(getattr(settings, "m7", None), "ssh", None), "jump", False))
+
+
+def host_runtime(svc: Any, m: HostManifest) -> HostRuntime:
+    found = {n: h.manifest for n, h in _host_files(svc).items()}
+    found.setdefault(m.name, m)
+    base = HostRuntime(m.name, m.tags, m.audit_commands)
+    if m.jump is None:
+        return base
+    if not jump_enabled(svc.settings):
+        why = f"host '{m.name}' needs jump host '{m.jump}' and m7.ssh.jump is off (no direct connection)"
+        return replace(base, problem=why)
+    try:
+        hop = resolve_chain(found, m.name)
+    except ValueError as exc:
+        return replace(base, problem=str(exc))
+    assert hop is not None
+    jump = JumpHop(hop.name, hop.host, hop.port, hop.user, hop.key_secret, hop.keepalive_interval_s)
+    return replace(base, jump=jump)
 
 
 def manifest_to_override(m: HostManifest, home: Path) -> dict[str, Any]:
@@ -118,6 +197,8 @@ class ResolvedEnv:
     origin: str = "settings"
     """`settings` (`settings.environments`) or `host-file` (`hosts/<name>.yaml`)."""
     description: str = ""
+    host: HostRuntime | None = None
+    """v2 data of a host file (tags, audit mode, jump hop); None for settings entries."""
 
 
 def hosts_enabled(settings: Any) -> bool:
@@ -130,6 +211,11 @@ def _host_files(svc: Any) -> dict[str, Any]:
     return dict(getattr(getattr(svc, "harness", None), "hosts", None) or {})
 
 
+def host_files(svc: Any) -> dict[str, Any]:
+    """Loaded host files of `svc` (empty while `m7.ssh.hosts` is off)."""
+    return _host_files(svc)
+
+
 def resolve_environment(svc: Any, name: str) -> ResolvedEnv | None:
     """The environment `name` of `svc` (anything with `.settings` and `.harness`)."""
     entry = svc.settings.environments.get(name)
@@ -139,8 +225,11 @@ def resolve_environment(svc: Any, name: str) -> ResolvedEnv | None:
     loaded = _host_files(svc).get(name)
     if loaded is None:
         return None
-    overrides = manifest_to_override(loaded.manifest, Path(svc.settings.home))
-    return ResolvedEnv(name, "ssh", overrides, "host-file", "ssh host file")
+    m = loaded.manifest
+    overrides = manifest_to_override(m, Path(svc.settings.home))
+    return ResolvedEnv(
+        name, "ssh", overrides, "host-file", m.description or "ssh host file", host_runtime(svc, m)
+    )
 
 
 def environment_names(svc: Any) -> list[str]:
