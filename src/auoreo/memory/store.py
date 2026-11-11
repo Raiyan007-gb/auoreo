@@ -14,14 +14,16 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any
 
 from auoreo.core.sqlcipher import open_memory
+from auoreo.harness.manifests import SLUG_RE
 from auoreo.memory.migrations import migrate
 from auoreo.memory.store_i4 import I4StoreMixin
-from auoreo.memory.store_search import STOPWORDS, Row, SearchMixin, active, fts_query
+from auoreo.memory.store_search import AGENT_NS, STOPWORDS, Row, SearchMixin, active, fts_query
 
 log = logging.getLogger(__name__)
 
@@ -74,13 +76,27 @@ def sha(text: str) -> str:
     return hashlib.sha256(" ".join(text.split()).encode()).hexdigest()
 
 
+_TEAM_ID = r"[A-Za-z0-9._-]{1,128}"
+_TENANT_RE = re.compile(rf"local|team:{_TEAM_ID}|{re.escape(AGENT_NS)}{SLUG_RE.strip('^$')}")
+
+
+def check_tenant(tenant: str) -> str:
+    """`local`, `team:<id>` or `agent:<slug>` (the manifest `memory_tenant` slug), else
+    `ValueError`. Keeps the tag injective: an `agent:` tenant partitions transcripts by the
+    session-id prefix `agent:<slug>|`, so a tag holding `|` (or a non-slug) could read another's."""
+    slug = tenant.removeprefix(AGENT_NS)
+    if not _TENANT_RE.fullmatch(tenant) or (tenant.startswith(AGENT_NS) and len(slug) > 48):
+        raise ValueError(f"invalid memory tenant {tenant[:80]!r}: use local, team:<id> or agent:<slug>")
+    return tenant
+
+
 class MemoryStore(SearchMixin, I4StoreMixin):
     def __init__(
         self, path: Path | str, dims: int, tenant: str = "local", *, encryption: str | None = None
     ) -> None:
         self.path = str(path)
         self.dims = dims
-        self.tenant = tenant
+        self.tenant = check_tenant(tenant)
         # F6: sqlcipher3 + `PRAGMA key` when db_encryption=sqlcipher (else stdlib sqlite3)
         self.db, self.encrypted = open_memory(self.path, encryption)
         self.db.execute("PRAGMA journal_mode=WAL")

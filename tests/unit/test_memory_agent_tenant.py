@@ -143,6 +143,32 @@ async def test_memory_tool_and_searches_use_the_agent_tenant(services: Services,
     assert err and "tenant-deny" in text
 
 
+@pytest.mark.parametrize(
+    "bad", ["agent:a|b", "agent:a|", "agent:A", "agent:", "agent:-x", "", "Local", "other"]
+)
+def test_store_refuses_a_tenant_tag_that_is_not_injective(tmp_path: Path, bad: str) -> None:
+    """The transcript partition of `agent:<slug>` is the prefix `agent:<slug>|` on the session
+    id, so `agent:a` would also see `agent:a|b`: only manifest slugs are accepted."""
+    from auoreo.memory.store import MemoryStore
+
+    with pytest.raises(ValueError, match="tenant"):
+        MemoryStore(tmp_path / "memory.db", 8, tenant=bad)
+
+
+def test_store_tenants_stay_apart_in_transcripts(tmp_path: Path) -> None:
+    from auoreo.memory.store import MemoryStore
+
+    names = ["local", "agent:a", "agent:a-b", "agent:a.b", "agent:ab", "team:t1", "team:t_0123abcd"]
+    stores = {n: MemoryStore(tmp_path / "memory.db", 8, tenant=n) for n in names}
+    for n, s in stores.items():
+        s.add_transcript("sess-shared", "user", f"secretword {n}")
+    for n in ("agent:a", "agent:a-b", "agent:a.b", "agent:ab"):
+        rows = stores[n].search_transcript("secretword", 50, None)
+        assert sorted(r.text.split()[1] for r in rows) == [n]
+    for s in stores.values():
+        s.close()
+
+
 async def test_topic_files_are_refused_to_a_tenanted_agent(services: Services, workdir: Path) -> None:
     """Topic files (`~/.auoreo/memory/topics/*.md` + a MEMORY.md index line) are one shared
     folder with no tenant: a tenanted agent may neither write nor read them, so what it learns
