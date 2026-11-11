@@ -203,8 +203,9 @@ class SkillManifest(BaseModel):
     description: str = Field(min_length=1)
 
 
-LOOP_CHECKS = ("completed", "nonempty", "json")
-"""Built-in `loop.until: check:<name>` predicates (never shell commands: workflows are inert)."""
+LOOP_CHECKS = ("completed", "nonempty", "json", "files_exist")
+"""Built-in `loop.until: check:<name>` predicates (never shell commands: workflows are inert).
+`check:files_exist:<path>[,<path>…]` (M7): relative paths that must exist in the session cwd."""
 
 
 class WorkflowLoop(_Strict):
@@ -218,8 +219,13 @@ class WorkflowLoop(_Strict):
     @classmethod
     def _until(cls, v: str) -> str:
         if v.startswith("check:"):
-            if v[6:] not in LOOP_CHECKS:
+            name, _, arg = v[6:].partition(":")
+            if name not in LOOP_CHECKS or (name == "files_exist") != bool(arg):
                 raise ValueError(f"unknown check '{v[6:]}' (one of {', '.join(LOOP_CHECKS)})")
+            if arg and (
+                bad := [p for p in arg.split(",") if not p or ".." in p or ":" in p or p[0] in "/\\~"]
+            ):
+                raise ValueError(f"files_exist takes relative paths inside the workspace, not {bad[:3]}")
             return v
         try:
             re.compile(v)

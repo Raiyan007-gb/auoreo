@@ -12,7 +12,8 @@ steps:
 ```
 
 A step may loop (ralph-lite, spec §9.3): it re-runs in the same session until `until` holds —
-a regex searched in the step's output, or `check:completed|nonempty|json` — or
+a regex searched in the step's output, or `check:completed|nonempty|json`, or
+`check:files_exist:<path>[,<path>…]` (relative paths that must exist in the session's workspace) — or
 `max_iterations` is reached. `{{loop.iteration}}` (1-based) and `{{loop.last}}` (the previous
 iteration's output) are available in its `input`. See `ralph_lite.yaml`.
 
