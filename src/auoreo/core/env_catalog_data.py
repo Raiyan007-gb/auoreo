@@ -211,7 +211,7 @@ ITEMS: list[Item] = [
     S("tool_engine", "check_fn TTL, collision policy, spill cap, MCP sampling limits"),
     S("h5", "apply_patch formatter step, run_code / video_analyze limits, metric store"),
     S("i9", "egress proxy (allow/deny hosts), search provider order + cache, guardian timeout"),
-    S("m7", "M7 feature flags (all off): token economy, SSH hosts, agent routing, worktrees"),
+    S("m7", "M7 feature flags (all off): token economy, SSH hosts, agent routing, worktrees, merge-back"),
     S("searxng_url", "self-hosted SearXNG for web_search, http://localhost:8888"),
     S("shell_max_processes", "concurrent persistent shells per session"),
     S("lsp_timeout_ms", ""),
