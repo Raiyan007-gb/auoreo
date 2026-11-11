@@ -78,8 +78,13 @@ async def _via_environment(svc: Services, command: str, timeout: float) -> int:
     from auoreo.backends.environment import ExecRequest
     from auoreo.core.env_custom import shell_env
     from auoreo.core.secrets import child_env
+    from auoreo.tools import ssh_gate
 
     backend = svc.backend("environment")
+    # an SSH socket opened here is the operator's: `net.ssh` row, flag on or off (like `ssh test`)
+    ssh_gate.attach(
+        backend, svc.settings, svc.audit.record, ssh_gate.DEFAULT_NAME, actor="operator", always=True
+    )
     if (bind := getattr(backend, "bind", None)) is not None:
         bind(svc)
     if (preflight := getattr(backend, "preflight", None)) is not None:

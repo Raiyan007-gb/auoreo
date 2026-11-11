@@ -576,6 +576,29 @@ async def test_editing_or_removing_a_host_file_invalidates_grant_and_socket(
     await pool_for(services).close()
 
 
+async def test_operator_checks_and_cli_exec_audit_their_sockets(
+    services: Services, ssh_server: SshServer, tmp_path: Path, workdir: Path
+) -> None:
+    """`GET /api/environments` and `auoreo exec --via environment` open SSH sockets too: each is
+    a `net.ssh` row for the operator (flag on or off), and the listing never leaves a pooled
+    connection on the shared backend for an agent to reuse unaudited."""
+    from auoreo.cli.commands.ops import _via_environment
+    from auoreo.remote.environments import list_environments
+
+    configure(services, ssh_server, tmp_path)
+    services.settings.backends = {**services.settings.backends, "environment": "ssh"}
+    listed = {e.name: e for e in await list_environments(services)}
+    assert listed["ssh"].ok, listed["ssh"].detail
+    opens = await audit_rows(services, "net.ssh")
+    assert [(r.actor, r.detail["name"]) for r in opens] == [("operator", "default")]
+    shared = services.backend("environment")
+    assert shared.net_audit is None and shared._conn is None
+    assert await _via_environment(services, "echo cli-ran", 5) == 0
+    opens = await audit_rows(services, "net.ssh")
+    assert [(r.actor, r.detail["name"]) for r in opens][-1] == ("operator", "default") and len(opens) == 2
+    await shared.close()
+
+
 async def test_revoking_a_host_file_under_a_running_server_fails_closed(
     services: Services, ssh_server: SshServer, workdir: Path
 ) -> None:
