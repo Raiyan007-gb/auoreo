@@ -16,14 +16,15 @@ import builtins
 import contextlib
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select, update
 
 from auoreo.core.db import DeliveryRow, SuggestionRow, utcnow
-from auoreo.suggestions import delivery
+from auoreo.suggestions import actions, delivery
+from auoreo.suggestions.origin import origin_of, strict
 
 if TYPE_CHECKING:
     from auoreo.core.services import Services
@@ -44,6 +45,7 @@ class Accepted:
     row: SuggestionRow
     session_id: str | None = None
     run_id: str | None = None
+    extra: dict[str, Any] = field(default_factory=dict)
 
 
 def suggestion_event(row: SuggestionRow) -> dict[str, Any]:
@@ -108,9 +110,10 @@ class SuggestionEngine:
             delivery.validate_deliver(self.s, deliver)
         except ValueError as exc:
             raise SuggestionError(str(exc)) from exc
-        action = dict(action or {})
-        if action.get("type") == "prompt" and not str(action.get("text") or "").strip():
-            raise SuggestionError("a prompt action needs non-empty `text`")
+        try:
+            action = await actions.prepare(self.s, action, origin_session)
+        except actions.ActionError as exc:
+            raise SuggestionError(str(exc)) from exc
         now = utcnow()
         async with self._lock:
             if dedupe_key:
@@ -179,6 +182,12 @@ class SuggestionEngine:
                 detail={"suggestion_id": suggestion_id},
             )
             raise SuggestionError("unattended sessions may only propose suggestions, never accept them")
+        pending = await self.get(suggestion_id)
+        if pending is not None and pending.status == "pending":
+            try:  # refuse before the status changes when the action cannot run
+                await actions.preflight(self.s, pending)
+            except actions.ActionError as exc:
+                raise SuggestionError(str(exc)) from exc
         row = await self._transition(suggestion_id, "accepted")
         await self.s.audit.record(
             actor="user",
@@ -188,11 +197,10 @@ class SuggestionEngine:
             reason="explicit consent",
             detail={"suggestion_id": row.id, "action": row.action},
         )
-        sid, run_id = await self._run_action(row)
-        await self.s.emit(
-            "server", "suggestion.accepted", suggestion_event(row) | {"session_id": sid, "run_id": run_id}
-        )
-        return Accepted(row, sid, run_id)
+        out = await actions.run(self, row)
+        data = suggestion_event(row) | {"session_id": out.session_id, "run_id": out.run_id} | out.extra
+        await self.s.emit("server", "suggestion.accepted", data)
+        return Accepted(row, out.session_id, out.run_id, dict(out.extra))
 
     async def deny(self, suggestion_id: int) -> SuggestionRow:
         row = await self._transition(suggestion_id, "denied")
@@ -220,26 +228,15 @@ class SuggestionEngine:
             return row
 
     async def is_unattended(self, session_id: str) -> bool:
-        """A session started by the deliveries worker (job/webhook run) is unattended."""
+        """A session started by the deliveries worker (job/webhook run) is unattended; with
+        `m7.agents.strict_origins`, so are connector chats and kanban workers."""
+        if strict(self.s):
+            return (await origin_of(self.s, session_id)).unattended
         async with self.s.db.session() as s:
             q = select(DeliveryRow.id).where(
                 DeliveryRow.session_id == session_id, DeliveryRow.kind.in_(("job", "webhook"))
             )
             return (await s.execute(q.limit(1))).first() is not None
-
-    async def _run_action(self, row: SuggestionRow) -> tuple[str | None, str | None]:
-        action = row.action or {}
-        if action.get("type") != "prompt":
-            return None, None
-        agent = action.get("agent") or None
-        sid = row.origin_session
-        ses = await self.s.get_session(sid) if sid else None
-        if ses is None or ses.archived or await self.is_unattended(ses.id):
-            new = await self.s.create_session(title=f"suggestion: {row.title}"[:120], agent=agent)
-            sid = new.id
-        assert sid is not None
-        run_id = await self.s.coordinator.submit(sid, str(action["text"]), agent=agent)
-        return sid, run_id
 
     # --------------------------------------------------------------- delivery
     def _spawn(self, coro: Any) -> None:

@@ -41,6 +41,21 @@ class M7Ssh(_Tolerant):
     """The `hosts/<name>.yaml` inventory and the per-host `ssh` permission."""
 
 
+class M7Triage(_Tolerant):
+    """W3 wave 2: the `kanban_create` suggestion action (allowlists, per-source caps, dedupe)."""
+
+    boards: list[str] = Field(default_factory=list)
+    """Boards a `kanban_create` suggestion may name (empty: none)."""
+    profiles: list[str] = Field(default_factory=list)
+    """Worker agents such a task may run as (the given `profile`, else `i3.kanban.agent`)."""
+    per_source_pending: int = Field(default=5, ge=1, le=100)
+    """Pending `kanban_create` suggestions per source (`webhook:<route>`, `job:<name>`, …)."""
+    per_source_daily: int = Field(default=20, ge=1, le=10_000)
+    """`kanban_create` suggestions per source in the last 24 hours, any status."""
+    dedupe_days: int = Field(default=30, ge=1, le=365)
+    """A key proposed, accepted or denied within this many days is not proposed again."""
+
+
 class M7Agents(_Tolerant):
     """W3 agents and bots. Connector routing has no switch here: it is on when a connector's
     config has `routes` (docs/designs/m7-agents-bots.md, open question 4)."""
@@ -49,6 +64,27 @@ class M7Agents(_Tolerant):
     """Honour `memory_tenant` on agent manifests."""
     citations: bool = False
     """Structured `citations[]` on replies."""
+    strict_origins: bool = False
+    """Connector, job, webhook and kanban-worker sessions are unattended: a suggestion they
+    propose runs in a new session as the origin's own agent, never in the origin session, and
+    a job, webhook or connector session cannot call `kanban_create` directly."""
+    kanban_suggestions: bool = False
+    """The `kanban_create` suggestion action (requires `strict_origins`)."""
+    triage: M7Triage = Field(default_factory=M7Triage)
+    post_consent: bool = False
+    """Consent-gated posting for public connectors (requires `strict_origins`)."""
+    voice_inbound: bool = False
+    """Inbound voice notes from paired chats (requires `strict_origins`)."""
+
+    @model_validator(mode="after")
+    def _wider_flags_need_strict_origins(self) -> M7Agents:
+        wider = [n for n in ("kanban_suggestions", "post_consent", "voice_inbound") if getattr(self, n)]
+        if wider and not self.strict_origins:
+            raise ValueError(
+                f"m7.agents.{wider[0]} requires m7.agents.strict_origins (else an unattended "
+                "session's suggestion could run in that session)"
+            )
+        return self
 
 
 class M7Orch(_Tolerant):

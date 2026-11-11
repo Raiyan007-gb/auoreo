@@ -33,7 +33,11 @@ def test_connector_routing_has_no_flag_and_a_stored_one_is_ignored(home: Path) -
     """Routing is opt-in by `routes` in a connector's config (design m7-agents-bots, question 4)."""
     st = Settings(home=home, m7={"agents": {"connector_routes": True, "citations": True}})
     assert not hasattr(st.m7.agents, "connector_routes") and st.m7.agents.citations is True
-    assert set(type(st.m7.agents).model_fields) == {"memory_tenants", "citations"}
+    assert set(type(st.m7.agents).model_fields) == {
+        "memory_tenants", "citations",
+        # wave 2 (m7-agents-bots-w2): consent semantics, none of them a routing switch
+        "strict_origins", "kanban_suggestions", "triage", "post_consent", "voice_inbound",
+    }  # fmt: skip
 
 
 def test_unknown_keys_are_ignored_so_a_rollback_never_breaks_startup(home: Path) -> None:
