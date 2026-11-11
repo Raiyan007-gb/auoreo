@@ -105,6 +105,43 @@ def test_numeric_spellings_of_an_unsafe_address_are_rejected(addr: str) -> None:
     assert HostManifest(**{**GOOD, "host": "167772165"}).host == "167772165"  # 10.0.0.5: still allowed
 
 
+@pytest.mark.parametrize(
+    "addr",
+    [
+        "fd00:ec2::254",  # AWS IMDS over IPv6
+        "[fd00:ec2::254]",
+        "fd00:ec2::254%lo",
+        "64:ff9b::a9fe:a9fe",  # NAT64 of 169.254.169.254
+        "64:ff9b::169.254.169.254",
+        "64:ff9b::6464:64c8",  # NAT64 of 100.100.100.200
+        "2002:a9fe:a9fe::",  # 6to4 of 169.254.169.254
+        "2002:a9fe:a9fe:1::5",
+        "::a9fe:a9fe",  # IPv4-compatible (deprecated) spelling
+    ],
+)
+def test_ipv6_spellings_of_a_metadata_address_are_rejected(addr: str) -> None:
+    with pytest.raises(ValueError):
+        hosts.reject_unsafe_address(addr)
+    with pytest.raises(ValidationError):
+        HostManifest(**{**GOOD, "host": addr})
+
+
+@pytest.mark.parametrize(
+    "addr",
+    [
+        "2001:db8::1",
+        "2606:4700:4700::1111",  # an ordinary global IPv6 address
+        "fd00:ec2::253",  # the same ULA prefix, another host
+        "64:ff9b::a00:5",  # NAT64 of 10.0.0.5
+        "2002:a00:5::1",  # 6to4 of 10.0.0.5
+        "::1",
+    ],
+)
+def test_ordinary_ipv6_addresses_stay_allowed(addr: str) -> None:
+    hosts.reject_unsafe_address(addr)
+    assert HostManifest(**{**GOOD, "host": addr}).host == addr
+
+
 @pytest.mark.parametrize("addr", ["10.0.0.5", "127.0.0.1", "lab.example.com", "2001:db8::1", "::1"])
 def test_ordinary_addresses_accepted(addr: str) -> None:
     hosts.reject_unsafe_address(addr)
@@ -167,6 +204,30 @@ def test_reload_reports_hosts(tmp_path: Path) -> None:
     h = Harness(roots(home, tmp_path / "p", trusted=True))
     write(home / "hosts" / "lab.yaml", host_yaml())
     assert h.reload()["hosts"] == {"added": ["lab"], "removed": []}
+
+
+def test_host_file_changes_are_seen_without_a_reload(tmp_path: Path) -> None:
+    """A separate process (`auoreo ssh add`, an editor, `rm`) changes `<home>/hosts/` under a
+    running server: the next resolve sees it, and a revoked host fails closed at once."""
+    from types import SimpleNamespace
+
+    home = tmp_path / "home"
+    hosts.write_host(home, "lab", {"host": "10.0.0.5", "user": "ubuntu", "key_secret": "secret:K"})
+    h = Harness([Root("runtime", home)])
+    st = Settings(home=home)
+    st.m7.ssh.hosts = True
+    svc = SimpleNamespace(settings=st, harness=h)
+    assert hosts.resolve_environment(svc, "lab") is not None
+    hosts.write_host(
+        home, "lab", {"host": "10.0.0.5", "user": "deploy", "key_secret": "secret:K"}, force=True
+    )
+    env = hosts.resolve_environment(svc, "lab")
+    assert env is not None and env.overrides["environment_ssh"].username == "deploy"
+    hosts.write_host(home, "web", {"host": "10.0.0.6", "user": "ubuntu", "key_secret": "secret:K"})
+    assert hosts.environment_names(svc) == ["lab", "web"]
+    (home / "hosts" / "lab.yaml").unlink()  # the operator revokes the host in another shell
+    assert hosts.resolve_environment(svc, "lab") is None
+    assert hosts.environment_names(svc) == ["web"]
 
 
 @pytest.mark.parametrize(

@@ -5,6 +5,7 @@ configured exec-server and the bridge peers — each with a `check()` status, ne
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
@@ -43,6 +44,26 @@ async def _checked(aw: Awaitable[BackendStatus]) -> tuple[bool, str]:
     return st.ok, st.detail
 
 
+async def _check_selected(svc: Services, bdef: Any) -> tuple[bool, str]:
+    """`check()` of the selected backend. An SSH one is checked on its own connection, audited
+    as the operator (`net.ssh`, like doctor), and closed: never the shared backend whose pooled
+    socket an agent would later reuse without a row of its own."""
+    from auoreo.tools import ssh_gate
+
+    shared = svc.backend(KIND)
+    if not ssh_gate.is_ssh(shared):
+        return await _checked(shared.check())
+    probe = bdef.load()(svc.settings)
+    ssh_gate.attach(
+        probe, svc.settings, svc.audit.record, ssh_gate.DEFAULT_NAME, actor="operator", always=True
+    )
+    try:
+        return await _checked(probe.check())
+    finally:
+        with contextlib.suppress(Exception):
+            await probe.close()
+
+
 def _selected(svc: Services) -> tuple[str | None, str]:
     try:
         bdef = svc.harness.select_backend(KIND, svc.settings.backends.get(KIND))
@@ -66,7 +87,7 @@ async def _backends(svc: Services) -> list[EnvironmentInfo]:
             name=name, kind="backend", backend=bdef.name, remote=remote, selected=name == selected
         )
         if name == selected:
-            info.ok, info.detail = await _checked(svc.backend(KIND).check())
+            info.ok, info.detail = await _check_selected(svc, bdef)
         else:
             info.detail = problem or bdef.manifest.description.split(".")[0]
         out.append(info)

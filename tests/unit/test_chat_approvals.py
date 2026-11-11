@@ -123,3 +123,50 @@ async def test_chat_approvals_mode_pushes_requests_and_resumes_run(
     assert any(t.startswith("Approval needed") and "risky" in t for t in texts)
     assert any(t.startswith("Approved 1") for t in texts)
     assert texts[-1] == "all done" and out["ok"]
+
+
+async def ask_ssh(services: Services, session: str, name: str, host: str, why: str) -> asyncio.Task[Any]:
+    detail = f"ssh root@{host}:22 ({name})"
+    task = asyncio.create_task(
+        services.approvals.request(
+            session, "exec_command", "ssh", name, detail, one_shot=True, justification=why
+        )
+    )
+    for _ in range(50):
+        if any(p.pattern == name for p in services.approvals.pending()):
+            break
+        await asyncio.sleep(0.01)
+    return task
+
+
+async def test_one_shot_ssh_needs_its_explicit_id_in_chat(services: Services) -> None:
+    """`/approve` (FIFO) and `/approve all` never grant a one-shot request (an ssh host here):
+    only `/approve <id>` does. The card shows host:port and the justification."""
+    pair(services.settings.home, OWNER)
+    router, chat = InboundRouter(services, "telegram"), Chat()
+    prod = await ask_ssh(services, "sA", "prod", "10.9.8.7", "drop the prod database now")
+    bash = await ask(services, pattern="echo ok")
+
+    await router.handle({"chat_id": OWNER, "text": "/pending"}, chat)
+    listing = chat.sent[-1][1]
+    assert "root@10.9.8.7:22" in listing and "justification: drop the prod database now" in listing
+
+    await router.handle({"chat_id": OWNER, "text": "/approve"}, chat)  # oldest is the ssh card
+    assert (await bash).granted and not prod.done()
+    assert "Approved 1" in chat.sent[-1][1] and "one-shot" in chat.sent[-1][1]
+
+    await router.handle({"chat_id": OWNER, "text": "/approve all"}, chat)
+    assert not prod.done() and chat.sent[-1][1].startswith("Nothing was approved.")
+
+    rid = next(p.request_id for p in services.approvals.pending() if p.pattern == "prod")
+    await router.handle({"chat_id": OWNER, "text": f"/approve {rid[:8]}"}, chat)
+    assert (await prod).granted and "Approved 1" in chat.sent[-1][1]
+
+
+async def test_deny_still_answers_one_shot_without_id(services: Services) -> None:
+    pair(services.settings.home, OWNER)
+    router, chat = InboundRouter(services, "telegram"), Chat()
+    dev = await ask_ssh(services, "sB", "dev", "10.0.0.5", "read the nginx error log")
+    await router.handle({"chat_id": OWNER, "text": "/deny all not now"}, chat)
+    res = await dev
+    assert not res.granted and res.message == "not now"

@@ -37,6 +37,24 @@ async def memory_for(services: Services, manifest: Any) -> Any:
         return None
 
 
+TOPICS_REFUSED = (
+    "topic files are shared by every agent and this agent has a memory tenant; "
+    "store it with target=fact instead (facts stay in the agent's tenant)"
+)
+
+
+def tenant_of(tool_services: Any) -> str | None:
+    """The calling agent's `memory_tenant` when tenants apply (`m7.agents.memory_tenants` on),
+    from a tool context's `services` map. Topic files have no tenant, so the `memory` and
+    `memory_read` tools refuse them to such an agent (even when its tenant failed to open)."""
+    svc = tool_services.get("services")
+    manifest = getattr(getattr(tool_services.get("spec"), "agent", None), "manifest", None)
+    slug = getattr(manifest, "memory_tenant", None)
+    if not slug or svc is None or not svc.settings.m7.agents.memory_tenants:
+        return None
+    return str(slug)
+
+
 async def memory_for_agent_name(services: Services, agent: str) -> Any:
     """`memory_for` by agent name (compaction indexing); an unknown agent uses `local`."""
     try:

@@ -69,6 +69,9 @@ class EnvironmentPool(SessionScoped):
         self.instances: dict[str, Any] = {}
         self.procs: dict[str, dict[str, ProcRecord]] = {}
         self._closing: list[asyncio.Future[Any]] = []  # M7: replaced host-file backends shutting down
+        self.epoch: dict[str, int] = {}
+        """M7: times `name` was dropped (edited or revoked); part of the `ssh` grant key, so a
+        grant never outlives the host definition it was given for."""
 
     def instance(self, name: str) -> Any:
         svc = self.services
@@ -101,6 +104,7 @@ class EnvironmentPool(SessionScoped):
 
     def _drop(self, name: str) -> None:
         old = self.instances.pop(name)
+        self.epoch[name] = self.epoch.get(name, 0) + 1
         for procs in self.procs.values():
             for pid in [p for p, rec in procs.items() if rec.backend is old]:
                 procs.pop(pid)
@@ -173,8 +177,10 @@ async def gate(ctx: ToolContext, label: str, backend: Any, *, tool: str, why: st
     svc = _services(ctx)
     if not ssh_gate.is_ssh(backend) or not hosts.hosts_enabled(svc.settings):
         return
-    named = pool_for(svc).instances.get(label) is backend
-    target = ssh_gate.target_of(label if named else ssh_gate.DEFAULT_NAME, backend)
+    pool = pool_for(svc)
+    named = pool.instances.get(label) is backend
+    epoch = pool.epoch.get(label, 0) if named else 0
+    target = ssh_gate.target_of(label if named else ssh_gate.DEFAULT_NAME, backend, epoch=epoch)
     await ssh_gate.gate_ssh(ctx, target, tool=tool, justification=why)
 
 
@@ -269,6 +275,14 @@ def lookup(ctx: ToolContext, proc_id: str) -> ProcRecord:
         _preflight(label, backend, "write_stdin")
         known = ", ".join(sorted(pool.procs.get(ctx.session_id, {}))) or "none"
         raise ToolError(f"no running exec_command session '{proc_id}' (live: {known})")
+    if (
+        pool.instances.get(rec.environment) is rec.backend
+        and pool.instance(rec.environment) is not rec.backend
+    ):
+        # M7: the host file changed or was revoked under the process (`instance` dropped it)
+        raise ToolError(
+            f"no running exec_command session '{proc_id}' (environment '{rec.environment}' changed)"
+        )
     _preflight(rec.environment, rec.backend, "write_stdin")
     return rec
 

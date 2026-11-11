@@ -223,14 +223,22 @@ class ApprovalBroker:
 
     async def cascade(self, request_id: str) -> list[str]:
         """Approve (`once`) every other pending request in the same approval group as
-        `request_id` (spec §17 bulk approve; group = §25.10 key). Returns the approved ids."""
+        `request_id` (spec §17 bulk approve; group = §25.10 key). Returns the approved ids.
+        One-shot requests (ssh/sftp hosts, `net_direct`, sandbox escalation) are decided one
+        at a time: they never cascade, in either direction (the group key spans sessions and
+        hosts)."""
         p = self._pending.get(request_id)
-        if p is None:
+        if p is None or p.one_shot:
             return []
         key = group_key(p)
         done: list[str] = []
         for other in list(self._pending.values()):
-            if other.request_id == request_id or other.future.done() or group_key(other) != key:
+            if (
+                other.request_id == request_id
+                or other.future.done()
+                or other.one_shot
+                or group_key(other) != key
+            ):
                 continue
             other.future.set_result(ApprovalOutcome(True, "once"))
             await self._emit(

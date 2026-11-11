@@ -178,6 +178,37 @@ async def test_cascade_approves_the_matching_group_only() -> None:
     other.cancel()
 
 
+async def test_cascade_never_crosses_one_shot_requests() -> None:
+    """A `once` + cascade on the `dev` ssh card must not approve a `prod` ssh request from
+    another session: one-shot requests (ssh, net_direct, sandbox escalation) are decided one
+    at a time."""
+    broker, seen = await _broker()
+    dev = asyncio.create_task(
+        broker.request(
+            "sessA", "exec_command", "ssh", "dev", "ssh u@dev:22 (dev)", one_shot=True, justification="logs"
+        )
+    )
+    prod = asyncio.create_task(
+        broker.request(
+            "sessB",
+            "exec_command",
+            "ssh",
+            "prod",
+            "ssh root@prod:22 (prod)",
+            one_shot=True,
+            justification="x",
+        )
+    )
+    await asyncio.sleep(0.01)
+    first = next(p for p in broker.pending() if p.pattern == "dev")
+    assert await reply_with_grants(broker, lambda sid: None, first.request_id, "once", cascade=True)
+    assert (await dev).granted
+    assert [p.pattern for p in broker.pending()] == ["prod"]
+    assert not [d for _, t, d in seen if t == "permission.replied" and d.get("cascade")]
+    assert await broker.reply(broker.pending()[0].request_id, "reject")
+    assert not (await prod).granted
+
+
 async def test_executor_audit_row_links_the_request_id(services: Services, gateway: FakeGateway) -> None:
     gateway.queue(Scripted(tool_calls=[("bash", {"command": "echo hi"})]), Scripted(text="done"))
     sess = await services.create_session()

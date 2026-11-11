@@ -6,6 +6,9 @@
   the attempt is audited.
 - Without an id the oldest pending request is answered (FIFO across sessions); an id is
   matched by prefix (≥ 4 characters) against pending request ids.
+- One-shot requests (an `ssh` host, `net_direct`, sandbox escalation, a literal secret) are
+  approved only by their explicit id: `/approve` without an id and `/approve all` skip them
+  and say so. `/deny` still answers them either way.
 - With `teams2.chat_approvals` the connector's own runs are interactive, and every approval
   request of that chat's session is pushed to the chat (`ApprovalNotifier`).
 """
@@ -42,11 +45,22 @@ def is_owner(services: Services, plugin: str, chat_id: str) -> bool:
     return not isinstance(owners, list) or not owners or chat_id in {str(o) for o in owners}
 
 
+SSH_PERMISSIONS = frozenset({"ssh", "sftp"})
+
+
+def _clip(text: str, n: int = 200) -> str:
+    return text if len(text) <= n else text[:n] + "…"
+
+
 def describe(p: Pending, agent: str = "") -> str:
-    """`agent` (M7): named when the connector routes one chat to several agents."""
-    pattern = p.pattern if len(p.pattern) <= 200 else p.pattern[:200] + "…"
+    """`agent` (M7): named when the connector routes one chat to several agents. An `ssh`
+    card shows the `user@host:port` it opens and, like any one-shot card, the justification."""
+    shown = p.detail if p.permission in SSH_PERMISSIONS and p.detail else p.pattern
     who = f"{agent}: " if agent else ""
-    return f"[{p.request_id[:8]}] {who}{p.tool} ({p.permission}): {pattern}"
+    line = f"[{p.request_id[:8]}] {who}{p.tool} ({p.permission}): {_clip(shown)}"
+    if p.justification:
+        line += f"\n  justification: {_clip(' '.join(p.justification.split()), 500)}"
+    return line
 
 
 def _agents(services: Services, plugin: str) -> dict[str, str]:
@@ -61,15 +75,20 @@ def _agents(services: Services, plugin: str) -> dict[str, str]:
     return session_agents(home / "plugins" / plugin / "sessions.json", fixed)
 
 
-def _targets(pending: list[Pending], words: list[str]) -> tuple[list[Pending], list[str]]:
-    """(requests to answer, remaining words = the reason)."""
-    if words and words[0].lower() == "all":
-        return pending, words[1:]
-    if words and len(words[0]) >= MIN_ID:
+def _targets(
+    pending: list[Pending], words: list[str], approve: bool
+) -> tuple[list[Pending], list[str], list[Pending]]:
+    """(requests to answer, remaining words = the reason, one-shot requests skipped). An
+    approval answers a one-shot request only when its id is named."""
+    if words and len(words[0]) >= MIN_ID and words[0].lower() != "all":
         hits = [p for p in pending if p.request_id.startswith(words[0].lower())]
         if hits:
-            return hits[:1], words[1:]
-    return pending[:1], words
+            return hits[:1], words[1:], []
+    skipped = [p for p in pending if p.one_shot] if approve else []
+    pool = [p for p in pending if p not in skipped]
+    if words and words[0].lower() == "all":
+        return pool, words[1:], skipped
+    return pool[:1], words, skipped
 
 
 async def handle_command(services: Services, plugin: str, chat_id: str, text: str) -> str:
@@ -95,8 +114,8 @@ async def handle_command(services: Services, plugin: str, chat_id: str, text: st
         return "Pending approvals (oldest first):\n" + "\n".join(lines)
     if not pending:
         return "No approvals are pending."
-    chosen, rest = _targets(pending, words[1:])
     reply: Reply = "once" if cmd == "/approve" else "reject"
+    chosen, rest, skipped = _targets(pending, words[1:], reply == "once")
     reason = (" ".join(rest)[:500] or None) if reply == "reject" else None
     done: list[str] = []
     for p in chosen:
@@ -112,7 +131,15 @@ async def handle_command(services: Services, plugin: str, chat_id: str, text: st
             detail={"chat_id": chat_id[:64], "request_id": p.request_id},
         )
     verb = "Approved" if reply == "once" else "Denied"
-    return f"{verb} {len(done)}:\n" + "\n".join(done) if done else "Nothing was answered (already resolved)."
+    if done:
+        out = f"{verb} {len(done)}:\n" + "\n".join(done)
+    else:
+        out = "Nothing was approved." if skipped else "Nothing was answered (already resolved)."
+    if skipped:
+        out += f"\nNot approved ({len(skipped)} one-shot, approve each with /approve <id>):\n" + "\n".join(
+            describe(p, names.get(p.session_id, "")) for p in skipped
+        )
+    return out
 
 
 class ApprovalNotifier:

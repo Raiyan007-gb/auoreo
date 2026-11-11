@@ -107,3 +107,34 @@ async def test_disabled(services: Services, settings: Settings) -> None:
     settings.mcp_server_enabled = False
     async with running_server(services, settings) as base, httpx.AsyncClient(base_url=base) as c:
         assert (await c.post("/mcp", json={})).status_code in {404, 405}
+
+
+async def test_tools_use_the_configured_agents_memory_tenant(
+    services: Services, settings: Settings, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`settings.agent` with a `memory_tenant`: MCP tool calls land in `agent:<slug>`, never in
+    the shared `local` store; a tenant that cannot be opened means no memory (fail closed)."""
+    from tests.conftest import write
+
+    agent = "---\nname: support\ndescription: test agent\nmemory_tenant: support\n---\nYou are support.\n"
+    write(workdir / ".auoreo" / "agents" / "support" / "AGENT.md", agent)
+    services.harness.reload()
+    services.settings.agent = "support"
+    services.settings.m7.agents.memory_tenants = True
+    mem = services.memory
+    assert mem is not None
+    op = {"action": "add", "target": "fact", "content": "Escalations go to the tier three queue"}
+    async with running_server(services, settings) as base, Client(f"{base}/mcp") as client:
+        result = await client.call_tool("memory", {"operations": [op]})
+        assert not result.is_error, text_of(result)
+        assert [r["content"] for r in mem.store.fact_rows()] == []  # nothing in `local`
+        tenant = await mem.for_agent(services.harness.agent("support").manifest)
+        assert [r["content"] for r in tenant.store.fact_rows()] == [op["content"]]
+
+        async def broken(self: object, manifest: object) -> object:
+            raise RuntimeError("tenant store unavailable")
+
+        monkeypatch.setattr(type(mem), "for_agent", broken)
+        result = await client.call_tool("memory", {"operations": [{**op, "content": "Second fact here"}]})
+        assert result.is_error and "disabled" in text_of(result)
+    assert [r["content"] for r in mem.store.fact_rows()] == []
