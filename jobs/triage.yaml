@@ -1,0 +1,19 @@
+name: triage
+description: Review blocked and stale kanban tasks on the triage board and propose at most three follow-ups for the owner.
+schedule: "every 6h"
+agent: triage
+prompt: |
+  It is {{now}} ({{job}}). Review the `triage` kanban board: call `kanban_list` for board
+  "triage" (use `tool_search` with "kanban" if it is not loaded) and `kanban_show` for the
+  tasks that are blocked, or claimed with no progress for more than a day.
+
+  Propose at most three suggestions in total, the most useful first: call `suggest` with
+  kind "ops", deliver "home", a title naming the task number, a body with the evidence (status,
+  failures, last comment) and a short `prompt` the owner can accept to follow up, and
+  dedupe_key "triage:task:<id>". Propose only; never change a task yourself. Say "board is
+  healthy" when nothing needs attention.
+deliver: [log]
+enabled: false
+catch_up: false
+timeout_s: 300
+max_steps: 12

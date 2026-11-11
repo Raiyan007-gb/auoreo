@@ -1,0 +1,27 @@
+name: issue-to-kanban
+description: Turn newly opened GitHub issues into kanban task suggestions; a task is created only when the owner accepts.
+# Needs m7.agents.strict_origins + m7.agents.kanban_suggestions, `triage` in
+# m7.agents.triage.boards and the worker profile (i3.kanban.agent) in m7.agents.triage.profiles.
+provider: github
+secret: "secret:webhook/issue-to-kanban"   # auoreo secrets set webhook/issue-to-kanban
+events: [issues]
+filters:
+  - {field: action, equals: opened}
+agent: triage
+max_steps: 8
+prompt: |
+  GitHub issue {{event.repository.full_name}}#{{event.issue.number}} was {{event.action}}
+  by {{event.issue.user.login}}: "{{event.issue.title}}"
+  {{event.issue.html_url}}
+
+  Issue text:
+  {{event.issue.body}}
+
+  Propose at most one kanban task for this issue: call `suggest` with kind "kanban",
+  dedupe_key "{{event.repository.full_name}}#{{event.issue.number}}", deliver "home", and
+  kanban {board: "triage", title, body, ref: "{{event.issue.html_url}}"}. Write the title and
+  body in your own words. Propose only; never act on the issue.
+deliver: [log]
+enabled: false
+rate_limit_per_minute: 30
+max_body_bytes: 1048576

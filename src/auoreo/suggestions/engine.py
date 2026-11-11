@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 
 from auoreo.core.db import DeliveryRow, SuggestionRow, utcnow
 from auoreo.suggestions import actions, delivery
@@ -116,14 +116,12 @@ class SuggestionEngine:
             raise SuggestionError(str(exc)) from exc
         now = utcnow()
         async with self._lock:
-            if dedupe_key:
-                async with self.s.db.session() as s:
-                    q = select(SuggestionRow).where(
-                        SuggestionRow.dedupe_key == dedupe_key[:128], SuggestionRow.status == "pending"
-                    )
-                    existing = (await s.execute(q.limit(1))).scalar()
-                if existing is not None:
-                    return existing, False
+            try:
+                dedupe_key, existing = await actions.admit(self.s, action, dedupe_key)
+            except actions.ActionError as exc:
+                raise SuggestionError(str(exc)) from exc
+            if existing is not None:
+                return existing, False
             row = SuggestionRow(
                 kind=(kind or "info")[:32],
                 title=title.strip()[:300],
@@ -132,7 +130,7 @@ class SuggestionEngine:
                 deliver=deliver[:64],
                 origin_session=origin_session,
                 action=action,
-                dedupe_key=dedupe_key[:128] if dedupe_key else None,
+                dedupe_key=dedupe_key,
                 created_at=now,
                 updated_at=now,
                 expires_at=now + timedelta(seconds=max(int(ttl_s), 1)),
@@ -151,14 +149,14 @@ class SuggestionEngine:
         return row, True
 
     async def _evict_overflow(self) -> builtins.list[SuggestionRow]:
-        """Expire the oldest pending rows beyond `max_pending` (caller holds the lock)."""
+        """Expire the oldest pending rows beyond `max_pending` (caller holds the lock). Kanban
+        suggestions have their own per-source cap: here they neither count nor get evicted."""
         async with self.s.db.session() as s:
-            q = (
-                select(SuggestionRow)
-                .where(SuggestionRow.status == "pending")
-                .order_by(SuggestionRow.created_at.desc(), SuggestionRow.id.desc())
-                .offset(self.max_pending)
-            )
+            q = select(SuggestionRow).where(SuggestionRow.status == "pending")
+            if self.s.settings.m7.agents.kanban_suggestions:
+                key = SuggestionRow.dedupe_key
+                q = q.where(or_(key.is_(None), ~key.startswith(actions.KB_PREFIX)))
+            q = q.order_by(SuggestionRow.created_at.desc(), SuggestionRow.id.desc()).offset(self.max_pending)
             rows = builtins.list((await s.execute(q)).scalars())
             for r in rows:
                 r.status = "expired"

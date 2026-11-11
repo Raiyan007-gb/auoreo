@@ -9,7 +9,11 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
     if svc is None:
         raise ToolError("suggestions are not available (no services attached)")
     action: dict = {}
-    if args.get("prompt"):
+    if args.get("prompt") and args.get("kanban"):
+        raise ToolError("give either `prompt` or `kanban`, not both")
+    if args.get("kanban"):
+        action = {"type": "kanban_create", **args["kanban"]}
+    elif args.get("prompt"):
         action = {"type": "prompt", "text": args["prompt"]}
         if args.get("agent"):
             action["agent"] = args["agent"]

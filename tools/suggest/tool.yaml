@@ -20,6 +20,17 @@ parameters:
       maxLength: 8000
       description: "Optional instruction to run as a new turn if the user accepts."
     agent: {type: string, maxLength: 64, description: "Agent for the accepted prompt (default: the session's)."}
+    kanban:
+      type: object
+      description: "Instead of `prompt`: create this kanban task if the user accepts (needs m7.agents.kanban_suggestions and a dedupe_key)."
+      properties:
+        board: {type: string, pattern: "^[a-z0-9][a-z0-9_-]{0,63}$"}
+        title: {type: string, minLength: 1, maxLength: 200}
+        body: {type: string, maxLength: 8000}
+        profile: {type: string, pattern: "^[a-z][a-z0-9_]*$", maxLength: 64, description: "Worker agent (default: i3.kanban.agent)."}
+        ref: {type: string, maxLength: 2000, description: "URL or path to attach (e.g. the issue URL)."}
+      required: [board, title]
+      additionalProperties: false
     ttl_s: {type: integer, minimum: 60, maximum: 2592000, default: 86400, description: "Expires after this many seconds."}
   required: [title]
   additionalProperties: false
