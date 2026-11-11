@@ -150,15 +150,36 @@ async def stored_cwd(services: Services, session_id: str) -> str | None:
 
 async def load(services: Services, rt: Any) -> None:
     """Resolve and validate `rt.cwd` once, when the coordinator builds the runtime."""
-    if not enabled(services.settings):
-        return
     raw = await stored_cwd(services, rt.session_id)
     if raw is None:
         return
+    if not enabled(services.settings):
+        await _ignored(services, rt.session_id, raw)
+        return
     try:
         rt.cwd = await validate_session_cwd(services, raw)
-    except (SessionCwdError, OSError) as exc:
-        rt.cwd_error = str(exc) if isinstance(exc, SessionCwdError) else f"{MISSING}: {exc}"
+    except SessionCwdError as exc:
+        rt.cwd_error = str(exc)
+    except (ValueError, OSError) as exc:  # e.g. a NUL in the stored path
+        rt.cwd_error = f"{MISSING}: {type(exc).__name__}: {str(exc)[:200]}"
+
+
+async def _ignored(services: Services, session_id: str, raw: str) -> None:
+    """Flag off (a rollback): a session born in a worktree runs in the server cwd. Say so once
+    per runtime load in the audit log instead of switching silently."""
+    try:
+        same = _norm(raw) == _norm(services.cwd)
+    except (ValueError, OSError):
+        same = False
+    if same:
+        return
+    await services.audit.record(
+        actor="system",
+        action="session.cwd_ignored",
+        session_id=session_id,
+        reason="m7.orch.session_cwd is off: the session runs in the server cwd",
+        detail={"stored_cwd": raw[:1000], "server_cwd": str(services.cwd)},
+    )
 
 
 # ------------------------------------------------------------------ sandbox git allowance

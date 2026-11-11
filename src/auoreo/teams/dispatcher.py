@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from auoreo.automation import lock
+from auoreo.runtime.cwd import SessionCwdError
 from auoreo.runtime.inbox import RunOptions
 from auoreo.runtime.subtask import WorktreeError
 from auoreo.teams import worktree_spawn
@@ -172,9 +173,17 @@ class KanbanDispatcher:
                 await kb.release(row.id, name)
                 self._guard(row.id, self.cfg.quota_cooldown_s, "worktree failed")
                 return False
-        ses = await self.s.create_session(
-            title=f"kanban:{row.board}#{row.id}"[:120], agent=profile, cwd=tree.path if tree else None
-        )
+        try:
+            ses = await self.s.create_session(
+                title=f"kanban:{row.board}#{row.id}"[:120], agent=profile, cwd=tree.path if tree else None
+            )
+        except SessionCwdError as exc:  # the worktree failed validation: undo, never run elsewhere
+            log.warning("kanban task %s: worktree refused (%s); unclaimed", row.id, exc)
+            await kb.release(row.id, name)
+            if tree is not None:
+                await worktree_spawn.rollback(self.s, [tree])
+            self._guard(row.id, self.cfg.quota_cooldown_s, "worktree failed")
+            return False
         if tree is not None:
             await self._attach(kb, row.id, tree, name)
         await kb.set_session(row.id, ses.id)
