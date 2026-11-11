@@ -244,7 +244,9 @@ A worktree's own `.auoreo/` is **never** loaded and never inherits trust: discov
 process-global (rooted at the server cwd) and `harness/trust.py` keys trust by exact workspace
 path, so a worktree path is untrusted by construction. Hook scripts with relative paths resolve
 against the definition root, not the session cwd (`hooks.py` script resolution stays on
-`Services.cwd`; only the hook process cwd and payload switch). This prevents a worker from
+`Services.cwd`). The hook process also runs in the server cwd: it is outside the sandbox, so a
+bare `pytest`, `make` or `./x` must not pick up files a worker wrote; the session cwd reaches a
+hook only as the payload's `cwd`. This prevents a worker from
 committing a hook or tool handler on its branch that later runs as trusted. A test asserts that a
 hook committed in a worktree never loads.
 
@@ -254,7 +256,7 @@ hook committed in a worktree never loads.
 | --- | --- |
 | `ToolContext(cwd=...)`, `engine.context["cwd"]`, plans dir (`runner.py`) | switched via `cwd_of` |
 | `render_context` (`harness/orchestrator.py`) | switched (receives the cwd argument) |
-| `hooks.py` process cwd and payload `cwd` | switched; script resolution stays global |
+| `hooks.py` payload `cwd` | switched; the process cwd and script resolution stay on the server cwd |
 | `compaction_restore.py` (3 sites) | switched; `rt` passed in |
 | `teams/service.py` plans path, `teams/spawn_i3.py` member `cwd` | switched (child cwd recorded) |
 | `runtime/subtask.py` (`/review`) | switched: the review child runs with the worktree as session cwd (fixes prompt-only isolation) |
@@ -398,8 +400,8 @@ Phases in order; each phase ends green on `ruff`, `mypy`, `pytest`.
     `engine.context` and the `render_context` call use `cwd_of`.
 8.  `src/auoreo/runtime/coordinator.py` (Modify): `runtime()` resolves and validates the cwd from
     the `session.created` event; `_session_start` payload.
-9.  `src/auoreo/runtime/hooks.py` (Modify): process cwd and payload from the runtime cwd; script
-    resolution stays on `Services.cwd`.
+9.  `src/auoreo/runtime/hooks.py` (Modify): payload `cwd` from the runtime cwd; the process cwd
+    and script resolution stay on `Services.cwd`.
 10. `src/auoreo/runtime/compaction_restore.py` (Modify): the three `services.cwd` sites take `rt`.
 11. `src/auoreo/harness/orchestrator.py` (Modify only if `render_context` needs a new parameter;
     `request_layout.py` is created by the token-economy design and is **not** a dependency here).
