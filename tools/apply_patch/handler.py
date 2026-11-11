@@ -19,6 +19,7 @@ from pathlib import Path
 from lark import Lark, Token, Tree
 from lark.exceptions import LarkError
 
+from auoreo.core.permissions import is_sensitive_write
 from auoreo.core.settings_h5 import h5_of
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 from auoreo.tools.formatters import FormatReport, format_files
@@ -234,6 +235,9 @@ async def run(args: dict, ctx: ToolContext) -> ToolResult:
     note = f"\n(matched with {', '.join(sorted(fuzz))})" if fuzz else ""
     if args.get("dry_run"):
         return ToolResult("dry run OK:\n" + "\n".join(summary) + note)
+    for path in writes:  # the executor only sees pattern `*`: the sensitive-write floor needs real paths
+        if is_sensitive_write(str(path)):
+            await ctx.authorize("apply_patch", "edit", str(path))
     for path, content in writes.items():
         if content is None:
             path.unlink(missing_ok=True)
