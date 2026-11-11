@@ -156,10 +156,55 @@ host_id, grant_id, call_id, run_id, direction, remote_path, local_path, overwrit
 
 Also with the flag on: the key is tried as the current secret value, then `<NAME>#prev` inside
 its rotation grace window (`auoreo secrets rotate`), and host key names are in the secret scope
-of the three environment tools only.
+of the environment tools (`use_environment`, `exec_command`, `write_stdin`, `env_transfer`) only.
 
-Not in this wave: `ssh keygen`, `ssh import`, jump hosts, key rotation helpers, `environment`
-and `host` fields in Starlark policy requests, `env=` usage tags, web host management.
+### Hosts waves b and c (each behind its own `m7.ssh.*` flag, default off)
+
+- **Host file v2.** `tags`, `jump`, `audit_commands` (`hash` | `redacted`) and `description`,
+  written only when set and then with `schema: 2`. A build reads a file whose `schema` is
+  newer than it knows as invalid (the host is absent: fail closed); a `schema: 2` file's
+  unknown key is ignored with a doctor warning; a file without the marker stays strict. The
+  hosts-a build rejects any v2 key, so before downgrading remove the v2 keys (`auoreo ssh
+  list` marks those hosts).
+- **Policy fields** (`policy_fields`). The Starlark request gains `environment` and `host`
+  (`{name, address, port, user, origin, tags, jump}`) for `exec_command`, `env_transfer`,
+  `use_environment` and `write_stdin` (the process's own environment); local tools see
+  `None`. `policies/read_only_host.star` is a disabled example for hosts tagged `readonly`:
+  a filter on model-written text, not enforcement.
+- **Exec audit** (`exec_audit`). `environment.exec` rows add `tool, call_id, run_id, host_id,
+  grant_id`; a host with `audit_commands: redacted` adds the redacted command (never for
+  `write_stdin`; redaction is pattern-based and can miss an inline secret).
+- **Usage tag** (`usage_tag`). Requests made while an environment is selected carry the
+  usage tag `env=<name>` (attribution only); budgets never match `env=` tags.
+- **Chat grants** (`chat_grants`, default off). `ssh`/`sftp` cards are answered in the web UI
+  or by a rule: a chat `/approve` refuses them even by id (`/deny` still works), and a
+  messaging-app session without a rule is refused at once. `approvals.unattended` never
+  approves `sftp` (nor `ssh`, which needs a rule or a human anyway).
+- **Keys (CLI only, work with the flags off).** `auoreo ssh keygen NAME` (ed25519 into the
+  secret store, default `SSH_KEY_<NAME>`; prints the public line), `pubkey`, `deploy [--via
+  SECRET]` (appends one `auoreo:<secret>:<fp8>` line remotely, then proves a login with the
+  new key alone), `rotate [--grace H] [--revoke-old] [--skip HOST]` (installs and proves the
+  new key on every host sharing the secret before swapping it; the old value stays as
+  `#prev` for `rotate_grace_h`), `rm [--forget-key]`, `import [--from PATH] [--key S]
+  [--write]` (Host/HostName/User/Port/one-hop ProxyJump; never IdentityFile, ProxyCommand,
+  Include or Match). Public key metadata lives in `<home>/ssh/keys.json` (display only). A
+  bash floor refuses the mutating `auoreo ssh` subcommands in tool shells: a speed bump, not
+  a boundary (the agent runs as the same OS user).
+- **Jump hosts** (`jump`). `jump: <host>` reaches the target through the bastion's own
+  authenticated connection (asyncssh `tunnel=`), with the bastion's key and the target's key
+  each offered only to its own hop, and the target host key verified end to end. The gate
+  checks `ssh:<bastion>` and `ssh:<target>` (a deny on either refuses; a rule only on the
+  target never covers the bastion; a human sees one card); `net.ssh` rows carry `role` and
+  `via`. With the flag off such a host is refused, never reached directly. `auoreo ssh test`
+  probes the target key through a trusted bastion. Known limit: a hostname target is resolved
+  by the bastion.
+- **Web** (`web`). `/api/hosts` (list, put, delete, check) and the Hosts page show
+  fingerprints and state only; writes are refused over the public tunnel; nothing there
+  trusts a host key or touches a key. A changed address or port is untrusted until `auoreo ssh
+  test`, and any edit invalidates existing grants.
+
+Not built: static port forwards (moved to M8), web key operations, and the `shell`, `policy`,
+public-key and fingerprint manifest fields.
 
 ## Audit and doctor
 
