@@ -10,7 +10,8 @@ backend). The grant has `net_direct` semantics:
   never do, and an `always` reply is not remembered;
 - a human grant needs a justification (kept 24 h, hash in the audit row);
 - it lasts for the session (`SessionState.ssh_granted`), is not restored after a restart, and
-  is keyed by the target, so editing the host definition asks again. A denial is not cached.
+  is keyed by the target and the pool's drop count, so editing or revoking the host definition
+  asks again. A denial is not cached.
 
 Audit: `net.ssh_grant{mode, name, host, port, grant_id, justificationHash}` at grant time and
 `net.ssh{mode, name, host, port, grant_id}` on every socket open (pooled reconnects included).
@@ -51,10 +52,12 @@ class SshTarget:
     port: int
     user: str
     key_secret: str
+    epoch: int = 0
+    """How often the pool dropped this host (edit or revoke): an old grant never matches."""
 
     @property
     def cache_key(self) -> str:
-        raw = f"{self.host}\n{self.port}\n{self.user}\n{self.key_secret}"
+        raw = f"{self.host}\n{self.port}\n{self.user}\n{self.key_secret}\n{self.epoch}"
         return f"{self.name}:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
 
 
@@ -62,11 +65,11 @@ def is_ssh(backend: Any) -> bool:
     return getattr(backend, "name", None) == "ssh" and hasattr(backend, "net_audit")
 
 
-def target_of(name: str, backend: Any) -> SshTarget | None:
+def target_of(name: str, backend: Any, *, epoch: int = 0) -> SshTarget | None:
     cfg = getattr(backend, "cfg", None) if is_ssh(backend) else None
     if cfg is None:
         return None
-    return SshTarget(name, str(cfg.host), int(cfg.port), str(cfg.username), str(cfg.key_secret or ""))
+    return SshTarget(name, str(cfg.host), int(cfg.port), str(cfg.username), str(cfg.key_secret or ""), epoch)
 
 
 def attach(

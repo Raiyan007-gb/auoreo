@@ -169,6 +169,30 @@ def test_reload_reports_hosts(tmp_path: Path) -> None:
     assert h.reload()["hosts"] == {"added": ["lab"], "removed": []}
 
 
+def test_host_file_changes_are_seen_without_a_reload(tmp_path: Path) -> None:
+    """A separate process (`auoreo ssh add`, an editor, `rm`) changes `<home>/hosts/` under a
+    running server: the next resolve sees it, and a revoked host fails closed at once."""
+    from types import SimpleNamespace
+
+    home = tmp_path / "home"
+    hosts.write_host(home, "lab", {"host": "10.0.0.5", "user": "ubuntu", "key_secret": "secret:K"})
+    h = Harness([Root("runtime", home)])
+    st = Settings(home=home)
+    st.m7.ssh.hosts = True
+    svc = SimpleNamespace(settings=st, harness=h)
+    assert hosts.resolve_environment(svc, "lab") is not None
+    hosts.write_host(
+        home, "lab", {"host": "10.0.0.5", "user": "deploy", "key_secret": "secret:K"}, force=True
+    )
+    env = hosts.resolve_environment(svc, "lab")
+    assert env is not None and env.overrides["environment_ssh"].username == "deploy"
+    hosts.write_host(home, "web", {"host": "10.0.0.6", "user": "ubuntu", "key_secret": "secret:K"})
+    assert hosts.environment_names(svc) == ["lab", "web"]
+    (home / "hosts" / "lab.yaml").unlink()  # the operator revokes the host in another shell
+    assert hosts.resolve_environment(svc, "lab") is None
+    assert hosts.environment_names(svc) == ["web"]
+
+
 @pytest.mark.parametrize(
     "order",
     [

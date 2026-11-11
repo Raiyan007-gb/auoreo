@@ -196,8 +196,9 @@ ssh backend _connect -> audit net.ssh{host, port, grant_id} on every socket open
     uuid.
 *   Cache: `SessionState.ssh_granted: dict[str, str]` (cache key to grant id). It lives for the
     session, is not restored by `restore_state` (a restarted session asks again), and a denial is
-    never cached. The key is the host name plus a hash of `host, port, user, key_secret`, so
-    editing the definition invalidates the grant.
+    never cached. The key is the host name plus a hash of `host, port, user, key_secret` and the
+    pool's drop count for that name, so editing the definition invalidates the grant, and a
+    revoked (deleted) file stays revoked even if the same file is put back.
 *   Audit: `AuditService.record(actor="agent", action="net.ssh_grant", ...)` at grant time with
     `detail {mode: "ssh", host, port, grant_id, justificationHash}`; and `action="net.ssh"` with
     `detail {mode: "ssh", host, port, grant_id}` on every socket open in the backend, so silent
@@ -414,6 +415,10 @@ Each phase leaves the tree green (ruff, mypy, pytest) and sits behind the flag.
 *   `registry.NAMED_KINDS` gains `"hosts"` (drives the snapshot load at line 133 and the reload
     diff at line 288); `Snapshot.hosts` and a `Harness.hosts` property. `registry.py` is 477 lines
     and must stay under 500.
+*   `Harness.hosts` compares a stamp of `<home>/hosts/*.yaml` (name, inode, mtime_ns, size) on
+    every read and re-reads the host files when it changed, so `auoreo ssh add` or `rm` from
+    another process takes effect under a running server without a reload; a removed file makes
+    the next resolve fail closed and the pool drops its connection and processes.
 *   `trust.UNTRUSTED_SKIP` gains `"hosts"`. Test: a project `hosts/x.yaml` in an untrusted root
     appears in `snap.untrusted` and not in `Harness.hosts`.
 

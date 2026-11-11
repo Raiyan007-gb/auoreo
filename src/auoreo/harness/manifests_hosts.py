@@ -10,7 +10,10 @@ runtime root (`<home>/hosts/`) only: never from a project `.auoreo/` (trusted or
 from __future__ import annotations
 
 import ipaddress
+import logging
+import os
 import socket
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -18,7 +21,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from auoreo.harness.manifests import NAME_RE, check_reserved
 
 if TYPE_CHECKING:
-    from auoreo.harness.discovery import Candidate
+    from auoreo.harness.discovery import Candidate, Root
+
+log = logging.getLogger(__name__)
 
 RUNTIME_ONLY = "hosts load from the runtime root only (<home>/hosts/); this file is ignored"
 
@@ -74,6 +79,41 @@ class HostManifest(BaseModel):
         if (why := unsafe_address(v)) is not None:
             raise ValueError(why)
         return v
+
+
+def hosts_stamp(roots: Iterable[Root]) -> tuple[tuple[str, int, int, int], ...]:
+    """Cheap change marker of the runtime root's `hosts/*.yaml` (name, inode, mtime_ns, size):
+    another process (`auoreo ssh add`, an editor, `rm`) edits these files under a running
+    server, and `Harness.hosts` compares this on every read instead of watching."""
+    out: list[tuple[str, int, int, int]] = []
+    for root in roots:
+        if root.source != "runtime":
+            continue
+        try:
+            with os.scandir(root.path / "hosts") as it:
+                for e in it:
+                    if e.name.endswith(".yaml"):
+                        st = e.stat()
+                        out.append((e.name, st.st_ino, st.st_mtime_ns, st.st_size))
+        except OSError:
+            continue
+    return tuple(sorted(out))
+
+
+def load_runtime_hosts(roots: Iterable[Root]) -> dict[str, Any]:
+    """The `hosts` kind re-read from the runtime root alone (an invalid file is skipped)."""
+    from auoreo.harness import loader
+    from auoreo.harness.discovery import iter_candidates
+
+    out: dict[str, Any] = {}
+    for cand in iter_candidates([r for r in roots if r.source == "runtime"], "hosts"):
+        try:
+            item = load_host(cand)
+        except loader.LoadError as err:
+            log.warning("skipping host file: %s", err)
+            continue
+        out.setdefault(cand.name, item)
+    return out
 
 
 def load_host(c: Candidate) -> Any:

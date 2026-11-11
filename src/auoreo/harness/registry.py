@@ -10,7 +10,7 @@ from __future__ import annotations
 import fnmatch
 import logging
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +28,7 @@ from auoreo.harness.loader import (
     ToolDef,
 )
 from auoreo.harness.manifests import AgentManifest
+from auoreo.harness.manifests_hosts import hosts_stamp, load_runtime_hosts
 from auoreo.harness.skill_sources import ExternalSkill, SkillCatalog
 from auoreo.harness.trust import (
     SKIP_NOTE,
@@ -202,6 +203,7 @@ class Harness:
         self.strict_overlays = strict_overlays
         self.error_on_collision = error_on_collision
         self._lock = threading.RLock()
+        self._hosts_stamp = hosts_stamp(roots)  # taken before loading: a race only re-reads
         self._snap = _load_snapshot(roots, strict_overlays, error_on_collision)
         self._dynamic: dict[str, ToolDef] = {}  # e.g. MCP tools, keyed by name
         self._dynamic_errors: list[LoadError] = []
@@ -272,7 +274,12 @@ class Harness:
 
     @property
     def hosts(self) -> dict[str, Loaded]:
-        """SSH host inventory (`hosts/<name>.yaml`, runtime root only)."""
+        """SSH host inventory (`hosts/<name>.yaml`, runtime root only). Re-read when the files
+        changed (another process edits them under a running server; a revoked host is gone)."""
+        if (stamp := hosts_stamp(self.roots)) != self._hosts_stamp:
+            fresh = load_runtime_hosts(self.roots)
+            with self._lock:
+                self._snap, self._hosts_stamp = replace(self._snap, hosts=fresh), stamp
         return self._snap.hosts
 
     @property
@@ -282,11 +289,12 @@ class Harness:
     # -------------------------------------------------------------- mutation
     def reload(self) -> dict[str, Any]:
         """Re-discover everything. A failed reload keeps the previous snapshot."""
+        stamp = hosts_stamp(self.roots)
         new = _load_snapshot(self.roots, self.strict_overlays, self.error_on_collision)
         self.availability.invalidate()
         with self._lock:
             old = self._snap
-            self._snap = new
+            self._snap, self._hosts_stamp = new, stamp
             self.generation += 1
         diff: dict[str, Any] = {
             "generation": self.generation,

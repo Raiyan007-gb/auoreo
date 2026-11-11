@@ -576,6 +576,35 @@ async def test_editing_or_removing_a_host_file_invalidates_grant_and_socket(
     await pool_for(services).close()
 
 
+async def test_revoking_a_host_file_under_a_running_server_fails_closed(
+    services: Services, ssh_server: SshServer, workdir: Path
+) -> None:
+    """No `harness.reload()`: a separate `auoreo ssh` process (or `rm`) changes the files under a
+    running server. The next call fails closed and drops the pooled connection; the same file
+    put back asks for a new grant, and a running process of the revoked host is gone."""
+    flag(services)
+    host_file(services, ssh_server)
+    path = services.settings.home / "hosts" / "lab.yaml"
+    engine = PermissionEngine([*BASE, Rule(permission="ssh", pattern="lab", action="allow")])
+    ctx = session(services, workdir, engine)
+    assert not (await tool(services, ctx, engine, "use_environment", {"name": "lab"}))[1]
+    text, err, _ = await tool(services, ctx, engine, "exec_command", {"cmd": "cat", "yield_time_ms": 200})
+    assert not err, text
+    proc_id = next(iter(pool_for(services).procs["s1"]))
+    saved = path.read_bytes()
+    path.unlink()
+    text, err, _ = await tool(services, ctx, engine, "exec_command", {"cmd": "echo gone"})
+    assert err and "unknown environment 'lab'" in text and "lab" not in pool_for(services).instances
+    assert not pool_for(services).procs.get("s1")
+    path.write_bytes(saved)  # put back unchanged: still a new grant, never the revoked one
+    text, err, _ = await tool(services, ctx, engine, "exec_command", {"cmd": "echo back"})
+    assert not err and "back" in text
+    assert len(await audit_rows(services, "net.ssh_grant")) == 2
+    text, err, _ = await tool(services, ctx, engine, "write_stdin", {"session_id": proc_id, "chars": "x\n"})
+    assert err and "no running exec_command session" in text
+    await pool_for(services).close()
+
+
 async def test_host_key_only_in_scope_of_the_environment_tools(
     services: Services, ssh_server: SshServer
 ) -> None:
