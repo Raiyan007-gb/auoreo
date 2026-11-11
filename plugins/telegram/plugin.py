@@ -19,6 +19,10 @@ I7 (spec §25.15 "Telegram 10.x"):
   `sendVoice` (multipart upload, `duration`, caption when the text fits in 1024 characters).
 - Token lock: one poller per bot token (`O_EXCL` lock file + PID liveness) so two profiles or
   processes never fight over `getUpdates` (Telegram answers the loser with 409 Conflict).
+- Inbound voice (M7, `voice: true`): `message.voice` / `message.audio` from a paired chat is checked
+  against the declared length and size, fetched with `getFile`, transcribed by the host
+  (`voice.transcribe`) and forwarded as text with `media`; the host prefixes it `[voice] ` and
+  never treats it as a command.
 - `verify_init_data()`: Mini-App `initData` HMAC-SHA256 check (`WebAppData` key derivation).
 """
 
@@ -29,6 +33,7 @@ import contextlib
 import hashlib
 import hmac
 import json
+import logging
 import os
 import tempfile
 import time
@@ -43,6 +48,8 @@ CHUNK = 4000
 CAPTION_MAX = 1024
 SOURCES_MAX = 1500
 VOICE_MAX_BYTES = 16 * 2**20
+VOICE_IN_MAX_S = 120
+VOICE_IN_MAX_BYTES = 5 * 2**20
 NAME = "telegram"
 
 
@@ -180,6 +187,7 @@ def chunk(text: str, size: int = CHUNK) -> list[str]:
 
 class Plugin:
     def __init__(self, host: Any, transport: httpx.AsyncBaseTransport | None = None) -> None:
+        logging.getLogger("httpx").setLevel(logging.WARNING)  # its INFO line quotes the token URL
         self.host = host
         self.transport = transport
         self.config: dict[str, Any] = {}
@@ -376,7 +384,10 @@ class Plugin:
 
     async def handle_update(self, update: dict[str, Any]) -> None:
         msg = update.get("message")
-        if not isinstance(msg, dict) or not msg.get("text"):
+        if not isinstance(msg, dict):
+            return
+        note = (msg.get("voice") or msg.get("audio")) if self.config.get("voice") else None
+        if not msg.get("text") and not isinstance(note, dict):
             return
         chat_id = str(msg["chat"]["id"])
         sender = msg.get("from") or {}
@@ -395,4 +406,52 @@ class Plugin:
                 await self.send(NAME, chat_id, text, {"reply_to": reply_to})
                 return
             self.allowlist.add(chat_id)
+        if not msg.get("text") and isinstance(note, dict):
+            await self.voice_note(chat_id, user, note, reply_to)
+            return
         self.host.message(NAME, chat_id, user, str(msg["text"]), reply_to=reply_to)
+
+    # ---------------------------------------------------------------- voice
+    async def voice_note(self, chat_id: str, user: str, note: dict[str, Any], reply_to: Any) -> None:
+        """M7: check the declared length and size, download through `getFile`, ask the host to
+        transcribe (`voice.transcribe`, quotas host side), forward the text with `media`. The
+        download URL holds the bot token: it is never logged and errors never quote it."""
+        max_s = int(self.config.get("voice_max_seconds", VOICE_IN_MAX_S))
+        max_b = int(self.config.get("voice_max_bytes", VOICE_IN_MAX_BYTES))
+        duration, size = int(note.get("duration") or 0), int(note.get("file_size") or 0)
+        mime = str(note.get("mime_type") or "audio/ogg")
+
+        async def say(text: str) -> None:
+            await self.send(NAME, chat_id, text, {"reply_to": reply_to})
+
+        if duration > max_s:
+            return await say(f"Voice note is {duration} s; the limit is {max_s} s.")
+        if size > max_b:
+            return await say(f"Voice note is {size} bytes; the limit is {max_b} bytes.")
+        transcribe = getattr(self.host, "voice_transcribe", None)
+        if transcribe is None:
+            return await say("Voice notes are not supported by this AUOREO host.")
+        try:
+            data = await self._download(str(note.get("file_id", "")), max_b)
+        except (TelegramError, httpx.HTTPError, OSError, KeyError, TypeError):
+            return await say("The voice note could not be downloaded.")
+        try:
+            res = await transcribe(chat_id, mime, data)
+        except Exception as exc:
+            if getattr(exc, "code", None) == -32601:
+                return await say("Voice notes are not supported by this AUOREO host.")
+            return await say(f"Voice note not transcribed: {str(exc)[:200]}")
+        media = [{"kind": "voice", "mime": mime, "duration_s": res.get("duration_s")}]
+        self.host.message(NAME, chat_id, user, str(res.get("text", "")), reply_to=reply_to, media=media)
+
+    async def _download(self, file_id: str, max_bytes: int) -> bytes:
+        info = await self._api("getFile", {"file_id": file_id})
+        path = str(info["file_path"])
+        if int(info.get("file_size") or 0) > max_bytes:
+            raise TelegramError("file too large")
+        token = await self._bot_token()
+        assert self._client is not None  # created by `_api`
+        resp = await self._client.get(f"{API}/file/bot{token}/{path}")
+        if resp.status_code != 200 or len(resp.content) > max_bytes:
+            raise TelegramError(f"download: HTTP {resp.status_code}")
+        return resp.content

@@ -54,6 +54,15 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+VOICE_PREFIX = "[voice] "
+
+
+def is_voice(params: dict[str, Any]) -> bool:
+    """M7: `media` (additive, metadata only) names a voice note the host transcribed."""
+    media = params.get("media")
+    return isinstance(media, list) and any(isinstance(m, dict) and m.get("kind") == "voice" for m in media)
+
+
 def file_config(home: Path, plugin: str) -> dict[str, Any]:
     """`plugins.<name>` from the settings store (state.db), read fresh (pairing edits it at runtime)."""
     from auoreo.core import settings_store
@@ -210,7 +219,10 @@ class InboundRouter:
         from auoreo.plugins.chat_approvals import ApprovalNotifier, handle_command, is_command
 
         meta = {"reply_to": params.get("reply_to"), "connector": params.get("name")}
-        if is_command(text):
+        if is_voice(params):  # --- M7: a transcript is never a chat or engine command
+            text = f"{VOICE_PREFIX}{text}"
+            params = {**params, "text": text}
+        elif is_command(text):
             answer = await handle_command(self.s, self.plugin, chat_id, text)
             receipt = await send(chat_id, answer, meta)
             return {"ok": bool(receipt.get("ok")), "command": True, "detail": receipt.get("detail")}

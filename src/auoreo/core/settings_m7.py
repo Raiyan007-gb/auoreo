@@ -49,6 +49,28 @@ class M7Agents(_Tolerant):
     """Honour `memory_tenant` on agent manifests."""
     citations: bool = False
     """Structured `citations[]` on replies."""
+    strict_origins: bool = False
+    """A suggestion proposed from a connector, job, webhook or kanban worker session never runs
+    in that session (docs/designs/m7-agents-bots.md, Wave 2). Required by the flags below."""
+    post_consent: bool = False
+    """Connectors that consume `consent:post` (Mastodon) post only for an accepted suggestion."""
+    post_daily_cap: int = Field(default=10, ge=1, le=1000)
+    """Consent-gated posts per plugin per UTC day."""
+    voice_inbound: bool = False
+    """The `voice.transcribe` host request: connector voice notes become `[voice] ` text."""
+    voice_max_seconds: int = Field(default=120, ge=1, le=3600)
+    """Longest voice note transcribed (seconds, measured after decoding)."""
+    voice_daily_seconds: int = Field(default=600, ge=1, le=86400)
+    """Transcribed seconds per plugin per UTC day."""
+    voice_max_bytes: int = Field(default=5 * 2**20, ge=1024, le=20 * 2**20)
+    """Largest voice file accepted by `voice.transcribe` (bytes)."""
+
+    @model_validator(mode="after")
+    def _consent_features_need_strict_origins(self) -> M7Agents:
+        for flag in ("post_consent", "voice_inbound"):
+            if getattr(self, flag) and not self.strict_origins:
+                raise ValueError(f"m7.agents.{flag} requires m7.agents.strict_origins")
+        return self
 
 
 class M7Orch(_Tolerant):

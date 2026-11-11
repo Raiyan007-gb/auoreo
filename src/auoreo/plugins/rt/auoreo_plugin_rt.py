@@ -83,6 +83,8 @@ class HostAPI:
         self._rt = rt
         self.name = os.environ.get("AUOREO_PLUGIN", "")
         self.config: dict[str, Any] = {}
+        self.proxy: str | None = None
+        """M7: the egress-proxy URL (with a host-minted token) for `consumes: [net:proxy]`."""
 
     async def secret(self, name: str) -> str | None:
         """Resolve `secrets:<name>`; only names declared in `consumes` are answered."""
@@ -101,8 +103,11 @@ class HostAPI:
         res = await self._rt.request("pairing.request", params)
         return res if isinstance(res, dict) else {}
 
-    def message(self, connector: str, chat_id: str, user: str, text: str, reply_to: Any = None) -> None:
-        """Inbound message: the host runs it in the session keyed (plugin, chat_id)."""
+    def message(
+        self, connector: str, chat_id: str, user: str, text: str, reply_to: Any = None, media: Any = None
+    ) -> None:
+        """Inbound message: the host runs it in the session keyed (plugin, chat_id). `media` (M7,
+        metadata only, e.g. `[{kind: "voice", mime, duration_s}]`) is ignored by older hosts."""
         params = {
             "name": connector,
             "chat_id": str(chat_id),
@@ -110,7 +115,26 @@ class HostAPI:
             "text": text,
             "reply_to": reply_to,
         }
+        if media:
+            params["media"] = media
         self._rt.notify("connector.message", params)
+
+    async def voice_transcribe(self, chat_id: str, mime: str, data: bytes) -> dict[str, Any]:
+        """M7: transcribe a voice note (`consumes: [voice]`, paired chat, host quotas) →
+        `{text, duration_s}`. An older host raises `RpcError` code -32601."""
+        params = {"chat_id": str(chat_id), "mime": mime, "data_b64": base64.b64encode(data).decode()}
+        res = await self._rt.request("voice.transcribe", params, timeout=120.0)
+        return res if isinstance(res, dict) else {}
+
+    async def state_get(self) -> dict[str, Any]:
+        """M7: the plugin's persisted JSON object (`consumes: [state]`)."""
+        res = await self._rt.request("state.get", {})
+        state = res.get("state") if isinstance(res, dict) else None
+        return state if isinstance(state, dict) else {}
+
+    async def state_set(self, state: dict[str, Any]) -> None:
+        """M7: replace the persisted JSON object (at most 16 KiB)."""
+        await self._rt.request("state.set", {"state": state})
 
     def log(self, level: str, message: str) -> None:
         self._rt.notify("log", {"level": level, "message": message})
@@ -230,6 +254,7 @@ class Runtime:
     # ------------------------------------------------------------- dispatch
     async def _initialize(self, p: dict[str, Any]) -> dict[str, Any]:
         self.host.config = dict(p.get("config") or {})
+        self.host.proxy = str(p["proxy"]) if p.get("proxy") else None
         init = getattr(self.plugin, "initialize", None)
         if init is not None:
             info = await _maybe(init(self.host.config, list(p.get("consumes_granted") or [])))

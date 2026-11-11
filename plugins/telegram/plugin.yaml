@@ -2,7 +2,7 @@ name: telegram
 version: 0.1.0
 description: Telegram bot connector (long polling, pairing codes, allowlist) and delivery provider.
 provides: [connector, delivery]
-consumes: [sessions, "secrets:telegram/bot_token"]
+consumes: [sessions, "secrets:telegram/bot_token", voice]
 permissions: [messaging]
 config_schema:
   type: object
@@ -52,6 +52,24 @@ config_schema:
       maximum: 30
       default: 1.0
       description: Minimum seconds between two streamed updates of one chat (rate limit).
+    voice:
+      type: boolean
+      default: false
+      description: >-
+        Transcribe voice notes from paired chats (needs m7.agents.voice_inbound on the host);
+        the text arrives prefixed `[voice] ` and is never treated as a command.
+    voice_max_seconds:
+      type: integer
+      minimum: 1
+      maximum: 3600
+      default: 120
+      description: Longer voice notes (as declared by Telegram) are refused before download.
+    voice_max_bytes:
+      type: integer
+      minimum: 1024
+      maximum: 20971520
+      default: 5242880
+      description: Larger voice files are refused before download (getFile serves at most 20 MB).
     lock_dir:
       type: string
       description: Folder for the one-poller-per-token lock file (default = the system temp dir).
