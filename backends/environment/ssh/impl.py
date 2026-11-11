@@ -42,6 +42,18 @@ def _asyncssh() -> Any:
     return asyncssh
 
 
+def _cap(max_bytes: int | None) -> Callable[[bytes, bytes, int, int], None] | None:
+    """An SFTP progress callback that aborts a copy past `max_bytes` (M7 `env_transfer`)."""
+    if max_bytes is None:
+        return None
+
+    def check(src: bytes, dst: bytes, copied: int, total: int) -> None:
+        if copied > max_bytes or total > max_bytes:
+            raise ShellError(f"transfer over the {max_bytes}-byte limit; aborted")
+
+    return check
+
+
 def remote_command(req: ExecRequest) -> str:
     cmd = f"bash -lc {shlex.quote(req.cmd)}"
     if req.workdir:
@@ -254,15 +266,27 @@ class Backend(EnvironmentBackend):
     async def write_stdin(self, process_id: str, chars: str, *, yield_time_ms: int = 1_000) -> Chunk:
         return await self.table.write(process_id, chars, yield_time_ms)
 
-    async def upload(self, local_path: str, remote_path: str) -> None:
+    async def upload(
+        self, local_path: str, remote_path: str, *, max_bytes: int | None = None, overwrite: bool = True
+    ) -> int:
+        """One file over SFTP on the granted connection (a channel, not a new socket)."""
         conn = await self._connection()
         async with conn.start_sftp_client() as sftp:
-            await sftp.put(local_path, remote_path)
+            if not overwrite and await sftp.lexists(remote_path):
+                raise ShellError(f"remote path exists: {remote_path} (pass overwrite=true to replace it)")
+            await sftp.put(local_path, remote_path, progress_handler=_cap(max_bytes))
+            return int((await sftp.stat(remote_path)).size or 0)
 
-    async def download(self, remote_path: str, local_path: str) -> None:
+    async def download(self, remote_path: str, local_path: str, *, max_bytes: int | None = None) -> int:
         conn = await self._connection()
         async with conn.start_sftp_client() as sftp:
-            await sftp.get(remote_path, local_path)
+            attrs = await sftp.lstat(remote_path)  # a symlink is refused, never followed
+            if attrs.type != _asyncssh().FILEXFER_TYPE_REGULAR:
+                raise ShellError(f"remote path is not a regular file: {remote_path}")
+            if max_bytes is not None and int(attrs.size or 0) > max_bytes:
+                raise ShellError(f"remote file is {attrs.size} bytes, over the {max_bytes}-byte limit")
+            await sftp.get(remote_path, local_path, progress_handler=_cap(max_bytes))
+            return int(attrs.size or 0)
 
     async def close_session(self, session_id: str) -> None:
         await self.table.close_session(session_id)

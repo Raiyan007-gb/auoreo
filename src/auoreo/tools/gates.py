@@ -57,7 +57,7 @@ NEVER_AUTO_APPROVE = frozenset({"sandbox_escalate", "sftp"})
 between this machine and a host). `ssh` needs no entry: `ctx.authorize` refuses it without a
 human or a rule."""
 
-HOST_KEY_TOOLS = frozenset({"use_environment", "exec_command", "write_stdin"})
+HOST_KEY_TOOLS = frozenset({"use_environment", "exec_command", "write_stdin", "env_transfer"})
 
 
 def host_key_names(harness: Any, tool: ToolDef, settings: Any) -> set[str]:

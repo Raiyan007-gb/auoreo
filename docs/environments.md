@@ -141,6 +141,19 @@ justificationHash}` at grant time and `net.ssh{mode, name, host, port, grant_id}
 socket open, pooled reconnects included (`actor: operator` for doctor and `auoreo ssh test`).
 Routing the socket through the proxy (`CONNECT host:22`) is a possible follow-up.
 
+`env_transfer` (M7 hosts-c, `m7.ssh.transfer`) is the second `net: none` tool in this
+exception. It opens no socket and reaches no new destination: SFTP is a channel on the
+session's already granted connection to its selected environment (the tool has no host
+argument). A granted session could already move bytes both ways with `exec_command`, so the
+added exposure is local (which files are read and written) and the checks sit there: a
+one-shot `sftp` decision on `<env>:<direction>:<remote_path>` (a rule or a human; never a
+permission mode, an `always` reply, `approvals.unattended` or, unless `m7.ssh.chat_grants`, a
+chat app), the secret-path floor, `read`/`edit` outside cwd, sensitive targets always ask,
+plan mode blocks downloads, symlinks are refused, one regular file up to
+`m7.ssh.transfer_max_bytes`, no overwrite unless asked. Rows: `environment.transfer{environment,
+host_id, grant_id, call_id, run_id, direction, remote_path, local_path, overwrite}` and
+`environment.transfer_done{call_id, ok, bytes, sha256, error?}`; never file content.
+
 Also with the flag on: the key is tried as the current secret value, then `<NAME>#prev` inside
 its rotation grace window (`auoreo secrets rotate`), and host key names are in the secret scope
 of the three environment tools only.
