@@ -827,6 +827,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/hosts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Hosts
+         * @description The host files of `<home>/hosts/` with trust and key state (no key material).
+         */
+        get: operations["list_hosts_api_hosts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hosts/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Host
+         * @description Create or replace `<home>/hosts/<name>.yaml` (body: `HostWrite`). Trust is never
+         *     granted here.
+         */
+        put: operations["put_host_api_hosts__name__put"];
+        post?: never;
+        /**
+         * Delete Host
+         * @description Delete the host file (never the secret or the known_hosts entry).
+         */
+        delete: operations["delete_host_api_hosts__name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/hosts/{name}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Host
+         * @description Connect with the stored key and the trusted host key (attributed to the operator).
+         *     Never probes or trusts an unknown host key: an untrusted host fails here.
+         */
+        post: operations["check_host_api_hosts__name__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kanban": {
         parameters: {
             query?: never;
@@ -4152,6 +4218,97 @@ export interface components {
         HooksHealth: {
             /** Routes */
             routes: string[];
+        };
+        /** HostCheck */
+        HostCheck: {
+            /** Detail */
+            detail: string;
+            /** Ok */
+            ok: boolean;
+        };
+        /** HostInfo */
+        HostInfo: {
+            /**
+             * Audit Commands
+             * @default hash
+             * @enum {string}
+             */
+            audit_commands: "hash" | "redacted";
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Host */
+            host: string;
+            /** Host Key Fingerprints */
+            host_key_fingerprints?: string[];
+            /** Jump */
+            jump?: string | null;
+            /**
+             * Keepalive Interval S
+             * @default 30
+             */
+            keepalive_interval_s: number;
+            /**
+             * Key Fingerprint
+             * @description SHA256 fingerprint (public), if known
+             */
+            key_fingerprint?: string | null;
+            /**
+             * Key Name
+             * @description NAME of the stored secret holding the private key
+             */
+            key_name: string;
+            /**
+             * Key Present
+             * @description The secret store has a value under key_name
+             */
+            key_present: boolean;
+            /** Name */
+            name: string;
+            /** Port */
+            port: number;
+            /**
+             * Problem
+             * @description Why agents cannot use it (a broken jump chain, …)
+             */
+            problem?: string | null;
+            /**
+             * Shadowed
+             * @description A settings.environments entry has the same name
+             * @default false
+             */
+            shadowed: boolean;
+            /** Tags */
+            tags?: string[];
+            /**
+             * Trusted
+             * @description known_hosts has a host key for host:port (`auoreo ssh test`)
+             */
+            trusted: boolean;
+            /**
+             * Usable By Agents
+             * @description m7.ssh.hosts is on, the host is trusted and not shadowed
+             */
+            usable_by_agents: boolean;
+            /** User */
+            user: string;
+        };
+        /** HostList */
+        HostList: {
+            /**
+             * Enabled
+             * @description settings.m7.ssh.hosts: agents may use these hosts
+             */
+            enabled: boolean;
+            /** Hosts */
+            hosts: components["schemas"]["HostInfo"][];
+            /**
+             * Problems
+             * @description Invalid or partly ignored host files
+             */
+            problems?: string[];
         };
         /** HubInstallRequest */
         HubInstallRequest: {
@@ -8507,6 +8664,181 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    list_hosts_api_hosts_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_host_api_hosts__name__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Audit Commands
+                     * @default hash
+                     * @enum {string}
+                     */
+                    audit_commands?: "hash" | "redacted";
+                    /**
+                     * Description
+                     * @default
+                     */
+                    description?: string;
+                    /** Host */
+                    host: string;
+                    /** Jump */
+                    jump?: string | null;
+                    /**
+                     * Keepalive Interval S
+                     * @default 30
+                     */
+                    keepalive_interval_s?: number;
+                    /**
+                     * Key Name
+                     * @description A secret NAME, never key text
+                     */
+                    key_name: string;
+                    /**
+                     * Port
+                     * @default 22
+                     */
+                    port?: number;
+                    /** Tags */
+                    tags?: string[];
+                    /** User */
+                    user: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostInfo"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_host_api_hosts__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_host_api_hosts__name__check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+            };
+            path: {
+                name: string;
+            };
+            cookie?: {
+                auoreo_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HostCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

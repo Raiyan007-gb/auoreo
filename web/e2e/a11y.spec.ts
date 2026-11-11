@@ -16,6 +16,7 @@ const PAGES = [
   "/goals",
   "/meetings",
   "/harness",
+  "/hosts",
   "/skills",
   "/plugins",
   "/teams",

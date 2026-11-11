@@ -45,6 +45,7 @@ from auoreo.api.routers import environments as environments_router  # --- W2-B
 # --- W0-C
 from auoreo.api.routers import goals as goals_router
 from auoreo.api.routers import hooks as hooks_router
+from auoreo.api.routers import hosts as hosts_router  # --- M7: SSH host inventory (m7.ssh.web)
 from auoreo.api.routers import i5 as i5_router  # --- I5
 from auoreo.api.routers import kanban as kanban_router
 from auoreo.api.routers import livekit as livekit_router  # --- I8
@@ -130,6 +131,7 @@ ROUTERS = (
     env_router,  # --- ENV: Settings → Environment (catalog, live writes, undo, .env import)
     env_custom_router,  # --- ENV: custom variables
     providers_router,  # --- providers + model selection
+    hosts_router,  # --- M7 hosts-c: /api/hosts (404 unless m7.ssh.web)
 )
 MOUNTS: list[tuple[str, Callable[[Settings], ASGIApp | None]]] = [
     ("/mcp", mcp_server.make_mount),  # M5h

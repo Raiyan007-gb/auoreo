@@ -12,6 +12,7 @@ import { g7Methods } from "./ops5"; // --- G7
 import { i5Methods } from "./ops6"; // --- I5
 import { envMethods } from "./env"; // --- ENV
 import { modelsMethods } from "./models"; // --- Settings → Models
+import { hostsMethods } from "./hosts"; // --- M7: SSH host inventory
 import type { components, paths } from "./types.gen";
 
 type S = components["schemas"];
@@ -297,6 +298,7 @@ export function createClient(opts: ClientOptions = {}) {
     ...i5Methods(request), // --- I5: share links, skills hub, memory usage, lsp stop (./ops6.ts)
     ...envMethods(request), // --- ENV: Settings → Environment (./env.ts)
     ...modelsMethods(request), // --- Settings → Models: providers + model selection (./models.ts)
+    ...hostsMethods(request), // --- M7: SSH hosts (./hosts.ts)
   };
 }
 
@@ -393,6 +395,7 @@ export type * from "./ops3"; // --- G5b
 export type * from "./ops4"; // --- G6
 export type * from "./ops5"; // --- G7
 export type * from "./ops6"; // --- I5
+export type * from "./hosts"; // --- M7: SSH hosts
 
 // =================================================================== --- W0-C goals + suggestions
 export type GoalInfo = S["GoalInfo"];

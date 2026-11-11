@@ -11,6 +11,7 @@ import {
   PuzzleIcon,
   RadioTowerIcon,
   ScrollTextIcon,
+  ServerIcon,
   SettingsIcon,
   SparklesIcon,
   TargetIcon,
@@ -47,6 +48,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     label: "Build",
     items: [
       { to: "/harness", label: "Harness", icon: PuzzleIcon },
+      { to: "/hosts", label: "Hosts", icon: ServerIcon },
       { to: "/skills", label: "Skills", icon: SparklesIcon },
       { to: "/plugins", label: "Plugins & MCP", icon: PlugIcon },
       { to: "/teams", label: "Teams", icon: UsersIcon },
