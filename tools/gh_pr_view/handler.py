@@ -12,7 +12,7 @@ FIELDS = (
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
     repo = await ghcli.repo_for(ctx, args.get("repo"))
     number = args.get("number")
-    if number is None and args.get("repo") and repo != await ghcli.cwd_repo(ctx.cwd):
+    if number is None and args.get("repo") and repo != await ghcli.home_repo(ctx):
         raise ToolError("number is required for a repo other than the working directory's")
     fields = FIELDS + (",comments" if args.get("comments") else "")
     # gh refuses --repo without an argument; no number means the cwd checkout's branch PR.

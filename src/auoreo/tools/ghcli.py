@@ -138,6 +138,16 @@ async def cwd_repo(cwd: Path) -> str | None:
     return parse_remote(url) if url else None
 
 
+async def home_repo(ctx: ToolContext) -> str | None:
+    """The session's own GitHub repo. A worktree session (M7 W4) reads it from the server
+    checkout, never from its worktree: the worker can replace `<worktree>/.git` with a
+    repository whose `origin` names any repo and so widen `github_allowed_repos`."""
+    from auoreo.runtime.cwd import worktree_session
+
+    svc = ctx.services.get("services")
+    return await cwd_repo(Path(svc.cwd) if svc is not None and worktree_session(ctx) else ctx.cwd)
+
+
 def _norm(repo: str) -> str:
     return repo.lower().removeprefix("github.com/")
 
@@ -158,19 +168,19 @@ def _settings_globs(ctx: ToolContext) -> list[str]:
 async def repo_for(ctx: ToolContext, raw: str | None) -> str:
     """Resolve and allow-list the target repo (`[HOST/]OWNER/REPO`)."""
     find_gh(ctx)  # say "install gh" before anything about remotes
-    home_repo = await cwd_repo(ctx.cwd)
+    home = await home_repo(ctx)
     if not raw:
-        if home_repo is None:
+        if home is None:
             raise ToolError(
                 "no repository: the working directory has no GitHub remote. Pass repo='owner/name' "
                 "(and list it in settings.github_allowed_repos)"
             )
-        return home_repo
+        return home
     repo = raw.strip().removeprefix("https://").removeprefix("github.com/").removesuffix(".git")
     if not REPO_RE.match(repo):
         raise ToolError(f"repo must look like owner/name (or host/owner/name), got `{raw[:100]}`")
-    if not allowed(repo, home_repo, _settings_globs(ctx)):
-        where = f"the working directory's repo `{home_repo}`" if home_repo else "no cwd repo"
+    if not allowed(repo, home, _settings_globs(ctx)):
+        where = f"the working directory's repo `{home}`" if home else "no cwd repo"
         raise ToolError(
             f"repo `{repo}` is not allowed: only {where} and repos matching settings.github_allowed_repos "
             "may be used. Ask the user to add it to that list"

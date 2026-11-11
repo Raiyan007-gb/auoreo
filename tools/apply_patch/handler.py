@@ -230,6 +230,12 @@ def _plan(ctx: ToolContext, ops: list[Op]) -> tuple[dict[Path, str | None], list
     return writes, summary, fuzz
 
 
+def target_paths(args: dict) -> list[str]:
+    """Every path the patch touches (`path` and `move_to`), for the executor's outside-cwd
+    gate (`tools/gates.py`); it runs before `run` writes anything."""
+    return [p for op in parse(args["patch"]) for p in (op.path, op.move_to) if p]
+
+
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
     writes, summary, fuzz = _plan(ctx, parse(args["patch"]))
     note = f"\n(matched with {', '.join(sorted(fuzz))})" if fuzz else ""

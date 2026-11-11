@@ -6,6 +6,7 @@ all-or-nothing batch, an existing branch resumed (never reset), a concurrent bat
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -49,15 +50,23 @@ async def _children(svc: Services, parent: str) -> list[str]:
 
 # ------------------------------------------------------------------ slugs and guards
 def test_slugs_are_safe_on_every_os() -> None:
-    assert wt.task_slug("../../etc/passwd") == "etc-passwd"
-    assert wt.task_slug("A\\B/C:d*e") == "a-b-c-d-e"
-    assert wt.task_slug("task_ab12-9f") == "task_ab12-9f"
+    def tag(raw: str) -> str:  # a changed or shortened name ends in 8 hex of sha256(raw)
+        return hashlib.sha256(raw.encode()).hexdigest()[:8]
+
+    assert wt.task_slug("../../etc/passwd") == f"etc-passwd-{tag('../../etc/passwd')}"
+    win = "A\\B/C:d*e"
+    assert wt.task_slug(win) == f"a-b-c-d-e-{tag(win)}"
+    assert wt.task_slug("task_ab12-9f") == "task_ab12-9f"  # already a slug: unchanged
     for reserved in ("CON", "nul", "com1", "LPT9", "aux.txt", "prn.tar.gz"):
         slug = wt.task_slug(reserved)
         assert slug.startswith("t-") and slug.split(".", 1)[0] not in wt.WINDOWS_RESERVED
-    assert wt.task_slug("a..b") == "a.b" and wt.task_slug(".hidden.") == "hidden"
-    assert wt.task_slug("x.lock") == "x" and len(wt.task_slug("z" * 300)) <= wt.MAX_SLUG
-    assert wt.task_slug("x.lock.lock") == "x" and wt.task_slug("y.lock-.lock.") == "y"  # git refuses *.lock
+    assert (
+        wt.task_slug("a..b") == f"a.b-{tag('a..b')}"
+        and wt.task_slug(".hidden.") == f"hidden-{tag('.hidden.')}"
+    )
+    assert wt.task_slug("x.lock") == f"x-{tag('x.lock')}" and len(wt.task_slug("z" * 300)) <= wt.MAX_SLUG
+    assert wt.task_slug("x.lock.lock") == f"x-{tag('x.lock.lock')}"  # git refuses *.lock
+    assert wt.task_slug("y.lock-.lock.") == f"y-{tag('y.lock-.lock.')}"
     for slug in map(wt.task_slug, ("../x", "con", "a b", "K1-7", "é/ü\\n")):
         assert wt.SLUG_RE.fullmatch(slug) and "/" not in slug and not set(slug) & set('<>:"|?*\\')
     with pytest.raises(WorktreeError, match="no characters"):
@@ -81,14 +90,15 @@ async def test_existing_branch_is_resumed_never_reset(services: Services, workdi
     git(first.path, "add", "work.txt")
     git(first.path, "commit", "--quiet", "-m", "worker commit")
     tip = git(workdir, "rev-parse", "auoreo/k1-7")
-    again = await wt.task_worktree(workdir, root, "k1-7")  # the folder is still there
+    base = first.base  # recorded when the task's worktree was made (the worktree.created event)
+    again = await wt.task_worktree(workdir, root, "k1-7", base=base)  # the folder is still there
     assert again.resumed and again.path == first.path
     git(workdir, "worktree", "remove", "--force", str(first.path))
-    back = await wt.task_worktree(workdir, root, "k1-7")  # the folder is gone, the branch is not
+    back = await wt.task_worktree(workdir, root, "k1-7", base=base)  # the folder is gone, the branch is not
     assert back.resumed and git(workdir, "rev-parse", "auoreo/k1-7") == tip
     assert (back.path / "work.txt").read_text(encoding="utf-8") == "done\n"
     with pytest.raises(WorktreeError):  # checked out elsewhere: fail, never steal or reset
-        await wt.task_worktree(workdir, root.parent / "second-root", "k1-7")
+        await wt.task_worktree(workdir, root.parent / "second-root", "k1-7", base=base)
     assert git(workdir, "rev-parse", "auoreo/k1-7") == tip
 
 
@@ -99,7 +109,8 @@ async def test_cap_and_concurrent_creation(services: Services, workdir: Path) ->
     assert len({m.path for m in made}) == 4 and len(_trees(services)) == 4
     with pytest.raises(WorktreeError, match="max_worktrees"):
         await wt.task_worktree(workdir, root, "one-more", max_worktrees=4)
-    assert (await wt.task_worktree(workdir, root, "par-0", max_worktrees=4)).resumed  # resume is free
+    again = await wt.task_worktree(workdir, root, "par-0", max_worktrees=4, base=made[0].base)
+    assert again.resumed  # resume is free
 
 
 # ------------------------------------------------------------------ behaviour table
@@ -142,7 +153,7 @@ async def test_child_runs_in_its_own_worktree(
     (created,) = await _events(services, child, "worktree.created")
     event = WorktreeCreated.model_validate(created)
     assert (Path(event.path), event.branch, event.resumed) == (tree, branch, False)
-    assert event.base == git(workdir, "rev-parse", "--short", "HEAD")
+    assert event.base == git(workdir, "rev-parse", "HEAD")
     assert event.task_id is None and "task_id" not in created
     prompt = first_user(gateway.requests_for("ISO")[0])
     assert str(tree) in prompt and branch in prompt and "not carried over" in prompt

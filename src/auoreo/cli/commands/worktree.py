@@ -30,37 +30,23 @@ async def _plan(days: float, force: bool) -> tuple[Path, list[wt.GcItem]]:
     if not st.m7.orch.worktrees:
         return await wt.plan_gc(Path.cwd(), _root(), days, force=force)
     from auoreo.runtime.cwd import orch_root
+    from auoreo.teams.worktree_gc import guard_from_settings
 
-    keep = await _protected()
-    top, items = await wt.plan_gc(Path.cwd(), _root(), days, force=force, protected=keep)
+    g = await guard_from_settings(st, _note)
+    top, items = await wt.plan_gc(
+        Path.cwd(), _root(), days, force=force, protected=g.protected, activity=g.activity
+    )
     extra = orch_root(st, top)
     if extra != (_root() or top / ".auoreo" / "worktrees"):
-        items += (await wt.plan_gc(Path.cwd(), extra, days, force=force, protected=keep))[1]
+        more = await wt.plan_gc(
+            Path.cwd(), extra, days, force=force, protected=g.protected, activity=g.activity
+        )
+        items += more[1]
     return top, items
 
 
-async def _protected() -> set[Path]:
-    """Worktrees of claimed kanban tasks; empty (with a note) when the store cannot be read."""
-    from auoreo.core.db import Database
-    from auoreo.teams.worktree_spawn import protected_paths
-
-    st = settings()
-    if not _exists(st.db_path):
-        return set()
-    try:
-        db = Database(st.db_path, encryption=st.db_encryption)
-        await db.init()
-        try:
-            return await protected_paths(db)
-        finally:
-            await db.close()
-    except Exception as exc:  # gc still works without the task store
-        err_console.print(f"[yellow]note:[/yellow] kanban store not readable ({escape(str(exc))})")
-        return set()
-
-
-def _exists(path: Path) -> bool:
-    return path.exists()
+def _note(text: str) -> None:
+    err_console.print(f"[yellow]note:[/yellow] {escape(text)}")
 
 
 def new_feature(

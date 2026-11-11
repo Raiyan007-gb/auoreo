@@ -171,7 +171,9 @@ resume of an existing `<wt>/.git`, `_prepare_root`) and adds keywords rather tha
     out (`git worktree add <dest> <branch>`); if it is checked out in another worktree the spawn
     fails with a clear error. The CLI `new-feature` keeps `reset=True`;
 *   slug: `k<board>-<task_id>` for kanban, `<name>-<4 hex>` for `delegate_task`, lowercased and
-    validated by `SLUG_RE`;
+    validated by `SLUG_RE`; a name the rules change (or one over 48 characters) gets
+    `-<8 hex of sha256(name)>` so two tasks never share a worktree, and a worktree whose
+    recorded branch is not `auoreo/<slug>` is not resumed;
 *   a per-repo `asyncio.Lock` serializes `git worktree add` (a `delegate_task` batch of up to 3
     would otherwise race on git's lock files);
 *   a path-length guard (on Windows the full worktree path must stay under 200 characters) and the
@@ -217,12 +219,23 @@ mount outside cwd needs `danger-full-access`, see `ExecSpec.outside_cwd`).
 
 Design (recommended option 2a): when the session cwd is a registered worktree, `bash`'s `ExecSpec`
 gets a new `git_allow` list, computed by the engine (never model-supplied) and limited to the
-worktree's own admin dir, `<common>/objects`, its branch ref and ref log, and `packed-refs`.
-`ExecSpec.outside_cwd()` exempts exactly these paths and each mount is audited as `sandbox.mount`.
-Everything else in the parent (working tree, hooks directory, `config`) stays unwritable. Residual
-risk, stated: the worker can write the shared object store and its own branch ref, so a hostile
-worker can add unreferenced objects (disk use) but cannot move other branches. Without an enforced
-sandbox nothing is confined, as the Goals state.
+worktree's own admin dir and the `auoreo/` branch namespace with its ref log (writable), and
+`<common>/objects` (read-only). The worker's git writes new objects to a private store
+(`GIT_OBJECT_DIRECTORY=<admin>/objects`, the shared store as `GIT_ALTERNATE_OBJECT_DIRECTORIES`);
+after each `bash` call, and before gc reads a branch, the orchestrator imports them into the
+shared store (`runtime/worktree_git.import_objects`: `pack-objects` then `index-pack`, which
+verifies every object hash). `ExecSpec.outside_cwd()` exempts exactly these paths and each mount
+is audited as `sandbox.mount`. Everything else in the parent (working tree, objects, hooks
+directory, `config`) stays unwritable. Residual risk, stated: the worker can move any branch in
+the `auoreo/` namespace (a per-task namespace would need a different branch name scheme, since git
+replaces a ref through a lock file beside it, and `auoreo/<slug>` cannot also be a folder); the
+orchestrator therefore resumes an existing branch only when the task's first `worktree.created`
+event recorded its base and the tip descends from it, and refuses an unrecorded one (a delegate
+child never resumes). A sibling that plants a descendant of the same base is not detected. The
+orchestrator never runs git with a
+worktree as the repository (`worktree_git.tree_git`: git dirs from the server's records, no
+fsmonitor, hooks or submodules). Without an enforced sandbox nothing is confined, as the Goals
+state.
 
 ### Trust and discovery scope
 
@@ -231,7 +244,9 @@ A worktree's own `.auoreo/` is **never** loaded and never inherits trust: discov
 process-global (rooted at the server cwd) and `harness/trust.py` keys trust by exact workspace
 path, so a worktree path is untrusted by construction. Hook scripts with relative paths resolve
 against the definition root, not the session cwd (`hooks.py` script resolution stays on
-`Services.cwd`; only the hook process cwd and payload switch). This prevents a worker from
+`Services.cwd`). The hook process also runs in the server cwd: it is outside the sandbox, so a
+bare `pytest`, `make` or `./x` must not pick up files a worker wrote; the session cwd reaches a
+hook only as the payload's `cwd`. This prevents a worker from
 committing a hook or tool handler on its branch that later runs as trusted. A test asserts that a
 hook committed in a worktree never loads.
 
@@ -241,7 +256,7 @@ hook committed in a worktree never loads.
 | --- | --- |
 | `ToolContext(cwd=...)`, `engine.context["cwd"]`, plans dir (`runner.py`) | switched via `cwd_of` |
 | `render_context` (`harness/orchestrator.py`) | switched (receives the cwd argument) |
-| `hooks.py` process cwd and payload `cwd` | switched; script resolution stays global |
+| `hooks.py` payload `cwd` | switched; the process cwd and script resolution stay on the server cwd |
 | `compaction_restore.py` (3 sites) | switched; `rt` passed in |
 | `teams/service.py` plans path, `teams/spawn_i3.py` member `cwd` | switched (child cwd recorded) |
 | `runtime/subtask.py` (`/review`) | switched: the review child runs with the worktree as session cwd (fixes prompt-only isolation) |
@@ -385,8 +400,8 @@ Phases in order; each phase ends green on `ruff`, `mypy`, `pytest`.
     `engine.context` and the `render_context` call use `cwd_of`.
 8.  `src/auoreo/runtime/coordinator.py` (Modify): `runtime()` resolves and validates the cwd from
     the `session.created` event; `_session_start` payload.
-9.  `src/auoreo/runtime/hooks.py` (Modify): process cwd and payload from the runtime cwd; script
-    resolution stays on `Services.cwd`.
+9.  `src/auoreo/runtime/hooks.py` (Modify): payload `cwd` from the runtime cwd; the process cwd
+    and script resolution stay on `Services.cwd`.
 10. `src/auoreo/runtime/compaction_restore.py` (Modify): the three `services.cwd` sites take `rt`.
 11. `src/auoreo/harness/orchestrator.py` (Modify only if `render_context` needs a new parameter;
     `request_layout.py` is created by the token-economy design and is **not** a dependency here).

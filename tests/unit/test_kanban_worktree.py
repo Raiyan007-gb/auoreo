@@ -84,11 +84,12 @@ async def test_two_workers_two_worktrees_and_a_redispatch_resumes(
     disp = KanbanDispatcher(services)
     assert sorted(await disp.tick()) == sorted([done.id, stuck.id])
     root = session_cwd.orch_root(services.settings, services.cwd)
+    base = git(workdir, "rev-parse", "HEAD")
     by_task = {w.task_id: w for w in disp.running.values()}
     for task in (done, stuck):
         path, branch = root / f"kjobs-{task.id}", f"auoreo/kjobs-{task.id}"
         assert (await _attachments(kb, task.id)) == [
-            {"ref": str(path), "note": f"branch={branch}", "by": by_task[task.id].name}
+            {"ref": str(path), "note": f"branch={branch} base={base}", "by": by_task[task.id].name}
         ]
         sid = by_task[task.id].session_id
         assert (await services.coordinator.runtime(sid)).cwd == path
@@ -96,6 +97,7 @@ async def test_two_workers_two_worktrees_and_a_redispatch_resumes(
         (created,) = [e.data for e in evs if e.type == "worktree.created"]
         assert created["path"] == str(path) and created["branch"] == branch
         assert (created["task_id"], created["board"], created["resumed"]) == (task.id, "jobs", False)
+        assert created["base"] == base
         assert git(path, "branch", "--show-current") == branch
     await _drain(disp)
     assert (await kb.get(done.id)).status == "done" and (await kb.get(stuck.id)).status == "ready"

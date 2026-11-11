@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -150,72 +150,110 @@ async def stored_cwd(services: Services, session_id: str) -> str | None:
 
 async def load(services: Services, rt: Any) -> None:
     """Resolve and validate `rt.cwd` once, when the coordinator builds the runtime."""
-    if not enabled(services.settings):
-        return
     raw = await stored_cwd(services, rt.session_id)
     if raw is None:
         return
+    if not enabled(services.settings):
+        await _ignored(services, rt.session_id, raw)
+        return
     try:
         rt.cwd = await validate_session_cwd(services, raw)
-    except (SessionCwdError, OSError) as exc:
-        rt.cwd_error = str(exc) if isinstance(exc, SessionCwdError) else f"{MISSING}: {exc}"
+    except SessionCwdError as exc:
+        rt.cwd_error = str(exc)
+    except (ValueError, OSError) as exc:  # e.g. a NUL in the stored path
+        rt.cwd_error = f"{MISSING}: {type(exc).__name__}: {str(exc)[:200]}"
+
+
+async def _ignored(services: Services, session_id: str, raw: str) -> None:
+    """Flag off (a rollback): a session born in a worktree runs in the server cwd. Say so once
+    per runtime load in the audit log instead of switching silently."""
+    try:
+        same = _norm(raw) == _norm(services.cwd)
+    except (ValueError, OSError):
+        same = False
+    if same:
+        return
+    await services.audit.record(
+        actor="system",
+        action="session.cwd_ignored",
+        session_id=session_id,
+        reason="m7.orch.session_cwd is off: the session runs in the server cwd",
+        detail={"stored_cwd": raw[:1000], "server_cwd": str(services.cwd)},
+    )
 
 
 # ------------------------------------------------------------------ sandbox git allowance
-_GIT_ALLOW: dict[str, list[Path]] = {}
+@dataclass(frozen=True)
+class GitAccess:
+    """What a worktree session's shell gets for git (engine-computed, never model-supplied)."""
+
+    writable: tuple[Path, ...] = ()
+    readable: tuple[Path, ...] = ()
+    env: dict[str, str] = field(default_factory=dict)
+
+    def mounts(self) -> list[Path]:
+        return [*self.writable, *self.readable]
 
 
-def _first_line(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace").splitlines()[0].strip()
-    except (OSError, IndexError):
-        return ""
+_GIT_ALLOW: dict[str, GitAccess] = {}
 
 
-def _pointer(path: Path | str) -> str:
-    """A `.git` pointer path with its folder resolved and its last part kept as written (the
-    worker owns `<worktree>/.git` and could make it a symlink)."""
-    head, tail = os.path.split(os.path.abspath(path))
-    return os.path.join(_norm(head), os.path.normcase(tail))
+async def _git_access(cwd: Path, server_cwd: Path) -> GitAccess:
+    """Read from the server repository's records only. Git is never run in the worktree and
+    `<worktree>/.git` is never read: the worker can rewrite that file, and a pointer to the
+    parent's git directory would otherwise make all of it writable.
+
+    Writable: the worktree's admin dir (HEAD, index, its private object store `objects/`) and
+    the `auoreo/` branch namespace with its ref log. Read-only: the shared object store, used
+    as an alternate (`GIT_ALTERNATE_OBJECT_DIRECTORIES`), so a worker can neither delete the
+    parent's objects nor rewrite `objects/info/alternates`; its new objects go to
+    `GIT_OBJECT_DIRECTORY=<admin>/objects` and the orchestrator imports them into the shared
+    store (`worktree_git.import_objects`, verified by `index-pack`)."""
+    from auoreo.runtime import worktree_git as wg
+
+    top = await wg.common_dir(server_cwd)
+    admin = wg.admin_dir(top, cwd) if top else None
+    if top is None or admin is None:  # unknown here, or two records claim this folder: no allowance
+        return GitAccess()
+    private, shared = wg.private_objects(admin), top / "objects"
+    private.mkdir(exist_ok=True)
+    writable = [admin]
+    branch = wg.first_line(admin / "HEAD").removeprefix("ref: refs/heads/")
+    if branch.startswith(BRANCH_NS + "/"):  # the worker's branch namespace; never refs/heads itself
+        writable += [top / "refs" / "heads" / BRANCH_NS, top / "logs" / "refs" / "heads" / BRANCH_NS]
+    if not shared.is_dir():
+        return GitAccess()
+    env = {"GIT_OBJECT_DIRECTORY": str(private), "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(shared)}
+    return GitAccess(tuple(_existing(writable)), (shared,), env)
 
 
 async def _git_paths(cwd: Path, server_cwd: Path) -> list[Path]:
-    """Read from the server repository's records only. Git is never run in the worktree and
-    `<worktree>/.git` is never read: the worker can rewrite that file, and a pointer to the
-    parent's git directory would otherwise make all of it writable."""
-    from auoreo.runtime import worktrees as wt
+    """Every mount of the allowance (writable and read-only)."""
+    return (await _git_access(cwd, server_cwd)).mounts()
 
-    common = await wt._ok("rev-parse", "--git-common-dir", cwd=server_cwd)
-    if not common:
-        return []
-    top = Path(_norm(os.path.join(server_cwd, common)))
-    records, want = top / "worktrees", _pointer(Path(cwd) / ".git")
-    mine = [
-        d
-        for d in (sorted(records.iterdir()) if records.is_dir() else [])
-        if _norm(d) == os.path.join(_norm(records), os.path.normcase(d.name))  # a real folder there
-        and (line := _first_line(d / "gitdir"))
-        and _pointer(os.path.join(d, line)) == want  # relative with `worktree.useRelativePaths`
-    ]
-    if len(mine) != 1:  # unknown here, or two records claim this folder: no allowance
-        return []
-    out = [mine[0], top / "objects"]
-    branch = _first_line(mine[0] / "HEAD").removeprefix("ref: refs/heads/")
-    if branch.startswith(BRANCH_NS + "/"):  # the worker's branch namespace; never refs/heads itself
-        out += [top / "refs" / "heads" / BRANCH_NS, top / "logs" / "refs" / "heads" / BRANCH_NS]
-    return _existing(out)
+
+def worktree_session(ctx: Any) -> bool:
+    """True when a tool call runs in a session whose cwd is not the server cwd (a worktree,
+    `m7.orch.session_cwd` on). Flag off, or the server cwd: False."""
+    services = ctx.services.get("services")
+    return services is not None and enabled(services.settings) and _norm(ctx.cwd) != _norm(services.cwd)
+
+
+async def git_access(ctx: Any) -> GitAccess:
+    """The git allowance of a shell command in a worktree session: the admin dir and the
+    `auoreo/` branch namespace writable (git replaces a ref through a lock file beside it, so
+    the namespace directory, not the single ref file), the shared object store read-only, and
+    the object-directory environment. The parent's working tree, `config`, `hooks`, objects
+    and every other ref stay unwritable. Empty for the server cwd."""
+    if not worktree_session(ctx):
+        return GitAccess()
+    services = ctx.services["services"]
+    key = _norm(ctx.cwd)
+    if key not in _GIT_ALLOW:
+        _GIT_ALLOW[key] = await _git_access(ctx.cwd, services.cwd)
+    return _GIT_ALLOW[key]
 
 
 async def git_allow(ctx: Any) -> list[Path]:
-    """Writable git metadata for a shell command of a worktree session (engine-computed, never
-    model-supplied): the worktree's admin dir, the object store and the `auoreo/` branch
-    namespace with its ref log. Git replaces a ref through a lock file beside it, so the
-    allowance is the namespace directory, not the single ref file. The parent's working tree,
-    `config`, `hooks` and every other ref stay unwritable. Empty for the server cwd."""
-    services = ctx.services.get("services")
-    if services is None or not enabled(services.settings) or _norm(ctx.cwd) == _norm(services.cwd):
-        return []
-    key = _norm(ctx.cwd)
-    if key not in _GIT_ALLOW:
-        _GIT_ALLOW[key] = await _git_paths(ctx.cwd, services.cwd)
-    return list(_GIT_ALLOW[key])
+    """Every path of `git_access` (`ExecSpec.git_allow`: exempt from the outside-cwd rule)."""
+    return (await git_access(ctx)).mounts()

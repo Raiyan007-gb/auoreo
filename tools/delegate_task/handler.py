@@ -51,9 +51,9 @@ async def _spawn(
 ) -> Any:
     try:
         return await _start(teams, ctx, task, name, background, args, tree)
-    except ToolError:
-        if tree is not None:  # the spawn failed: the worktree made for it goes too
-            await worktree_spawn.rollback(ctx.services["services"], [tree])
+    except BaseException:  # a failed or cancelled spawn: the worktree made for it goes too
+        if tree is not None:  # (a dirty or committed one is kept by `discard_worktree`)
+            await asyncio.shield(worktree_spawn.rollback(ctx.services["services"], [tree]))
         raise
 
 
@@ -143,8 +143,9 @@ async def _batch_trees(
     for task, name in zip(tasks, names, strict=True):
         try:
             trees[name] = await _tree(ctx, task, args, name)
-        except ToolError:
-            await worktree_spawn.rollback(ctx.services["services"], [t for t in trees.values() if t])
+        except BaseException:  # failed or cancelled: none of this call's worktrees stays
+            made = [t for t in trees.values() if t]
+            await asyncio.shield(worktree_spawn.rollback(ctx.services["services"], made))
             raise
     return trees
 
@@ -170,12 +171,19 @@ async def _batch(teams: Any, ctx: ToolContext, args: dict) -> ToolResult:
     await attempt(teams.ensure_team(ctx.session_id))  # one team before the concurrent spawns
     trees = await _batch_trees(ctx, tasks, names, args)
 
+    started: set[str] = set()
+
     async def one(task: dict[str, Any], name: str) -> tuple[str, Any]:
-        async with gate:
-            try:
+        try:
+            async with gate:
+                started.add(name)  # from here `_spawn` owns the rollback of its worktree
                 return name, await _spawn(teams, ctx, task, name, background, args, trees[name])
-            except ToolError as exc:
-                return name, exc
+        except ToolError as exc:
+            return name, exc
+        except BaseException:  # cancelled while waiting for the gate: `_spawn` never ran
+            if name not in started and trees[name] is not None:
+                await asyncio.shield(worktree_spawn.rollback(ctx.services["services"], [trees[name]]))
+            raise
 
     results = await asyncio.gather(*(one(t, n) for t, n in zip(tasks, names, strict=True)))
     parts: list[str] = []

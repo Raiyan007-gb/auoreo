@@ -2,8 +2,9 @@
 
 `HookRunner.run(event, ...)` selects the enabled hooks for `event` whose `matcher`
 (fnmatch, `a|b` alternatives) matches `match_key`, runs each `command` without a shell
-(cwd = session cwd, scrubbed env + `AUOREO_SESSION_ID`/`AUOREO_HOOK_EVENT`, JSON payload on
-stdin) and folds the stdout replies into one `HookOutcome`:
+(cwd = the server cwd, scrubbed env + `AUOREO_SESSION_ID`/`AUOREO_HOOK_EVENT`, JSON payload on
+stdin; a worktree session's own cwd is the payload's `cwd`, M7) and folds the stdout replies
+into one `HookOutcome`:
 
 - tool events (`PreToolUse`/`PostToolUse`): allow | deny{message} | modify{input}
   (modifications chain; the first deny wins);
@@ -192,6 +193,8 @@ class HookRunner:
         if not selected:
             return out
         body = {**payload, "session_id": session_id, "event": event}
+        if (own := self.s.coordinator.cwd_for(session_id)) != self.s.cwd:
+            body["cwd"] = str(own)  # M7 W4: a worktree session's root, as data only
         fold = _FOLD.get(event, _fold_info)
         token = _IN_HOOK.set(True)
         try:
@@ -255,7 +258,7 @@ class HookRunner:
 
     def _argv(self, hook: Loaded) -> list[str]:
         """`./x` / `../x` resolve against the definition root when that file exists there
-        (so bundled and overlay hooks can ship their scripts); otherwise against the cwd."""
+        (so bundled and overlay hooks can ship their scripts); otherwise against the server cwd."""
         root = Path(hook.path).parent.parent
         argv = []
         for arg in hook.manifest.command:
@@ -277,7 +280,10 @@ class HookRunner:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                cwd=str(self.s.coordinator.cwd_for(session_id)),  # M7 W4; scripts resolve globally
+                # M7 W4: never a worktree. A hook runs outside the sandbox as the server user, so a
+                # bare `pytest`/`make`/`./x` must not pick up files a worker wrote there; the
+                # session's cwd reaches the hook as the payload's `cwd` only.
+                cwd=str(self.s.cwd),
                 env=env,
             )
         except OSError as exc:

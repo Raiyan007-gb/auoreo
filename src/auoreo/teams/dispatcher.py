@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from auoreo.automation import lock
+from auoreo.runtime.cwd import SessionCwdError
 from auoreo.runtime.inbox import RunOptions
 from auoreo.runtime.subtask import WorktreeError
 from auoreo.teams import worktree_spawn
@@ -165,15 +166,24 @@ class KanbanDispatcher:
         tree = None
         if self.s.settings.m7.orch.worktrees:  # --- M7 W4: one worktree per task
             try:
-                tree = await worktree_spawn.prepare(self.s, f"k{row.board}-{row.id}")
+                base = await worktree_spawn.recorded_base(self.s, row.board, row.id)
+                tree = await worktree_spawn.prepare(self.s, f"k{row.board}-{row.id}", base=base)
             except (WorktreeError, OSError) as exc:
                 log.warning("kanban task %s: no worktree (%s); unclaimed", row.id, exc)
                 await kb.release(row.id, name)
                 self._guard(row.id, self.cfg.quota_cooldown_s, "worktree failed")
                 return False
-        ses = await self.s.create_session(
-            title=f"kanban:{row.board}#{row.id}"[:120], agent=profile, cwd=tree.path if tree else None
-        )
+        try:
+            ses = await self.s.create_session(
+                title=f"kanban:{row.board}#{row.id}"[:120], agent=profile, cwd=tree.path if tree else None
+            )
+        except SessionCwdError as exc:  # the worktree failed validation: undo, never run elsewhere
+            log.warning("kanban task %s: worktree refused (%s); unclaimed", row.id, exc)
+            await kb.release(row.id, name)
+            if tree is not None:
+                await worktree_spawn.rollback(self.s, [tree])
+            self._guard(row.id, self.cfg.quota_cooldown_s, "worktree failed")
+            return False
         if tree is not None:
             await self._attach(kb, row.id, tree, name)
         await kb.set_session(row.id, ses.id)
@@ -201,7 +211,7 @@ class KanbanDispatcher:
 
     async def _attach(self, kb: KanbanStore, task_id: int, tree: Any, by: str) -> None:
         """The durable task-to-worktree mapping (used on re-dispatch and by `worktree gc`)."""
-        ref, note = str(tree.path), f"{worktree_spawn.BRANCH_NOTE}{tree.branch}"
+        ref, note = str(tree.path), worktree_spawn.attachment_note(tree)
         known = [json.loads(r.text) for r in await kb.comments(task_id, structured=True)]
         if not any(k.get("ref") == ref for k in known):
             await kb.attach(task_id, ref, note=note, by=by)
