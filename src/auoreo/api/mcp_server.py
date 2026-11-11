@@ -49,6 +49,7 @@ from auoreo.gateway.resolve import resolve_model
 from auoreo.gateway.types import ToolCall
 from auoreo.harness.loader import ToolDef
 from auoreo.harness.orchestrator import AgentSpec, build_spec, floors
+from auoreo.memory.recall import memory_for
 from auoreo.tools.context import SessionState, ToolContext
 
 if TYPE_CHECKING:
@@ -169,6 +170,8 @@ class McpEndpoint:
     ) -> mt.CallToolResult:
         svc, spec, tools, engine = self._prepare()
         sid = f"mcp-{_session_id(ctx)}"  # a fresh id per call when the transport has none
+        # the agent's memory tenant, as the runner resolves it (None = fail closed, no memory)
+        memory = await memory_for(svc, spec.agent.manifest)
         tctx = ToolContext(
             session_id=sid,
             cwd=svc.cwd,
@@ -176,7 +179,7 @@ class McpEndpoint:
             harness=svc.harness,
             state=self._state(sid),
             interactive=False,
-            services={"services": svc, "spec": spec, "engine": engine, "memory": svc.memory},
+            services={"services": svc, "spec": spec, "engine": engine, "memory": memory},
         )
         call = ToolCall(
             id=f"mcp_{uuid.uuid4().hex[:12]}", name=params.name, arguments=json.dumps(params.arguments or {})
