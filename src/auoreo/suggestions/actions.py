@@ -235,9 +235,33 @@ async def _run_kanban(engine: SuggestionEngine, row: SuggestionRow) -> Outcome:
     return Outcome(extra={"task_id": task.id})
 
 
+async def _preflight_post(services: Any, row: SuggestionRow) -> None:
+    if not services.settings.m7.agents.post_consent:
+        raise ActionError("posting is disabled (m7.agents.post_consent)")
+
+
+async def _run_post(engine: SuggestionEngine, row: SuggestionRow) -> Outcome:
+    """Accept is the consent: send the drafted post through its plugin, once. A refusal (daily
+    cap, plugin stopped, already sent) leaves the suggestion accepted and says so; nothing is
+    sent unless `plugins.consent.post` agrees."""
+    from auoreo.plugins import consent
+
+    try:
+        res = await consent.post(engine.s, row.id)
+    except consent.ConsentError as exc:
+        return Outcome(extra={"posted": False, "detail": str(exc)[:300]})
+    return Outcome(
+        extra={
+            "posted": bool(res.get("ok")),
+            "detail": str(res.get("detail", ""))[:300],
+            "external_id": res.get("external_id"),
+        }
+    )
+
+
 STAMPED: frozenset[str] = frozenset({"kanban_create"})
 """Action types that always carry origin stamps (their caps need the source), flag or not."""
 PREPARERS: dict[str, Preparer] = {"prompt": _prepare_prompt, "kanban_create": _prepare_kanban}
 ADMITTERS: dict[str, Admitter] = {"kanban_create": _admit_kanban}
-PREFLIGHTS: dict[str, Checker] = {"kanban_create": _preflight_kanban}
-RUNNERS: dict[str, Runner] = {"prompt": _run_prompt, "kanban_create": _run_kanban}
+PREFLIGHTS: dict[str, Checker] = {"kanban_create": _preflight_kanban, "post": _preflight_post}
+RUNNERS: dict[str, Runner] = {"prompt": _run_prompt, "kanban_create": _run_kanban, "post": _run_post}

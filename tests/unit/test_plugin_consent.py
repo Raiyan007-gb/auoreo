@@ -32,6 +32,9 @@ class Peer:
     def __init__(self) -> None:
         self.calls: list[dict[str, Any]] = []
 
+    async def close(self) -> None:
+        self.alive = False
+
     async def request(self, method: str, params: dict[str, Any], timeout: float = 30) -> Any:
         self.calls.append({"method": method, **params})
         return {"ok": True, "detail": "posted", "external_id": f"st{len(self.calls)}"}
@@ -181,6 +184,9 @@ async def test_reply_mode_proposes_instead_of_sending(services: Services, gatewa
         "target": ANA,
         "text": "Here is my draft.",
         "reply_to": {"status_id": "96"},
+        # stamped by strict_origins: a Mastodon reply is an unattended, platform-origin proposal
+        "origin_kind": "platform",
+        "source": "plugin:mastodon",
     }
     assert row.dedupe_key == "post:mastodon:96" and row.deliver == "home"
     # a public "/approve all" is not a chat command on a consent connector
@@ -240,3 +246,38 @@ async def test_proxy_token_is_minted_per_start_and_revoked(services: Services) -
     assert proxy.peek(token) is None and again != extra
     requests_m7.release("mastodon")
     assert proxy.status()["tokens"] == 0
+
+
+async def test_accepting_a_post_suggestion_sends_it_once_through_the_consent_path(services: Services) -> None:
+    from auoreo.suggestions.engine import SuggestionError, suggestions_of
+
+    _host, _st, peer = install(services)
+    row, _ = await suggestions_of(services).propose(
+        "post", "Reply", "Thanks!", deliver="home",
+        action={"type": "post", "plugin": "mastodon", "target": ANA, "text": "Thanks!"},
+    )  # fmt: skip
+    assert peer.calls == []  # a proposal never sends
+    accepted = await suggestions_of(services).accept(row.id)
+    assert [c["method"] for c in peer.calls] == ["delivery.send"]
+    assert peer.calls[0]["meta"]["consent_id"] == str(row.id)
+    assert accepted.extra["posted"] is True and accepted.extra["external_id"] == "st1"
+    with pytest.raises(SuggestionError, match="not pending"):  # a second accept never re-sends
+        await suggestions_of(services).accept(row.id)
+    assert len(peer.calls) == 1
+
+
+async def test_a_refused_post_is_accepted_but_not_sent_and_says_why(services: Services) -> None:
+    from auoreo.suggestions.engine import suggestions_of
+
+    _host, _st, peer = install(services)
+    row, _ = await suggestions_of(services).propose(
+        "post", "Reply", "Thanks!", deliver="home",
+        action={"type": "post", "plugin": "mastodon", "target": ANA, "text": "Thanks!"},
+    )  # fmt: skip
+    for _ in range(services.settings.m7.agents.post_daily_cap):  # exhaust the daily cap first
+        extra = await add_post(services)
+        await consent.post(services, extra)
+    peer.calls.clear()
+    accepted = await suggestions_of(services).accept(row.id)
+    assert peer.calls == []
+    assert accepted.extra["posted"] is False and "cap" in accepted.extra["detail"]
