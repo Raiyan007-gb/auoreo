@@ -95,6 +95,16 @@ def test_unsafe_addresses_rejected(addr: str) -> None:
         HostManifest(**{**GOOD, "host": addr})
 
 
+@pytest.mark.parametrize("addr", ["2852039166", "0xa9fea9fe", "169.254.43518", "0251.0376.0251.0376", "0"])
+def test_numeric_spellings_of_an_unsafe_address_are_rejected(addr: str) -> None:
+    """The resolver reads these as 169.254.169.254 (or 0.0.0.0) without any DNS lookup."""
+    with pytest.raises(ValueError):
+        hosts.reject_unsafe_address(addr)
+    with pytest.raises(ValidationError):
+        HostManifest(**{**GOOD, "host": addr})
+    assert HostManifest(**{**GOOD, "host": "167772165"}).host == "167772165"  # 10.0.0.5: still allowed
+
+
 @pytest.mark.parametrize("addr", ["10.0.0.5", "127.0.0.1", "lab.example.com", "2001:db8::1", "::1"])
 def test_ordinary_addresses_accepted(addr: str) -> None:
     hosts.reject_unsafe_address(addr)

@@ -10,6 +10,7 @@ runtime root (`<home>/hosts/`) only: never from a project `.auoreo/` (trusted or
 from __future__ import annotations
 
 import ipaddress
+import socket
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -28,11 +29,18 @@ _BLOCKED_ADDRS = frozenset(ipaddress.ip_address(a) for a in ("100.100.100.200", 
 def unsafe_address(host: str) -> str | None:
     """Why `host` may not be an SSH target, or None. Only literals are checked: link-local and
     cloud-metadata addresses and the unspecified address. A hostname is resolved at connect
-    time and not re-checked (known limitation, `docs/environments.md`)."""
+    time and not re-checked (known limitation, `docs/environments.md`). The numeric spellings a
+    resolver reads as IPv4 without a lookup (`2852039166`, `0xa9fea9fe`, `169.254.43518`) count
+    as literals."""
+    text = host.strip().strip("[]").split("%", 1)[0]
+    ip: ipaddress.IPv4Address | ipaddress.IPv6Address
     try:
-        ip = ipaddress.ip_address(host.strip().strip("[]").split("%", 1)[0])
+        ip = ipaddress.ip_address(text)
     except ValueError:
-        return None
+        try:
+            ip = ipaddress.IPv4Address(socket.inet_aton(text))
+        except (OSError, ValueError):
+            return None
     mapped = getattr(ip, "ipv4_mapped", None)
     ip = mapped or ip
     if ip in _BLOCKED_ADDRS or any(ip.version == n.version and ip in n for n in _BLOCKED_NETS):

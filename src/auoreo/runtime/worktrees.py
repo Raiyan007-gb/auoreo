@@ -230,7 +230,8 @@ def task_slug(raw: str) -> str:
     an extension)."""
     slug = re.sub(r"[^a-z0-9._-]+", "-", raw.lower())
     slug = re.sub(r"\.{2,}", ".", slug)[:MAX_SLUG].strip(".-")
-    slug = slug.removesuffix(".lock").strip(".-")
+    while slug.endswith(".lock"):  # every one: `x.lock.lock` must not end up as `x.lock`
+        slug = slug.removesuffix(".lock").strip(".-")
     if not slug:
         raise WorktreeError(f"'{raw}' has no characters usable in a worktree name")
     if slug.split(".", 1)[0] in WINDOWS_RESERVED:
