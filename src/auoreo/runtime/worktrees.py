@@ -28,6 +28,7 @@ from collections.abc import Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from auoreo.runtime import worktree_git as wg
 from auoreo.runtime.subtask import WorktreeError, _git, _prepare_root
 
 SLUG_RE = re.compile(r"^[a-z0-9._-]+(/[a-z0-9._-]+)*$")
@@ -85,6 +86,7 @@ async def new_feature(
     force: bool = False,
     check_pr: bool = True,
     reset: bool = True,
+    harden: bool = False,
 ) -> NewFeature:
     if not SLUG_RE.fullmatch(slug):
         raise WorktreeError(f"invalid slug '{slug}' (lowercase [a-z0-9._-], '/'-separated)")
@@ -109,15 +111,16 @@ async def new_feature(
             "origin/HEAD" if await _ok("rev-parse", "--verify", "--quiet", "origin/HEAD", cwd=top) else "HEAD"
         )
     _prepare_root(root)
+    opts = wg.HARDEN if harden else ()  # orchestrator: a checkout of a worker's branch runs no hook
     if reset:
-        await _git("worktree", "add", "--quiet", "-B", branch, str(dest), base, cwd=top)
+        await _git(*opts, "worktree", "add", "--quiet", "-B", branch, str(dest), base, cwd=top)
     elif await _ok("rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", cwd=top):
         # never `-B`: an existing branch is checked out as it is (git refuses one that is
         # already checked out in another worktree), so a re-dispatched task keeps its commits
-        await _git("worktree", "add", "--quiet", str(dest), branch, cwd=top)
+        await _git(*opts, "worktree", "add", "--quiet", str(dest), branch, cwd=top)
         return NewFeature(dest, branch, base, resumed=True, notes=[*notes, "resumed existing branch"])
     else:
-        await _git("worktree", "add", "--quiet", "-b", branch, str(dest), base, cwd=top)
+        await _git(*opts, "worktree", "add", "--quiet", "-b", branch, str(dest), base, cwd=top)
     return NewFeature(dest, branch, base, notes=notes)
 
 
@@ -183,12 +186,16 @@ async def plan_gc(
         if not path.exists():
             items.append(GcItem(path, "folder missing", "prune"))
             continue
-        dirty = await _ok("status", "--porcelain", cwd=path)
+        # git never runs inside the worktree as a repository: the worker owns `<path>/.git`
+        dirty = await wg.tree_ok(top, path, "status", "--porcelain", "--ignore-submodules=all")
+        if dirty is None and not force:
+            items.append(GcItem(path, "git status failed (not a clean, registered worktree)", "keep"))
+            continue
         if dirty and not force:
             items.append(GcItem(path, f"{len(dirty.splitlines())} uncommitted change(s)", "keep"))
             continue
-        age = _age_s(path, await _ok("log", "-1", "--format=%ct", "HEAD", cwd=path))
         head = e.get("HEAD", "")
+        age = _age_s(path, await _ok("log", "-1", "--format=%ct", head, cwd=top) if head else None)
         if age > MERGED_GRACE_S and head and await _merged(top, head):
             items.append(GcItem(path, "merged", "remove"))
             continue
@@ -211,7 +218,8 @@ async def apply_gc(top: Path, items: list[GcItem], registered_force: bool = Fals
         if i.reason.startswith("orphan"):
             shutil.rmtree(i.path)
             continue
-        await _git("worktree", "remove", *(["--force"] if registered_force else []), str(i.path), cwd=top)
+        force = ["--force"] if registered_force else []
+        await _git(*wg.HARDEN, "worktree", "remove", *force, str(i.path), cwd=top)  # its status check too
 
 
 # ------------------------------------------------------------------ M7 W4: task worktrees
@@ -270,7 +278,9 @@ async def task_worktree(cwd: Path, root: Path, slug: str, *, max_worktrees: int 
         head = await _ok("rev-parse", "--short", "HEAD", cwd=top)
         if not head:
             raise WorktreeError(f"{top} has no commit to branch from")
-        out = await new_feature(top, slug, root, base="HEAD", fetch=False, check_pr=False, reset=False)
+        out = await new_feature(
+            top, slug, root, base="HEAD", fetch=False, check_pr=False, reset=False, harden=True
+        )
         out.base = out.base if out.base not in ("", "HEAD") else head
         return out
 
@@ -278,10 +288,12 @@ async def task_worktree(cwd: Path, root: Path, slug: str, *, max_worktrees: int 
 async def discard_worktree(cwd: Path, tree: NewFeature) -> None:
     """Undo a worktree created by a spawn that then failed. A resumed or dirty one is left
     alone; the branch goes only when it has no commit of its own."""
-    if tree.resumed or await _ok("status", "--porcelain", cwd=tree.path):
-        return  # resumed, or a child already wrote there: nothing is thrown away
+    if tree.resumed:
+        return
     top = await toplevel(cwd)
+    if await wg.tree_ok(top, tree.path, "status", "--porcelain", "--ignore-submodules=all") != "":
+        return  # a child already wrote there (or git cannot tell): nothing is thrown away
     async with _LOCKS.setdefault(str(top), asyncio.Lock()):
-        await _ok("worktree", "remove", "--force", str(tree.path), cwd=top)
+        await _ok(*wg.HARDEN, "worktree", "remove", "--force", str(tree.path), cwd=top)
         if await _ok("merge-base", "--is-ancestor", tree.branch, "HEAD", cwd=top) is not None:
             await _ok("branch", "-D", tree.branch, cwd=top)

@@ -33,7 +33,7 @@ class WorktreeError(RuntimeError):
     pass
 
 
-async def _git(*args: str, cwd: Path, stdin: bytes | None = None) -> bytes:
+async def _git(*args: str, cwd: Path, stdin: bytes | None = None, env: dict[str, str] | None = None) -> bytes:
     proc = await asyncio.create_subprocess_exec(
         "git",
         *args,
@@ -41,7 +41,7 @@ async def _git(*args: str, cwd: Path, stdin: bytes | None = None) -> bytes:
         stdin=asyncio.subprocess.PIPE if stdin is not None else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        env=child_env([], None),
+        env={**child_env([], None), **(env or {})},
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(stdin), GIT_TIMEOUT_S)

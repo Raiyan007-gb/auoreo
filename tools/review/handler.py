@@ -4,6 +4,7 @@ prompt, run as a foreground subagent through the teams extension)."""
 
 import asyncio
 import json
+import os
 import re
 import shutil
 from pathlib import Path
@@ -16,9 +17,11 @@ CONFLICT = re.compile(r"^(<{7}|>{7})( |$)", re.M)
 MAX_ROWS = 40
 
 
-async def _cmd(argv: list[str], cwd: Path, timeout_s: float = 60) -> tuple[int, str]:
+async def _cmd(
+    argv: list[str], cwd: Path, timeout_s: float = 60, env: dict[str, str] | None = None
+) -> tuple[int, str]:
     proc = await asyncio.create_subprocess_exec(
-        *argv, cwd=str(cwd), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT
+        *argv, cwd=str(cwd), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout_s)
@@ -29,28 +32,58 @@ async def _cmd(argv: list[str], cwd: Path, timeout_s: float = 60) -> tuple[int, 
     return proc.returncode or 0, out.decode(errors="replace")
 
 
-async def working_diff(cwd: Path) -> tuple[str, list[str]]:
-    """`git diff HEAD` (or the staged diff of an unborn branch) + changed/untracked paths."""
+async def _git(ctx: ToolContext, cwd: Path) -> tuple[list[str], dict[str, str] | None]:
+    """argv prefix and env for git. A worktree session (M7 W4) never lets git discover the
+    repository in its worktree (the worker owns `<worktree>/.git`, and this runs outside the
+    sandbox): the git dirs come from the server repository's records, hooks and fsmonitor off."""
+    from auoreo.runtime import worktree_git as wg
+    from auoreo.runtime.cwd import worktree_session
+
     git = shutil.which("git")
     if git is None:
         raise ToolError("review needs git on PATH")
-    code, top = await _cmd([git, "rev-parse", "--show-toplevel"], cwd)
+    if not worktree_session(ctx):
+        return [git], None
+    common = await wg.common_dir(ctx.services["services"].cwd)
+    admin = wg.admin_dir(common, cwd) if common else None
+    if common is None or admin is None:
+        raise ToolError(f"not a registered worktree: {cwd}")
+    return [git, *wg.HARDEN], {**os.environ, **wg.tree_env(common, admin, cwd)}
+
+
+async def working_diff(
+    cwd: Path, git: list[str] | None = None, env: dict[str, str] | None = None
+) -> tuple[str, list[str]]:
+    """`git diff HEAD` (or the staged diff of an unborn branch) + changed/untracked paths."""
+    if git is None:
+        found = shutil.which("git")
+        if found is None:
+            raise ToolError("review needs git on PATH")
+        git = [found]
+    code, top = await _cmd([*git, "rev-parse", "--show-toplevel"], cwd, env=env)
     if code != 0:
         raise ToolError(f"not a git repository: {cwd}")
-    _, status = await _cmd([git, "status", "--porcelain", "--untracked-files=all"], cwd)
+    _, status = await _cmd([*git, "status", "--porcelain", "--untracked-files=all"], cwd, env=env)
     files = [ln[3:].split(" -> ")[-1].strip('"') for ln in status.splitlines() if len(ln) > 3]
-    code, diff = await _cmd([git, "diff", "HEAD"], cwd)
+    code, diff = await _cmd([*git, "diff", "HEAD"], cwd, env=env)
     if code != 0:  # no HEAD yet
-        _, diff = await _cmd([git, "diff", "--cached"], cwd)
+        _, diff = await _cmd([*git, "diff", "--cached"], cwd, env=env)
     return diff, files
 
 
-async def diagnostics(ctx: ToolContext, cwd: Path, files: list[str]) -> tuple[list[str], list[str]]:
+async def diagnostics(
+    ctx: ToolContext,
+    cwd: Path,
+    files: list[str],
+    git: list[str] | None = None,
+    env: dict[str, str] | None = None,
+) -> tuple[list[str], list[str]]:
     """(blocking errors, advisory notes)."""
     blocking: list[str] = []
     notes: list[str] = []
-    git = shutil.which("git") or "git"
-    code, check = await _cmd([git, "diff", "HEAD", "--check"], cwd)
+    code, check = await _cmd(
+        [*(git or [shutil.which("git") or "git"]), "diff", "HEAD", "--check"], cwd, env=env
+    )
     if code not in (0, 128) and check.strip():
         blocking += [f"git diff --check: {ln}" for ln in check.splitlines() if ln and not ln.startswith("+")]
     paths = [cwd / f for f in files if (cwd / f).is_file()]
@@ -101,11 +134,12 @@ async def _agent(ctx: ToolContext, focus: str, report: str) -> tuple[str, bool]:
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
     cwd = ctx.cwd.resolve()
-    diff, files = await working_diff(cwd)
+    git, env = await _git(ctx, cwd)
+    diff, files = await working_diff(cwd, git, env)
     if not files and not diff.strip():
         structured = {"blockingErrors": [], "preventContinuation": False, "files": []}
         return ToolResult("nothing to review: the working tree is clean", meta={"structured": structured})
-    blocking, notes = await diagnostics(ctx, cwd, files)
+    blocking, notes = await diagnostics(ctx, cwd, files, git, env)
     cap = int(args.get("max_diff_chars", 20000))
     shown = diff if len(diff) <= cap else diff[:cap] + f"\n… [{len(diff) - cap} more diff chars]"
     lines = [f"**review** · {len(files)} changed file(s): {', '.join(files[:30])}"]

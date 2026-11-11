@@ -6,6 +6,7 @@ hooks running the worker's files) and asserts it is closed for worktree sessions
 
 from __future__ import annotations
 
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -19,7 +20,7 @@ from auoreo.harness.manifests import Rule
 from auoreo.runtime import cwd as session_cwd
 from auoreo.runtime import worktrees as wt
 from tests.teams_helpers import RoutedGateway, call_tool, tool_ctx, turn
-from tests.worktree_helpers import flags_on, git_init
+from tests.worktree_helpers import flags_on, git, git_init
 
 
 @pytest.fixture
@@ -134,3 +135,74 @@ async def test_apply_patch_in_the_server_cwd_is_unchanged(services: Services, wo
     patch = f"*** Begin Patch\n*** Add File: {outside / 'n.txt'}\n+x\n*** End Patch\n"
     assert (await call_tool(services, ctx, "apply_patch", {"patch": patch}))[1] is False
     assert (outside / "n.txt").exists()
+
+
+# ------------------------------------------------------------------ 2: orchestrator git
+def _plant_repo(tree: Path, marker: Path, origin: str = "https://github.com/victim/other.git") -> None:
+    """What a worker can do inside its own worktree: replace the `.git` pointer with a
+    repository whose config runs a script on any index refresh and names another origin."""
+    (tree / ".git").unlink()
+    git(tree, "init", "--quiet")
+    script = tree / "evil.sh"
+    script.write_text(f"#!/bin/sh\ntouch '{marker}'\ncat >/dev/null\nprintf 'x\\0'\n", encoding="utf-8")
+    script.chmod(0o755)
+    git(tree, "config", "core.fsmonitor", str(script))
+    git(tree, "remote", "add", "origin", origin)
+    (tree / "sub").mkdir()  # a nested repository is a submodule candidate for `git status`
+    git(tree / "sub", "init", "--quiet")
+    git(tree / "sub", "config", "core.fsmonitor", str(script))
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX shell script as fsmonitor")
+async def test_gc_and_discard_never_run_git_in_a_planted_worktree_repository(
+    services: Services, workdir: Path, tmp_path: Path
+) -> None:
+    git_init(workdir)
+    tree = await _tree(services)
+    marker = tmp_path / "PWNED"
+    _plant_repo(tree.path, marker)
+    root = session_cwd.orch_root(services.settings, services.cwd)
+    _, items = await wt.plan_gc(workdir, root, 7)
+    assert [(i.path.name, i.action) for i in items] == [(tree.path.name, "keep")]
+    assert not marker.exists()
+    await wt.discard_worktree(workdir, tree)
+    assert not marker.exists() and tree.path.exists()  # git cannot tell it is clean: left alone
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX shell script as fsmonitor")
+async def test_the_github_home_repo_of_a_worktree_session_is_the_server_checkouts(
+    services: Services, workdir: Path, tmp_path: Path
+) -> None:
+    from auoreo.tools.ghcli import home_repo
+
+    git_init(workdir)
+    git(workdir, "remote", "add", "origin", "https://github.com/me/mine.git")
+    flags_on(services)
+    tree = (await _tree(services)).path
+    row = await services.create_session(cwd=tree)
+    ctx = tool_ctx(services, row.id)
+    ctx.cwd = tree
+    assert await home_repo(ctx) == "me/mine"
+    marker = tmp_path / "PWNED"
+    _plant_repo(tree, marker)
+    assert await home_repo(ctx) == "me/mine"  # not victim/other
+    assert not marker.exists()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs a POSIX shell script as fsmonitor")
+async def test_the_review_tool_in_a_worktree_never_runs_the_workers_git_config(
+    services: Services, workdir: Path, tmp_path: Path
+) -> None:
+    git_init(workdir)
+    flags_on(services)
+    tree = (await _tree(services)).path
+    row = await services.create_session(cwd=tree)
+    ctx = tool_ctx(services, row.id)
+    ctx.cwd = tree
+    (tree / "README.md").write_text("changed\n", encoding="utf-8")
+    text, is_error = await call_tool(services, ctx, "review", {})
+    assert not is_error and "README.md" in text  # the honest worktree is reviewed as before
+    marker = tmp_path / "PWNED"
+    _plant_repo(tree, marker)
+    await call_tool(services, ctx, "review", {})
+    assert not marker.exists()

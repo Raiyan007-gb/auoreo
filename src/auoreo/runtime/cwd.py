@@ -165,42 +165,18 @@ async def load(services: Services, rt: Any) -> None:
 _GIT_ALLOW: dict[str, list[Path]] = {}
 
 
-def _first_line(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="replace").splitlines()[0].strip()
-    except (OSError, IndexError):
-        return ""
-
-
-def _pointer(path: Path | str) -> str:
-    """A `.git` pointer path with its folder resolved and its last part kept as written (the
-    worker owns `<worktree>/.git` and could make it a symlink)."""
-    head, tail = os.path.split(os.path.abspath(path))
-    return os.path.join(_norm(head), os.path.normcase(tail))
-
-
 async def _git_paths(cwd: Path, server_cwd: Path) -> list[Path]:
     """Read from the server repository's records only. Git is never run in the worktree and
     `<worktree>/.git` is never read: the worker can rewrite that file, and a pointer to the
     parent's git directory would otherwise make all of it writable."""
-    from auoreo.runtime import worktrees as wt
+    from auoreo.runtime import worktree_git as wg
 
-    common = await wt._ok("rev-parse", "--git-common-dir", cwd=server_cwd)
-    if not common:
+    top = await wg.common_dir(server_cwd)
+    admin = wg.admin_dir(top, cwd) if top else None
+    if top is None or admin is None:  # unknown here, or two records claim this folder: no allowance
         return []
-    top = Path(_norm(os.path.join(server_cwd, common)))
-    records, want = top / "worktrees", _pointer(Path(cwd) / ".git")
-    mine = [
-        d
-        for d in (sorted(records.iterdir()) if records.is_dir() else [])
-        if _norm(d) == os.path.join(_norm(records), os.path.normcase(d.name))  # a real folder there
-        and (line := _first_line(d / "gitdir"))
-        and _pointer(os.path.join(d, line)) == want  # relative with `worktree.useRelativePaths`
-    ]
-    if len(mine) != 1:  # unknown here, or two records claim this folder: no allowance
-        return []
-    out = [mine[0], top / "objects"]
-    branch = _first_line(mine[0] / "HEAD").removeprefix("ref: refs/heads/")
+    out = [admin, top / "objects"]
+    branch = wg.first_line(admin / "HEAD").removeprefix("ref: refs/heads/")
     if branch.startswith(BRANCH_NS + "/"):  # the worker's branch namespace; never refs/heads itself
         out += [top / "refs" / "heads" / BRANCH_NS, top / "logs" / "refs" / "heads" / BRANCH_NS]
     return _existing(out)
