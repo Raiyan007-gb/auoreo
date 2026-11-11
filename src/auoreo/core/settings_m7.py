@@ -17,6 +17,21 @@ class _Tolerant(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class M7Mask(_Tolerant):
+    """W1 Wave 2 observation masking (`m7.token.masking`) and the report's mask gates."""
+
+    keep_recent: int = Field(default=10, ge=0)
+    """The last N tool results are never masked."""
+    min_chars: int = Field(default=2000, ge=1)
+    """Only string tool results of at least this many characters are masked."""
+    min_tokens: int = Field(default=8000, ge=0)
+    """Report gate M3: the maskable size from which a session counts as a masking candidate."""
+    cache_read_multiplier: float = Field(default=0.1, ge=0)
+    """Cache-read price / input price used by report gate M3 (Anthropic default; some models differ)."""
+    cache_write_multiplier: float | None = Field(default=None, ge=0)
+    """Cache-write price / input price for gate M3; None = 1.25 (`cache_ttl` 5m) or 2.0 (1h)."""
+
+
 class M7Token(_Tolerant):
     """W1 token economy."""
 
@@ -32,6 +47,7 @@ class M7Token(_Tolerant):
     """Send `prompt_cache_key = session_id` to OpenAI-family models."""
     read_dedupe: bool = False
     """A repeated, unchanged `read` in the same turn returns a short notice."""
+    mask: M7Mask = Field(default_factory=M7Mask)
 
 
 class M7Ssh(_Tolerant):
