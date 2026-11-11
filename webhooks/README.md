@@ -87,3 +87,18 @@ keeps the newest `automation_deliveries_keep` finished rows (1000 by default, 0 
 prunes older `delivered|failed|unknown` rows at start and after each delivery, so an event
 re-sent after its row was pruned is accepted again. `pending` and `delivering` rows are never
 pruned.
+
+## Issue triage (`issue-to-kanban.yaml`, M7)
+
+Disabled by default. A GitHub `issues` / `opened` delivery runs the `triage` agent, which can
+only *propose*: it calls `suggest` with a `kanban: {board, title, body, ref}` object and the
+dedupe key `<repo>#<issue>`. The engine prefixes the key with its source
+(`kb:webhook:issue-to-kanban:acme/app#42`), so a redelivery returns the same suggestion, and
+a key proposed, accepted or denied in the last `m7.agents.triage.dedupe_days` (30) is not
+proposed again. Each source has its own caps (`per_source_pending` 5, `per_source_daily` 20);
+over a cap the proposal fails and an audit row `suggestion.capped` is written. Nothing is
+created until the owner accepts the suggestion; accept creates one `ready` task (the body
+wrapped as untrusted data, the issue URL attached) for the kanban dispatcher. To enable:
+`m7.agents.strict_origins`, `m7.agents.kanban_suggestions`, `triage` in
+`m7.agents.triage.boards`, the worker profile (`i3.kanban.agent`, or the task's `profile`) in
+`m7.agents.triage.profiles`, and `enabled: true` in a copy under `~/.auoreo/webhooks/`.

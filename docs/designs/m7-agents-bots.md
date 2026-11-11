@@ -446,6 +446,40 @@ remove or justify). Phases each leave the build green.
     Telegram test bot for Sources rendering.
 *   Confirm file sizes: `runner.py` and `host.py` not above their current line counts.
 
+## Wave 2 implementation notes (unattended semantics, triage, evals)
+
+Built from the Wave 2 draft's phases A-C with its recommended defaults (`strict_origins` is a
+default-off flag; the model supplies the kanban dedupe key and the engine adds the source
+prefix). Where the build differs from the draft:
+
+*   **Origins.** `suggestions/origin.py` adds the `sessions.json` scan as
+    `core/approvals.connector_plugin` (shared with `unattended_kind`) rather than calling it
+    from a copy. A worker is also a session pinned by the dispatcher or any session of an
+    `AUOREO_KANBAN_BOARD` process, as in `teams/kanban_guard.py`. Accept also refuses to run
+    in the origin session when the stored `origin_kind` says it was unattended, even if the
+    chat mapping is gone. With `strict_origins` on, `origin_kind` and `source` are stored for
+    every action, not only for unattended origins.
+*   **Dedupe.** Kanban dedupe covers `pending`, `accepted` and `denied` rows, not `expired` or
+    `tombstoned` ones: those carry no human decision, and counting them would block an issue
+    for 30 days after a TTL expiry. A non-kanban suggestion cannot use the reserved `kb:` key
+    prefix while `kanban_suggestions` is on.
+*   **Eviction.** The draft's per-source caps alone do not stop a flood from evicting other
+    suggestions (`suggestions_max_pending` defaults to 5, the same as `per_source_pending`), so
+    with `kanban_suggestions` on, kanban rows neither count toward nor are evicted by the
+    global `max_pending`.
+*   **Profile.** A kanban suggestion without `profile` is checked against
+    `triage.profiles` as `i3.kanban.agent`, so the allowlist cannot be skipped by omission.
+*   **Not built in this wave:** the PR proposal after a worker finishes
+    (`teams/pr_suggest.py`, `triage.propose_pr`); Telegram voice and the Mastodon connector
+    are built separately.
+*   **Verified claims.** A `permission: "*"` rule compiles to `.*` and matches every
+    permission name (`tests/unit/test_triage_recipes.py`); `harness validate` accepts an
+    `evals/` folder under an agent (`tests/unit/test_eval_agents.py`); the GitHub provider
+    passes the `issues` payload through unchanged, so `event.issue.number` and
+    `event.repository.full_name` are the fields `github_target` already reads.
+*   **Defence in depth.** Adding a tool to `agents/triage` `tools.allow` alone does not expose
+    it: the profile's `deny "*"` rule hides any tool without a matching allow rule.
+
 --------------------------------------------------------------------------------
 
 *Drafted with EGM (Elephant-Goldfish-Mouse design workflow)*

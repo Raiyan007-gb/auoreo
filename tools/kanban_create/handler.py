@@ -10,6 +10,7 @@ def _fmt(row) -> str:
 
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
     kb = teams_for(ctx).kanban
+    await guard.refuse_unattended(ctx)
     board = guard.board_arg(ctx, args)
     row = await attempt(kb.create(board, args["title"], args.get("body", ""), profile=args.get("profile")))
     return ToolResult("created " + _fmt(row), meta={"id": row.id})

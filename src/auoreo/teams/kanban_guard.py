@@ -59,3 +59,21 @@ async def task_on_board(ctx: ToolContext, task_id: int) -> tuple[KanbanStore, Ka
 def refuse_worker(ctx: ToolContext, verb: str) -> None:
     if verb in ORCHESTRATOR_VERBS and pinned_board(ctx) is not None:
         raise ToolError(f"kanban_{verb} is for orchestrators; kanban workers cannot {verb} tasks")
+
+
+async def refuse_unattended(ctx: ToolContext) -> None:
+    """M7 W3 wave 2: with `m7.agents.strict_origins`, a job, webhook or connector session may
+    not create kanban tasks directly (a task can start a worker run with no human step); it
+    proposes a `kanban_create` suggestion instead. Workers and attended sessions are unaffected."""
+    from auoreo.suggestions.origin import origin_of, strict
+
+    svc = ctx.services.get("services")
+    if svc is None or not strict(svc):
+        return
+    hint = ctx.services.get("unattended")
+    kind = hint if hint in ("cron", "platform") else (await origin_of(svc, ctx.session_id)).kind
+    if kind in ("cron", "platform"):
+        raise ToolError(
+            f"kanban_create is not available to unattended {kind} sessions; propose the task "
+            "with suggest(kanban={board, title, body, ...}) and a dedupe_key so a human can accept it"
+        )

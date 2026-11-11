@@ -34,3 +34,6 @@ non-interactively (approval-needing tools are denied), and writes a `deliveries`
 Agents create reminders and jobs with the `cronjob` tool (approval required) and clients with
 `POST /api/cron` (`dry_run: true` previews the next 5 fires); both write
 `<home>/jobs/<name>.yaml`, and only those files can be removed again through them.
+
+`triage.yaml` (M7, disabled) runs the `triage` agent every 6 hours over the `triage` kanban
+board and proposes at most three follow-up suggestions to `home`; it never changes a task.

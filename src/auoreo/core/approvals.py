@@ -359,6 +359,12 @@ async def unattended_kind(services: Any, session_id: str, hint: object = None) -
                 return "cron"
     except Exception:  # no deliveries table (minimal test services) → not a cron session
         pass
+    return "platform" if connector_plugin(services, session_id) is not None else "single_query"
+
+
+def connector_plugin(services: Any, session_id: str) -> str | None:
+    """The connector plugin whose `sessions.json` maps a chat to this session, else None.
+    Values are tested, so routed keys (`<chat>#<agent>`) match too."""
     import json
 
     home = getattr(getattr(services, "settings", None), "home", None)
@@ -368,8 +374,8 @@ async def unattended_kind(services: Any, session_id: str, hint: object = None) -
         except (OSError, ValueError):
             continue
         if isinstance(mapping, dict) and session_id in mapping.values():
-            return "platform"
-    return "single_query"
+            return str(path.parent.name)
+    return None
 
 
 def unattended_action(settings: Any, kind: str) -> str:
