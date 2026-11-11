@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from auoreo.core.redaction import PREFIXES
 from auoreo.memory.files import memory_dir
 from auoreo.memory.prefs import PrefsError, inbox
+from auoreo.memory.recall import TOPICS_REFUSED, tenant_of
 from auoreo.memory.topics import (
     TYPES,
     DriftError,
@@ -206,6 +207,8 @@ async def _run(args: dict, ctx: ToolContext) -> str:
     mem = ctx.services.get("memory")
     services = ctx.services.get("services")
     ops = args["operations"]
+    if any(op.get("target") == "topic" for op in ops) and tenant_of(ctx.services):
+        raise ToolError(TOPICS_REFUSED)
     for op in ops:
         _check_safe(op.get("content", "") + op.get("description", ""))
     prefs_ops = [op for op in ops if op["target"] == "prefs"]

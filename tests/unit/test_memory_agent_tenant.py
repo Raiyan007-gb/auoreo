@@ -143,6 +143,40 @@ async def test_memory_tool_and_searches_use_the_agent_tenant(services: Services,
     assert err and "tenant-deny" in text
 
 
+async def test_topic_files_are_refused_to_a_tenanted_agent(services: Services, workdir: Path) -> None:
+    """Topic files (`~/.auoreo/memory/topics/*.md` + a MEMORY.md index line) are one shared
+    folder with no tenant: a tenanted agent may neither write nor read them, so what it learns
+    stays in its fact store and it cannot read what other agents filed there."""
+    _on(services)
+    _agents(services, workdir, support="support", plain=None)
+
+    async def ctx(agent: str) -> ToolContext:
+        c = ctx_for(services, workdir, agent=agent)
+        c.services["memory"] = await memory_for(services, services.harness.agent(agent).manifest)
+        return c
+
+    topics = services.settings.home / "memory" / "topics"
+    secret = {"action": "add", "target": "topic", "name": "customer_acme", "description": "acme"}
+    op = {**secret, "content": "ACME renewal price 120k"}
+    text, err = await call(services, await ctx("support"), "memory", {"operations": [op]})
+    assert err and "fact" in text and not (topics / "customer_acme.md").exists()
+    # an untenanted agent still files topics; the tenanted one cannot read or list them
+    text, err = await call(services, await ctx("plain"), "memory", {"operations": [op]})
+    assert not err and (topics / "customer_acme.md").exists(), text
+    text, err = await call(services, await ctx("support"), "memory_read", {"name": "customer_acme"})
+    assert err and "120k" not in text and "fact" in text
+    text, err = await call(services, await ctx("support"), "memory_read", {"name": "topics/customer_acme.md"})
+    assert err and "120k" not in text
+    text, err = await call(services, await ctx("support"), "memory_read", {})
+    assert not err and "customer_acme" not in text
+    text, err = await call(services, await ctx("plain"), "memory_read", {"name": "customer_acme"})
+    assert not err and "120k" in text
+    # flag off: no tenants, topics work as before
+    services.settings.m7.agents.memory_tenants = False
+    text, err = await call(services, await ctx("support"), "memory_read", {"name": "customer_acme"})
+    assert not err and "120k" in text
+
+
 async def test_agent_namespace_is_never_requestable_from_another_tenant(services: Services) -> None:
     _on(services)
     mem = services.memory

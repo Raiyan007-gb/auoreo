@@ -23,7 +23,10 @@ memory_tenant: support         # optional (M7): this agent's own partition of th
 is on: the agent's facts, recall, transcript search and compaction summaries then live in the
 tenant `agent:<slug>` of `memory.db`, invisible to agents without that tenant and shared by
 agents that name the same one. `MEMORY.md`, `USER.md` and `PREFS.md` stay shared by every
-agent (they describe the human). Turning the flag off hides the tenant's rows without
+agent (they describe the human). Topic files (`memory/topics/*.md`, the `memory` tool's
+`target=topic` and `memory_read` of a topic) have no tenant, so an agent with a tenant may
+neither write nor read nor list them: the tools refuse and point it at `target=fact`, which
+lands in its tenant. Turning the flag off hides the tenant's rows without
 deleting them. An agent from an untrusted project root cannot choose a tenant. Remove the key
 before running an older build: the manifest is strict there and the agent would not load.
 
