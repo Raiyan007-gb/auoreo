@@ -457,4 +457,51 @@ Phases in order; each phase ends green on `ruff`, `mypy`, `pytest`.
 
 --------------------------------------------------------------------------------
 
+## Wave 2 implementation notes
+
+Built from the Wave 2 draft (`m7-orchestration-w2`, not formally reviewed) with every
+recommended default: approval in the handler, human-only and one-shot; `merge_definitions`
+`refuse`; the conflict task created `blocked`; the `refs/heads/auoreo` namespace allowance kept;
+`merge_max_objects` 20000 with refusal above it; DAG workflows (`needs`/`when`,
+`check:tests|lint`) moved to M8; no `0009` revision and no schema change. Modules:
+`runtime/merge.py` (git plumbing), `teams/merge_flow.py`, `merge_records.py`, `merge_card.py`,
+`tools/git_merge/`, `teams/worktree_reconcile.py` (one `STARTERS` line). Settings on `m7.orch`:
+`merge` (requires `worktrees`), `merge_definitions`, `merge_max_objects`, `conflict_board`,
+`reconcile_interval_s`. Deviations from the draft:
+
+*   **Hooks.** `subtask._git` passes `core.hooksPath=<os.devnull>` to every harness git call
+    (orchestrator, `/review`, `auoreo new-feature`), not an empty folder under `<home>`: a folder
+    can be planted into; the null device names no directory. The CLI `new-feature` therefore no
+    longer runs the user's `post-checkout` hook.
+*   **Unrecorded branches are refused** (`merge.denied{reason: "unrecorded"}`): only a branch
+    with a `worktree.created` record is merged; D3 uses that record's base.
+*   **Conflict tasks.** Dedupe is a comment by author `__merge__` (a worker's comments carry its
+    session id). The dispatcher resumes the conflicting branch for a task found in the harness's
+    own `merge.conflicts` events, never from a `branch=` attachment (workers can add those), and
+    only with `m7.orch.merge` on.
+*   **`review.requested` at worker end** is emitted (dispatcher finish and delegate finish) only
+    with `m7.orch.merge` on; `git_merge` emits one when none exists for the sha.
+*   **Card and audit.** The sandbox line is the server's sandbox state
+    (`ext["sandbox_boot"].enforced`), not per worker. Audit actions: `merge.approved`,
+    `merge.rejected` (reject or timeout), `merge.completed`, `merge.failed`, `merge.denied`.
+    Gitlink additions are refused with symlinks. The CLI's `run --auto` never answers a
+    `git_merge` card.
+*   **Visibility.** `check_fn` reads the process settings (`get_settings()`); the handler checks
+    `m7.orch.merge` on the live services again (fail closed).
+*   **Reconcile.** Live sessions are protected through the Wave 1 task-store guard (running
+    sessions and members, claimed tasks), not by asking a running server: no API change. Only
+    `gc --reconcile` writes the journal; plain `gc` is unchanged. `--restore` recreates a missing
+    branch at the tip recorded in `review.requested`.
+*   **`files_exist`** is `check:files_exist:<path>[,<path>…]` (relative paths, resolved inside
+    the session's workspace root). It has no flag: it is opt-in per workflow file and no bundled
+    workflow uses it.
+*   **Formatter (Wave 1 finding).** In a worktree session `apply_patch` never runs prettier (its
+    binary is `node_modules/.bin/prettier` in the worktree and its config can be JavaScript)
+    or a `PATH` formatter that resolves inside the worktree; a note says so.
+*   **Not built:** the `doctor` rows (git version, "merge on, sandbox not enforced"), the PR
+    fallback, DAG workflows and `0009`. Event payload models are not in `openapi.json`, so no
+    SDK regeneration was needed (`check_openapi.py --check` passes).
+
+--------------------------------------------------------------------------------
+
 *Drafted with EGM*
