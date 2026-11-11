@@ -398,6 +398,8 @@ class PermissionEngine:
             "agent": ctx.get("agent"),
             "session_id": ctx.get("session_id"),
             "cwd": str(ctx["cwd"]) if ctx.get("cwd") is not None else None,
+            "environment": ctx.get("environment"),  # --- M7 hosts-b: None unless set by
+            "host": ctx.get("host"),  # tools/env_policy.py for the environment tools
         }
         res = self.policies.decide(req)
         if res.action is None:

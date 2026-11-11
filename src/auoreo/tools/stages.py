@@ -94,11 +94,15 @@ def agent_of(ctx: ToolContext) -> str:
     return str(getattr(spec, "name", "") or "")
 
 
-def policy_context(tool: ToolDef, ctx: ToolContext) -> dict[str, Any]:
-    """The per-call fields of the exec-policy `req` (spec §2.10)."""
+def policy_context(tool: ToolDef, ctx: ToolContext, args: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The per-call fields of the exec-policy `req` (spec §2.10), plus `environment`/`host`
+    for the environment tools (M7 `m7.ssh.policy_fields`, `tools/env_policy.py`)."""
+    from auoreo.tools.env_policy import env_fields
+
     out: dict[str, Any] = {"tool": tool.name, "session_id": ctx.session_id, "cwd": str(ctx.cwd)}
     if agent := agent_of(ctx):
         out["agent"] = agent
+    out.update(env_fields(tool.name, ctx, args))
     return out
 
 

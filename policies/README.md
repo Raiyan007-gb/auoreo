@@ -33,6 +33,12 @@ required). The file must define `def decide(req):`.
 | `mode` | permission mode (`manual`, `smart`, `acceptEdits`, `plan`, `yolo`) |
 | `interactive` | `True` when a human can answer an approval |
 | `agent`, `session_id`, `cwd` | where the call comes from (may be `None`) |
+| `environment` | M7 (`settings.m7.ssh.policy_fields`): the execution environment the call acts on, for `exec_command`, `env_transfer` (the session's selection), `write_stdin` (the environment its process started in) and `use_environment` (the one requested); `None` for every other tool, which acts on the local machine |
+| `host` | M7: `{name, address, port, user, origin, tags, jump}` when that environment is an SSH host, else `None`. No secret name. `tags` come from `hosts/<name>.yaml` |
+
+`read_only_host.star` (bundled, `enabled: false`) is an example: copy it to `<home>/policies/`,
+set `enabled: true` and tag a host `readonly`. It filters model-written text and is **not**
+enforcement: real read-only access is a remote account without write permission.
 
 `req` is a copy: changing it has no effect.
 

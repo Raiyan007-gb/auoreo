@@ -29,6 +29,7 @@ M7 W1b (`docs/designs/m7-token-economy.md`), off by default:
 from __future__ import annotations
 
 import logging
+import re
 from collections import OrderedDict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -119,6 +120,22 @@ async def carry(runner: AgentRunner, rt: SessionRuntime, turn_msg: dict[str, Any
     log.warning("context block of session %s not persisted: its message row was not found", rt.session_id)
 
 
+_ENV_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
+ENV_TAG_PREFIX = "env="
+
+
+def env_tag(settings: Any, rt: SessionRuntime) -> dict[str, Any]:
+    """M7 `m7.ssh.usage_tag`: `{"tags": ["env=<name>"]}` while an environment is selected
+    (attribution: "tokens spent while <name> was selected", not metering). A name outside the
+    host-name pattern is `env=other` (tags are comma-joined into a bounded ledger column).
+    Budgets ignore `env=` tags (`gateway/budgets.py`): the agent picks the environment."""
+    ssh = getattr(getattr(settings, "m7", None), "ssh", None)
+    name = getattr(getattr(rt, "state", None), "environment", None)
+    if not getattr(ssh, "usage_tag", False) or not name:
+        return {}
+    return {"tags": [ENV_TAG_PREFIX + (name if _ENV_NAME.match(name) else "other")]}
+
+
 def build(
     runner: AgentRunner,
     spec: AgentSpec,
@@ -158,6 +175,7 @@ def build(
             "session_id": rt.session_id,
             "run_id": run_id,
             **runner.compaction.post.marks(rt.session_id),
+            **env_tag(runner.s.settings, rt),
         },
         variant=variant,
         turn_state=run_id,

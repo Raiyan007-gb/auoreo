@@ -244,7 +244,8 @@ class AgentRunner:
             question=question,
             emit=emit,
             services={"memory": memory, "services": self.s, "engine": engine, "spec": spec}
-            | {"context": context, "options": options, "turn_msg": turn_msg},  # I3: exact fork seed
+            | {"context": context, "options": options, "turn_msg": turn_msg}  # I3: exact fork seed
+            | {"run_id": run_id},  # M7 hosts-b: joins `environment.exec` rows to the run
         )
         with (
             obs.span("agent.run", model=spec.model, agent=spec.name) as span,  # --- W0-D

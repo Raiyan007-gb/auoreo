@@ -63,6 +63,7 @@ class CallInfo:
     interval_s: float = 0.5
     last: float = 0.0
     progress_schema: dict[str, Any] | None = None  # --- I6: validates `progress(data=…)`
+    run_id: str | None = None  # --- M7 hosts-b: the run this call belongs to (audit linkage)
 
 
 CURRENT_CALL: ContextVar[CallInfo | None] = ContextVar("auoreo_current_call", default=None)

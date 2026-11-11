@@ -71,7 +71,7 @@ def list_(as_json: Annotated[bool, typer.Option("--json", help="Print JSON.")] =
     """List hosts: name, address, user, key secret NAME, and whether a host key is trusted."""
     home = settings().home
     found, problems = hosts.read_hosts(home)
-    rows = [
+    rows: list[dict[str, Any]] = [
         {
             "name": m.name,
             "host": m.host,

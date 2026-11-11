@@ -25,6 +25,15 @@ obs.METRICS.setdefault(METRIC, ("updown", frozenset({"provider"})))
 metrics_text.HELP.setdefault(METRIC, "Daily USD budget left per provider (gateway.budgets).")
 
 
+UNMETERED_TAG_PREFIXES = ("env=",)
+"""Tags never matched against a budget: `env=<name>` (M7) is chosen by the agent through
+`use_environment`, so a ceiling keyed on it would let the model move spend between ceilings."""
+
+
+def _metered(tags: Iterable[str]) -> list[str]:
+    return [t for t in tags if not str(t).startswith(UNMETERED_TAG_PREFIXES)]
+
+
 def _today() -> date:
     return datetime.now(UTC).date()
 
@@ -54,7 +63,7 @@ class BudgetTracker:
             return
         self._roll()
         keys = [("key", deployment), ("provider", provider_of(deployment) or deployment)]
-        keys += [("tag", t) for t in tags]
+        keys += [("tag", t) for t in _metered(tags)]
         if slot:
             keys.append(("key", slot))
         for k in keys:
@@ -80,7 +89,7 @@ class BudgetTracker:
         checks: list[tuple[str, str, float | None]] = [
             ("key", deployment, self.cfg.per_key_daily.get(deployment)),
             ("provider", provider, self.cfg.provider_daily.get(provider)),
-            *[("tag", t, self.cfg.tag_daily.get(t)) for t in tags],
+            *[("tag", t, self.cfg.tag_daily.get(t)) for t in _metered(tags)],
         ]
         if slot:
             checks.append(("key", slot, self.cfg.per_key_daily.get(slot)))

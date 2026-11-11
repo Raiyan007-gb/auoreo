@@ -121,7 +121,15 @@ async def gate_ssh(
     engine = ctx.services.get("engine")
     if engine is None:  # fail closed: this gate is the only check on the socket
         raise ToolError(f"ssh host '{target.name}' needs the `ssh` permission; no permission engine attached")
-    decision = engine.evaluate(PERMISSION, target.name, "ask", interactive=ctx.interactive)
+    from auoreo.tools.env_policy import fields_for
+
+    context = {
+        "tool": tool,
+        "session_id": ctx.session_id,
+        "cwd": str(ctx.cwd),
+        **fields_for(svc, target.name),
+    }
+    decision = engine.evaluate(PERMISSION, target.name, "ask", interactive=ctx.interactive, context=context)
     by_rule = decision.action == "allow" and decision.reason != "mode"
     text = " ".join(justification.split()) if isinstance(justification, str) else ""
     asks_human = not by_rule and decision.action != "deny" and ctx.interactive
@@ -132,8 +140,9 @@ async def gate_ssh(
         )
     detail = f"ssh {target.user}@{target.host}:{target.port} ({target.name})"
     await ctx.authorize(
-        tool, PERMISSION, target.name, "ask", sticky=False, detail=detail, justification=text or None
-    )
+        tool, PERMISSION, target.name, "ask", sticky=False, detail=detail, justification=text or None,
+        context=context,
+    )  # fmt: skip
     grant = uuid.uuid4().hex
     digest = None
     if text and justification_error(text) is None:
