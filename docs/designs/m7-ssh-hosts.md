@@ -210,8 +210,10 @@ ssh backend _connect -> audit net.ssh{host, port, grant_id} on every socket open
     free-form strings evaluated by `PermissionEngine.evaluate`; a test confirms a rule
     `permission: ssh` matches.
 *   Address hygiene: `ssh add` and the loader reject link-local and cloud-metadata literals
-    (`169.254.0.0/16`, `fe80::/10`, `100.100.100.200`) and `0.0.0.0`. Hostnames are resolved at
-    connect time and not re-checked (known limitation, see Risks).
+    (`169.254.0.0/16`, `fe80::/10`, `100.100.100.200`, `fd00:ec2::254`) and `0.0.0.0`, including
+    IPv6 forms wrapping such an IPv4 address (mapped, 6to4, NAT64 `64:ff9b::/96`,
+    IPv4-compatible). Hostnames are resolved at connect time and not re-checked (known
+    limitation, see Risks).
 *   Net label: the two tools keep `net: none`, because `net_stage` runs per call and would demand
     a justification even for local environments. This is stated in O1 and Risks; the `net.ssh*`
     rows are the compensating audit.

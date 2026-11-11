@@ -105,6 +105,43 @@ def test_numeric_spellings_of_an_unsafe_address_are_rejected(addr: str) -> None:
     assert HostManifest(**{**GOOD, "host": "167772165"}).host == "167772165"  # 10.0.0.5: still allowed
 
 
+@pytest.mark.parametrize(
+    "addr",
+    [
+        "fd00:ec2::254",  # AWS IMDS over IPv6
+        "[fd00:ec2::254]",
+        "fd00:ec2::254%lo",
+        "64:ff9b::a9fe:a9fe",  # NAT64 of 169.254.169.254
+        "64:ff9b::169.254.169.254",
+        "64:ff9b::6464:64c8",  # NAT64 of 100.100.100.200
+        "2002:a9fe:a9fe::",  # 6to4 of 169.254.169.254
+        "2002:a9fe:a9fe:1::5",
+        "::a9fe:a9fe",  # IPv4-compatible (deprecated) spelling
+    ],
+)
+def test_ipv6_spellings_of_a_metadata_address_are_rejected(addr: str) -> None:
+    with pytest.raises(ValueError):
+        hosts.reject_unsafe_address(addr)
+    with pytest.raises(ValidationError):
+        HostManifest(**{**GOOD, "host": addr})
+
+
+@pytest.mark.parametrize(
+    "addr",
+    [
+        "2001:db8::1",
+        "2606:4700:4700::1111",  # an ordinary global IPv6 address
+        "fd00:ec2::253",  # the same ULA prefix, another host
+        "64:ff9b::a00:5",  # NAT64 of 10.0.0.5
+        "2002:a00:5::1",  # 6to4 of 10.0.0.5
+        "::1",
+    ],
+)
+def test_ordinary_ipv6_addresses_stay_allowed(addr: str) -> None:
+    hosts.reject_unsafe_address(addr)
+    assert HostManifest(**{**GOOD, "host": addr}).host == addr
+
+
 @pytest.mark.parametrize("addr", ["10.0.0.5", "127.0.0.1", "lab.example.com", "2001:db8::1", "::1"])
 def test_ordinary_addresses_accepted(addr: str) -> None:
     hosts.reject_unsafe_address(addr)

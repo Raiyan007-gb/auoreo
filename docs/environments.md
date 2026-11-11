@@ -79,8 +79,9 @@ keepalive_interval_s: 30           # 0 disables keepalives
 - **Names.** `settings.environments.<name>` wins over a host file of the same name; `auoreo
   doctor` then warns "host file `<name>` shadowed by settings.environments". Windows device
   names (`con`, `nul`, `com1`, …) are refused. `--host` may not be a link-local or metadata
-  address literal (`169.254.0.0/16`, `fe80::/10`, `100.100.100.200`) or `0.0.0.0`; a hostname
-  is resolved at connect time and not re-checked.
+  address literal (`169.254.0.0/16`, `fe80::/10`, `100.100.100.200`, `fd00:ec2::254`) or
+  `0.0.0.0`, also spelled as an IPv6 form that wraps the IPv4 address (mapped, 6to4 `2002::/16`,
+  NAT64 `64:ff9b::/96`, `::a.b.c.d`); a hostname is resolved at connect time and not re-checked.
 - **Flag off** (the default): agents see no host files (`use_environment lab` is an unknown
   environment) and nothing below applies. The `auoreo ssh` commands work either way: they only
   manage files.
