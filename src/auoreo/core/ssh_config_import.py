@@ -61,6 +61,25 @@ def _split(line: str) -> tuple[str, str] | None:
     return m.group(1).lower(), m.group(2).strip().strip('"')
 
 
+def _host(value: str, plan: ImportPlan, out: list[Entry]) -> Entry | None:
+    words = value.split()
+    if len(words) != 1 or _PATTERN.search(value):
+        plan.skipped.append((value[:80], "pattern or several aliases (not imported)"))
+        return None
+    entry = Entry(words[0], host_name(words[0]))
+    out.append(entry)
+    return entry
+
+
+def _option(cur: Entry, key: str, value: str) -> None:
+    if key in REFUSED:
+        cur.skip = f"{key} is not supported"
+    elif key in NOTED:
+        cur.notes.append(f"{key} ignored")
+    elif key in KEYS and key not in cur.fields:  # first value wins, as in OpenSSH
+        cur.fields[key] = value
+
+
 def _entries(text: str, plan: ImportPlan) -> list[Entry]:
     out: list[Entry] = []
     cur: Entry | None = None
@@ -70,24 +89,14 @@ def _entries(text: str, plan: ImportPlan) -> list[Entry]:
             continue
         key, value = kv
         if key == "host":
-            words = value.split()
-            if len(words) != 1 or _PATTERN.search(value):
-                cur = None
-                plan.skipped.append((value[:80], "pattern or several aliases (not imported)"))
-                continue
-            cur = Entry(words[0], host_name(words[0]))
-            out.append(cur)
-        elif key in ("match", "include"):
+            cur = _host(value, plan, out)
+            continue
+        if key in ("match", "include"):
             plan.notes.append(f"`{key.title()}` is not followed")
             cur = None if key == "match" else cur
-        elif cur is None:
             continue
-        elif key in REFUSED:
-            cur.skip = f"{key} is not supported"
-        elif key in NOTED:
-            cur.notes.append(f"{key} ignored")
-        elif key in KEYS and key not in cur.fields:  # first value wins, as in OpenSSH
-            cur.fields[key] = value
+        if cur is not None:
+            _option(cur, key, value)
     return out
 
 
