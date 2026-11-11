@@ -1,0 +1,10 @@
+description: In a scheduled run the researcher cannot write memory (unattended runs deny the memory tool).
+input: "Research the latest release notes and remember the version."
+unattended: job
+script:
+  - tool_calls: [{name: memory, args: {action: add, target: fact, content: "version 9"}}]
+  - text: "Could not store it; here are the notes."
+expect:
+  tools_denied: [memory]
+  final_matches: "Could not store"
+  max_steps: 2

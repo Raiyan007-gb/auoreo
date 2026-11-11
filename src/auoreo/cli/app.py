@@ -179,7 +179,9 @@ app.command("heartbeat")(loop.heartbeat)
 app.command("login")(login.login)
 app.command("new-feature")(worktree.new_feature)
 app.add_typer(worktree.app, name="worktree", help="Feature worktrees under .auoreo/worktrees: gc.")
-app.add_typer(evals.app, name="eval", help="Evals: memory retrieval (recall@10, nDCG, p95).")
+app.add_typer(
+    evals.app, name="eval", help="Evals: memory retrieval (recall@10, nDCG, p95) and agent profiles."
+)
 
 # --- I4: workspace trust for <cwd>/.auoreo
 from auoreo.cli.commands import trust as trust_cmd  # noqa: E402

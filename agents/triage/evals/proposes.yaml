@@ -1,0 +1,15 @@
+description: A triage run loads suggest and proposes; its own permissions allow it without an approval.
+input: "GitHub issue acme/app#7 was opened: the export button does nothing."
+unattended: webhook
+script:
+  - tool_calls: [{name: tool_search, args: {query: suggest, limit: 1}}]
+  - tool_calls:
+      - name: suggest
+        args: {title: "Fix the export button (acme/app#7)", kind: ops, dedupe_key: "acme/app#7", prompt: "Investigate the export button."}
+  - text: "Proposed one follow-up."
+expect:
+  tools_called: [tool_search, suggest]
+  tools_denied: []
+  events: [tool.completed, run.completed]
+  final_matches: "^Proposed"
+  max_steps: 3

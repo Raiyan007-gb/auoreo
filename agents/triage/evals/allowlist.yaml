@@ -1,0 +1,6 @@
+description: The triage profile sees exactly its own tools in a webhook run (a widened allowlist fails here).
+input: "GitHub issue acme/app#1 was opened: crash on start."
+unattended: webhook
+expect:
+  tools_available: [suggest, kanban_list, kanban_show, read, grep, glob, tool_search]
+  max_steps: 1

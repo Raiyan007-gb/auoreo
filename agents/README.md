@@ -32,3 +32,13 @@ before running an older build: the manifest is strict there and the agent would 
 
 Add an agent by adding a folder — no code changes. Override a bundled agent by creating
 the same folder under `~/.auoreo/agents/` or `<project>/.auoreo/agents/`.
+
+## Evals (`agents/<name>/evals/*.yaml`, M7)
+
+An optional `evals/` folder holds cases that check the agent's *profile* — its tool list,
+permission outcomes and unattended denials — on the fake gateway, where the model's turns are
+the case's `script`. Run them with `auoreo eval agents [NAME...]` (`--json`, `--root DIR`);
+exit 1 when a case fails, 2 when one is malformed. There is no CI gate. The case format is
+documented at the top of `scripts/eval_agents.py`; `agents/triage/evals/` has examples.
+`--gateway live` runs the same cases against the configured model (ignoring `script`) and
+needs real keys.

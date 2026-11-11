@@ -106,8 +106,12 @@ async def test_strict_chat_suggestion_never_runs_in_the_chat_session(services: S
     assert new is not None and new.agent == "default"  # never widened to `ops`
     await services.coordinator.wait(res.session_id, 20)
     assert services.coordinator.result(res.run_id or "").text == "echo: restart nginx"  # type: ignore[union-attr]
-    chat_events = await services.events.replay(0, frozenset({chat}))
-    assert not [e for e in chat_events if "restart nginx" in json.dumps(e.data, default=str)]
+
+    def mentions(events: list) -> list:  # type: ignore[type-arg]
+        return [e for e in events if "restart nginx" in json.dumps(e.data, default=str)]
+
+    assert mentions(await services.events.replay(0, frozenset({f"session:{res.session_id}"})))
+    assert not mentions(await services.events.replay(0, frozenset({f"session:{chat}"})))
 
 
 async def test_strict_keeps_an_agent_equal_to_the_origin_agent(services: Services) -> None:
