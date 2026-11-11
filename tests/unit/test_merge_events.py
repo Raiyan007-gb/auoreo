@@ -66,3 +66,16 @@ def test_task_ref_forms_and_worktree_created_payload() -> None:
     plain = worktree_spawn.payload(tree, task_ref="delegate:ses_1/fix")
     assert plain["task_ref"] == "delegate:ses_1/fix" and "task_id" not in plain
     assert "task_ref" not in worktree_spawn.payload(tree)
+
+
+def test_git_merge_is_hidden_while_the_flag_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from auoreo.teams import merge_flow
+
+    off = SimpleNamespace(m7=M7Settings())
+    on = SimpleNamespace(m7=M7Settings(orch=M7Orch(session_cwd=True, worktrees=True, merge=True)))
+    monkeypatch.setattr("auoreo.core.settings.get_settings", lambda: off)
+    assert merge_flow.available() == "m7.orch.merge is off"
+    monkeypatch.setattr("auoreo.core.settings.get_settings", lambda: on)
+    assert merge_flow.available() is True

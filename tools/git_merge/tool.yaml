@@ -1,0 +1,38 @@
+name: git_merge
+toolset: teams
+description: >-
+  Merge one reviewed commit of a worker branch (auoreo/<slug>) into the branch checked out in
+  the server checkout, as a --no-ff merge commit. Pass the full sha you reviewed; it must still
+  be the branch tip. A human approves every call on a card that shows the commit, the target
+  HEAD, the files and the tamper checks; no rule or mode can pre-approve it. Conflicts touch
+  nothing and open a blocked kanban task. Needs m7.orch.merge.
+parameters:
+  type: object
+  properties:
+    branch:
+      type: string
+      pattern: '^auoreo/[a-z0-9._-]+(/[a-z0-9._-]+)*$'
+      maxLength: 200
+      description: The worker branch, e.g. auoreo/kdefault-12.
+    sha:
+      type: string
+      pattern: '^([0-9a-f]{40}|[0-9a-f]{64})$'
+      description: The full commit id you reviewed (abbreviations are refused).
+    note:
+      type: string
+      maxLength: 500
+      description: Optional note for the human (shown on the card as unverified agent text).
+  required: [branch, sha]
+  additionalProperties: false
+permission: git_merge
+default_action: ask
+is_destructive: true
+interactive_only: true
+exposure: deferred
+net: none
+sandbox_mode: read-only
+redaction: mask
+check_fn: auoreo.teams.merge_flow:available
+timeout_ms: 600000
+max_result_size_chars: 8000
+search_hint: git merge worker branch worktree merge-back approve review

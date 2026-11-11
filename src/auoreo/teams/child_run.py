@@ -18,6 +18,7 @@ from sqlalchemy import select
 from auoreo.core.db import TeamMemberRow
 from auoreo.runtime.hooks import subagent_stop
 from auoreo.runtime.inbox import RunOptions
+from auoreo.teams import merge_records
 from auoreo.teams.ceiling import leaf_permissions
 from auoreo.teams.format import (
     SCHEMA_MISMATCH,
@@ -124,6 +125,7 @@ async def finish(t: TeamsService, m: Member, status: str, text: str, error: dict
         m.handoff_data = {**value, "usage": m.usage}  # spec §25.11: usage filled by the harness
         m.text = json.dumps(m.handoff_data, ensure_ascii=False)
     await set_status(t, m, FINAL.get(status, "failed"))
+    await merge_records.record_tip(t.s, m.session_id)  # M7 Wave 2: no-op unless m7.orch.merge
     data = {
         "parent": m.parent_session_id,
         "child": m.session_id,

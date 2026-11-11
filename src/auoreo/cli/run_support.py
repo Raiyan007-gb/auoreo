@@ -118,9 +118,10 @@ async def _install_rules(svc: Services, sid: str, rules: list[Rule]) -> None:
 
 async def _answer_permission(svc: Services, data: dict[str, Any], auto: bool) -> None:
     from auoreo.core.approvals import reply_with_grants
+    from auoreo.teams.merge_flow import HUMAN_ONLY
 
     rid = str(data.get("request_id"))
-    if auto:
+    if auto and data.get("permission") not in HUMAN_ONLY:  # `--auto` never answers a merge card
         reply = "once"
     else:
         err_console.print(
