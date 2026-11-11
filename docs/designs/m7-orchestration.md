@@ -217,12 +217,19 @@ mount outside cwd needs `danger-full-access`, see `ExecSpec.outside_cwd`).
 
 Design (recommended option 2a): when the session cwd is a registered worktree, `bash`'s `ExecSpec`
 gets a new `git_allow` list, computed by the engine (never model-supplied) and limited to the
-worktree's own admin dir, `<common>/objects`, its branch ref and ref log, and `packed-refs`.
-`ExecSpec.outside_cwd()` exempts exactly these paths and each mount is audited as `sandbox.mount`.
-Everything else in the parent (working tree, hooks directory, `config`) stays unwritable. Residual
-risk, stated: the worker can write the shared object store and its own branch ref, so a hostile
-worker can add unreferenced objects (disk use) but cannot move other branches. Without an enforced
-sandbox nothing is confined, as the Goals state.
+worktree's own admin dir and the `auoreo/` branch namespace with its ref log (writable), and
+`<common>/objects` (read-only). The worker's git writes new objects to a private store
+(`GIT_OBJECT_DIRECTORY=<admin>/objects`, the shared store as `GIT_ALTERNATE_OBJECT_DIRECTORIES`);
+after each `bash` call, and before gc reads a branch, the orchestrator imports them into the
+shared store (`runtime/worktree_git.import_objects`: `pack-objects` then `index-pack`, which
+verifies every object hash). `ExecSpec.outside_cwd()` exempts exactly these paths and each mount
+is audited as `sandbox.mount`. Everything else in the parent (working tree, objects, hooks
+directory, `config`) stays unwritable. Residual risk, stated: the worker can move any branch in
+the `auoreo/` namespace (a per-task namespace would need a different branch name scheme, since git
+replaces a ref through a lock file beside it). The orchestrator never runs git with a
+worktree as the repository (`worktree_git.tree_git`: git dirs from the server's records, no
+fsmonitor, hooks or submodules). Without an enforced sandbox nothing is confined, as the Goals
+state.
 
 ### Trust and discovery scope
 

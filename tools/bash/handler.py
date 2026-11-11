@@ -1,7 +1,8 @@
 """bash through the selected sandbox backend (`ctx.backend("sandbox")`, spec §19.8)."""
 
 from auoreo.backends.sandbox import ExecSpec, SandboxError, denial_text, sandbox_note
-from auoreo.runtime.cwd import git_allow
+from auoreo.runtime.cwd import git_access
+from auoreo.runtime.worktree_git import import_objects
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
 
 CAP = 30_000
@@ -17,23 +18,27 @@ def _clip(text: str) -> str:
 async def run(args: dict, ctx: ToolContext) -> ToolResult:
     timeout = int(args.get("timeout_s", 120))
     policy = ctx.exec_policy
-    allow = await git_allow(ctx)  # M7 W4: a worktree session may write its own git metadata
+    git = await git_access(ctx)  # M7 W4: a worktree session may write its own git metadata
     spec = ExecSpec(
         argv=["bash", "-c", args["command"]],
         cwd=ctx.cwd,
-        env=dict(ctx.env),
+        env={**ctx.env, **git.env},
         timeout_s=timeout,
         mode=policy.mode,  # type: ignore[arg-type]
         net=policy.net,  # type: ignore[arg-type]
         merge_stderr=True,
-        writable=allow,
-        git_allow=allow,
+        writable=list(git.writable),
+        readable=list(git.readable),
+        git_allow=git.mounts(),
     )
     sandbox = ctx.backend("sandbox")
     try:
         res = await sandbox.run(spec)
     except SandboxError as exc:
         raise ToolError(f"[sandbox: {exc}]") from exc
+    finally:
+        if git.env:  # the worker's new commits become readable from the parent repository
+            await import_objects(ctx.services["services"].cwd, ctx.cwd)
     note = sandbox_note(ctx, res)
     if res.timed_out:
         text = f"command timed out after {timeout}s"

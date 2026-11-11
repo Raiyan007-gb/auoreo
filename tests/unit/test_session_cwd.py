@@ -204,10 +204,14 @@ async def test_bash_runs_in_the_worktree_with_a_git_allowance(
     common = workdir / ".git"
     assert spec.cwd == tree and spec.mode == "workspace-write"
     allowed = {p.resolve() for p in spec.git_allow}
-    assert allowed and allowed == {p.resolve() for p in spec.writable}
-    assert (common / "objects").resolve() in allowed
-    assert (common / "worktrees" / tree.name).resolve() in allowed
-    assert (common / "refs" / "heads" / "auoreo").resolve() in allowed
+    writable = {p.resolve() for p in spec.writable}
+    assert allowed and allowed == writable | {p.resolve() for p in spec.readable}
+    # the shared object store is read-only (an alternate); new objects go to the admin dir
+    assert (common / "objects").resolve() in allowed and (common / "objects").resolve() not in writable
+    assert spec.env["GIT_ALTERNATE_OBJECT_DIRECTORIES"] == str(common.resolve() / "objects")
+    assert spec.env["GIT_OBJECT_DIRECTORY"] == str(common.resolve() / "worktrees" / tree.name / "objects")
+    assert (common / "worktrees" / tree.name).resolve() in writable
+    assert (common / "refs" / "heads" / "auoreo").resolve() in writable
     for forbidden in (workdir, common, common / "config", common / "hooks", common / "refs" / "heads"):
         assert forbidden.resolve() not in allowed
     assert spec.outside_cwd() == []  # exempt: no danger-full-access needed for a commit

@@ -6,6 +6,9 @@ hooks running the worker's files) and asserts it is closed for worktree sessions
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -206,3 +209,103 @@ async def test_the_review_tool_in_a_worktree_never_runs_the_workers_git_config(
     _plant_repo(tree, marker)
     await call_tool(services, ctx, "review", {})
     assert not marker.exists()
+
+
+# ------------------------------------------------------------------ 3: shared object store
+def _worker_git(tree: Path, *args: str) -> str:
+    """Git as the worker's shell runs it (the env `git_access` gives `bash`)."""
+    from auoreo.runtime import worktree_git as wg
+
+    common = Path(git(tree, "rev-parse", "--git-common-dir")).resolve()
+    admin = wg.admin_dir(common, tree)
+    assert admin is not None
+    env = {
+        **os.environ,
+        "GIT_OBJECT_DIRECTORY": str(wg.private_objects(admin)),
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(common / "objects"),
+    }
+    cmd = ["git", "-c", "user.name=w", "-c", "user.email=w@example.invalid", *args]
+    return subprocess.run(cmd, cwd=tree, env=env, check=True, capture_output=True, text=True).stdout
+
+
+async def test_worker_commits_reach_the_parent_repository(services: Services, workdir: Path) -> None:
+    """Commits land in the worker's private store; the orchestrator imports them, so the
+    parent's own git (merge-base, log, a human's merge), gc and the review tool all work."""
+    git_init(workdir)
+    flags_on(services)
+    tree = await _tree(services)
+    ctx = tool_ctx(services, "ses_x")
+    ctx.cwd = tree.path
+    access = await session_cwd.git_access(ctx)
+    assert access.env and (workdir / ".git" / "objects").resolve() in access.readable
+    (tree.path / "work.txt").write_text("w\n", encoding="utf-8")
+    _worker_git(tree.path, "add", "work.txt")
+    _worker_git(tree.path, "commit", "--quiet", "-m", "worker")
+    tip = _worker_git(tree.path, "rev-parse", "HEAD").strip()
+    with pytest.raises(subprocess.CalledProcessError):
+        git(workdir, "cat-file", "-e", tip)  # only in the private store so far
+    root = session_cwd.orch_root(services.settings, services.cwd)
+    _, items = await wt.plan_gc(workdir, root, 7)
+    assert [i.action for i in items] == ["keep"]
+    assert git(workdir, "merge-base", "--is-ancestor", "main", tree.branch) == ""
+    assert git(workdir, "log", "-1", "--format=%s", tree.branch) == "worker"
+    git(workdir, "fsck", "--no-dangling")
+    git(workdir, "merge", "--quiet", "--ff-only", tree.branch)  # the human's merge-back
+    assert (workdir / "work.txt").exists()
+    # review in the worktree reads the worker's own history
+    row = await services.create_session(cwd=tree.path)
+    rctx = tool_ctx(services, row.id)
+    rctx.cwd = tree.path
+    (tree.path / "work.txt").write_text("w2\n", encoding="utf-8")
+    text, is_error = await call_tool(services, rctx, "review", {})
+    assert not is_error and "work.txt" in text
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="needs bash")
+async def test_the_bash_tool_imports_the_workers_commits(services: Services, workdir: Path) -> None:
+    git_init(workdir)
+    flags_on(services)
+    tree = await _tree(services)
+    row = await services.create_session(cwd=tree.path)
+    ctx = tool_ctx(services, row.id)
+    ctx.cwd = tree.path
+    (tree.path / "b.txt").write_text("b\n", encoding="utf-8")
+    cmd = "git add b.txt && git -c user.name=w -c user.email=w@example.invalid commit -q -m viabash"
+    text, is_error = await call_tool(services, ctx, "bash", {"command": cmd})
+    assert not is_error, text
+    assert git(workdir, "log", "-1", "--format=%s", tree.branch) == "viabash"
+    git(workdir, "fsck", "--no-dangling")
+
+
+@pytest.mark.skipif(shutil.which("bwrap") is None or sys.platform != "linux", reason="needs bubblewrap")
+async def test_a_sandboxed_worker_cannot_destroy_the_shared_object_store(
+    services: Services, workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    git_init(workdir)
+    flags_on(services)
+    bdef = services.harness.select_backend("sandbox", "bwrap")
+    assert bdef is not None
+    backend = bdef.load()(services.settings)
+    if not (await backend.check()).ok:
+        pytest.skip("bubblewrap cannot run here")
+    monkeypatch.setitem(services._backends, "sandbox", backend)
+    tree = await _tree(services)
+    row = await services.create_session(cwd=tree.path)
+    ctx = tool_ctx(services, row.id)
+    ctx.cwd = tree.path
+    objects = workdir / ".git" / "objects"
+    (tree.path / "s.txt").write_text("s\n", encoding="utf-8")
+    commit = "git add s.txt && git -c user.name=w -c user.email=w@example.invalid commit -q -m sandboxed"
+    text, is_error = await call_tool(services, ctx, "bash", {"command": commit})
+    assert not is_error, text
+    attacks = [
+        f"rm -rf {objects}/*",
+        f"echo /nonexistent > {objects}/info/alternates",
+        f"echo '[core]' >> {workdir}/.git/config",
+    ]
+    for attack in attacks:
+        await call_tool(services, ctx, "bash", {"command": attack})
+    assert not (objects / "info" / "alternates").exists()
+    git(workdir, "fsck", "--no-dangling")
+    assert git(workdir, "log", "-1", "--format=%s", tree.branch) == "sandboxed"
+    assert git(workdir, "log", "-1", "--format=%s", "main") == "init"

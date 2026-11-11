@@ -183,6 +183,9 @@ async def plan_gc(
         if path in keep:
             items.append(GcItem(path, "task claimed or running", "keep"))
             continue
+        if not await wg.import_objects(top, path):  # its commits may live only in its own store
+            items.append(GcItem(path, "worker commits not yet in the repository (import failed)", "keep"))
+            continue
         if not path.exists():
             items.append(GcItem(path, "folder missing", "prune"))
             continue
@@ -294,6 +297,8 @@ async def discard_worktree(cwd: Path, tree: NewFeature) -> None:
     if await wg.tree_ok(top, tree.path, "status", "--porcelain", "--ignore-submodules=all") != "":
         return  # a child already wrote there (or git cannot tell): nothing is thrown away
     async with _LOCKS.setdefault(str(top), asyncio.Lock()):
+        if not await wg.import_objects(top, tree.path):
+            return
         await _ok(*wg.HARDEN, "worktree", "remove", "--force", str(tree.path), cwd=top)
         if await _ok("merge-base", "--is-ancestor", tree.branch, "HEAD", cwd=top) is not None:
             await _ok("branch", "-D", tree.branch, cwd=top)

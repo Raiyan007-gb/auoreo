@@ -16,6 +16,7 @@ orchestrator never lets git discover a repository in a worktree:
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 from auoreo.runtime.subtask import WorktreeError, _git
@@ -71,17 +72,45 @@ def admin_dir(common: Path, worktree: Path) -> Path | None:
     return mine[0] if len(mine) == 1 else None
 
 
+def private_objects(admin: Path) -> Path:
+    """The worker's own object store: its commits land here, the shared one is read-only."""
+    return admin / "objects"
+
+
 def tree_env(common: Path, admin: Path, worktree: Path) -> dict[str, str]:
-    return {"GIT_DIR": str(admin), "GIT_COMMON_DIR": str(common), "GIT_WORK_TREE": str(worktree)}
+    """The worker's view of its worktree, from the server's records (its private objects
+    first, the shared store as an alternate)."""
+    env = {"GIT_DIR": str(admin), "GIT_COMMON_DIR": str(common), "GIT_WORK_TREE": str(worktree)}
+    if private_objects(admin).is_dir():
+        env["GIT_OBJECT_DIRECTORY"] = str(private_objects(admin))
+        env["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = str(common / "objects")
+    return env
+
+
+async def resolve(server_cwd: Path, worktree: Path) -> tuple[Path, Path]:
+    """`(common, admin)` of a registered worktree, else `WorktreeError`. Also refused when the
+    repository enables `extensions.worktreeConfig` and a worker shell has had write access to
+    the admin dir (its private object store exists): git would then read `config.worktree`,
+    which the worker can write (filter drivers run on `git status`)."""
+    common = await common_dir(server_cwd)
+    admin = admin_dir(common, worktree) if common else None
+    if common is None or admin is None:
+        raise WorktreeError(f"{worktree} is not a registered worktree of {server_cwd}")
+    if not private_objects(admin).is_dir():
+        return common, admin  # no worker shell ever had write access to the admin dir
+    try:
+        flag = (await _git("config", "--bool", "extensions.worktreeConfig", cwd=server_cwd)).decode()
+    except WorktreeError:
+        flag = ""  # unset
+    if flag.strip() == "true":
+        raise WorktreeError("extensions.worktreeConfig is on: a worker's config.worktree would apply")
+    return common, admin
 
 
 async def tree_git(server_cwd: Path, worktree: Path, *args: str) -> str:
     """`git <args>` on `worktree` without discovering anything inside it. Raises
     `WorktreeError` when the server repository has no record of `worktree`."""
-    common = await common_dir(server_cwd)
-    admin = admin_dir(common, worktree) if common else None
-    if common is None or admin is None:
-        raise WorktreeError(f"{worktree} is not a registered worktree of {server_cwd}")
+    common, admin = await resolve(server_cwd, worktree)
     env = tree_env(common, admin, worktree)
     return (await _git(*HARDEN, *args, cwd=worktree, env=env)).decode().strip()
 
@@ -96,3 +125,57 @@ async def tree_ok(server_cwd: Path, worktree: Path, *args: str) -> str | None:
 async def repo_git(server_cwd: Path, *args: str) -> str:
     """`git <args>` in the server checkout with `HARDEN` (no fsmonitor, hooks or submodules)."""
     return (await _git(*HARDEN, *args, cwd=server_cwd)).decode().strip()
+
+
+# ------------------------------------------------------------------ worker objects → shared store
+_HEX = re.compile(r"[0-9a-f]{40}([0-9a-f]{24})?")
+
+
+async def _quiet(*args: str, cwd: Path, env: dict[str, str]) -> str | None:
+    try:
+        return (await _git(*HARDEN, *args, cwd=cwd, env=env)).decode().strip()
+    except (WorktreeError, OSError):
+        return None
+
+
+async def _tip(server_cwd: Path, admin: Path, both: dict[str, str]) -> str | None:
+    """The commit the worktree's HEAD names (read from the server's admin record)."""
+    head = first_line(admin / "HEAD")
+    ref = head.removeprefix("ref: ") if head.startswith("ref: refs/") else head
+    if ref != head or _HEX.fullmatch(ref):
+        return await _quiet("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}", cwd=server_cwd, env=both)
+    return None
+
+
+async def import_objects(server_cwd: Path, worktree: Path) -> bool:
+    """Copy the objects of the worktree's HEAD from the worker's private store into the shared
+    one, so the branch reads (gc, merge-base, a human's `git merge`) work from the parent.
+    `pack-objects` reads the private store as an alternate; `index-pack` verifies every object
+    hash before the pack lands in the shared store. True when nothing was missing or the import
+    succeeded; False when it failed (callers then keep the worktree)."""
+    common = await common_dir(server_cwd)
+    admin = admin_dir(common, worktree) if common else None
+    if common is None or admin is None or not private_objects(admin).is_dir():
+        return True  # no worker store here (a CLI worktree, or no shell ever ran)
+    private = private_objects(admin)
+    local = {"GIT_DIR": str(common)}
+    both = {**local, "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(private)}
+    tip = await _tip(server_cwd, admin, both)
+    if tip is None:
+        return True  # an unborn or unreadable HEAD: nothing a parent read could need
+    if await _quiet("cat-file", "-e", f"{tip}^{{commit}}", cwd=server_cwd, env=local) is not None:
+        return True
+    refs = await _quiet("for-each-ref", "--format=%(objectname) %(refname)", cwd=server_cwd, env=local)
+    have = {
+        line.split(" ", 1)[0]
+        for line in (refs or "").splitlines()
+        if not line.partition(" ")[2].startswith("refs/heads/auoreo/")
+    }
+    revs = "\n".join([tip, "--not", *sorted(have)]) + "\n"
+    try:
+        pack = await _git(*HARDEN, "pack-objects", "--revs", "--stdout", "-q", cwd=server_cwd, env=both,
+                          stdin=revs.encode())  # fmt: skip
+        await _git(*HARDEN, "index-pack", "--stdin", cwd=server_cwd, env=local, stdin=pack)
+    except (WorktreeError, OSError):
+        return False
+    return await _quiet("cat-file", "-e", f"{tip}^{{commit}}", cwd=server_cwd, env=local) is not None

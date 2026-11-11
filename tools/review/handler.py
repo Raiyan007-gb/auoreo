@@ -38,16 +38,17 @@ async def _git(ctx: ToolContext, cwd: Path) -> tuple[list[str], dict[str, str] |
     sandbox): the git dirs come from the server repository's records, hooks and fsmonitor off."""
     from auoreo.runtime import worktree_git as wg
     from auoreo.runtime.cwd import worktree_session
+    from auoreo.runtime.subtask import WorktreeError
 
     git = shutil.which("git")
     if git is None:
         raise ToolError("review needs git on PATH")
     if not worktree_session(ctx):
         return [git], None
-    common = await wg.common_dir(ctx.services["services"].cwd)
-    admin = wg.admin_dir(common, cwd) if common else None
-    if common is None or admin is None:
-        raise ToolError(f"not a registered worktree: {cwd}")
+    try:
+        common, admin = await wg.resolve(ctx.services["services"].cwd, cwd)
+    except WorktreeError as exc:
+        raise ToolError(str(exc)) from exc
     return [git, *wg.HARDEN], {**os.environ, **wg.tree_env(common, admin, cwd)}
 
 
