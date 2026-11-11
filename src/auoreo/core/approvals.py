@@ -50,6 +50,9 @@ class Pending:
     justification: str | None = None
     """Why the agent asks (sandbox escalation `justification`): shown on the card; the audit
     row keeps its hash (`justificationHash`), never the text."""
+    local_only: bool = False
+    """M7: only the web UI / API may answer (`ssh`/`sftp` unless `m7.ssh.chat_grants`); a chat
+    `/approve` refuses it, even by id. A chat `/deny` still answers it."""
 
 
 class EditRefused(ValueError):
@@ -125,6 +128,7 @@ class ApprovalBroker:
         editable: bool = False,
         input: dict[str, Any] | None = None,
         justification: str | None = None,
+        local_only: bool = False,
     ) -> ApprovalOutcome:
         try:
             checked, persist = validate_scope(pattern, patterns, always)
@@ -146,6 +150,7 @@ class ApprovalBroker:
             editable,
             input if editable else None,
             justification,
+            local_only,
         )
         self._pending[p.request_id] = p
         await self._emit(

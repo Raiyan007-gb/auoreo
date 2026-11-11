@@ -107,6 +107,24 @@ def justification_error(text: str | None) -> str | None:
     return None
 
 
+def chat_grants(settings: Any) -> bool:
+    """`m7.ssh.chat_grants`: may a chat `/approve <id>` answer `ssh`/`sftp` cards? Off by
+    default: such cards are `local_only` (web UI / API) and platform sessions need a rule."""
+    return bool(getattr(getattr(getattr(settings, "m7", None), "ssh", None), "chat_grants", False))
+
+
+async def refuse_platform(ctx: ToolContext, svc: Any, what: str, rule: str) -> None:
+    """A messaging-connector session is interactive (`teams2.chat_approvals`) but its chat may
+    not answer a `local_only` card, which would only wait for the timeout: refuse at once."""
+    from auoreo.core.approvals import unattended_kind
+
+    if await unattended_kind(svc, ctx.session_id, ctx.services.get("unattended")) == "platform":
+        raise ToolError(
+            f"{what} needs approval, and a messaging-app session cannot grant it "
+            f"(m7.ssh.chat_grants is off); allow it with a permission rule `{rule}`"
+        )
+
+
 async def gate_ssh(
     ctx: ToolContext, target: SshTarget | None, *, tool: str, justification: str | None = None
 ) -> str | None:
@@ -138,10 +156,13 @@ async def gate_ssh(
             f"ssh host '{target.name}' {why}: call use_environment with name "
             f"'{target.name}' and a {JUSTIFICATION_ARG} (a human reviews it)"
         )
+    chat = chat_grants(svc.settings)
+    if asks_human and not chat:
+        await refuse_platform(ctx, svc, f"ssh host '{target.name}'", f"{PERMISSION} {target.name}")
     detail = f"ssh {target.user}@{target.host}:{target.port} ({target.name})"
     await ctx.authorize(
         tool, PERMISSION, target.name, "ask", sticky=False, detail=detail, justification=text or None,
-        context=context,
+        context=context, local_only=not chat,
     )  # fmt: skip
     grant = uuid.uuid4().hex
     digest = None
