@@ -3311,6 +3311,180 @@
         "title": "HooksHealth",
         "type": "object"
       },
+      "HostCheck": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "detail"
+        ],
+        "title": "HostCheck",
+        "type": "object"
+      },
+      "HostInfo": {
+        "properties": {
+          "audit_commands": {
+            "default": "hash",
+            "enum": [
+              "hash",
+              "redacted"
+            ],
+            "title": "Audit Commands",
+            "type": "string"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "host": {
+            "title": "Host",
+            "type": "string"
+          },
+          "host_key_fingerprints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Host Key Fingerprints",
+            "type": "array"
+          },
+          "jump": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jump"
+          },
+          "keepalive_interval_s": {
+            "default": 30,
+            "title": "Keepalive Interval S",
+            "type": "number"
+          },
+          "key_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SHA256 fingerprint (public), if known",
+            "title": "Key Fingerprint"
+          },
+          "key_name": {
+            "description": "NAME of the stored secret holding the private key",
+            "title": "Key Name",
+            "type": "string"
+          },
+          "key_present": {
+            "description": "The secret store has a value under key_name",
+            "title": "Key Present",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "port": {
+            "title": "Port",
+            "type": "integer"
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why agents cannot use it (a broken jump chain, \u2026)",
+            "title": "Problem"
+          },
+          "shadowed": {
+            "default": false,
+            "description": "A settings.environments entry has the same name",
+            "title": "Shadowed",
+            "type": "boolean"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "trusted": {
+            "description": "known_hosts has a host key for host:port (`auoreo ssh test`)",
+            "title": "Trusted",
+            "type": "boolean"
+          },
+          "usable_by_agents": {
+            "description": "m7.ssh.hosts is on, the host is trusted and not shadowed",
+            "title": "Usable By Agents",
+            "type": "boolean"
+          },
+          "user": {
+            "title": "User",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "host",
+          "port",
+          "user",
+          "key_name",
+          "key_present",
+          "trusted",
+          "usable_by_agents"
+        ],
+        "title": "HostInfo",
+        "type": "object"
+      },
+      "HostList": {
+        "properties": {
+          "enabled": {
+            "description": "settings.m7.ssh.hosts: agents may use these hosts",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "hosts": {
+            "items": {
+              "$ref": "#/components/schemas/HostInfo"
+            },
+            "title": "Hosts",
+            "type": "array"
+          },
+          "problems": {
+            "description": "Invalid or partly ignored host files",
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "hosts",
+          "enabled"
+        ],
+        "title": "HostList",
+        "type": "object"
+      },
       "HubInstallRequest": {
         "additionalProperties": false,
         "properties": {
@@ -13018,6 +13192,376 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/hosts": {
+      "get": {
+        "description": "The host files of `<home>/hosts/` with trust and key state (no key material).",
+        "operationId": "list_hosts_api_hosts_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Hosts",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/hosts/{name}": {
+      "delete": {
+        "description": "Delete the host file (never the secret or the known_hosts entry).",
+        "operationId": "delete_host_api_hosts__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Host",
+        "tags": [
+          "hosts"
+        ]
+      },
+      "put": {
+        "description": "Create or replace `<home>/hosts/<name>.yaml` (body: `HostWrite`). Trust is never\ngranted here.",
+        "operationId": "put_host_api_hosts__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "The editable fields. A changed address or port is untrusted until `auoreo ssh test`.",
+                "properties": {
+                  "audit_commands": {
+                    "default": "hash",
+                    "enum": [
+                      "hash",
+                      "redacted"
+                    ],
+                    "title": "Audit Commands",
+                    "type": "string"
+                  },
+                  "description": {
+                    "default": "",
+                    "maxLength": 200,
+                    "title": "Description",
+                    "type": "string"
+                  },
+                  "host": {
+                    "maxLength": 253,
+                    "minLength": 1,
+                    "title": "Host",
+                    "type": "string"
+                  },
+                  "jump": {
+                    "anyOf": [
+                      {
+                        "maxLength": 64,
+                        "pattern": "^[a-z][a-z0-9_]*$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Jump"
+                  },
+                  "keepalive_interval_s": {
+                    "default": 30,
+                    "maximum": 3600,
+                    "minimum": 0,
+                    "title": "Keepalive Interval S",
+                    "type": "number"
+                  },
+                  "key_name": {
+                    "description": "A secret NAME, never key text",
+                    "pattern": "^[A-Za-z0-9_.-]{1,64}$",
+                    "title": "Key Name",
+                    "type": "string"
+                  },
+                  "port": {
+                    "default": 22,
+                    "maximum": 65535,
+                    "minimum": 1,
+                    "title": "Port",
+                    "type": "integer"
+                  },
+                  "tags": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 8,
+                    "title": "Tags",
+                    "type": "array"
+                  },
+                  "user": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "title": "User",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "host",
+                  "user",
+                  "key_name"
+                ],
+                "title": "HostWrite",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Host",
+        "tags": [
+          "hosts"
+        ]
+      }
+    },
+    "/api/hosts/{name}/check": {
+      "post": {
+        "description": "Connect with the stored key and the trusted host key (attributed to the operator).\nNever probes or trusts an unknown host key: an untrusted host fails here.",
+        "operationId": "check_host_api_hosts__name__check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auoreo_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auoreo Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HostCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Check Host",
+        "tags": [
+          "hosts"
         ]
       }
     },

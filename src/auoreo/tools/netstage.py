@@ -145,7 +145,7 @@ async def net_stage(
     assert justification is not None
     pattern = f"{tool.name}:{host or '*'}"
     decision = engine.evaluate(
-        "net_direct", pattern, "ask", interactive=ctx.interactive, context=policy_context(tool, ctx)
+        "net_direct", pattern, "ask", interactive=ctx.interactive, context=policy_context(tool, ctx, args)
     )
     if decision.action == "deny":
         return ex._err(call, f"direct network access denied ({decision.detail}). Do not retry unchanged."), eg

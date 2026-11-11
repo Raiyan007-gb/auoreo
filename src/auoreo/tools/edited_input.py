@@ -93,7 +93,7 @@ async def apply_edit(
             pattern,
             tool.manifest.default_action,
             interactive=ctx.interactive,
-            context=policy_context(tool, ctx),
+            context=policy_context(tool, ctx, edited),
         )
         floor = f"permission denied ({decision.detail})" if decision.action == "deny" else None
     keys = changed_keys(args, edited)

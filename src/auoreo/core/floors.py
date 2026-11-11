@@ -42,6 +42,7 @@ from typing import Literal
 from auoreo.core.floors_literal import find as literal_secrets  # noqa: F401  (H1b re-export)
 from auoreo.core.floors_secrets import is_secret_path as is_secret_path  # re-export
 from auoreo.core.floors_secrets import scan
+from auoreo.core.floors_ssh import LAUNCHERS, operator_cli
 
 FloorAction = Literal["deny", "ask"]
 MAX_DEPTH = 3
@@ -356,7 +357,14 @@ _GIT_SUBS: dict[str, Check] = {
     "config": _git_ask("config", _config_write, "git config write", "git config"),
 }
 
+
+def _operator(argv: list[str]) -> list[Finding]:
+    """M7: mutating `auoreo ssh` subcommands are operator-only (`core/floors_ssh.py`)."""
+    return [] if (why := operator_cli(argv)) is None else _deny(why)
+
+
 _CHECKS: dict[str, Check] = {
+    **dict.fromkeys(LAUNCHERS, _operator),
     "rm": _rm,
     "find": _find,
     "dd": _dd,
@@ -437,6 +445,7 @@ def _command(argv: list[str], raw: str, depth: int, out: list[Finding]) -> None:
     elif name == "eval" and depth < MAX_DEPTH:
         out.extend(analyze(" ".join(argv[1:]), depth + 1))
     check = _CHECKS.get(name) or (_mkfs if name.startswith("mkfs") else None)
+    check = check or (_operator if name.startswith("python") else None)
     if check is not None:
         out.extend(check(argv))
 

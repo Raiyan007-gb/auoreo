@@ -5,6 +5,7 @@ import { ControlProvider } from "@/lib/control";
 import { ApprovalsPage } from "@/pages/Approvals";
 import { GoalsPage } from "@/pages/Goals";
 import { HarnessPage } from "@/pages/Harness";
+import { HostsPage } from "@/pages/Hosts"; // --- M7: SSH hosts
 import { MemoryPage } from "@/pages/Memory";
 import { SessionRoute } from "@/pages/Session";
 import { SessionsPage } from "@/pages/Sessions";
@@ -54,6 +55,7 @@ export function App() {
               <Route path="approvals" element={<Navigate to="/inbox" replace />} />
               <Route path="memory" element={<MemoryPage />} />
               <Route path="harness" element={<HarnessPage />} />
+              <Route path="hosts" element={<HostsPage />} /> {/* --- M7 */}
               <Route path="usage" element={<UsagePage />} />
               <Route path="settings" element={<SettingsPage />} />
               {/* --- W0-B */}

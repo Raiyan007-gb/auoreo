@@ -56,10 +56,16 @@ class EnvironmentBackend(ABC):
     async def write_stdin(self, process_id: str, chars: str, *, yield_time_ms: int = 1_000) -> ExecChunk:
         """Write to a running process (empty `chars` = poll) and return new output."""
 
-    async def upload(self, local_path: str, remote_path: str) -> None:
+    async def upload(
+        self, local_path: str, remote_path: str, *, max_bytes: int | None = None, overwrite: bool = True
+    ) -> int:
+        """Copy one regular file to the environment; returns the bytes sent. M7 `env_transfer`
+        passes `max_bytes` (refuse larger) and `overwrite=False` (refuse an existing target)."""
         raise NotImplementedError(f"{self.name}: upload is not supported")
 
-    async def download(self, remote_path: str, local_path: str) -> None:
+    async def download(self, remote_path: str, local_path: str, *, max_bytes: int | None = None) -> int:
+        """Copy one regular file from the environment to `local_path` (the caller picks a
+        fresh temporary name); returns the bytes received; aborts past `max_bytes`."""
         raise NotImplementedError(f"{self.name}: download is not supported")
 
     async def close_session(self, session_id: str) -> None:

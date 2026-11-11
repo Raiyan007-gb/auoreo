@@ -54,11 +54,21 @@ class SshTarget:
     key_secret: str
     epoch: int = 0
     """How often the pool dropped this host (edit or revoke): an old grant never matches."""
+    via: SshTarget | None = None
+    """M7 hosts-c: the jump host this target is reached through (one hop)."""
 
     @property
     def cache_key(self) -> str:
         raw = f"{self.host}\n{self.port}\n{self.user}\n{self.key_secret}\n{self.epoch}"
+        if self.via is not None:  # the grant covers this exact chain
+            v = self.via
+            raw += f"\nvia\n{v.name}\n{v.host}\n{v.port}\n{v.user}\n{v.key_secret}"
         return f"{self.name}:{hashlib.sha256(raw.encode()).hexdigest()[:16]}"
+
+    @property
+    def hops(self) -> list[SshTarget]:
+        """Jump host first, then the target."""
+        return [self.via, self] if self.via is not None else [self]
 
 
 def is_ssh(backend: Any) -> bool:
@@ -69,7 +79,11 @@ def target_of(name: str, backend: Any, *, epoch: int = 0) -> SshTarget | None:
     cfg = getattr(backend, "cfg", None) if is_ssh(backend) else None
     if cfg is None:
         return None
-    return SshTarget(name, str(cfg.host), int(cfg.port), str(cfg.username), str(cfg.key_secret or ""), epoch)
+    hop = getattr(getattr(backend, "host_ext", None), "jump", None)
+    via = SshTarget(hop.name, hop.host, int(hop.port), hop.user, hop.key_secret) if hop is not None else None
+    return SshTarget(
+        name, str(cfg.host), int(cfg.port), str(cfg.username), str(cfg.key_secret or ""), epoch, via
+    )
 
 
 def attach(
@@ -90,7 +104,7 @@ def attach(
             action="net.ssh",
             session_id=session_id,
             decision="allow",
-            detail={**detail, "name": name, "grant_id": grant_id},
+            detail={**detail, "name": detail.get("name", name), "grant_id": grant_id},
         )
 
     backend.net_audit = audit
@@ -107,6 +121,24 @@ def justification_error(text: str | None) -> str | None:
     return None
 
 
+def chat_grants(settings: Any) -> bool:
+    """`m7.ssh.chat_grants`: may a chat `/approve <id>` answer `ssh`/`sftp` cards? Off by
+    default: such cards are `local_only` (web UI / API) and platform sessions need a rule."""
+    return bool(getattr(getattr(getattr(settings, "m7", None), "ssh", None), "chat_grants", False))
+
+
+async def refuse_platform(ctx: ToolContext, svc: Any, what: str, rule: str) -> None:
+    """A messaging-connector session is interactive (`teams2.chat_approvals`) but its chat may
+    not answer a `local_only` card, which would only wait for the timeout: refuse at once."""
+    from auoreo.core.approvals import unattended_kind
+
+    if await unattended_kind(svc, ctx.session_id, ctx.services.get("unattended")) == "platform":
+        raise ToolError(
+            f"{what} needs approval, and a messaging-app session cannot grant it "
+            f"(m7.ssh.chat_grants is off); allow it with a permission rule `{rule}`"
+        )
+
+
 async def gate_ssh(
     ctx: ToolContext, target: SshTarget | None, *, tool: str, justification: str | None = None
 ) -> str | None:
@@ -121,8 +153,22 @@ async def gate_ssh(
     engine = ctx.services.get("engine")
     if engine is None:  # fail closed: this gate is the only check on the socket
         raise ToolError(f"ssh host '{target.name}' needs the `ssh` permission; no permission engine attached")
-    decision = engine.evaluate(PERMISSION, target.name, "ask", interactive=ctx.interactive)
-    by_rule = decision.action == "allow" and decision.reason != "mode"
+    from auoreo.tools.env_policy import fields_for
+
+    context = {
+        "tool": tool,
+        "session_id": ctx.session_id,
+        "cwd": str(ctx.cwd),
+        **fields_for(svc, target.name),
+    }
+    decisions = []
+    for hop in target.hops:  # the jump host first: a deny on either hop refuses
+        hop_ctx = context if hop is target else {**context, **fields_for(svc, hop.name)}
+        decision = engine.evaluate(PERMISSION, hop.name, "ask", interactive=ctx.interactive, context=hop_ctx)
+        if decision.action == "deny" and target.via is not None:
+            raise ToolError(f"permission denied for {PERMISSION} `{hop.name}` ({decision.detail})")
+        decisions.append(decision)
+    by_rule = all(d.action == "allow" and d.reason != "mode" for d in decisions)
     text = " ".join(justification.split()) if isinstance(justification, str) else ""
     asks_human = not by_rule and decision.action != "deny" and ctx.interactive
     if asks_human and (why := justification_error(text)) is not None:
@@ -130,10 +176,17 @@ async def gate_ssh(
             f"ssh host '{target.name}' {why}: call use_environment with name "
             f"'{target.name}' and a {JUSTIFICATION_ARG} (a human reviews it)"
         )
+    chat = chat_grants(svc.settings)
+    if asks_human and not chat:
+        await refuse_platform(ctx, svc, f"ssh host '{target.name}'", f"{PERMISSION} {target.name}")
     detail = f"ssh {target.user}@{target.host}:{target.port} ({target.name})"
-    await ctx.authorize(
-        tool, PERMISSION, target.name, "ask", sticky=False, detail=detail, justification=text or None
-    )
+    if target.via is not None:
+        await _authorize_chain(ctx, svc, target, tool, by_rule, text, local_only=not chat)
+    else:
+        await ctx.authorize(
+            tool, PERMISSION, target.name, "ask", sticky=False, detail=detail, justification=text or None,
+            context=context, local_only=not chat,
+        )  # fmt: skip
     grant = uuid.uuid4().hex
     digest = None
     if text and justification_error(text) is None:
@@ -153,8 +206,37 @@ async def gate_ssh(
             "grant_id": grant,
             "justificationHash": digest,
             "tool": tool,
+            **({"chain": [h.name for h in target.hops]} if target.via is not None else {}),
         },
     )
     ctx.state.ssh_granted[target.cache_key] = grant
     OPENER.set(("agent", ctx.session_id, grant))
     return grant
+
+
+async def _authorize_chain(
+    ctx: ToolContext, svc: Any, target: SshTarget, tool: str, by_rule: bool, text: str, *, local_only: bool
+) -> None:
+    """One decision for a jump chain: both hops allowed by rules, or ONE human card naming
+    both (`db via bastion`). `ctx.authorize` cannot be used per hop: a rule on the target
+    would then silently cover an unapproved jump host."""
+    if by_rule:
+        return
+    names = " and ".join(f"`{PERMISSION} {h.name}`" for h in target.hops)
+    if not ctx.interactive:
+        raise ToolError(
+            f"ssh host '{target.name}' via '{target.via.name if target.via else ''}' needs approval but "
+            f"this run is non-interactive; allow both hops with permission rules ({names})"
+        )
+    via = target.via
+    assert via is not None
+    detail = (
+        f"ssh {target.user}@{target.host}:{target.port} ({target.name}) "
+        f"via {via.user}@{via.host}:{via.port} ({via.name})"
+    )
+    outcome = await svc.approvals.request(
+        ctx.session_id, tool, PERMISSION, target.name, detail[:2000],
+        one_shot=True, justification=text or None, local_only=local_only,
+    )  # fmt: skip
+    if not outcome.granted:
+        raise ToolError(f"user rejected {PERMISSION} `{target.name}` via `{via.name}`")

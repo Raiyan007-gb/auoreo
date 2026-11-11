@@ -179,7 +179,7 @@ class ToolExecutor:
             pattern,
             tool.manifest.default_action,
             interactive=ctx.interactive,
-            context=_policy_context(tool, ctx),
+            context=_policy_context(tool, ctx, args),
         )
         audit = {
             "tool": tool.name,
@@ -249,6 +249,7 @@ class ToolExecutor:
             tool.name,
             engine_cfg.progress_interval_ms / 1000,
             progress_schema=tool.manifest.progress_schema,
+            run_id=ctx.services.get("run_id"),
         )
         try:
             handler = tool.handler()
@@ -438,7 +439,7 @@ class ToolExecutor:
             pattern,
             "ask",
             interactive=ctx.interactive,
-            context=_policy_context(tool, ctx),
+            context=_policy_context(tool, ctx, args),
         )
         if decision.action == "deny":
             return self._err(call, f"sandbox escalation denied ({decision.detail})"), None

@@ -52,7 +52,12 @@ def _operator_refs(node: Any, key: str = "") -> Iterator[str]:
             yield node
 
 
-HOST_KEY_TOOLS = frozenset({"use_environment", "exec_command", "write_stdin"})
+NEVER_AUTO_APPROVE = frozenset({"sandbox_escalate", "sftp"})
+"""Permissions `approvals.unattended.<kind>: approve` never answers (M7: `sftp` moves files
+between this machine and a host). `ssh` needs no entry: `ctx.authorize` refuses it without a
+human or a rule."""
+
+HOST_KEY_TOOLS = frozenset({"use_environment", "exec_command", "write_stdin", "env_transfer"})
 
 
 def host_key_names(harness: Any, tool: ToolDef, settings: Any) -> set[str]:
@@ -96,9 +101,9 @@ async def unattended_gate(
     reason: str,
 ) -> ToolOutcome | None:
     """None = proceed (auto-approved by policy); else the refusal outcome. Sensitive writes
-    and sandbox escalations never auto-approve (fail closed)."""
+    sandbox escalations and `sftp` never auto-approve (fail closed)."""
     kind = await unattended_kind(ex.s, ctx.session_id, ctx.services.get("unattended"))
-    closed = SENSITIVE_NOTE in reason or permission == "sandbox_escalate"
+    closed = SENSITIVE_NOTE in reason or permission in NEVER_AUTO_APPROVE
     if unattended_action(ex.s.settings, kind) == "approve" and not closed:
         await ex.s.audit.record(
             actor="policy",

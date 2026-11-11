@@ -2,7 +2,8 @@
 
 Each policy is a Starlark module (starlark-rust via `starlark-pyo3`: no `while`, no
 imports/`load()`, no IO, deterministic) that defines `decide(req)`. `req` is a dict with
-`tool, permission, pattern, mode, interactive, agent, session_id, cwd`; `decide` returns
+`tool, permission, pattern, mode, interactive, agent, session_id, cwd, environment, host`
+(the last two are M7 `m7.ssh.policy_fields`, else None); `decide` returns
 `"allow" | "deny" | "ask" | "review"` or `None` (no opinion).
 
 `PolicyEngine.decide()` asks enabled policies in priority order (high first, then name);
@@ -39,7 +40,10 @@ PolicyAction = Literal["allow", "deny", "ask", "review"]
 ACTIONS: frozenset[str] = frozenset({"allow", "deny", "ask", "review"})
 BUDGET_S = 0.05
 MAX_CALLSTACK = 64
-REQ_FIELDS = ("tool", "permission", "pattern", "mode", "interactive", "agent", "session_id", "cwd")
+REQ_FIELDS = (
+    "tool", "permission", "pattern", "mode", "interactive", "agent", "session_id", "cwd",
+    "environment", "host",
+)  # fmt: skip
 _HELPER_INPUT_CAP = 20_000
 
 

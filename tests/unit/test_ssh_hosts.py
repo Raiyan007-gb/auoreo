@@ -42,11 +42,13 @@ def write(path: Path, text: str) -> Path:
 def test_manifest_defaults_and_forbidden_keys() -> None:
     m = HostManifest(**GOOD)
     assert (m.port, m.keepalive_interval_s) == (22, 30)
-    for extra in ("private_key", "public_key", "fingerprint", "password", "jump", "tags"):
+    for extra in ("private_key", "public_key", "fingerprint", "password", "shell", "policy", "forwards"):
         with pytest.raises(ValidationError):
             HostManifest(**GOOD, **{extra: "x"})
     assert set(HostManifest.model_fields) == {
         "name", "host", "port", "user", "key_secret", "keepalive_interval_s",
+        # M7 hosts-b/c (v2, `schema: 2`): no field may hold key material
+        "version", "tags", "jump", "audit_commands", "description",
     }  # fmt: skip
 
 
@@ -387,7 +389,7 @@ def test_cli_add_and_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     r = run(app, ["ssh", "list", "--json"])
     rows = {row["name"]: row for row in json.loads(r.stdout)}
     want = {"name": "lab", "host": "10.0.0.6", "port": 22, "user": "ubuntu", "key": "SSH_KEY_LAB"}
-    assert rows["lab"] == {**want, "trusted": True}
+    assert rows["lab"] == {**want, "trusted": True, "schema": 1, "tags": [], "jump": None}
     assert rows["new"]["trusted"] is False
     text = run(app, ["ssh", "list"]).stdout
     assert "lab" in text and "10.0.0.6:22" in text and "SSH_KEY_LAB" in text

@@ -28,8 +28,9 @@ from typing import Any
 
 from auoreo.backends.environment import ExecChunk, ExecRequest
 from auoreo.core import hosts
+from auoreo.core.redaction import redact
 from auoreo.tools import ssh_gate
-from auoreo.tools.context import ToolContext, ToolError, ToolResult
+from auoreo.tools.context import CURRENT_CALL, ToolContext, ToolError, ToolResult
 from auoreo.tools.shell_sessions import SessionScoped, ShellError, attached, clip_tokens
 
 KIND = "environment"
@@ -86,6 +87,8 @@ class EnvironmentPool(SessionScoped):
             self._drop(name)
         if env is None:
             raise ToolError(hosts.unknown_message(svc, name))
+        if env.host is not None and env.host.problem:  # M7 v2: never half a definition
+            raise ToolError(f"environment '{name}': {env.host.problem}")
         try:
             bdef = svc.harness.select_backend(KIND, env.backend)
             if bdef is None:
@@ -93,6 +96,8 @@ class EnvironmentPool(SessionScoped):
             inst = bdef.load()(apply_overrides(svc.settings, env.overrides))
         except (KeyError, ValueError) as exc:
             raise ToolError(f"environment '{name}': {exc}") from exc
+        if env.host is not None:
+            inst.host_ext = env.host
         ssh_gate.attach(inst, svc.settings, svc.audit.record, name)
         self.instances[name] = inst
         return inst
@@ -100,7 +105,9 @@ class EnvironmentPool(SessionScoped):
     @staticmethod
     def _same(inst: Any, env: hosts.ResolvedEnv) -> bool:
         want = env.overrides.get("environment_ssh")
-        return env.origin != "host-file" or getattr(inst, "cfg", None) == want
+        if env.origin != "host-file":
+            return True
+        return getattr(inst, "cfg", None) == want and getattr(inst, "host_ext", None) == env.host
 
     def _drop(self, name: str) -> None:
         old = self.instances.pop(name)
@@ -172,16 +179,25 @@ def resolve(ctx: ToolContext) -> tuple[str, Any]:
     return str(getattr(backend, "name", KIND)), _bind(backend, svc)
 
 
-async def gate(ctx: ToolContext, label: str, backend: Any, *, tool: str, why: str | None = None) -> None:
-    """M7: the per-host `ssh` permission for an SSH backend (no-op otherwise or flag off)."""
-    svc = _services(ctx)
+def target(svc: Any, label: str, backend: Any) -> ssh_gate.SshTarget | None:
+    """The `ssh` grant target of `backend` (None unless SSH and the gate is on)."""
     if not ssh_gate.is_ssh(backend) or not hosts.hosts_enabled(svc.settings):
-        return
+        return None
     pool = pool_for(svc)
     named = pool.instances.get(label) is backend
     epoch = pool.epoch.get(label, 0) if named else 0
-    target = ssh_gate.target_of(label if named else ssh_gate.DEFAULT_NAME, backend, epoch=epoch)
-    await ssh_gate.gate_ssh(ctx, target, tool=tool, justification=why)
+    return ssh_gate.target_of(label if named else ssh_gate.DEFAULT_NAME, backend, epoch=epoch)
+
+
+async def gate(
+    ctx: ToolContext, label: str, backend: Any, *, tool: str, why: str | None = None
+) -> str | None:
+    """M7: the per-host `ssh` permission for an SSH backend (no-op otherwise or flag off);
+    returns the grant id."""
+    tgt = target(_services(ctx), label, backend)
+    if tgt is None:
+        return None
+    return await ssh_gate.gate_ssh(ctx, tgt, tool=tool, justification=why)
 
 
 async def _guard[T](label: str, aw: Any) -> T:
@@ -210,11 +226,32 @@ def _preflight(label: str, backend: Any, tool: str) -> None:
         raise ToolError(f"environment '{label}': {exc}") from exc
 
 
-async def _audit(ctx: ToolContext, label: str, backend: Any, text: str, *, stdin: bool) -> None:
+def linkage(ctx: ToolContext, svc: Any, label: str, backend: Any, tool: str) -> dict[str, Any]:
+    """M7 `m7.ssh.exec_audit`: the keys that join a remote row to its call, run, host and
+    grant (`host_id` is the grant's target key; no address or secret name)."""
+    call = CURRENT_CALL.get()
+    tgt = target(svc, label, backend)
+    return {
+        "tool": tool,
+        "call_id": call.call_id if call is not None else None,
+        "run_id": (call.run_id if call is not None else None) or ctx.services.get("run_id"),
+        "host_id": tgt.cache_key if tgt is not None else None,
+        "grant_id": ctx.state.ssh_granted.get(tgt.cache_key) if tgt is not None else None,
+    }
+
+
+def exec_audit_on(settings: Any) -> bool:
+    ssh = getattr(getattr(settings, "m7", None), "ssh", None)
+    return bool(getattr(ssh, "hosts", False) and getattr(ssh, "exec_audit", False))
+
+
+async def _audit(
+    ctx: ToolContext, label: str, backend: Any, text: str, *, stdin: bool, tool: str = "exec_command"
+) -> None:
     if not getattr(backend, "remote", False):
         return
     svc = _services(ctx)
-    detail = {
+    detail: dict[str, Any] = {
         "backend": str(getattr(backend, "name", "?")),
         "environment": label,
         "remote": True,
@@ -222,6 +259,11 @@ async def _audit(ctx: ToolContext, label: str, backend: Any, text: str, *, stdin
     }
     if stdin:
         detail["stdin"] = True
+    if exec_audit_on(svc.settings):
+        detail.update(linkage(ctx, svc, label, backend, tool))
+        ext = getattr(backend, "host_ext", None)
+        if not stdin and getattr(ext, "audit_commands", "hash") == "redacted":
+            detail["cmd"] = redact(text)[:2000]  # opt-in per host; `AuditLog.record` redacts again
     await svc.audit.record(actor="tool", action="environment.exec", session_id=ctx.session_id, detail=detail)
 
 
@@ -291,7 +333,7 @@ async def write_stdin(ctx: ToolContext, rec: ProcRecord, proc_id: str, args: dic
     chars = str(args.get("chars", ""))
     await gate(ctx, rec.environment, rec.backend, tool="write_stdin")
     if chars:
-        await _audit(ctx, rec.environment, rec.backend, chars, stdin=True)
+        await _audit(ctx, rec.environment, rec.backend, chars, stdin=True, tool="write_stdin")
     pool = pool_for(_services(ctx))
     try:
         chunk: ExecChunk = await _guard(
@@ -339,12 +381,16 @@ async def describe(settings: Any, harness: Any, audit: Any = None) -> list[tuple
     async def one(name: str) -> tuple[str, bool, str, str]:
         env = hosts.resolve_environment(svc, name)
         assert env is not None
+        if env.host is not None and env.host.problem:
+            return name, False, env.host.problem, f"fix hosts/{name}.yaml or its jump host"
         async with limit:
             try:
                 bdef = harness.select_backend(KIND, env.backend)
                 if bdef is None:
                     raise KeyError(f"no '{KIND}' backend '{env.backend}'")
                 inst = bdef.load()(apply_overrides(settings, env.overrides))
+                if env.host is not None:
+                    inst.host_ext = env.host
                 if audit is not None:
                     ssh_gate.attach(inst, settings, audit.record, name, actor="operator")
                 status = await asyncio.wait_for(inst.check(), 10)
@@ -363,4 +409,7 @@ async def describe(settings: Any, harness: Any, audit: Any = None) -> list[tuple
     for name in hosts.shadowed_hosts(svc):
         note = f"host file `{name}` shadowed by settings.environments"
         out.append((f"{name} (host file)", False, note, "rename the host file or the settings entry"))
+    for name, loaded in sorted(hosts.host_files(svc).items()):
+        for note in getattr(loaded, "warnings", ()) or ():
+            out.append((f"{name} (host file)", False, note, f"remove the key from hosts/{name}.yaml"))
     return out

@@ -509,4 +509,32 @@ Each phase leaves the tree green (ruff, mypy, pytest) and sits behind the flag.
 
 --------------------------------------------------------------------------------
 
+## Wave 2 implementation notes (hosts-b and hosts-c)
+
+Built from the unreviewed draft `m7-ssh-hosts-w2` with every owner decision at its default
+(O1 `schema: 2` marker, O2 `chat_grants` off, O3 `net: none` riding the ssh grant, O4 CLI-only
+keys, O5 no tunnel writes, O6 forwards to M8, O7 opt-in redacted `cmd`, O8 the bash floor).
+User documentation: `docs/environments.md` "Hosts waves b and c". Deviations from the draft:
+
+*   **Tolerant reader scope.** Unknown keys are dropped only in a file that declares
+    `schema: 2`; a marker-less (hosts-a format) file keeps the strict reader, so a stray key
+    such as `private_key:` in an old file stays an error.
+*   **`env_transfer` permission.** The pipeline's own `sftp` check defaults to `allow` (a deny
+    rule on the bare remote path still refuses); the decision is the handler's one-shot `sftp`
+    check on `<env>:<direction>:<remote_path>`. With `default_action: ask` the human would see
+    two cards and an `always` reply on the first would persist. Plan mode also blocks a
+    download.
+*   **Jump approvals.** For a chain the gate asks the approval broker directly (one card naming
+    both hops) instead of `ctx.authorize`, which would re-evaluate only the target and let a
+    target rule silently cover an unapproved bastion.
+*   **Chat `/deny`** still answers a `local_only` card (denying is always safe); `/approve`
+    refuses it even by id.
+*   **Web.** `PUT /api/hosts/{name}` validates its body in the handler (schema published via
+    `openapi_extra`) so a 422 never echoes a pasted key; no harness reload is issued because
+    `Harness.hosts` already re-reads on a file-stamp change. `DELETE` returns 204.
+*   **Policy file name** `read_only_host.star` (policy names must match `[a-z][a-z0-9_]*`).
+*   **Import** uses the local user name for an entry without `User`.
+
+--------------------------------------------------------------------------------
+
 *Drafted with EGM*

@@ -71,7 +71,7 @@ def list_(as_json: Annotated[bool, typer.Option("--json", help="Print JSON.")] =
     """List hosts: name, address, user, key secret NAME, and whether a host key is trusted."""
     home = settings().home
     found, problems = hosts.read_hosts(home)
-    rows = [
+    rows: list[dict[str, Any]] = [
         {
             "name": m.name,
             "host": m.host,
@@ -79,6 +79,9 @@ def list_(as_json: Annotated[bool, typer.Option("--json", help="Print JSON.")] =
             "user": m.user,
             "key": m.key_secret.removeprefix("secret:"),
             "trusted": bool(hosts.known_keys(home, m.host, m.port)),
+            "schema": m.version,
+            "tags": list(m.tags),
+            "jump": m.jump,
         }
         for m in found.values()
     ]
@@ -87,7 +90,12 @@ def list_(as_json: Annotated[bool, typer.Option("--json", help="Print JSON.")] =
     else:
         for r in rows:
             mark = "yes" if r["trusted"] else "no"
-            typer.echo(f"{r['name']}  {r['host']}:{r['port']}  {r['user']}  key={r['key']}  trusted={mark}")
+            extra = f"  via={r['jump']}" if r["jump"] else ""
+            extra += f"  tags={','.join(r['tags'])}" if r["tags"] else ""
+            extra += "  (schema 2: older builds ignore this host)" if r["schema"] >= 2 else ""
+            typer.echo(
+                f"{r['name']}  {r['host']}:{r['port']}  {r['user']}  key={r['key']}  trusted={mark}{extra}"
+            )
         if not rows:
             typer.echo("no hosts (add one with `auoreo ssh add`)")
     for line in problems:
@@ -167,22 +175,6 @@ async def run_test(
     if not path.is_file():  # the backend requires the file; an empty one trusts nothing
         path.parent.mkdir(parents=True, exist_ok=True)
         path.touch(mode=0o600)
-    try:
-        probe = await hosts.probe_host_key(m.host, m.port, timeout)
-    except (OSError, TimeoutError, ValueError) as exc:
-        echo(f"cannot reach {name} ({m.host}:{m.port}): {type(exc).__name__}: {exc}"[:300])
-        return EXIT_CONNECT
-    except Exception as exc:  # asyncssh protocol errors
-        echo(f"no host key from {name} ({m.host}:{m.port}): {type(exc).__name__}: {exc}"[:300])
-        return EXIT_CONNECT
-    echo(f"{name} ({m.host}:{m.port}) host key {probe.key_type} {probe.fingerprint_sha256}")
-    if probe.openssh_line not in hosts.known_keys(home, m.host, m.port):
-        code = await _decide(
-            home, name, m, probe, replace_key=replace_key, fingerprint=fingerprint,
-            confirm=confirm, echo=echo, record=record,
-        )  # fmt: skip
-        if code:
-            return code
     if harness is None:
         from auoreo.core.paths import bundled_root
         from auoreo.harness.discovery import default_roots
@@ -193,8 +185,46 @@ async def run_test(
     if bdef is None:
         echo("the ssh environment backend is not available")
         return EXIT_CONNECT
-    backend = bdef.load()(apply_overrides(st, hosts.manifest_to_override(m, home)))
-    ssh_gate.attach(backend, None, record, name, actor="operator", always=True)
+    ext = hosts.runtime_for(hosts.read_hosts(home)[0], m)
+    if ext.problem:
+        echo(f"cannot test {name}: {ext.problem}")
+        return EXIT_INVALID
+
+    def make() -> Any:
+        b = bdef.load()(apply_overrides(st, hosts.manifest_to_override(m, home)))
+        b.host_ext = ext
+        ssh_gate.attach(b, None, record, name, actor="operator", always=True)
+        return b
+
+    tunnel_owner = make() if ext.jump is not None else None
+    try:
+        tunnel = None
+        if tunnel_owner is not None:  # M7 hosts-c: the target key is probed through the bastion
+            try:
+                tunnel = await tunnel_owner.jump_connection()
+            except ShellError as exc:
+                hop = m.jump or "?"
+                echo(f"jump host {hop} failed (trust it first: `auoreo ssh test {hop}`): {exc}")
+                return EXIT_CONNECT
+        probe = await hosts.probe_host_key(m.host, m.port, timeout, tunnel=tunnel)
+    except (OSError, TimeoutError, ValueError) as exc:
+        echo(f"cannot reach {name} ({m.host}:{m.port}): {type(exc).__name__}: {exc}"[:300])
+        return EXIT_CONNECT
+    except Exception as exc:  # asyncssh protocol errors
+        echo(f"no host key from {name} ({m.host}:{m.port}): {type(exc).__name__}: {exc}"[:300])
+        return EXIT_CONNECT
+    finally:
+        if tunnel_owner is not None:
+            await tunnel_owner.close()
+    echo(f"{name} ({m.host}:{m.port}) host key {probe.key_type} {probe.fingerprint_sha256}")
+    if probe.openssh_line not in hosts.known_keys(home, m.host, m.port):
+        code = await _decide(
+            home, name, m, probe, replace_key=replace_key, fingerprint=fingerprint,
+            confirm=confirm, echo=echo, record=record,
+        )  # fmt: skip
+        if code:
+            return code
+    backend = make()
     try:
         status = await backend.check()
         if not status.ok:
@@ -259,3 +289,7 @@ def test(
     code = asyncio.run(go())
     if code:
         raise typer.Exit(code)
+
+
+# M7 hosts-b/c: `keygen|pubkey|deploy|rotate|rm` and `import` register on `app` above.
+from auoreo.cli.commands import ssh_keys as _ssh_keys  # noqa: E402,F401

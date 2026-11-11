@@ -63,6 +63,7 @@ class CallInfo:
     interval_s: float = 0.5
     last: float = 0.0
     progress_schema: dict[str, Any] | None = None  # --- I6: validates `progress(data=…)`
+    run_id: str | None = None  # --- M7 hosts-b: the run this call belongs to (audit linkage)
 
 
 CURRENT_CALL: ContextVar[CallInfo | None] = ContextVar("auoreo_current_call", default=None)
@@ -277,6 +278,7 @@ class ToolContext:
         context: Mapping[str, Any] | None = None,
         detail: str | None = None,
         justification: str | None = None,
+        local_only: bool = False,
     ) -> None:
         """Check a *secondary* permission from inside a handler (e.g. a URL fetched by a
         tool whose own permission is `read`). Floors and rules apply; `ask` goes to the
@@ -284,7 +286,8 @@ class ToolContext:
 
         `sticky=False` gives `net_direct` semantics: only a rule or a human reply allows (a
         permission mode such as `yolo` does not), and an `always` reply is not remembered.
-        `context` is passed to the policy engine."""
+        `context` is passed to the policy engine. `local_only` (M7): a chat app may not
+        answer the card (`core/approvals.Pending.local_only`)."""
         engine = self.services.get("engine")
         if engine is None:
             return
@@ -309,6 +312,7 @@ class ToolContext:
             (detail or pattern)[:2000],
             one_shot=not sticky,
             justification=justification,
+            **({"local_only": True} if local_only else {}),
         )
         if not outcome.granted:
             raise ToolError(f"user rejected {permission} `{pattern[:200]}`")

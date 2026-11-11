@@ -115,6 +115,10 @@ from .health import Health
 from .hook_ack import HookAck
 from .hook_ack_status import HookAckStatus
 from .hooks_health import HooksHealth
+from .host_check import HostCheck
+from .host_info import HostInfo
+from .host_info_audit_commands import HostInfoAuditCommands
+from .host_list import HostList
 from .http_validation_error import HTTPValidationError
 from .hub_install_request import HubInstallRequest
 from .hub_installed_skill import HubInstalledSkill
@@ -224,6 +228,10 @@ from .provider_result import ProviderResult
 from .provider_result_status import ProviderResultStatus
 from .provider_spec_out import ProviderSpecOut
 from .provider_update import ProviderUpdate
+from .put_host_api_hosts_name_put_host_write import PutHostApiHostsNamePutHostWrite
+from .put_host_api_hosts_name_put_host_write_audit_commands import (
+    PutHostApiHostsNamePutHostWriteAuditCommands,
+)
 from .reembed_status import ReembedStatus
 from .reload_api_harness_reload_post_kind_type_0 import ReloadApiHarnessReloadPostKindType0
 from .reload_result import ReloadResult
@@ -419,6 +427,10 @@ __all__ = (
     "HookAck",
     "HookAckStatus",
     "HooksHealth",
+    "HostCheck",
+    "HostInfo",
+    "HostInfoAuditCommands",
+    "HostList",
     "HTTPValidationError",
     "HubInstalledSkill",
     "HubInstalledSkillIntegrity",
@@ -522,6 +534,8 @@ __all__ = (
     "ProviderResultStatus",
     "ProviderSpecOut",
     "ProviderUpdate",
+    "PutHostApiHostsNamePutHostWrite",
+    "PutHostApiHostsNamePutHostWriteAuditCommands",
     "ReembedStatus",
     "ReloadApiHarnessReloadPostKindType0",
     "ReloadResult",

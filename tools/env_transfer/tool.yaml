@@ -1,0 +1,42 @@
+name: env_transfer
+toolset: shell
+description: >-
+  Copy ONE regular file between the working directory and the session's SSH environment
+  (selected with use_environment) over the already-approved connection. Each transfer needs
+  its own `sftp` approval for `<environment>:<direction>:<remote_path>`. Local paths follow
+  the file rules (outside the working directory asks; secret files never). An existing
+  target is refused unless overwrite is true.
+parameters:
+  type: object
+  properties:
+    direction:
+      type: string
+      enum: [upload, download]
+      description: upload = local -> host, download = host -> local.
+    local_path:
+      type: string
+      description: Path on this machine (relative = under the working directory).
+    remote_path:
+      type: string
+      maxLength: 1024
+      description: Path on the host (relative = under the remote user's home).
+    overwrite:
+      type: boolean
+      default: false
+      description: Replace an existing target file.
+  required: [direction, local_path, remote_path]
+  additionalProperties: false
+# The decision is the handler's one-shot `sftp` check on `<env>:<direction>:<remote_path>`
+# (rules, policies, a human; never a mode, `always` or unattended approval). The pipeline
+# check below only lets a deny rule on the bare remote path refuse early.
+permission: sftp
+pattern_arg: remote_path
+default_action: allow
+is_destructive: true
+exposure: deferred
+interrupt: cancel
+timeout_ms: 300000
+search_hint: copy file upload download scp sftp transfer ssh host remote
+max_result_size_chars: 2000
+net: none  # documented exception: SFTP is a channel on the session's granted ssh connection
+sandbox_mode: workspace-write

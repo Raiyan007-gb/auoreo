@@ -9,6 +9,9 @@
 - One-shot requests (an `ssh` host, `net_direct`, sandbox escalation, a literal secret) are
   approved only by their explicit id: `/approve` without an id and `/approve all` skip them
   and say so. `/deny` still answers them either way.
+- M7: a `local_only` request (`ssh`/`sftp` while `m7.ssh.chat_grants` is off) is never
+  approved from a chat, not even by its id; the refusal is audited (`approval.chat`,
+  `decision: deny`, `reason: local_only`). `/deny` still answers it.
 - With `teams2.chat_approvals` the connector's own runs are interactive, and every approval
   request of that chat's session is pushed to the chat (`ApprovalNotifier`).
 """
@@ -46,6 +49,10 @@ def is_owner(services: Services, plugin: str, chat_id: str) -> bool:
 
 
 SSH_PERMISSIONS = frozenset({"ssh", "sftp"})
+LOCAL_ONLY = (
+    "SSH host and file-transfer requests are answered in the web UI only "
+    "(or allowed by a permission rule); /deny still works here."
+)
 
 
 def _clip(text: str, n: int = 200) -> str:
@@ -115,6 +122,25 @@ async def handle_command(services: Services, plugin: str, chat_id: str, text: st
     if not pending:
         return "No approvals are pending."
     reply: Reply = "once" if cmd == "/approve" else "reject"
+    local = [p for p in pending if p.local_only] if reply == "once" else []
+    if local:
+        # M7: `ssh`/`sftp` cards are answered in the web UI only (`m7.ssh.chat_grants` off)
+        named = words[1].lower() if len(words) > 1 and len(words[1]) >= MIN_ID else ""
+        refused = [p for p in local if named and p.request_id.startswith(named)]
+        for p in refused:
+            await services.audit.record(
+                actor=actor,
+                action="approval.chat",
+                session_id=p.session_id,
+                decision="deny",
+                reason="local_only",
+                detail={"chat_id": chat_id[:64], "request_id": p.request_id, "permission": p.permission},
+            )
+        if refused:
+            return f"Not approved: {describe(refused[0], names.get(refused[0].session_id, ''))}\n{LOCAL_ONLY}"
+        pending = [p for p in pending if not p.local_only]
+        if not pending:
+            return f"Nothing was approved. {len(local)} pending request(s): {LOCAL_ONLY}"
     chosen, rest, skipped = _targets(pending, words[1:], reply == "once")
     reason = (" ".join(rest)[:500] or None) if reply == "reject" else None
     done: list[str] = []
@@ -139,6 +165,8 @@ async def handle_command(services: Services, plugin: str, chat_id: str, text: st
         out += f"\nNot approved ({len(skipped)} one-shot, approve each with /approve <id>):\n" + "\n".join(
             describe(p, names.get(p.session_id, "")) for p in skipped
         )
+    if local:
+        out += f"\nNot approved ({len(local)}): {LOCAL_ONLY}"
     return out
 
 
@@ -172,10 +200,12 @@ class ApprovalNotifier:
                 if p.request_id in self.seen:
                     continue
                 self.seen.add(p.request_id)
-                text = (
-                    f"Approval needed {describe(p, self.agent)}\n"
-                    f"Reply /approve {p.request_id[:8]} or /deny {p.request_id[:8]} [reason]."
+                how = (
+                    f"{LOCAL_ONLY} Reply /deny {p.request_id[:8]} [reason] to refuse."
+                    if p.local_only
+                    else f"Reply /approve {p.request_id[:8]} or /deny {p.request_id[:8]} [reason]."
                 )
+                text = f"Approval needed {describe(p, self.agent)}\n{how}"
                 with contextlib.suppress(Exception):
                     await self.send(self.chat_id, text, {"session_id": self.session_id})
             await asyncio.sleep(POLL_S)

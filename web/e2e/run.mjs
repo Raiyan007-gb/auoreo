@@ -102,6 +102,7 @@ async function main() {
       AUOREO_BACKENDS: '{"stt":"fake","tts":"fake","vad":"fake"}',
       AUOREO_G6: JSON.stringify({ skills: { taps: [tapUrl] } }), // --- I5
       AUOREO_TEST_PROVIDER_BASE: `http://127.0.0.1:${provider.address().port}`, // --- Settings → Models
+      AUOREO_M7: JSON.stringify({ ssh: { web: true } }), // --- M7: the Hosts page (agents still cannot use hosts)
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
