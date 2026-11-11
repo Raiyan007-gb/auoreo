@@ -49,6 +49,9 @@ class M7Token(_Tolerant):
     read_dedupe: bool = False
     """A repeated, unchanged `read` in the same turn returns a short notice."""
     mask: M7Mask = Field(default_factory=M7Mask)
+    masking: Literal["off", "compaction"] = "off"
+    """`compaction`: every compaction run first replaces old bulky tool results by placeholders
+    (originals spilled under `sessions/<id>/tool-results/masked/`); `/compact unmask=` restores."""
 
 
 class M7Ssh(_Tolerant):

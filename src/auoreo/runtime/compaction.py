@@ -33,6 +33,7 @@ from auoreo.gateway.errors import GatewayError
 from auoreo.gateway.types import LLMRequest
 from auoreo.harness.manifests import HookEvent
 from auoreo.memory.recall import memory_for_agent_name
+from auoreo.runtime import masking
 from auoreo.runtime.compaction_extras import assemble
 from auoreo.runtime.compaction_i4 import PostCompaction, hygiene_due, meter, skill_prune_plan
 from auoreo.runtime.compaction_plan import (
@@ -99,7 +100,7 @@ class CompactionResult:
     compaction_id: str
     summary_chars: int
     pruned: int = 0
-    source: str = "summary"  # summary | session_memory | prune
+    source: str = "summary"  # summary | session_memory | prune | mask
     retries: int = 0
     summary_model: str | None = None
     cache_read: int = 0
@@ -315,7 +316,10 @@ class CompactionService:
     ) -> CompactionResult:
         history = rt.history
         pre = self.tokens(model, history)
-        pruned = await self._prune(rt)
+        masked = await masking.apply(self, rt, cid, trigger)  # --- M7: m7.token.masking (flag off: 0)
+        if masked and stop_below is not None and (now := self.tokens(model, history)) < stop_below:
+            return CompactionResult(pre, now, 0, cid, 0, masked, "mask")
+        pruned = masked + await self._prune(rt)
         if pruned and stop_below is not None and (now := self.tokens(model, history)) < stop_below:
             return CompactionResult(pre, now, 0, cid, 0, pruned, "prune")
         sizes = [self.tokens(model, [m]) for m in history]

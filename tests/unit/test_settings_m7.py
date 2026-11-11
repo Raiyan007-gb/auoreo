@@ -54,6 +54,9 @@ def test_closed_choices_reject_typos(home: Path) -> None:
 
 
 def test_mask_settings_defaults_and_tolerance(home: Path) -> None:
+    assert Settings(home=home).m7.token.masking == "off"
+    with pytest.raises(ValueError):  # `economic` is not built
+        Settings(home=home, m7={"token": {"masking": "economic"}})
     mask = Settings(home=home).m7.token.mask
     assert (mask.keep_recent, mask.min_chars, mask.min_tokens) == (10, 2000, 8000)
     assert (mask.cache_read_multiplier, mask.cache_write_multiplier) == (0.1, None)

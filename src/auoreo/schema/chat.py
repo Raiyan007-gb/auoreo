@@ -190,7 +190,8 @@ class CompactRequest(_In):
 class CompactionOut(BaseModel):
     compaction_id: str
     source: str = "summary"
-    """`summary` (LLM), `session_memory` (notes file, no LLM) or `prune` (S2 only)."""
+    """`summary` (LLM), `session_memory` (notes file, no LLM), `prune` (S2 only) or `mask`
+    (observation masking alone, `m7.token.masking`)."""
     pre_tokens: int
     post_tokens: int
     archived: int

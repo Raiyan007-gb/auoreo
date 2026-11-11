@@ -246,3 +246,43 @@ async def test_runner_reads_both_copies_of_a_parallel_batch_in_full(
     await services.coordinator.submit(sess.id, "read it twice at once", interactive=False)
     await services.coordinator.wait(sess.id, 10)
     assert all("line 59" in r for r in _tool_results(services, sess.id))
+
+
+# ------------------------------------------------- M7 Wave 2: observation masking
+async def _read_with_call(w: World, path: Path) -> str:
+    """A `read` preceded by its assistant tool call, so masking knows the tool name."""
+    call = {"id": f"call_{w.n + 1}", "type": "function", "function": {"name": "read", "arguments": "{}"}}
+    w.history.append({"role": "assistant", "content": None, "tool_calls": [call]})
+    return await w.read(path)
+
+
+def _mask(w: World, tmp_path: Path) -> list[str]:
+    """One masking batch over the live history, applied in place as the service does."""
+    from auoreo.core.settings_m7 import M7Mask
+    from auoreo.runtime.masking import mask_batch
+
+    w.history[:0] = [{"role": "user", "content": "a"}, {"role": "user", "content": "b"}]  # head
+    batch = mask_batch(w.history, M7Mask(keep_recent=0), tmp_path / "masked", tmp_path / "spill")
+    for i, m in batch.changes.items():
+        w.history[i] = m
+    return batch.call_ids
+
+
+async def test_a_read_after_its_earlier_result_was_masked_is_read_in_full(tmp_path: Path) -> None:
+    w, path = World(tmp_path), _file(tmp_path)
+    await _read_with_call(w, path)
+    assert _mask(w, tmp_path) == ["call_1"]
+    again = await w.read(path)
+    assert not _is_notice(again) and "line 59" in again
+
+
+async def test_a_notice_whose_earlier_read_was_masked_is_rewritten(tmp_path: Path) -> None:
+    from auoreo.runtime.masking_plan import NOTICE_MASKED
+
+    w, path = World(tmp_path), _file(tmp_path)
+    await _read_with_call(w, path)
+    assert _is_notice(await _read_with_call(w, path))
+    assert _mask(w, tmp_path) == ["call_1"]  # the notice itself is short: never masked as a result
+    notice = next(m for m in w.history if m.get("tool_call_id") == "call_2")
+    assert notice["content"] == NOTICE_MASKED
+    assert not _is_notice(await w.read(path))  # and the next read is full again
