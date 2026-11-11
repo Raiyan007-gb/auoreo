@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
@@ -395,3 +396,68 @@ async def test_the_dispatcher_refuses_a_planted_branch_and_resumes_its_own(
         if not disp.running:
             break
         await asyncio.sleep(0.05)
+
+
+# ------------------------------------------------------------------ 6: gc and live children
+def _age(repo: Path, tree: Path, hours: float = 3) -> None:
+    """The base commit and the worktree folder look `hours` old (as for a long-running child)."""
+    old = time.time() - hours * 3600
+    stamp = f"{int(old)} +0000"
+    env = {**os.environ, "GIT_COMMITTER_DATE": stamp, "GIT_AUTHOR_DATE": stamp}
+    cmd = [
+        "git",
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.invalid",
+        "commit",
+        "-q",
+        "--amend",
+        "--no-edit",
+    ]
+    subprocess.run(cmd, cwd=repo, env=env, check=True, capture_output=True)
+    git(tree, "reset", "--quiet", "--hard", git(repo, "rev-parse", "HEAD"))
+    os.utime(tree, (old, old))
+
+
+async def test_gc_keeps_a_live_childs_worktree_and_ages_by_session_activity(
+    services: Services, workdir: Path, gateway: RoutedGateway
+) -> None:
+    from auoreo.teams.worktree_gc import guard
+
+    git_init(workdir)
+    flags_on(services)
+    tree = await _tree(services, "live-child")
+    _age(workdir, tree.path)
+    root = session_cwd.orch_root(services.settings, services.cwd)
+    _, items = await wt.plan_gc(workdir, root, 7)
+    assert [(i.action, i.reason) for i in items] == [("remove", "merged")]  # what gc did before
+
+    parent = await services.create_session()
+    gate = asyncio.Event()
+    gateway.route("LIVE", Scripted(text="still working"), gate=gate)
+    teams = services.ext["teams"]
+    child = await teams.spawn(
+        parent.id, agent="default", prompt="LIVE go", name="c", background=True, cwd=tree.path
+    )
+    for _ in range(100):  # the child's turn has started and waits on the gateway
+        if gateway.requests_for("LIVE"):
+            break
+        await asyncio.sleep(0.02)
+    g = await guard(services.db)
+    assert tree.path.resolve() in {p.resolve() for p in g.protected}
+    _, items = await wt.plan_gc(workdir, root, 7, protected=g.protected, activity=g.activity)
+    assert [(i.action, i.reason) for i in items] == [("keep", "task claimed or running")]
+
+    gate.set()
+    await services.coordinator.wait(child.session_id, 20)
+    for _ in range(100):
+        g = await guard(services.db)
+        if tree.path.resolve() not in {p.resolve() for p in g.protected}:
+            break
+        await asyncio.sleep(0.05)
+    assert tree.path.resolve() not in {p.resolve() for p in g.protected}  # finished: not live
+    os.utime(tree.path, (time.time() - 3 * 3600,) * 2)
+    _, items = await wt.plan_gc(workdir, root, 7, protected=g.protected, activity=g.activity)
+    assert [i.action for i in items] == ["keep"]  # its session was active minutes ago
+    assert g.activity[tree.path.resolve()] > time.time() - 600

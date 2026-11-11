@@ -76,13 +76,15 @@ def settings_schema_row(st: Settings) -> Check:
 
 
 async def worktrees_row(st: Settings, cwd: Path | None = None) -> Check:
-    from auoreo.core.doctor_fix import worktree_root
+    from auoreo.core.doctor_fix import gc_guard, worktree_root
     from auoreo.runtime import worktrees as wt
     from auoreo.runtime.subtask import WorktreeError
 
     root = worktree_root(st)
     try:
-        _top, items = await wt.plan_gc(cwd or Path.cwd(), root, st.i5.doctor.worktree_stale_days)
+        _top, items = await wt.plan_gc(
+            cwd or Path.cwd(), root, st.i5.doctor.worktree_stale_days, **await gc_guard(st)
+        )
     except WorktreeError as exc:
         return Check("worktrees", "ok", f"skipped: {str(exc)[:120]}")
     if not items:

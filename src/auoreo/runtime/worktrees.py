@@ -25,7 +25,7 @@ import re
 import shutil
 import sys
 import time
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -156,8 +156,10 @@ def _resolved(path: Path) -> Path:
     return path.resolve()
 
 
-def _age_s(path: Path, commit_ts: str | None) -> float:
-    newest = max([path.stat().st_mtime, float(commit_ts or 0)])
+def _age_s(path: Path, commit_ts: str | None, active: float = 0.0) -> float:
+    """Seconds since the worktree was last touched: its folder, its HEAD commit and (M7) the
+    newest event of a session that runs there."""
+    newest = max([path.stat().st_mtime, float(commit_ts or 0), active])
     return time.time() - newest
 
 
@@ -168,8 +170,10 @@ async def plan_gc(
     *,
     force: bool = False,
     protected: Collection[Path] = (),
+    activity: Mapping[Path, float] | None = None,
 ) -> tuple[Path, list[GcItem]]:
-    """`protected`: worktrees of claimed or running tasks; they are kept whatever their state."""
+    """`protected`: worktrees of claimed tasks or live sessions; they are kept whatever their
+    state. `activity`: per worktree, the newest session event (epoch seconds)."""
     keep = {_resolved(p) for p in protected}
     top = await toplevel(cwd)
     root = (root or top / ".auoreo" / "worktrees").resolve()
@@ -199,7 +203,8 @@ async def plan_gc(
             items.append(GcItem(path, f"{len(dirty.splitlines())} uncommitted change(s)", "keep"))
             continue
         head = e.get("HEAD", "")
-        age = _age_s(path, await _ok("log", "-1", "--format=%ct", head, cwd=top) if head else None)
+        commit_ts = await _ok("log", "-1", "--format=%ct", head, cwd=top) if head else None
+        age = _age_s(path, commit_ts, (activity or {}).get(path, 0.0))
         if age > MERGED_GRACE_S and head and await _merged(top, head):
             items.append(GcItem(path, "merged", "remove"))
             continue

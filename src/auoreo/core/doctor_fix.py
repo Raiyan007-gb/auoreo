@@ -85,12 +85,23 @@ def worktree_root(st: Settings) -> Path | None:
     return Path(raw).expanduser() if raw else None
 
 
+async def gc_guard(st: Settings) -> dict[str, Any]:
+    """M7 (`m7.orch.session_cwd`): keep the worktrees of live sessions and claimed tasks, and
+    age them by session activity (`teams.worktree_gc`); flag off: nothing (unchanged)."""
+    if not st.m7.orch.session_cwd:
+        return {}
+    from auoreo.teams.worktree_gc import guard_from_settings
+
+    g = await guard_from_settings(st)
+    return {"protected": g.protected, "activity": g.activity}
+
+
 async def worktree_fixes(st: Settings, cwd: Path, root: Path | None = None) -> list[Fix]:
     from auoreo.runtime import worktrees as wt
     from auoreo.runtime.subtask import WorktreeError
 
     try:
-        top, items = await wt.plan_gc(cwd, root, st.i5.doctor.worktree_stale_days)
+        top, items = await wt.plan_gc(cwd, root, st.i5.doctor.worktree_stale_days, **await gc_guard(st))
     except WorktreeError:
         return []
 
