@@ -1,6 +1,6 @@
 ---
 name: cloud-hosts
-description: Work with cloud VMs and SSH hosts safely. Use when asked to find instances in AWS, Google Cloud, Azure or Hetzner, propose adding them as SSH hosts, or run commands on a named host through use_environment.
+description: Use when listing cloud VMs or working on a named SSH host.
 ---
 # Cloud hosts and SSH
 
