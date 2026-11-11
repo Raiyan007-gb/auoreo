@@ -38,7 +38,8 @@ class M7Token(_Tolerant):
     telemetry: bool = False
     """Prefix/tool hashes and breakpoints on `usage` events; `cache.prefix_changed` warnings."""
     cache_layout: Literal["legacy", "tail"] = "legacy"
-    """Anthropic breakpoints: `legacy` = last user message; `tail` = last message + previous turn."""
+    """Anthropic breakpoints: `legacy` = last user message; `tail` = the last user message plus the
+    last markable message (the tail). There is no previous-turn breakpoint (Wave 2: not built)."""
     context_carrier: Literal["splice", "persisted"] = "splice"
     """Per-turn context block: spliced at request time, or persisted with the turn message."""
     cached_pricing: bool = False
