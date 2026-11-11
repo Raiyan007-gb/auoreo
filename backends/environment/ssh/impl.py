@@ -24,6 +24,7 @@ import asyncio
 import contextlib
 import shlex
 from collections.abc import Awaitable, Callable
+from types import SimpleNamespace
 from typing import Any
 
 from auoreo.backends import BackendStatus
@@ -64,6 +65,7 @@ class Backend(EnvironmentBackend):
         """Operator CLI (`auoreo ssh deploy|rotate`): the exact key texts to offer instead of
         the stored secret, to prove a login with a new key before it is stored. Never set
         by a tool or the environment pool."""
+        self._jump: Any = None
         self._lock = asyncio.Lock()
         self.table = ProcTable(self.name, int(getattr(settings, "shell_max_processes", 8) or 8))
 
@@ -84,6 +86,8 @@ class Backend(EnvironmentBackend):
             out.append('environment_ssh.key_secret is required ("secret:<NAME>" in the secret store)')
         elif not self._keys(cfg.key_secret):
             out.append(f"secret {cfg.key_secret.removeprefix('secret:')} is not set")
+        if (hop := self.hop) is not None and not self._store_keys(hop.key_secret):
+            out.append(f"jump host {hop.name}: secret {hop.key_secret.removeprefix('secret:')} is not set")
         return out
 
     def _keys(self, ref: str) -> list[str]:
@@ -102,35 +106,76 @@ class Backend(EnvironmentBackend):
         cfg = self.cfg
         return f"{cfg.username}@{cfg.host}:{cfg.port}" if cfg is not None else "?"
 
+    def _store_keys(self, ref: str) -> list[str]:
+        """The jump hop's own keys: always from the store, never `key_override`."""
+        store = SecretStore(self.settings.home, getattr(self.settings, "keyring", "allow-file"))
+        return store.candidates(ref.removeprefix("secret:"), by="backend:ssh")
+
+    @property
+    def hop(self) -> Any:
+        """The M7 jump hop (`core.hosts.JumpHop`) or None."""
+        return getattr(self.host_ext, "jump", None)
+
     async def _connect(self) -> Any:
         asyncssh = _asyncssh()
         if problems := self._problems():
             raise ShellError(f"ssh environment not configured: {'; '.join(problems)}")
         cfg = self.cfg
-        failure: ShellError | None = None
-        for key_text in self._keys(cfg.key_secret) or [""]:
+        tunnel = await self.jump_connection()
+        detail: dict[str, Any] = {"mode": "ssh", "host": cfg.host, "port": cfg.port}
+        if self.hop is not None:
+            detail.update(role="target", via=self.hop.name)
+        return await self._login(asyncssh, cfg, self._keys(cfg.key_secret), self.target, detail, tunnel)
+
+    async def jump_connection(self) -> Any:
+        """The authenticated connection to the jump host (opened once, reopened if it
+        dropped), or None without one. It uses the jump's own key, known_hosts entry and
+        keepalive; the target's key is never offered to the bastion."""
+        hop = self.hop
+        if hop is None:
+            return None
+        if self._jump is not None and not self._jump.is_closed():
+            return self._jump
+        cfg = self.cfg
+        jcfg = SimpleNamespace(
+            host=hop.host, port=hop.port, username=hop.user, key_secret=hop.key_secret,
+            known_hosts=cfg.known_hosts, connect_timeout_s=cfg.connect_timeout_s,
+            keepalive_interval_s=hop.keepalive_interval_s,
+        )  # fmt: skip
+        label = f"{hop.user}@{hop.host}:{hop.port} (jump host {hop.name})"
+        detail = {"name": hop.name, "mode": "ssh", "host": hop.host, "port": hop.port, "role": "jump"}
+        self._jump = await self._login(
+            _asyncssh(), jcfg, self._store_keys(hop.key_secret), label, detail, None
+        )
+        return self._jump
+
+    async def _login(
+        self, asyncssh: Any, cfg: Any, keys: list[str], label: str, detail: dict[str, Any], tunnel: Any
+    ) -> Any:
+        failure = ShellError(f"ssh {label}: secret {cfg.key_secret.removeprefix('secret:')} is not set")
+        for key_text in keys:
             try:
                 key = asyncssh.import_private_key(key_text)
             except (asyncssh.KeyImportError, ValueError) as exc:
                 failure = ShellError(f"ssh key {cfg.key_secret} is not a valid private key: {exc}")
                 continue
             try:
-                conn = await self._open(asyncssh, cfg, key)
+                conn = await self._open(asyncssh, cfg, key, label, tunnel)
             except asyncssh.PermissionDenied:
-                failure = ShellError(
-                    f"ssh {self.target}: authentication failed (key {cfg.key_secret} rejected)"
-                )
+                failure = ShellError(f"ssh {label}: authentication failed (key {cfg.key_secret} rejected)")
                 continue
             if self.net_audit is not None:
-                await self.net_audit({"mode": "ssh", "host": cfg.host, "port": cfg.port})
+                await self.net_audit(detail)
             return conn
-        assert failure is not None
         raise failure from None
 
-    async def _open(self, asyncssh: Any, cfg: Any, key: Any) -> Any:
+    async def _open(self, asyncssh: Any, cfg: Any, key: Any, label: str = "", tunnel: Any = None) -> Any:
+        label = label or self.target
         extra: dict[str, Any] = {}
         if getattr(cfg, "keepalive_interval_s", None) is not None:
             extra["keepalive_interval"] = cfg.keepalive_interval_s
+        if tunnel is not None:  # an open SSHClientConnection; never a string (that reads config)
+            extra["tunnel"] = tunnel
         try:
             return await asyncssh.connect(
                 cfg.host, cfg.port, username=cfg.username, client_keys=[key],
@@ -139,17 +184,15 @@ class Backend(EnvironmentBackend):
             )  # fmt: skip
         except asyncssh.HostKeyNotVerifiable as exc:
             raise ShellError(
-                f"ssh {self.target}: host key does not match {cfg.known_hosts} — refusing to connect "
+                f"ssh {label}: host key does not match {cfg.known_hosts} — refusing to connect "
                 f"(fail closed; verify the host and update known_hosts): {exc.reason}"
             ) from None
         except TimeoutError:
-            raise ShellError(
-                f"ssh {self.target}: connect timed out after {cfg.connect_timeout_s:g}s"
-            ) from None
+            raise ShellError(f"ssh {label}: connect timed out after {cfg.connect_timeout_s:g}s") from None
         except asyncssh.PermissionDenied:
             raise
         except (OSError, asyncssh.Error) as exc:
-            raise ShellError(f"ssh {self.target}: connection failed: {exc}") from None
+            raise ShellError(f"ssh {label}: connection failed: {exc}") from None
 
     async def _connection(self) -> Any:
         async with self._lock:
@@ -226,8 +269,9 @@ class Backend(EnvironmentBackend):
 
     async def close(self) -> None:
         await self.table.close_all()
-        if self._conn is not None:
-            self._conn.close()
-            with contextlib.suppress(Exception):
-                await self._conn.wait_closed()
-            self._conn = None
+        for conn in (self._conn, self._jump):  # the target first, then its tunnel
+            if conn is not None:
+                conn.close()
+                with contextlib.suppress(Exception):
+                    await conn.wait_closed()
+        self._conn = self._jump = None

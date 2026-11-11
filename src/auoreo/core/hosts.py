@@ -357,13 +357,15 @@ def forget_host_key(home: Path, host: str, port: int) -> bool:
     return True
 
 
-async def probe_host_key(host: str, port: int, timeout: float = 10.0) -> ProbeResult:
+async def probe_host_key(host: str, port: int, timeout: float = 10.0, *, tunnel: Any = None) -> ProbeResult:
     """The host key `host:port` presents, without authenticating (the connection ends after
     key exchange). CLI trust-on-first-use only: nothing at runtime calls this, and the result
-    is trusted only after the operator confirms its fingerprint."""
+    is trusted only after the operator confirms its fingerprint. `tunnel` (M7 jump hosts) is an
+    authenticated connection to the bastion the probe goes through."""
     import asyncssh
 
-    key = await asyncio.wait_for(asyncssh.get_server_host_key(host, port, config=None), timeout)
+    extra: dict[str, Any] = {"tunnel": tunnel} if tunnel is not None else {}  # an open connection
+    key = await asyncio.wait_for(asyncssh.get_server_host_key(host, port, config=None, **extra), timeout)
     if key is None:
         raise ValueError(f"{host}:{port} presented no host key")
     line = " ".join(key.export_public_key().decode().split()[:2])
