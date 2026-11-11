@@ -77,9 +77,14 @@ async def _start(
             handoff=bool(_pick(task, args, "handoff")),
             frozen=_frozen(ctx),
             cwd=tree.path if tree else None,
-            worktree=worktree_spawn.payload(tree) if tree else None,
+            worktree=_created(tree, ctx, name) if tree else None,
         )
     )
+
+
+def _created(tree: Any, ctx: ToolContext, name: str) -> dict[str, Any]:
+    """`worktree.created` data with the child's `task_ref` (`delegate:<parent>/<name>`)."""
+    return worktree_spawn.payload(tree, task_ref=worktree_spawn.delegate_ref(ctx.session_id, name))
 
 
 def _pick(task: dict[str, Any], args: dict, key: str) -> Any:

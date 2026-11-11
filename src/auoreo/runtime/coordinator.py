@@ -229,7 +229,8 @@ class SessionRunCoordinator:
                 )
 
             if step.loop is not None:  # --- I4: ralph-lite loop inside the session
-                return await run_looping(step, req.text, {}, turn, partial(self.s.emit, rt.session_id))
+                emit = partial(self.s.emit, rt.session_id)
+                return await run_looping(step, req.text, {}, turn, emit, session_cwd.cwd_of(rt, self.s))
             return await turn(step_input(step, req.text, {}))
         return await self._run_workflow(rt, req, manifest)
 
@@ -272,6 +273,7 @@ class SessionRunCoordinator:
                     outputs,
                     partial(self.runner.run_turn, crt, agent=step.agent, model=req.model),
                     partial(self.s.emit, sid),
+                    session_cwd.cwd_of(crt, self.s),
                 )
             else:
                 result = await self.runner.run_turn(crt, text, agent=step.agent, model=req.model)

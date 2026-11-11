@@ -135,10 +135,27 @@ class M7Orch(_Tolerant):
     """Where orchestrator worktrees go; default `<home>/worktrees/<repo>-<hash8>/` (outside the
     checkout), after `g6.review.worktree_root` when that is set."""
 
+    # --- Wave 2 (docs/designs/m7-orchestration.md, "Wave 2 implementation notes")
+    merge: bool = False
+    """The `git_merge` tool: merge one human-approved commit of an `auoreo/*` branch into the
+    server checkout (requires `worktrees`)."""
+    merge_definitions: Literal["refuse", "warn"] = "refuse"
+    """A merge that changes `.auoreo/`, `.github/workflows/`, `.gitattributes` or `.gitmodules`:
+    refused (merge it by hand), or shown as a warning on the approval card."""
+    merge_max_objects: int = Field(default=20000, ge=1, le=1_000_000)
+    """Objects new to the target that `git_merge` re-hashes before the card; above it, refused."""
+    conflict_board: str | None = None
+    """Board of the kanban task a conflicting merge opens; default the source task's, else `default`."""
+    reconcile_interval_s: float = Field(default=300.0, ge=0)
+    """How often the server turns `<home>/worktrees/gc-journal.jsonl` into `worktree.removed`
+    and `worktree.gc` events (0 = never)."""
+
     @model_validator(mode="after")
     def _worktrees_need_a_session_cwd(self) -> M7Orch:
         if self.worktrees and not self.session_cwd:
             raise ValueError("m7.orch.worktrees requires m7.orch.session_cwd (else isolation is prompt-only)")
+        if self.merge and not self.worktrees:
+            raise ValueError("m7.orch.merge requires m7.orch.worktrees")
         return self
 
 

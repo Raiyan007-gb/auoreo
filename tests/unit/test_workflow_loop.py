@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -74,3 +75,47 @@ async def test_loop_stops_at_max_iterations_in_child_steps(
     steps = await _events(services, sess.id, "workflow.step.completed")
     assert steps[0]["status"] == "max_steps" and steps[1]["output"] == "b ran"
     assert services.coordinator.result(run_id or "") is not None
+
+
+# ------------------------------------------------------------------ M7: check:files_exist
+def test_files_exist_check_validation_and_semantics(tmp_path: Path) -> None:
+    for bad in ("check:files_exist", "check:files_exist:", "check:files_exist:/etc/passwd",
+                "check:files_exist:../x", "check:files_exist:a,,b", "check:files_exist:C:/x"):  # fmt: skip
+        with pytest.raises(ValidationError):
+            WorkflowLoop(until=bad)
+    loop = WorkflowLoop(until="check:files_exist:out/report.md,done.flag")
+    ok = TurnResult("r", "completed", "anything")
+    assert not until_met(loop, ok, tmp_path)
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "report.md").write_text("r")
+    assert not until_met(loop, ok, tmp_path)
+    (tmp_path / "done.flag").write_text("")
+    assert until_met(loop, ok, tmp_path)
+    assert not until_met(loop, ok)  # no workspace known: never met
+
+
+async def test_files_exist_loop_stops_when_the_file_appears(
+    services: Services, gateway: FakeGateway, workdir: Path
+) -> None:
+    write(
+        workdir / ".auoreo" / "workflows" / "fx.yaml",
+        "name: fx\ndescription: d\nsteps:\n  - id: a\n    agent: default\n"
+        "    loop: {until: 'check:files_exist:DONE.txt', max_iterations: 3}\n",
+    )
+    services.harness.reload()
+    gateway.queue(Scripted(text="one"), Scripted(text="two"), Scripted(text="three"))
+    sess = await services.create_session()
+
+    async def make_file_after_first() -> None:
+        for _ in range(1000):
+            if await _events(services, sess.id, "workflow.loop.iteration"):
+                break
+            await asyncio.sleep(0.01)
+        (workdir / "DONE.txt").write_text("ok")
+
+    maker = asyncio.create_task(make_file_after_first())
+    await services.coordinator.submit(sess.id, "go", workflow="fx", interactive=False)
+    await services.coordinator.wait(sess.id, 20)
+    await maker
+    its = await _events(services, sess.id, "workflow.loop.iteration")
+    assert its[-1]["met"] is True and len(its) <= 2

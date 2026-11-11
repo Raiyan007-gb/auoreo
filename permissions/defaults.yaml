@@ -44,6 +44,9 @@ rules:
   - {permission: external_directory, pattern: "$CWD/.auoreo/plans/*", action: allow}
   # Teams: delegate_task defaults to `ask`; allow it so delegation works headless (M5d).
   - {permission: delegate, pattern: "*", action: allow}
+  # M7: git_merge asks the human itself (a one-shot card bound to the commit and the target
+  # HEAD); allowing it here only avoids a second, weaker prompt. Nothing can pre-approve it.
+  - {permission: git_merge, pattern: "*", action: allow}
 # Extra shell deny-globs (unbypassable, checked before any mode, even yolo).
 floors:
   - "*git push --force*"

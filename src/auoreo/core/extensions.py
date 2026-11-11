@@ -28,6 +28,7 @@ STARTERS: list[str] = [
     "auoreo.automation.webhooks:start",
     "auoreo.teams:start",  # key = last dotted part → services.ext["teams"]
     "auoreo.teams.dispatcher:start",  # I3 → services.ext["dispatcher"] (off unless i3.kanban.dispatch)
+    "auoreo.teams.worktree_reconcile:start",  # M7 W4 Wave 2: gc journal → worktree.removed|gc events
     "auoreo.plugins:start",  # → services.ext["plugins"]
     "auoreo.memory.curator:start",  # → services.ext["curator"] (deterministic, no LLM)
     "auoreo.memory.reembed:start",  # I4 → services.ext["reembed"] (resumable re-embed job)

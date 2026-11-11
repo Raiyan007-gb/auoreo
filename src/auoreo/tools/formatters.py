@@ -8,6 +8,12 @@ A formatter only runs when the *project* opts into it, so a stray file never get
   `pyproject.toml` with a `[tool.ruff` table;
 - js/ts → `node_modules/.bin/prettier --write` found in an ancestor;
 - `.rs` → `rustfmt` when an ancestor has `Cargo.toml` (edition from `rustfmt.toml`, else 2021).
+
+M7 W4 Wave 2: `untrusted` is a tree a worker owns (a worktree session's cwd). A formatter runs
+as the server user outside the sandbox, so nothing that tree supplies is executed: prettier is
+skipped there (its binary is `node_modules/.bin/prettier` and its config may be JavaScript),
+and a `PATH` binary that resolves inside the tree is skipped too. ruff and rustfmt read only
+TOML from the tree.
 """
 
 from __future__ import annotations
@@ -92,17 +98,44 @@ async def _run(argv: list[str], cwd: Path, env: dict[str, str], timeout_s: float
     return proc.returncode or 0, out.decode(errors="replace").strip()
 
 
-async def format_files(paths: list[Path], env: dict[str, str], timeout_s: float = 20.0) -> FormatReport:
-    """Format the files that exist and have an opted-in formatter; report which changed."""
+UNTRUSTED_SKIP = frozenset({"prettier"})
+"""Formatters that load code from the project they format: never run in a worker's tree."""
+
+
+def _inside(path: Path, root: Path) -> bool:
+    try:
+        return path.resolve().is_relative_to(root.resolve())
+    except (OSError, ValueError):
+        return True  # unreadable: treat as the worker's
+
+
+def _refused(chosen: tuple[str, Path, list[str]], untrusted: Path | None) -> str | None:
+    if untrusted is None:
+        return None
+    name, _root, cmd = chosen
+    if name in UNTRUSTED_SKIP or _inside(Path(cmd[0]), untrusted):
+        return f"{name}: skipped in a worktree session (it would run code from the worker's tree)"
+    return None
+
+
+async def format_files(
+    paths: list[Path], env: dict[str, str], timeout_s: float = 20.0, *, untrusted: Path | None = None
+) -> FormatReport:
+    """Format the files that exist and have an opted-in formatter; report which changed.
+    `untrusted`: a worker-owned tree whose formatter code is never executed (see above)."""
     groups: dict[tuple[str, Path, tuple[str, ...]], list[Path]] = {}
+    report = FormatReport()
     for path in paths:
         pick = PICKERS.get(path.suffix)
         if pick is None or not path.is_file():
             continue
         chosen = pick(path)
-        if chosen is not None:
-            groups.setdefault((chosen[0], chosen[1], tuple(chosen[2])), []).append(path)
-    report = FormatReport()
+        if chosen is None:
+            continue
+        if (why := _refused(chosen, untrusted)) is not None:
+            report.notes += [] if why in report.notes else [why]
+            continue
+        groups.setdefault((chosen[0], chosen[1], tuple(chosen[2])), []).append(path)
     for (name, root, cmd), files in groups.items():
         before = {p: _digest(p) for p in files}
         try:

@@ -280,9 +280,13 @@ async def _format(ctx: ToolContext, paths: list[Path]) -> FormatReport:
     if not cfg.format or not paths:
         return FormatReport()
     from auoreo.core.secrets import child_env
+    from auoreo.runtime.cwd import worktree_session
 
+    untrusted = ctx.cwd if worktree_session(ctx) else None  # M7: the worker owns that tree
     try:
-        report = await format_files(paths, ctx.env or child_env([], None), cfg.format_timeout_s)
+        report = await format_files(
+            paths, ctx.env or child_env([], None), cfg.format_timeout_s, untrusted=untrusted
+        )
     except Exception as exc:  # never fail an applied patch on the formatter
         return FormatReport(notes=[f"skipped ({type(exc).__name__}: {exc})"])
     for path in report.formatted:

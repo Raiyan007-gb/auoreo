@@ -35,7 +35,8 @@ from auoreo.automation import lock
 from auoreo.runtime.cwd import SessionCwdError
 from auoreo.runtime.inbox import RunOptions
 from auoreo.runtime.subtask import WorktreeError
-from auoreo.teams import worktree_spawn
+from auoreo.runtime.worktrees import BRANCH_PREFIX as wt_prefix
+from auoreo.teams import merge_records, worktree_spawn
 from auoreo.teams.kanban import KanbanError, KanbanStore
 from auoreo.teams.worker_log import RotatingLog, worker_log_path
 
@@ -166,8 +167,8 @@ class KanbanDispatcher:
         tree = None
         if self.s.settings.m7.orch.worktrees:  # --- M7 W4: one worktree per task
             try:
-                base = await worktree_spawn.recorded_base(self.s, row.board, row.id)
-                tree = await worktree_spawn.prepare(self.s, f"k{row.board}-{row.id}", base=base)
+                slug, base = await self._worktree_of(row)
+                tree = await worktree_spawn.prepare(self.s, slug, base=base)
             except (WorktreeError, OSError) as exc:
                 log.warning("kanban task %s: no worktree (%s); unclaimed", row.id, exc)
                 await kb.release(row.id, name)
@@ -209,6 +210,15 @@ class KanbanDispatcher:
         w.task = asyncio.create_task(self._watch(w), name=f"kanban:worker:{name}")
         return True
 
+    async def _worktree_of(self, row: KanbanTaskRow) -> tuple[str, str | None]:
+        """`(slug, recorded base)` of the task's worktree. A merge-conflict task the harness
+        opened (Wave 2, its own `merge.conflicts` event) resumes the conflicting branch, so the
+        resolver works where the commits are; the conflicting sha is the base it must descend from."""
+        if self.s.settings.m7.orch.merge and (hit := await merge_records.conflict_branch(self.s, row.id)):
+            branch, sha = hit
+            return branch.removeprefix(wt_prefix), sha
+        return f"k{row.board}-{row.id}", await worktree_spawn.recorded_base(self.s, row.board, row.id)
+
     async def _attach(self, kb: KanbanStore, task_id: int, tree: Any, by: str) -> None:
         """The durable task-to-worktree mapping (used on re-dispatch and by `worktree gc`)."""
         ref, note = str(tree.path), worktree_spawn.attachment_note(tree)
@@ -233,6 +243,7 @@ class KanbanDispatcher:
         res = coord.result(w.run_id) if w.run_id else None
         if res is not None and res.status not in {"completed", "max_steps"}:
             status, code = "failed", str((res.error or {}).get("code") or res.status)
+        await merge_records.record_tip(self.s, w.session_id)  # M7 Wave 2: no-op unless m7.orch.merge
         events = await self.s.events.replay(0, frozenset({f"session:{w.session_id}"}), 2000)
         w.log.write(
             *({"type": e.type, "seq": e.seq, "data": e.data} for e in events if ".delta" not in e.type)

@@ -98,6 +98,16 @@ class KanbanStore:
             await s.commit()
         return row
 
+    async def create_blocked(self, board: str, title: str, body: str = "") -> KanbanTaskRow:
+        """A task born `blocked` (M7 merge conflicts): the dispatcher does not start a worker on
+        it until a human or the orchestrator unblocks it. No failure is counted."""
+        row = KanbanTaskRow(board=board, title=title, body=body, status="blocked")
+        async with self.s.db.session() as s:
+            s.add(row)
+            await s.commit()
+        await self._event("blocked", row)
+        return row
+
     async def get(self, task_id: int) -> KanbanTaskRow:
         async with self.s.db.session() as s:
             row = await s.get(KanbanTaskRow, task_id)

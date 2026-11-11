@@ -54,8 +54,25 @@ async def rollback(services: Services, trees: list[wt.NewFeature]) -> None:
         await wt.discard_worktree(services.cwd, tree)
 
 
-def payload(tree: wt.NewFeature, *, task_id: int | None = None, board: str | None = None) -> dict[str, Any]:
+def kanban_ref(board: str, task_id: int) -> str:
+    """`task_ref` of a kanban task (the grammar of the dispatcher's session title)."""
+    return f"kanban:{board}#{task_id}"
+
+
+def delegate_ref(parent_session_id: str, name: str) -> str:
+    return f"delegate:{parent_session_id}/{name}"
+
+
+def payload(
+    tree: wt.NewFeature,
+    *,
+    task_id: int | None = None,
+    board: str | None = None,
+    task_ref: str | None = None,
+) -> dict[str, Any]:
     """`data` of the `worktree.created` event (emitted on the child session)."""
+    if task_ref is None and task_id is not None and board is not None:
+        task_ref = kanban_ref(board, task_id)
     event = WorktreeCreated(
         path=str(tree.path),
         branch=tree.branch,
@@ -63,6 +80,7 @@ def payload(tree: wt.NewFeature, *, task_id: int | None = None, board: str | Non
         resumed=tree.resumed,
         task_id=task_id,
         board=board,
+        task_ref=task_ref,
     )
     return event.model_dump(exclude_none=True)
 
