@@ -115,3 +115,7 @@ HOST_REQUESTS: dict[str, Handler] = {
     "usage.record": usage_record,
     "oauth.token": oauth_token,
 }
+
+from auoreo.plugins.requests_m7 import M7_REQUESTS  # noqa: E402  --- M7: voice, state
+
+HOST_REQUESTS.update(M7_REQUESTS)

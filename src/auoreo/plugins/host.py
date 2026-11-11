@@ -19,7 +19,9 @@ from typing import TYPE_CHECKING, Any
 
 from auoreo.core.secrets import child_env
 from auoreo.harness.manifests import PluginManifest
+from auoreo.plugins import consent
 from auoreo.plugins import install as inst
+from auoreo.plugins import requests_m7 as m7
 from auoreo.plugins.bridge import (
     PluginDelivery,
     PluginSkill,
@@ -209,11 +211,10 @@ class PluginHost:
         granted = [
             c
             for c in st.manifest.consumes
-            if c in {"sessions", "memory", "usage"} or c.startswith("secrets:")
+            if c in {"sessions", "memory", "usage"} or c.startswith("secrets:") or c in m7.GRANTABLE
         ]
-        info = await peer.request(
-            "initialize", {"config": st.config, "consumes_granted": granted}, timeout=30
-        )
+        init = {"config": st.config, "consumes_granted": granted, **await m7.init_extra(self.s, st)}
+        info = await peer.request("initialize", init, timeout=30)
         self._register(st, info if isinstance(info, dict) else {})
         for conn in st.connectors:
             await peer.request("connector.start", {"name": conn}, timeout=30)
@@ -246,6 +247,7 @@ class PluginHost:
         register_providers(self, st, info)  # --- I6: `provides: [webhook_provider]`
 
     async def _cleanup(self, st: PluginState) -> None:
+        m7.release(st.name)  # --- M7: revoke the plugin's egress-proxy token
         if st.peer is not None:
             await st.peer.close()
             st.peer = None
@@ -388,6 +390,8 @@ class PluginHost:
             peer = st.peer
             if peer is None or not peer.alive:
                 return {"ok": False, "detail": f"plugin '{st.name}' is not running", "external_id": None}
+            if (refused := await consent.gate(self.s, st, meta)) is not None:  # --- M7
+                return {**refused, "external_id": None}
             params = {"name": name, "target": target, "text": text, "meta": meta}
             res = await peer.request("delivery.send", params, timeout=self.s.settings.plugins_tool_timeout_s)
             return res if isinstance(res, dict) else {"ok": False, "detail": "bad reply"}

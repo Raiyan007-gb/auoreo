@@ -91,14 +91,25 @@ class M7Agents(_Tolerant):
     strict_origins: bool = False
     """Connector, job, webhook and kanban-worker sessions are unattended: a suggestion they
     propose runs in a new session as the origin's own agent, never in the origin session, and
-    a job, webhook or connector session cannot call `kanban_create` directly."""
+    a job, webhook or connector session cannot call `kanban_create` directly. Required by the
+    flags below."""
     kanban_suggestions: bool = False
     """The `kanban_create` suggestion action (requires `strict_origins`)."""
     triage: M7Triage = Field(default_factory=M7Triage)
     post_consent: bool = False
-    """Consent-gated posting for public connectors (requires `strict_origins`)."""
+    """Connectors that consume `consent:post` (Mastodon) post only for an accepted suggestion
+    (requires `strict_origins`)."""
+    post_daily_cap: int = Field(default=10, ge=1, le=1000)
+    """Consent-gated posts per plugin per UTC day."""
     voice_inbound: bool = False
-    """Inbound voice notes from paired chats (requires `strict_origins`)."""
+    """The `voice.transcribe` host request: connector voice notes become `[voice] ` text
+    (requires `strict_origins`)."""
+    voice_max_seconds: int = Field(default=120, ge=1, le=3600)
+    """Longest voice note transcribed (seconds, measured after decoding)."""
+    voice_daily_seconds: int = Field(default=600, ge=1, le=86400)
+    """Transcribed seconds per plugin per UTC day."""
+    voice_max_bytes: int = Field(default=5 * 2**20, ge=1024, le=20 * 2**20)
+    """Largest voice file accepted by `voice.transcribe` (bytes)."""
 
     @model_validator(mode="after")
     def _wider_flags_need_strict_origins(self) -> M7Agents:
