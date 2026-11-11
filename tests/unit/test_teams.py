@@ -242,7 +242,12 @@ async def test_interrupt_agent_cancels_running_child(services: Services, gateway
     assert m.status == "stopped" and not teams.is_running(m.session_id)
     members = await teams.members(m.team_id)
     assert members[0].status == "stopped"
-    child_events = [t for t, _ in await events_of(services, m.session_id)]
+    child_events: list[str] = []
+    for _ in range(100):  # run.aborted is appended by the cancelled run; poll rather than race it
+        child_events = [t for t, _ in await events_of(services, m.session_id)]
+        if "run.aborted" in child_events:
+            break
+        await asyncio.sleep(0.05)
     assert "run.aborted" in child_events
     failed = [d for t, d in await events_of(services, parent) if t == "subagent.failed"]
     assert failed and failed[0]["status"] == "stopped"
