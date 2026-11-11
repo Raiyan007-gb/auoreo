@@ -261,3 +261,43 @@ async def test_arm_top_k_sets_the_memory_recall_depth(
     services.settings.bandit.enabled = False
     await turn(services, sess.id, "again")
     assert seen == [3, 8]
+
+
+# ------------------------------------------------ M7 Wave 2: cache ratio signal
+class _Usage(_Row):
+    def __init__(self, prompt: int, cached: int, outcome: str | None = "ok") -> None:
+        super().__init__(0.0, 10, outcome, cached)
+        self.prompt_tokens = prompt
+
+
+def test_cache_ratio_is_recorded_over_main_turn_rows() -> None:
+    rows = [_Usage(1000, 900), _Usage(1000, 100), _Usage(5000, 0, outcome="RATE_LIMIT")]
+    sig = signals_of("completed", rows, (0.0, 0.0), 0)
+    assert sig["cache_ratio"] == pytest.approx(0.5) and sig["cache_hit"] == 1
+    assert signals_of("completed", [], (0.0, 0.0), 0)["cache_ratio"] == 0.0
+
+
+def test_reward_keeps_the_binary_term_unless_ratio_is_chosen() -> None:
+    w = BanditWeights()
+    sig = {"success": 1, "cache_hit": 1, "cache_ratio": 0.25}
+    assert reward(w, sig) == pytest.approx(1.0 + 0.1)  # default: binary
+    assert reward(w, sig, cache_signal="binary") == reward(w, sig)
+    assert reward(w, sig, cache_signal="ratio") == pytest.approx(1.0 + 0.1 * 0.25)
+    assert reward(w, {"success": 1, "cache_hit": 1}, cache_signal="ratio") == pytest.approx(1.0)
+
+
+async def test_outcome_signals_carry_the_ratio_and_the_flag_picks_the_term(
+    services: Services, gateway: FakeGateway
+) -> None:
+    enable(services)
+    services.coordinator.runner.policy.rng = FixedRng([0.9, 0.9])
+    sess = await services.create_session()
+    await turn(services, sess.id, "hello")
+    services.settings.m7.token.bandit_cache_signal = "ratio"
+    await turn(services, sess.id, "hello again")
+    first, second = await outcomes(services)
+    for out in (first, second):
+        assert "cache_ratio" in out.signals and 0.0 <= out.signals["cache_ratio"] <= 1.0
+    w = services.settings.bandit.weights
+    assert first.reward == pytest.approx(reward(w, first.signals), abs=1e-6)
+    assert second.reward == pytest.approx(reward(w, second.signals, cache_signal="ratio"), abs=1e-6)

@@ -52,6 +52,10 @@ class M7Token(_Tolerant):
     masking: Literal["off", "compaction"] = "off"
     """`compaction`: every compaction run first replaces old bulky tool results by placeholders
     (originals spilled under `sessions/<id>/tool-results/masked/`); `/compact unmask=` restores."""
+    bandit_cache_signal: Literal["binary", "ratio"] = "binary"
+    """Bandit reward cache term: `binary` (any cached token) or `ratio` (cached / prompt over
+    main-turn calls). `cache_ratio` is always recorded in the outcome signals; switch only after
+    report gate C1 passes, and keep `bandit.weights.cache_hit = 0` with `cached_pricing` on."""
 
 
 class M7Ssh(_Tolerant):
