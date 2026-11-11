@@ -46,6 +46,13 @@ def enabled(settings: Any) -> bool:
     return bool(settings.m7.orch.session_cwd)
 
 
+def worktree_session(ctx: Any) -> bool:
+    """True when `ctx` runs in a per-session workspace (flag on, cwd differs from the server cwd):
+    the worker controls every file there, so nothing in it may be executed outside the sandbox."""
+    services = ctx.services.get("services")
+    return services is not None and enabled(services.settings) and _norm(ctx.cwd) != _norm(services.cwd)
+
+
 def cwd_of(rt: Any, services: Any) -> Path:
     """The workspace root of `rt`'s session: its own cwd, else the server cwd."""
     own: Path | None = getattr(rt, "cwd", None)

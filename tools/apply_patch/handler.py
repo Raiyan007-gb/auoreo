@@ -21,8 +21,9 @@ from lark.exceptions import LarkError
 
 from auoreo.core.permissions import is_sensitive_write
 from auoreo.core.settings_h5 import h5_of
+from auoreo.runtime.cwd import worktree_session
 from auoreo.tools.context import ToolContext, ToolError, ToolResult
-from auoreo.tools.formatters import FormatReport, format_files
+from auoreo.tools.formatters import JS_EXT, FormatReport, format_files
 from auoreo.tools.lsp_diagnostics import diagnostics_for
 from auoreo.tools.writeguard import check_write
 
@@ -275,10 +276,19 @@ async def _format(ctx: ToolContext, paths: list[Path]) -> FormatReport:
         return FormatReport()
     from auoreo.core.secrets import child_env
 
+    skipped: list[str] = []
+    if worktree_session(ctx):  # prettier (binary or config) would run worker-written files unsandboxed
+        skipped = [p.name for p in paths if p.suffix in JS_EXT]
+        paths = [p for p in paths if p.suffix not in JS_EXT]
+    note = [
+        "format step skipped in a worktree session: it would run files from the worktree outside the sandbox"
+    ]
     try:
         report = await format_files(paths, ctx.env or child_env([], None), cfg.format_timeout_s)
     except Exception as exc:  # never fail an applied patch on the formatter
-        return FormatReport(notes=[f"skipped ({type(exc).__name__}: {exc})"])
+        return FormatReport(notes=[f"skipped ({type(exc).__name__}: {exc})", *(note if skipped else [])])
     for path in report.formatted:
         ctx.state.read_files[str(path)] = path.stat().st_mtime
+    if skipped:
+        report.notes += note
     return report
