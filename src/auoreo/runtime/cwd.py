@@ -206,15 +206,22 @@ async def _git_paths(cwd: Path, server_cwd: Path) -> list[Path]:
     return _existing(out)
 
 
+def worktree_session(ctx: Any) -> bool:
+    """True when a tool call runs in a session whose cwd is not the server cwd (a worktree,
+    `m7.orch.session_cwd` on). Flag off, or the server cwd: False."""
+    services = ctx.services.get("services")
+    return services is not None and enabled(services.settings) and _norm(ctx.cwd) != _norm(services.cwd)
+
+
 async def git_allow(ctx: Any) -> list[Path]:
     """Writable git metadata for a shell command of a worktree session (engine-computed, never
     model-supplied): the worktree's admin dir, the object store and the `auoreo/` branch
     namespace with its ref log. Git replaces a ref through a lock file beside it, so the
     allowance is the namespace directory, not the single ref file. The parent's working tree,
     `config`, `hooks` and every other ref stay unwritable. Empty for the server cwd."""
-    services = ctx.services.get("services")
-    if services is None or not enabled(services.settings) or _norm(ctx.cwd) == _norm(services.cwd):
+    if not worktree_session(ctx):
         return []
+    services = ctx.services["services"]
     key = _norm(ctx.cwd)
     if key not in _GIT_ALLOW:
         _GIT_ALLOW[key] = await _git_paths(ctx.cwd, services.cwd)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterator
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from auoreo.core.approvals import unattended_action, unattended_hint, unattended_kind
@@ -117,6 +118,32 @@ async def unattended_gate(
     )
 
 
+def _declared_paths(tool: ToolDef, args: dict[str, Any]) -> list[str]:
+    """Paths a tool without `pattern_arg: path` says it will touch: its handler module's
+    `target_paths(args)` (e.g. every `path`/`move_to` of an `apply_patch`). A malformed
+    argument yields nothing here; the handler then refuses it before writing."""
+    fn = getattr(tool.handler(), "__globals__", {}).get("target_paths")
+    if not callable(fn):
+        return []
+    try:
+        return [p for p in fn(args) if isinstance(p, str) and p]
+    except Exception:
+        return []
+
+
+def _gated_paths(tool: ToolDef, args: dict[str, Any], ctx: ToolContext) -> list[str]:
+    from auoreo.runtime.cwd import worktree_session
+
+    m = tool.manifest
+    if m.permission_name not in ("read", "edit"):
+        return []
+    if m.pattern_arg == "path":
+        return [args["path"]] if isinstance(args.get("path"), str) else []
+    # M7 W4: in a worktree session the multi-path tools are gated too (scoped to worktree
+    # sessions so the server cwd keeps its behaviour: an `edit` approval covers the patch)
+    return _declared_paths(tool, args) if worktree_session(ctx) else []
+
+
 async def external_dir_gate(
     ex: ToolExecutor,
     call: ToolCall,
@@ -126,13 +153,28 @@ async def external_dir_gate(
     engine: PermissionEngine,
 ) -> ToolOutcome | None:
     """§19.6: `read`/`edit` tools with a `path` outside cwd ask `external_directory` for the
-    parent directory (`<dir>/*`, so an `always` grant covers its files)."""
-    m = tool.manifest
-    if m.pattern_arg != "path" or m.permission_name not in ("read", "edit"):
-        return None
-    if not isinstance(args.get("path"), str):
-        return None
-    path = ctx.resolve_path(args["path"])
+    parent directory (`<dir>/*`, so an `always` grant covers its files). In a worktree
+    session every path a multi-path tool declares (`target_paths`) is checked the same way."""
+    seen: set[str] = set()
+    for raw in _gated_paths(tool, args, ctx):
+        path = ctx.resolve_path(raw)
+        if str(path.parent) in seen:
+            continue
+        seen.add(str(path.parent))
+        if (refused := await _outside_gate(ex, call, tool, args, ctx, engine, path)) is not None:
+            return refused
+    return None
+
+
+async def _outside_gate(
+    ex: ToolExecutor,
+    call: ToolCall,
+    tool: ToolDef,
+    args: dict[str, Any],
+    ctx: ToolContext,
+    engine: PermissionEngine,
+    path: Path,
+) -> ToolOutcome | None:
     decision = engine.external_directory(path, ctx.cwd, interactive=ctx.interactive)
     if decision is None or decision.action == "allow":
         return None
