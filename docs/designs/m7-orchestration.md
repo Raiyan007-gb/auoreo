@@ -228,7 +228,11 @@ verifies every object hash). `ExecSpec.outside_cwd()` exempts exactly these path
 is audited as `sandbox.mount`. Everything else in the parent (working tree, objects, hooks
 directory, `config`) stays unwritable. Residual risk, stated: the worker can move any branch in
 the `auoreo/` namespace (a per-task namespace would need a different branch name scheme, since git
-replaces a ref through a lock file beside it). The orchestrator never runs git with a
+replaces a ref through a lock file beside it, and `auoreo/<slug>` cannot also be a folder); the
+orchestrator therefore resumes an existing branch only when the task's first `worktree.created`
+event recorded its base and the tip descends from it, and refuses an unrecorded one (a delegate
+child never resumes). A sibling that plants a descendant of the same base is not detected. The
+orchestrator never runs git with a
 worktree as the repository (`worktree_git.tree_git`: git dirs from the server's records, no
 fsmonitor, hooks or submodules). Without an enforced sandbox nothing is confined, as the Goals
 state.

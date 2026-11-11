@@ -90,14 +90,15 @@ async def test_existing_branch_is_resumed_never_reset(services: Services, workdi
     git(first.path, "add", "work.txt")
     git(first.path, "commit", "--quiet", "-m", "worker commit")
     tip = git(workdir, "rev-parse", "auoreo/k1-7")
-    again = await wt.task_worktree(workdir, root, "k1-7")  # the folder is still there
+    base = first.base  # recorded when the task's worktree was made (the worktree.created event)
+    again = await wt.task_worktree(workdir, root, "k1-7", base=base)  # the folder is still there
     assert again.resumed and again.path == first.path
     git(workdir, "worktree", "remove", "--force", str(first.path))
-    back = await wt.task_worktree(workdir, root, "k1-7")  # the folder is gone, the branch is not
+    back = await wt.task_worktree(workdir, root, "k1-7", base=base)  # the folder is gone, the branch is not
     assert back.resumed and git(workdir, "rev-parse", "auoreo/k1-7") == tip
     assert (back.path / "work.txt").read_text(encoding="utf-8") == "done\n"
     with pytest.raises(WorktreeError):  # checked out elsewhere: fail, never steal or reset
-        await wt.task_worktree(workdir, root.parent / "second-root", "k1-7")
+        await wt.task_worktree(workdir, root.parent / "second-root", "k1-7", base=base)
     assert git(workdir, "rev-parse", "auoreo/k1-7") == tip
 
 
@@ -108,7 +109,8 @@ async def test_cap_and_concurrent_creation(services: Services, workdir: Path) ->
     assert len({m.path for m in made}) == 4 and len(_trees(services)) == 4
     with pytest.raises(WorktreeError, match="max_worktrees"):
         await wt.task_worktree(workdir, root, "one-more", max_worktrees=4)
-    assert (await wt.task_worktree(workdir, root, "par-0", max_worktrees=4)).resumed  # resume is free
+    again = await wt.task_worktree(workdir, root, "par-0", max_worktrees=4, base=made[0].base)
+    assert again.resumed  # resume is free
 
 
 # ------------------------------------------------------------------ behaviour table
@@ -151,7 +153,7 @@ async def test_child_runs_in_its_own_worktree(
     (created,) = await _events(services, child, "worktree.created")
     event = WorktreeCreated.model_validate(created)
     assert (Path(event.path), event.branch, event.resumed) == (tree, branch, False)
-    assert event.base == git(workdir, "rev-parse", "--short", "HEAD")
+    assert event.base == git(workdir, "rev-parse", "HEAD")
     assert event.task_id is None and "task_id" not in created
     prompt = first_user(gateway.requests_for("ISO")[0])
     assert str(tree) in prompt and branch in prompt and "not carried over" in prompt

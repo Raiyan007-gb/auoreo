@@ -276,12 +276,17 @@ async def _live(top: Path, root: Path) -> int:
     return sum(1 for e in _entries(listing) if base in _resolved(Path(e["worktree"])).parents)
 
 
-async def task_worktree(cwd: Path, root: Path, slug: str, *, max_worktrees: int = 8) -> NewFeature:
-    """Create (or resume) the worktree of one task on branch `auoreo/<slug>`."""
+async def task_worktree(
+    cwd: Path, root: Path, slug: str, *, max_worktrees: int = 8, base: str | None = None
+) -> NewFeature:
+    """Create (or resume) the worktree of one task on branch `auoreo/<slug>`. `base` is the
+    commit recorded when the task's worktree was first made (kanban attachment): an existing
+    branch is resumed only when its tip descends from it; without a record it is refused
+    (another worker can create any `auoreo/*` branch, so an unrecorded one is not trusted)."""
     slug = task_slug(slug)
     top = await toplevel(cwd)
     async with _LOCKS.setdefault(str(top), asyncio.Lock()):
-        dest = root / slug
+        dest, branch = root / slug, BRANCH_PREFIX + slug
         if not (dest / ".git").exists():
             check_path_length(dest)
             if await _live(top, root) >= max_worktrees:
@@ -289,19 +294,39 @@ async def task_worktree(cwd: Path, root: Path, slug: str, *, max_worktrees: int 
                     f"{max_worktrees} worktrees are live under {root} (m7.orch.max_worktrees); "
                     "merge or remove some (`auoreo worktree gc`)"
                 )
-        head = await _ok("rev-parse", "--short", "HEAD", cwd=top)
+        head = await _ok("rev-parse", "--verify", "--quiet", "HEAD^{commit}", cwd=top)
         if not head:
             raise WorktreeError(f"{top} has no commit to branch from")
+        if (dest / ".git").exists() or await _ok(
+            "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}", cwd=top
+        ):
+            await _check_resumable(top, dest, branch, base)
         out = await new_feature(
             top, slug, root, base="HEAD", fetch=False, check_pr=False, reset=False, harden=True
         )
-        out.base = out.base if out.base not in ("", "HEAD") else head
+        out.base = base if out.resumed and base else head
         if out.resumed and (on := await _checked_out(top, dest)) != f"refs/heads/{out.branch}":
             raise WorktreeError(
                 f"{dest} is on {on or 'no branch'}, not {out.branch}; refusing to resume it "
                 "(remove it with `git worktree remove` or pick another task name)"
             )
         return out
+
+
+async def _check_resumable(top: Path, dest: Path, branch: str, base: str | None) -> None:
+    if base is None:
+        raise WorktreeError(
+            f"{branch} already exists but this task has no record of creating it; refusing to resume "
+            "it (another worker may have made it). Delete the branch or check its commits by hand"
+        )
+    if not re.fullmatch(r"[0-9a-f]{4,64}", base):
+        raise WorktreeError(f"recorded base '{base[:80]}' of {branch} is not a commit id")
+    await wg.import_objects(top, dest)  # a live worktree's commits may still be private
+    tip = f"refs/heads/{branch}"
+    if await _ok(*wg.HARDEN, "merge-base", "--is-ancestor", base, tip, cwd=top) is None:
+        raise WorktreeError(
+            f"{branch} does not descend from the task's recorded base {base[:12]}; refusing to resume it"
+        )
 
 
 async def _checked_out(top: Path, dest: Path) -> str | None:

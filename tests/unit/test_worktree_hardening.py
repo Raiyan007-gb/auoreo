@@ -6,6 +6,7 @@ hooks running the worker's files) and asserts it is closed for worktree sessions
 
 from __future__ import annotations
 
+import asyncio
 import os
 import shutil
 import subprocess
@@ -41,9 +42,9 @@ def _tmp_is_not_a_free_zone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(tempfile, "tempdir", str(scratch))
 
 
-async def _tree(svc: Services, slug: str = "job-1") -> wt.NewFeature:
+async def _tree(svc: Services, slug: str = "job-1", base: str | None = None) -> wt.NewFeature:
     root = session_cwd.orch_root(svc.settings, svc.cwd)
-    return await wt.task_worktree(svc.cwd, root, slug)
+    return await wt.task_worktree(svc.cwd, root, slug, **({"base": base} if base else {}))
 
 
 def _allow(rt: Any, *permissions: str) -> None:
@@ -331,6 +332,66 @@ async def test_a_worktree_on_another_branch_is_not_resumed(services: Services, w
     tree = await _tree(services, "job")
     git(tree.path, "switch", "--quiet", "-c", "auoreo/someone-else")  # the worker moved its HEAD
     with pytest.raises(WorktreeError, match="refusing to resume"):
-        await _tree(services, "job")
+        await _tree(services, "job", base=tree.base)
     git(tree.path, "switch", "--quiet", "auoreo/job")
-    assert (await _tree(services, "job")).resumed
+    assert (await _tree(services, "job", base=tree.base)).resumed
+
+
+# ------------------------------------------------------------------ 5: planted sibling branches
+def _plant(sibling: Path, branch: str, *, orphan: bool = False) -> str:
+    """Worker A (namespace write access) creates or moves another task's branch."""
+    git(sibling, "switch", "--quiet", *(["--orphan", branch] if orphan else ["-c", branch]))
+    (sibling / "planted.txt").write_text("x\n", encoding="utf-8")
+    git(sibling, "add", "planted.txt")
+    git(sibling, "commit", "--quiet", "--no-verify", "-m", "planted")
+    return git(sibling, "rev-parse", "HEAD")
+
+
+async def test_an_unrecorded_or_unrelated_branch_is_never_resumed(services: Services, workdir: Path) -> None:
+    git_init(workdir)
+    sibling = await _tree(services, "a-1")
+    _plant(sibling.path, "auoreo/kdefault-5")
+    git(sibling.path, "switch", "--quiet", "auoreo/a-1")
+    with pytest.raises(WorktreeError, match="no record"):
+        await _tree(services, "kdefault-5")  # the task never made it: refused
+    own = await _tree(services, "own-1")
+    git(own.path, "switch", "--quiet", "--detach")
+    git(workdir, "branch", "-D", "auoreo/own-1")
+    _plant(sibling.path, "auoreo/own-1", orphan=True)  # moved to history unrelated to its base
+    git(sibling.path, "switch", "--quiet", "auoreo/a-1")
+    git(workdir, "worktree", "remove", "--force", str(own.path))
+    with pytest.raises(WorktreeError, match="does not descend"):
+        await _tree(services, "own-1", base=own.base)
+
+
+async def test_the_dispatcher_refuses_a_planted_branch_and_resumes_its_own(
+    services: Services, workdir: Path, gateway: RoutedGateway
+) -> None:
+    git_init(workdir)
+    flags_on(services)
+    cfg = services.settings.i3.kanban
+    cfg.boards, cfg.agent = ["jobs"], "implementer"
+    kb = services.ext["teams"].kanban
+    from auoreo.teams.dispatcher import KanbanDispatcher
+
+    task = await kb.create("jobs", "KPLANT do it")
+    sibling = await _tree(services, "a-1")
+    planted = _plant(sibling.path, f"auoreo/kjobs-{task.id}")
+    git(sibling.path, "switch", "--quiet", "auoreo/a-1")
+    gateway.route("KPLANT", Scripted(text="ok"))
+    disp = KanbanDispatcher(services)
+    assert await disp.tick() == []
+    assert (await kb.get(task.id)).status == "ready" and disp.guarded(task.id) == "worktree failed"
+    assert git(workdir, "rev-parse", f"auoreo/kjobs-{task.id}") == planted  # untouched, not run
+    # once the stray branch is gone the task gets its own; its base is recorded in the event
+    git(workdir, "branch", "-D", f"auoreo/kjobs-{task.id}")
+    disp.guards.clear()
+    assert await disp.tick() == [task.id]
+    from auoreo.teams.worktree_spawn import recorded_base
+
+    head = git(workdir, "rev-parse", "HEAD")
+    assert await recorded_base(services, "jobs", task.id) == head
+    for _ in range(400):
+        if not disp.running:
+            break
+        await asyncio.sleep(0.05)

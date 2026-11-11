@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 
-from auoreo.core.db import KanbanCommentRow, KanbanTaskRow
+from auoreo.core.db import EventRow, KanbanCommentRow, KanbanTaskRow
 from auoreo.runtime import worktrees as wt
 from auoreo.runtime.cwd import orch_root
 from auoreo.runtime.subtask import WorktreeError
@@ -30,6 +30,7 @@ if TYPE_CHECKING:
 
 DISABLED = "worktree is disabled (m7.orch.worktrees)"
 BRANCH_NOTE = "branch="
+BASE_NOTE = " base="
 CHILD_NOTE = (
     "\n\nYou work in your own git worktree at `{path}` on branch `{branch}` (created from {base} of "
     "the parent checkout; its uncommitted changes were not carried over). Relative paths and commands "
@@ -37,14 +38,15 @@ CHILD_NOTE = (
 )
 
 
-async def prepare(services: Services, slug: str) -> wt.NewFeature:
-    """Create (or resume) the worktree for `slug`. Raises `WorktreeError`; never falls back to
-    the parent checkout."""
+async def prepare(services: Services, slug: str, *, base: str | None = None) -> wt.NewFeature:
+    """Create (or resume) the worktree for `slug`. `base`: the commit recorded when the task's
+    worktree was first made (none for a new delegate child, so an existing branch is refused).
+    Raises `WorktreeError`; never falls back to the parent checkout."""
     orch = services.settings.m7.orch
     if not (orch.worktrees and orch.session_cwd):
         raise WorktreeError(DISABLED)
     root = orch_root(services.settings, services.cwd)
-    return await wt.task_worktree(services.cwd, root, slug, max_worktrees=orch.max_worktrees)
+    return await wt.task_worktree(services.cwd, root, slug, max_worktrees=orch.max_worktrees, base=base)
 
 
 async def rollback(services: Services, trees: list[wt.NewFeature]) -> None:
@@ -63,6 +65,25 @@ def payload(tree: wt.NewFeature, *, task_id: int | None = None, board: str | Non
         board=board,
     )
     return event.model_dump(exclude_none=True)
+
+
+def attachment_note(tree: wt.NewFeature) -> str:
+    """`branch=auoreo/<slug> base=<sha>`: the kanban record a re-dispatch resumes from."""
+    return f"{BRANCH_NOTE}{tree.branch}{BASE_NOTE}{tree.base}"
+
+
+async def recorded_base(services: Services, board: str, task_id: int) -> str | None:
+    """The base commit of the task's first `worktree.created` event. Events are append-only
+    and only the server emits them; kanban attachments are not used here because a worker can
+    add one (`kanban_attach`) to any task on its board."""
+    q = select(EventRow).where(EventRow.type == "worktree.created").order_by(EventRow.seq)
+    async with services.db.session() as s:
+        rows = list((await s.execute(q)).scalars())
+    for row in rows:
+        data = services.db.cipher.decrypt(row.data)
+        if data.get("task_id") == task_id and data.get("board") == board and data.get("base"):
+            return str(data["base"])
+    return None
 
 
 def child_note(tree: wt.NewFeature) -> str:

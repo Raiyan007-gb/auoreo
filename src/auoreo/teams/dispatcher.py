@@ -165,7 +165,8 @@ class KanbanDispatcher:
         tree = None
         if self.s.settings.m7.orch.worktrees:  # --- M7 W4: one worktree per task
             try:
-                tree = await worktree_spawn.prepare(self.s, f"k{row.board}-{row.id}")
+                base = await worktree_spawn.recorded_base(self.s, row.board, row.id)
+                tree = await worktree_spawn.prepare(self.s, f"k{row.board}-{row.id}", base=base)
             except (WorktreeError, OSError) as exc:
                 log.warning("kanban task %s: no worktree (%s); unclaimed", row.id, exc)
                 await kb.release(row.id, name)
@@ -201,7 +202,7 @@ class KanbanDispatcher:
 
     async def _attach(self, kb: KanbanStore, task_id: int, tree: Any, by: str) -> None:
         """The durable task-to-worktree mapping (used on re-dispatch and by `worktree gc`)."""
-        ref, note = str(tree.path), f"{worktree_spawn.BRANCH_NOTE}{tree.branch}"
+        ref, note = str(tree.path), worktree_spawn.attachment_note(tree)
         known = [json.loads(r.text) for r in await kb.comments(task_id, structured=True)]
         if not any(k.get("ref") == ref for k in known):
             await kb.attach(task_id, ref, note=note, by=by)
