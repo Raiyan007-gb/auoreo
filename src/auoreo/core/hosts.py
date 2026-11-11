@@ -158,16 +158,22 @@ def jump_enabled(settings: Any) -> bool:
 
 
 def host_runtime(svc: Any, m: HostManifest) -> HostRuntime:
+    """Runtime data of host file `m` in a running server (jump hosts need `m7.ssh.jump`)."""
     found = {n: h.manifest for n, h in _host_files(svc).items()}
     found.setdefault(m.name, m)
+    if m.jump is not None and not jump_enabled(svc.settings):
+        why = f"host '{m.name}' needs jump host '{m.jump}' and m7.ssh.jump is off (no direct connection)"
+        return HostRuntime(m.name, m.tags, m.audit_commands, problem=why)
+    return runtime_for(found, m)
+
+
+def runtime_for(found: Mapping[str, HostManifest], m: HostManifest) -> HostRuntime:
+    """Runtime data of `m` among the host files `found` (no flag check: the operator CLI)."""
     base = HostRuntime(m.name, m.tags, m.audit_commands)
     if m.jump is None:
         return base
-    if not jump_enabled(svc.settings):
-        why = f"host '{m.name}' needs jump host '{m.jump}' and m7.ssh.jump is off (no direct connection)"
-        return replace(base, problem=why)
     try:
-        hop = resolve_chain(found, m.name)
+        hop = resolve_chain({**found, m.name: m}, m.name)
     except ValueError as exc:
         return replace(base, problem=str(exc))
     assert hop is not None
@@ -328,6 +334,26 @@ def trust(home: Path, host: str, port: int, line: str, *, replace: bool = False)
             lines[i] = f"{','.join(rest)} {old}" if rest else ""
         kept = [ln for i, ln in enumerate(lines) if ln or i not in {j for j, _, _ in found}]
         write_private(path, "\n".join([*kept, f"{pattern} {key}"]) + "\n")
+    return True
+
+
+def forget_host_key(home: Path, host: str, port: int) -> bool:
+    """Drop the `known_hosts` entry of `host:port` (`auoreo ssh rm --forget-key`); other
+    lines and other names on a shared line are kept. False when there was none."""
+    pattern = host_pattern(host, port)
+    path = known_hosts_path(home)
+    with migrate_lock(path):
+        text = _read(path)
+        found = _entries(text, pattern)
+        if not found:
+            return False
+        lines = text.splitlines()
+        for i, names, old in found:
+            rest = [n for n in names if n != pattern]
+            lines[i] = f"{','.join(rest)} {old}" if rest else ""
+        drop = {i for i, _, _ in found}
+        kept = [ln for i, ln in enumerate(lines) if ln or i not in drop]
+        write_private(path, "\n".join(kept) + ("\n" if kept else ""))
     return True
 
 

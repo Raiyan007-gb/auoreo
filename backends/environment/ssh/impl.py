@@ -60,6 +60,10 @@ class Backend(EnvironmentBackend):
         self.host_ext: Any = None
         """M7 v2 `core.hosts.HostRuntime` of a host file (tags, audit mode, jump hop), set by
         the environment pool after construction; None for settings entries."""
+        self.key_override: list[str] | None = None
+        """Operator CLI (`auoreo ssh deploy|rotate`): the exact key texts to offer instead of
+        the stored secret, to prove a login with a new key before it is stored. Never set
+        by a tool or the environment pool."""
         self._lock = asyncio.Lock()
         self.table = ProcTable(self.name, int(getattr(settings, "shell_max_processes", 8) or 8))
 
@@ -84,6 +88,8 @@ class Backend(EnvironmentBackend):
 
     def _keys(self, ref: str) -> list[str]:
         """Key texts to offer, in order. Never logged, returned to a tool or put in an error."""
+        if self.key_override is not None:  # operator CLI only (`core/host_keys.py`)
+            return list(self.key_override)
         store = SecretStore(self.settings.home, getattr(self.settings, "keyring", "allow-file"))
         name = ref.removeprefix("secret:")
         if getattr(getattr(getattr(self.settings, "m7", None), "ssh", None), "hosts", False):

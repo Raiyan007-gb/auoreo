@@ -267,3 +267,7 @@ def test(
     code = asyncio.run(go())
     if code:
         raise typer.Exit(code)
+
+
+# M7 hosts-b/c: `keygen|pubkey|deploy|rotate|rm` and `import` register on `app` above.
+from auoreo.cli.commands import ssh_keys as _ssh_keys  # noqa: E402,F401
