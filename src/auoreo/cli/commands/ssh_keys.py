@@ -340,3 +340,59 @@ def rm_cmd(
 ) -> None:
     """Delete the host file (the stored key is kept)."""
     _run(remove, name, forget_key=forget_key)
+
+
+# ------------------------------------------------------------------ import (hosts-c)
+async def import_config(
+    ops: Ops, source: Path, *, key: str | None = None, write: bool = False, default_user: str = "root"
+) -> int:
+    """Dry run by default; `write` creates host files (never overwriting one). Each imported
+    host uses secret `key` (default `SSH_KEY_<NAME>`): no key is read from the config."""
+    from auoreo.core.ssh_config_import import plan
+
+    try:
+        text = await asyncio.to_thread(Path.read_text, source, encoding="utf-8", errors="replace")
+        secret = hk.check_secret(key) if key else None
+    except (OSError, ValueError) as exc:
+        ops.echo(f"cannot import: {exc}")
+        return EXIT_INVALID
+    result = plan(text, default_user)
+    written: list[str] = []
+    skipped = [f"{alias}: {why}" for alias, why in result.skipped]
+    for e in result.hosts:
+        fields = {**e.fields, "key_secret": f"secret:{secret or hk.default_secret(e.name)}"}
+        line = f"{e.name}  {fields['user']}@{fields['host']}:{fields['port']}"
+        line += f"  via={fields['jump']}" if fields.get("jump") else ""
+        if not write:
+            ops.echo(f"would add {line}  key={fields['key_secret'].removeprefix('secret:')}")
+            continue
+        try:
+            hosts.write_host(ops.home, e.name, fields)
+        except (ValueError, FileExistsError) as exc:
+            skipped.append(f"{e.alias}: {exc}")
+            continue
+        written.append(e.name)
+        ops.echo(f"added {line}")
+    for line in [*skipped, *result.notes]:
+        ops.echo(f"skipped {line}")
+    if write:
+        await ops.record(
+            actor="operator", action="host.imported", decision="allow",
+            detail={"source": source.name, "written": written, "skipped": len(skipped)},
+        )  # fmt: skip
+        ops.echo("next: store each key (`auoreo ssh keygen`) and trust each host (`auoreo ssh test <name>`)")
+    else:
+        ops.echo("dry run: pass --write to create these host files")
+    return 0
+
+
+@app.command("import")
+def import_cmd(
+    source: Annotated[Path, typer.Option("--from", help="OpenSSH client config.")] = Path("~/.ssh/config"),
+    key: Annotated[str | None, typer.Option("--key", help="Secret NAME for every imported host.")] = None,
+    write: Annotated[bool, typer.Option("--write", help="Create the host files (default: dry run).")] = False,
+) -> None:
+    """Import Host/HostName/User/Port/ProxyJump entries (no keys, no ProxyCommand, no Include)."""
+    import getpass
+
+    _run(import_config, source.expanduser(), key=key, write=write, default_user=getpass.getuser())
